@@ -175,7 +175,7 @@ describe("RunPhase — cancel is a single transition", () => {
     // false on the very next render.
     const activeStates: RunPhase[] = ["starting", "streaming", "finalizing"];
     for (const from of activeStates) {
-      // Simulate the transition — App.tsx's setRunPhase("cancelled")
+      // Simulate the transition — useRunPhase's cancel()
       // is the actual code path; here we assert the invariant that
       // the destination phase has spinner off.
       expect(shouldShowSpinner("cancelled")).toBe(false);

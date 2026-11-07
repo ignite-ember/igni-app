@@ -437,3 +437,46 @@ describe("ChatTranscript#applyWorkflowEvent", () => {
     expect((out[0] as WorkflowItem).run.phases[0].title).toBe("(unnamed phase)");
   });
 });
+
+describe("ChatTranscript#assistantTextForStats", () => {
+  const stats = () =>
+    factory.stats({
+      runId: "r",
+      inputTokens: 1,
+      outputTokens: 1,
+      reasoningTokens: 0,
+      visibleThinkTokens: 0,
+      visibleOutTokens: 0,
+      duration: 1,
+      corrected: true,
+    });
+
+  it("finds the assistant text that closes the stats line's turn", () => {
+    const items = [factory.user("q"), factory.assistant("answer"), factory.thinking("t"), stats()];
+    expect(t(items).assistantTextForStats(3)).toBe("answer");
+  });
+
+  it("stops at the turn's user message", () => {
+    const items = [factory.assistant("old"), factory.user("q"), stats()];
+    expect(t(items).assistantTextForStats(2)).toBeUndefined();
+  });
+
+  it("has nothing for an index that is not a stats line", () => {
+    const items = [factory.assistant("a")];
+    expect(t(items).assistantTextForStats(0)).toBeUndefined();
+    expect(t(items).assistantTextForStats(5)).toBeUndefined();
+  });
+});
+
+describe("ChatTranscript#startWorkflow", () => {
+  it("opens the run's card", () => {
+    const next = t([]).startWorkflow("build", "wf1");
+    expect(next.items).toHaveLength(1);
+    expect(next.items[0]).toMatchObject({ kind: "workflow", run: { workflowRunId: "wf1" } });
+  });
+
+  it("leaves a card its first event already opened", () => {
+    const opened = t([]).startWorkflow("build", "wf1");
+    expect(opened.startWorkflow("build", "wf1")).toBe(opened);
+  });
+});

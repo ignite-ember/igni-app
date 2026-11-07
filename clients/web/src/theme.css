@@ -1143,7 +1143,7 @@ button {
 }
 
 /* Visualization applied to the chat row a user lands on from the
-   ChatSearchBar. The class is removed after ~2.4 s in App.tsx so
+   ChatSearchBar. The class is removed after ~2.4 s (chat/useChatSearch.ts) so
    re-targeting the same row re-triggers the animation cleanly.
    The pulse + ring are applied to the DIRECT CHILD (the actual
    message bubble) rather than the wider ``.chat-row`` wrapper so
@@ -10039,4 +10039,59 @@ button {
 
 .ext-settings-error {
   color: var(--danger-text);
+}
+
+/* ── App shell: header, account menu, welcome ───────────────────────
+   What used to be inline styles in App.tsx, beside the components
+   they moved out into. Each rule computes what the inline style did. */
+
+/* A group's mark, as an img (never inlined markup: see lib/theme.ts). */
+.brand-mark {
+  object-fit: contain;
+}
+
+/* The connection dot in the brand row says something; it does nothing. */
+.brand .dot.conn-dot {
+  cursor: default;
+}
+
+/* The project path, truncated from the left so the folder name (the
+   informative end) stays visible. */
+.chip .chip-label.chip-label-path {
+  max-width: 380px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  direction: rtl;
+  text-align: left;
+}
+
+.account-menu-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 39;
+}
+
+.dropdown.account-menu {
+  width: 220px;
+}
+
+.account-menu .popup-item.account-menu-who {
+  cursor: default;
+}
+
+.account-menu .account-menu-name {
+  color: var(--fg);
+  font-weight: 500;
+}
+
+.welcome-mark {
+  display: flex;
+  justify-content: center;
+}
+
+.welcome p.welcome-hint {
+  color: var(--fg-faint);
+  font-size: 12.5px;
+  margin-top: 22px;
 }

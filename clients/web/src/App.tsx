@@ -1,827 +1,153 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { ChatItem } from "./chat/chatItem";
+import { Arrivals } from "./chat/arrival";
 import { ChatItemFactory } from "./chat/chatItemFactory";
 import { ChatItemIds } from "./chat/chatItemIds";
-import { ChatTranscript } from "./chat/chatTranscript";
+import { HistoryLoader } from "./chat/historyLoader";
 import { HistoryTurnMapper } from "./chat/historyTurnMapper";
-import { PlanTaskList } from "./chat/planTasks";
-import { parseHistoryTurn } from "./protocol/historyTurns";
-import {
-  parseOrchestrateEvent,
-  type OrchestrateEventEnvelope,
-} from "./protocol/orchestrateEvents";
-import { parseWorkflowEvent } from "./protocol/workflowEvents";
-import {
-  applyVisualizationDelta,
-  visualizationDeltaFromPayload,
-} from "./chat/visualizationStream";
-import { nextObserverBusyState } from "./chat/observerBusy";
-import { planSessionBinding } from "./chat/sessionBinding";
-import { Arrivals } from "./chat/arrival";
-import { useChatFollow } from "./chat/followOutput";
 import {
   current as currentPage,
   openRoot,
   pop as popPage,
-  basePages,
   truncateTo,
   visible as visiblePages,
-  type PageKind,
   type PageRoute,
 } from "./chat/pageStack";
-import { Contributions } from "./extensions/contributions";
-import { ExtensionsPanel } from "./components/panels/ExtensionsPanel";
-import { Drawer } from "./components/panels/Drawer";
-import {
-  ExtensionPage,
-  type ExtensionSummary,
-} from "./extensions/ExtensionPage";
-import { ExtensionIndicator } from "./extensions/ExtensionIndicator";
+import { ProjectFolderPicker } from "./chat/projectFolderPicker";
+import { PushChannelRouter } from "./chat/pushChannelRouter";
+import { SessionRow } from "./chat/sessionRow";
+import type { ShellPort } from "./chat/shellPort";
+import { useChatController } from "./chat/useChatController";
+import { useChatSearch } from "./chat/useChatSearch";
+import { useCommands } from "./chat/useCommands";
+import { useHitl } from "./chat/useHitl";
+import { useObserver } from "./chat/useObserver";
+import { useRunPhase } from "./chat/useRunPhase";
+import { useSessionBinding } from "./chat/useSessionBinding";
+import { useStampCancelledReply, useTranscriptState } from "./chat/useTranscriptState";
+import { useTranscriptScroll } from "./chat/useTranscriptScroll";
+import { WorkflowLauncher } from "./chat/workflowLauncher";
 import { useDocumentTheme } from "./extensions/useDocumentTheme";
-import { PageContext } from "./components/PageShell";
-import { WorkflowsPage } from "./components/pages/WorkflowsPage";
-import { HelpPage } from "./components/pages/HelpPage";
-import { ContextPage } from "./components/pages/ContextPage";
-import { handleEsc } from "./chat/escHandler";
-import { buildContinuedPrompt } from "./chat/continueInterrupted";
+import { useExtensions } from "./extensions/useExtensions";
 import {
-  isProcessing,
-  phaseFromProcFinalizing,
-  phaseLabel,
-  phaseToProcFinalizing,
-  shouldShowSpinner,
-  type RunPhase,
-} from "./chat/runPhase";
-import {
+  SIDEBAR_BREAKPOINT_PX,
   WindowModel,
   ensureClientId,
   useWindowField,
-  type Panel,
 } from "./clientState";
 import { useExtensionTraffic } from "./extensions/useExtensionTraffic";
-import { Virtuoso, type VirtuosoHandle } from "react-virtuoso";
-import { ChatItemView } from "./components/chatItems/ChatItemView";
-import type { ChatItemHandlers } from "./components/chatItems/handlers";
 import { ChatSearchBar } from "./components/ChatSearchBar";
-import type { SlashCommand } from "./chat/slashCommands";
 import { Composer } from "./components/composer/Composer";
 import { ComposerDraft } from "./components/composer/composerDraft";
-import type { PermissionMode } from "./components/composer/permissionModes";
-import { GroupIndicator } from "./components/GroupIndicator";
-import { WatcherIndicator } from "./components/WatcherIndicator";
-import {
-  BackendVersionChip,
-  CtxMeter,
-  SessionChip,
-} from "./components/StatusBits";
+import { modeSwitchCommand, type PermissionMode } from "./components/composer/permissionModes";
 import { FPSCounterOverlay } from "./components/FPSCounter";
 import { HitlDialog, type HitlDecision } from "./components/HitlDialog";
-import {
-  FlameIcon,
-  FolderIcon,
-  MenuIcon,
-} from "./components/Icons";
-// Aliased: ``Icons`` exports a ``MenuIcon`` too, and that one is the
-// hamburger. This is the glyph set the panels draw from.
-import { MenuIcon as Glyph } from "@ignite-ember/ui-react";
-import { NotificationsPanel } from "./components/NotificationsPanel";
-import { unreadFor, useNotificationCounts } from "./notifications/model";
-import {
-  TRUST_DIALOG_KIND,
-  isTrustStatus,
-  useWorkspaceTrust,
-} from "./workspaceTrust/model";
+import { useNotificationCounts, unreadFor } from "./notifications/model";
+import { Notifier } from "./notifications/notifier";
+import { useWorkspaceTrust } from "./workspaceTrust/model";
 import { ScrollIndicator } from "./components/ScrollIndicator";
 import { SignInWall } from "./components/SignInWall";
 import { Sidebar, type SessionEntry } from "./components/Sidebar";
-import { AgentsPanel } from "./components/panels/AgentsPanel";
-import { FilePreview } from "./components/FilePreview";
-import { FirstRunSetup } from "./components/FirstRunSetup";
-import { HooksPanel } from "./components/panels/HooksPanel";
-import { ProgramsPanel } from "./components/panels/ProgramsPanel";
-import { Toasts } from "./components/Toasts";
-import { HostDialog } from "./components/HostDialog";
-import { UpdatePrompt } from "./components/UpdatePrompt";
-import { WorkspaceTrustDialog } from "./components/WorkspaceTrustDialog";
-import { RetryBanner } from "./components/RetryBanner";
+import { AppHeader } from "./components/AppHeader";
+import { AppOverlays } from "./components/AppOverlays";
+import { AppPages } from "./components/AppPages";
+import { ConversationList } from "./components/ConversationList";
+import { LoginDialog } from "./components/LoginDialog";
+import { StatusLine } from "./components/StatusLine";
+import { WelcomeScreen } from "./components/WelcomeScreen";
 import { host } from "./lib/host";
-import { applyTheme, brandMark, brandName } from "./lib/theme";
-import { PluginsPanel } from "./components/panels/PluginsPanel";
-import { SkillsPanel } from "./components/panels/SkillsPanel";
-import { DirectoryPicker } from "./components/panels/DirectoryPicker";
-import { LoginPanel } from "./components/panels/LoginPanel";
-import { LoopPanel } from "./components/panels/LoopPanel";
-import { McpPanel } from "./components/panels/McpPanel";
-import { WatcherPanel } from "./components/panels/WatcherPanel";
-import { SchedulePanel } from "./components/panels/SchedulePanel";
-import {
-  IgniClient,
-  pickNativeDirectory,
-  type ConnectionState,
-} from "./protocol/client";
-import type {
-  HITLRequest,
-  ServerMessage,
-  StatusUpdate,
-} from "./protocol/messages";
-import { withDetails } from "./chat/hitlDetails";
-import { countOf } from "./lib/plural";
-import { indexOfRun, runAt } from "./chat/runIndex";
+import { useGroupBranding } from "./lib/useGroupBranding";
+import { useHostBindings } from "./lib/useHostBindings";
+import { IgniClient } from "./protocol/client";
+import type { StatusUpdate } from "./protocol/messages";
 import { ExtensionNamesContext } from "./extensions/extensionNames";
-import { AccountChip } from "./components/AccountChip";
+import { useUpdateCheck } from "./update/useUpdateCheck";
 
 /**
- * What is open over the chat — the window model's `ui.panel`.
- *
- * Everything the app could open used to live in this one slot and
- * render as a centre-screen modal. The destinations moved out to
- * ``chat/pageStack.ts`` — they are places you browse, and a single
- * slot cannot hold a trail. What is left is one thing at a time over
- * the chat: pick one thing and go (``dir-picker``), get through a flow
- * (``login``), glance at what is waiting (``notifications``), or find
- * in the conversation (``search``).
- *
- * The HITL prompt is not here either, and never was — it renders as
- * ``hitlSlot`` inside the Composer, anchored to the run it is asking
- * about. Dialogs that ask the person something are `ui.dialog`.
+ * The window: it builds the collaborators that live as long as it does,
+ * hands them to one hook per concern, and lays the result out. The run,
+ * the commands, the session and the observer each live in ``chat/``;
+ * nothing here keeps a copy of their state.
  */
-type PanelState =
-  | { kind: "none" }
-  | { kind: "login" }
-  | { kind: "dir-picker" }
-  | { kind: "notifications" }
-  | { kind: "search" };
-
-/** `ui.panel` as the render code below reads it. */
-function panelState(panel: Panel | null): PanelState {
-  return panel ? ({ kind: panel.kind } as PanelState) : { kind: "none" };
-}
-
-interface UpdateInfo {
-  available: boolean;
-  current_version: string;
-  latest_version: string;
-  download_url?: string;
-}
-
-/** The destinations with a permanent seat in the sidebar.
- *
- * Above the session list, because that is what they are relative to
- * it: places, not conversations. Three and not thirteen — the rest
- * keep their place in `TOOLS_MENU` below, and these are the ones you
- * go back to while working rather than configure once. */
-
-const BASE_SIDEBAR_LINKS: { kind: PageKind; label: string }[] = [
-  { kind: "plugins", label: "Plugins" },
-  { kind: "mcp", label: "MCPs" },
-  { kind: "extensions", label: "Extensions" },
-];
-
-/** Entries for the header tools menu — each opens its feature's UI
- * directly (no slash command visible to the user). */
-const BASE_TOOLS_MENU: { label: string; command: string; desc: string }[] = [
-  { label: "MCP servers", command: "/mcp", desc: "connect external tools" },
-  { label: "Agents", command: "/agents", desc: "agent pool" },
-  { label: "Skills", command: "/skills", desc: "slash-command workflows" },
-  { label: "Plugins", command: "/plugins", desc: "marketplaces & installs" },
-  {
-    label: "Extensions",
-    command: "/extensions",
-    desc: "installed extensions & their settings",
-  },
-  { label: "Hooks", command: "/hooks", desc: "pre/post tool hooks" },
-  { label: "Loop", command: "/loop", desc: "recurring prompt status" },
-  {
-    label: "Scheduled tasks",
-    command: "/schedule",
-    desc: "background routines",
-  },
-  {
-    label: "Workflows",
-    command: "/workflows",
-    desc: "multi-phase agent scripts",
-  },
-  {
-    label: "Watcher",
-    command: "/watcher",
-    desc: "background processes & live logs",
-  },
-  {
-    label: "Compact context",
-    command: "/compact",
-    desc: "summarize old turns",
-  },
-  {
-    label: "Context breakdown",
-    command: "/ctx",
-    desc: "system vs runs token split",
-  },
-  { label: "Help", command: "/help", desc: "all commands" },
-];
-
-/**
- * The app's navigation, with whatever is installed folded in.
- *
- * Module scope, because it outlives any one render and because the
- * two lists above were module scope for the same reason. What is
- * contributed to it comes from the extensions the backend reports —
- * see the ``list_extensions`` effect below, which folds each one in
- * as it arrives and takes it back out when it goes.
- */
-const contributions = new Contributions(
-  BASE_SIDEBAR_LINKS,
-  BASE_TOOLS_MENU,
-  basePages,
-);
-
-/** Walk back from a ``stats`` item's index to find the assistant
- *  text that closes the same run. The inline copy-response button on
- *  the stats line copies this text. We stop at the previous user
- *  message because every stats item belongs to exactly one turn. */
-function findAssistantTextForStats(
-  items: ChatItem[],
-  idx: number,
-): string | undefined {
-  const stats = items[idx];
-  if (!stats || stats.kind !== "stats") return undefined;
-  for (let i = idx - 1; i >= 0; i--) {
-    const it = items[i];
-    if (it.kind === "user") return undefined;
-    if (it.kind === "assistant") return it.text;
-  }
-  return undefined;
-}
-
-/** The chat list's ``atBottomThreshold``; see the ``<Virtuoso>`` below. */
-const AT_BOTTOM_THRESHOLD = 50;
-
 export default function App() {
   const client = useMemo(() => new IgniClient(), []);
   // The one id allocator for this window's list: the ids are React keys,
   // so every item in it must come from here.
   const chatItems = useMemo(() => new ChatItemFactory(new ChatItemIds()), []);
-  const history = useMemo(() => new HistoryTurnMapper(chatItems), [chatItems]);
-  const transcript = useCallback(
-    (items: ChatItem[]) => new ChatTranscript(items, chatItems),
-    [chatItems],
+  const historyLoader = useMemo(
+    () => new HistoryLoader(client, new HistoryTurnMapper(chatItems), chatItems),
+    [client, chatItems],
   );
-  // This window's model: the page it is on, the panel over its chat,
-  // its sidebar, the preview, the selection, the composer, toasts, the
-  // dialog, where the transcript is, focus, and the session it shows.
-  // The host owns it (``host.ui`` to an extension); the views below
-  // bind to it and write to it, and keep no copy of their own. See
-  // ``clientState.ts``.
-  //
-  // Keyed by ``host.viewKey`` so two Tauri windows — which share an
-  // origin, and so share localStorage — are two distinct windows with
-  // two distinct models, rather than one fighting itself.
+  // This window's model (see ``clientState.ts``): the host owns it
+  // (``host.ui`` to an extension), the views bind to it and keep no copy.
+  // Keyed by ``host.viewKey`` so two Tauri windows, which share
+  // localStorage, are two distinct models.
   const windowModel = useMemo(
     () =>
       new WindowModel(client, ensureClientId(host.viewKey), 250, host.kind, {
         // Until the model answers: a wide window with its sidebar out.
-        sidebar: { open: window.innerWidth > 700, width: null, section: null },
+        sidebar: { open: window.innerWidth > SIDEBAR_BREAKPOINT_PX, width: null, section: null },
       }),
     [client],
   );
-  const [conn, setConn] = useState<ConnectionState>("connecting");
-  // Whether this window has bound its session since the socket came up.
-  // The composer waits for it as well as for the socket: binding a
-  // session shows that session's draft (the backend pushes it), so
-  // anything typed before the binding was replaced by it. T19.
-  const [sessionBound, setSessionBound] = useState(false);
-  const [items, setItems] = useState<ChatItem[]>([]);
-  // Mirror of ``items`` for callbacks whose deps don't include
-  // ``items`` (e.g. ``submit`` — see its long comment for why).
-  // The ref is updated on every render via the effect below so
-  // always points at the latest array; the callback can read it
-  // synchronously without depending on ``items`` in its closure.
-  const itemsRef = useRef<ChatItem[]>(items);
-  useEffect(() => {
-    itemsRef.current = items;
-  }, [items]);
-  // Single source of truth for run lifecycle. Every derived UI flag
-  // (``processing``, ``finalizing``, spinner-visible, composer-enabled)
-  // reads from this ONE state. Cancel is a single transition — the
-  // whole reason this refactor exists is that the previous model had
-  // ``processing`` and ``finalizing`` as independent booleans each
-  // set/cleared from 3+ sites, and the cancel path missed
-  // ``finalizing`` → STOP-button bug (spinner stuck forever).
-  //
-  // Transitions:
-  //   idle       ← app boot, run_completed, run_error, cancelled
-  //   starting   ← submit initiated, before first stream event
-  //   streaming  ← run_started, content deltas flowing
-  //   finalizing ← streaming_done (BE tail draining)
-  //   done       ← run_completed (top-level, non-parent)
-  //   cancelled  ← client.cancel() — replaces both flags immediately
-  //   errored    ← run_error
-  const [runPhase, setRunPhaseState] = useState<RunPhase>("idle");
-  const [status, setStatus] = useState<StatusUpdate | null>(null);
-  const [hitl, setHitl] = useState<HITLRequest[] | null>(null);
-  const panel = panelState(useWindowField(windowModel, "panel"));
-  const setPanel = useCallback(
-    (next: PanelState) =>
-      windowModel.write("panel", next.kind === "none" ? null : { kind: next.kind }),
-    [windowModel],
+  const notifier = useMemo(() => new Notifier(windowModel, host), [windowModel]);
+  const folderPicker = useMemo(() => new ProjectFolderPicker(client), [client]);
+  const workflows = useMemo(() => new WorkflowLauncher(client), [client]);
+  // The folder from New Window (``?dir=``) and a page from the link that
+  // opened this window (``?open=``, see ``chat/arrival.ts``). Read once:
+  // following a link is an arrival, not a place.
+  const opening = useMemo(
+    () => ({
+      wantedDir: new URLSearchParams(window.location.search).get("dir") ?? "",
+      arrival: Arrivals.fromSearch(window.location.search),
+    }),
+    [],
   );
+
+  const { items, historyIndexToItemIndex, view, setItems } = useTranscriptState(chatItems);
+  const run = useRunPhase(client);
+  useStampCancelledReply(run.runPhase, view);
+  const hitl = useHitl(client, run.controls);
+  const commands = useCommands(client);
+  const { loadCatalog, openModelMenu } = commands;
+  const [status, setStatus] = useState<StatusUpdate | null>(null);
+  const [sessions, setSessions] = useState<SessionEntry[]>([]);
+  const panel = useWindowField(windowModel, "panel");
   // Where this window is: ``ui.route``. Empty means the chat is showing.
   const route = useWindowField(windowModel, "route");
-  /**
-   * The installed extensions, as the backend reports them.
-   *
-   * Held in state as well as folded into {@link contributions}
-   * because the nav only needs the labels and a page needs the rest
-   * — the origin to frame, the grant list, the state and its reason.
-   */
-  const [extensions, setExtensions] = useState<ExtensionSummary[]>([]);
-  // Read by the message handler, which is not rebuilt when this changes.
-  const extensionsRef = useRef(extensions);
-  extensionsRef.current = extensions;
-  // Names to label an extension's chat messages with — they carry its id.
-  const extensionNames = useMemo(
-    () => new Map(extensions.map((e) => [e.id, e.name])),
-    [extensions],
-  );
-  // The part of the route this window can draw — an extension's page
-  // appears once its extension is listed.
-  const pages = useMemo(
-    () => visiblePages(route, contributions.pages),
-    // ``extensions`` is what changes ``contributions.pages``.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [route, extensions],
-  );
-  // Followed rather than read once: the app keeps its theme on the
-  // document, so without this an extension frame would be told the
-  // theme at mount and never again.
+  const sidebar = useWindowField(windowModel, "sidebar");
+  // The session this window shows — ``sessions.current`` to an extension.
+  const sessionId = useWindowField(windowModel, "session");
+  // The directory this window's session is locked to (tools + shell cwd).
+  const projectDir = useWindowField(windowModel, "project_dir");
+  const dialog = useWindowField(windowModel, "dialog");
+  const updateCheck = useUpdateCheck(client, windowModel);
+  const { checkRef } = updateCheck;
+  // Followed rather than read once, so an extension frame is told when
+  // the document's theme changes.
   const frameTheme = useDocumentTheme();
-  // Put text in the composer and hand the person the caret: a skill
-  // picked from a panel, a message to edit and resend. The text is the
-  // model's (``ui.composer``); the caret is the editor's, reached
+
+  // A skill picked from a panel, a message to edit and resend: the text
+  // is the model's (``ui.composer``); the caret is the editor's, reached
   // through the handle the Composer fills in.
   const composerFocus = useRef<(() => void) | null>(null);
   const seedComposer = useCallback(
     (entry: string) => {
-      windowModel.write(
-        "composer",
-        // A pre-fill enters the mode its prefix asks for, as typing it would.
-        ComposerDraft.fromWire(entry).toModel(),
-        { force: true },
-      );
+      // A pre-fill enters the mode its prefix asks for, as typing it would.
+      windowModel.write("composer", ComposerDraft.fromWire(entry).toModel(), { force: true });
       composerFocus.current?.();
     },
     [windowModel],
   );
-  // Plain-browser fallback for host.openFile — the desktop app
-  // handles the open itself. The
-  // preview is ``ui.preview``, so an extension can open one too.
-  const preview = useWindowField(windowModel, "preview");
-  useEffect(() => {
-    host.setPreviewFallback((p) => windowModel.write("preview", { path: p }));
-    // A file opened — in the editor or in the preview — is the file
-    // picked: ``ui.selection.file``.
-    return host.onOpen((p) =>
-      windowModel.write("selection", { ...windowModel.get("selection"), file: p }),
-    );
-  }, [windowModel]);
-
-  // Host-aware CSS hook. The Tauri shell sets these via its
-  // ``initialization_script`` at page-load time, but Tauri 2 doesn't
-  // re-fire that script when the loading view navigates to the real
-  // app via ``location.href``. Re-stamp from the React mount so the
-  // host-aware rules in theme.css (custom title bar, traffic-light
-  // gutter, drag region) always match. Idempotent — re-running just
-  // sets the same attributes.
-  useEffect(() => {
-    const html =
-      typeof document !== "undefined" ? document.documentElement : null;
-    if (!html) return;
-    const w = window as unknown as { __TAURI__?: unknown };
-    if (!w.__TAURI__) return;
-    html.dataset.host = "tauri";
-    const p = (navigator.platform || "").toLowerCase();
-    html.dataset.platform = /mac/.test(p)
-      ? "mac"
-      : /win/.test(p)
-        ? "win"
-        : "linux";
-  }, []);
-
-  // Desktop-shell → web-UI event bus. The Tauri shell dispatches
-  // ``igni-host`` CustomEvents on ``window`` (``{type, payload}`` in
-  // ``detail``) for its native menu items.
-  useEffect(() => {
-    const dispatch = (type: string, payload: Record<string, unknown>) => {
-      if (type === "igni:menu") {
-        // Native-menu items routed through the host bridge. ``id``
-        // is the menu item identifier the native side registered.
-        const id = String(payload.id ?? "");
-        if (id === "new_chat") {
-          // Empty the chat — same effect as the ``/clear`` command.
-          setItems([]);
-          setHistoryIndexToItemIndex([]);
-        } else if (id === "check_update") {
-          // App-menu "Check for Updates…" — fire the explicit check
-          // with feedback (``silent=false`` surfaces an OS "Up to
-          // date" notification when there's nothing new). Routed
-          // through a ref so this listener can stay mounted once
-          // and still call the latest closure.
-          void checkForUpdateRef.current?.(false);
-        } else if (id === "restart_backend") {
-          // Best-effort reconnect signal. The native side already
-          // restarts the BE process; here we just kick the WS
-          // client to re-connect so it doesn't sit on the closed
-          // socket. ``client.connect()`` is idempotent.
-          try {
-            client.close();
-          } catch {
-            /* already closed */
-          }
-        }
-      }
-    };
-    const onCustom = (e: Event) => {
-      const ev = e as CustomEvent<{
-        type: string;
-        payload: Record<string, unknown>;
-      }>;
-      const { type, payload } = ev.detail || { type: "", payload: {} };
-      dispatch(type, payload || {});
-    };
-    window.addEventListener("igni-host", onCustom);
-    return () => {
-      window.removeEventListener("igni-host", onCustom);
-    };
-  }, []);
-
-  // Toast stack — non-conversational notifications (scheduled tasks
-  // completing, background runs finishing) land here so they survive
-  // conversation switches and don't pollute the active chat. Persists
-  // top-right; auto-dismiss inside each card. ``ui.toasts``: an
-  // extension's toasts arrive in the same stack.
-  const toasts = useWindowField(windowModel, "toasts");
-  const addToast = useCallback(
-    (toast: { title: string; body?: string; target?: PageRoute }) => {
-      windowModel.toast({
-        text: toast.title,
-        kind: "info",
-        body: toast.body ?? null,
-        target: toast.target ?? null,
-      });
-    },
-    [windowModel],
-  );
-  const dismissToast = useCallback(
-    (id: string) => windowModel.dismissToast(id),
-    [windowModel],
-  );
-  // Single dispatch for user-facing notifications. Tries the native
-  // host bridge first (Tauri → macOS Notification Center). Only
-  // falls back to the in-app toast stack on plain web where no
-  // bridge exists.
-  const notifyHost = useCallback(
-    async (payload: {
-      title: string;
-      body?: string;
-      /** Where clicking the in-app toast goes. */
-      target?: PageRoute;
-      data?: Record<string, unknown>;
-    }) => {
-      const delivered = await host.notify({
-        title: payload.title,
-        body: payload.body,
-        data: payload.data,
-      });
-      if (delivered) return;
-      addToast({
-        title: payload.title,
-        body: payload.body,
-        target: payload.target,
-      });
-    },
-    [addToast],
-  );
-  // The update waiting, as the last check reported it. The in-app
-  // sheet for acting on it is a dialog (``ui.dialog``); the alerting
-  // surface is the host OS notification — see ``announceUpdate``.
-  const [pendingUpdate, setPendingUpdate] = useState<UpdateInfo | null>(null);
-  const dialog = useWindowField(windowModel, "dialog");
-  const showUpdate = useCallback(
-    (info: UpdateInfo) => windowModel.openDialog({ kind: "update", ...info }),
-    [windowModel],
-  );
-  // Ref to the latest ``checkForUpdate`` closure so the once-mounted
-  // ``igni-host`` listener (deps ``[]``) can call the current version.
-  const checkForUpdateRef = useRef<
-    ((silent?: boolean) => Promise<void>) | null
-  >(null);
-  const announceUpdate = useCallback((info: UpdateInfo) => {
-    if (info.available) {
-      setPendingUpdate(info);
-      showUpdate(info);
-      // OS-level alert so the user sees it even if the app is
-      // backgrounded. The modal sheet takes over once they
-      // refocus the window.
-      void host.notify({
-        title: "Update available",
-        body: `igni ${info.latest_version} is ready to install.`,
-      });
-    }
-  }, [showUpdate]);
-  // Re-runnable update check used by the native "Check for Updates…"
-  // menu item and the version chip click. ``silent=false`` surfaces
-  // an OS notification when there's no update, so the menu click
-  // always gives the user feedback.
-  const checkForUpdate = useCallback(
-    async (silent = false) => {
-      try {
-        const tauriInvoke = (
-          window as unknown as {
-            __TAURI__?: {
-              core?: { invoke?: (cmd: string) => Promise<unknown> };
-            };
-          }
-        ).__TAURI__?.core?.invoke;
-        const info = tauriInvoke
-          ? ((await tauriInvoke("igni_check_update")) as UpdateInfo)
-          : await client.rpc<UpdateInfo | null>("check_for_update");
-        if (!info) return;
-        if (info.available) {
-          announceUpdate(info);
-        } else if (!silent) {
-          void host.notify({
-            title: "Up to date",
-            body: `You're on the latest version (${info.current_version}).`,
-          });
-        }
-      } catch {
-        /* best-effort; silent failure */
-      }
-    },
-    [announceUpdate, client],
-  );
-  // Keep the ref in lockstep so the menu handler always invokes the
-  // freshest closure (which captures the latest ``client``).
-  useEffect(() => {
-    checkForUpdateRef.current = checkForUpdate;
-  }, [checkForUpdate]);
-  // DEV-ONLY: set ``VITE_IGNI_FAKE_UPDATE=1`` to surface the modal
-  // + OS notification at launch without contacting GitHub Releases.
-  // Remove before shipping.
-  const fakeUpdateDone = useRef(false);
-  useEffect(() => {
-    if (fakeUpdateDone.current) return;
-    const env = (import.meta as unknown as { env?: Record<string, string> })
-      .env;
-    if (!env?.VITE_IGNI_FAKE_UPDATE) return;
-    fakeUpdateDone.current = true;
-    announceUpdate({
-      available: true,
-      current_version: "0.6.0",
-      latest_version: "0.7.0",
-      download_url: "https://github.com/ignite-ember/igni/releases/latest",
-    });
-  }, [announceUpdate]);
-  // The folder this window was opened onto, from New Window. Empty
-  // for the first window, which uses the backend's default session.
-  const windowProjectDir = useMemo(
-    () => new URLSearchParams(window.location.search).get("dir") ?? "",
-    [],
-  );
-  // A page to open, from the link that opened this window
-  // (`?open=<page>&…`, see `chat/arrival.ts`) — an extension's service
-  // links to its own page this way. Read once: following a link is an
-  // arrival, and re-reading the URL later would reopen the page every
-  // time the app re-rendered.
-  const arrival = useMemo(() => Arrivals.fromSearch(window.location.search), []);
-
-  // And taken out of the address bar once it has been read — after
-  // sign-in, because before it the link is still where this window is
-  // going.
-  //
-  // A link is an arrival, not a place. Left in the URL it went on
-  // being true for ever: every reload read it again and put the window
-  // back on that page, so navigating anywhere else and refreshing
-  // undid the navigation. ``replaceState`` rather than a push: the URL
-  // with the parameter is not a step in this window's history, it is
-  // how the window opened. ``dir`` stays: it says which folder this
-  // window belongs to, which stays true for as long as the window does.
-  useEffect(() => {
-    if (!arrival || !status?.cloud_email) return;
-    const url = new URL(window.location.href);
-    window.history.replaceState(
-      null,
-      "",
-      `${url.pathname}${Arrivals.withoutArrival(url.search)}${url.hash}`,
-    );
-  }, [arrival, status?.cloud_email]);
-  const sidebar = useWindowField(windowModel, "sidebar");
-  const sidebarOpen = sidebar.open;
   const setSidebarOpen = useCallback(
-    (next: boolean | ((prev: boolean) => boolean)) => {
-      const current = windowModel.get("sidebar");
-      const resolved = typeof next === "function" ? next(current.open) : next;
-      windowModel.write("sidebar", { ...current, open: resolved });
-    },
+    (open: boolean) => windowModel.write("sidebar", { ...windowModel.get("sidebar"), open }),
     [windowModel],
   );
-  const [sessions, setSessions] = useState<SessionEntry[]>([]);
-  // The session this window shows — ``sessions.current`` to an
-  // extension. The model's, so an extension can move the window.
-  const sessionId = useWindowField(windowModel, "session");
-  const setSessionId = useCallback(
-    (id: string) => windowModel.write("session", id),
-    [windowModel],
-  );
-  const [skills, setSkills] = useState<SlashCommand[]>([]);
-  // What the backend says exists. `null` until the RPC answers (or
-  // for a backend too old to have it), which is the signal for the
-  // composer to fall back to its hardcoded list rather than show an
-  // empty menu.
-  const [backendCommands, setBackendCommands] = useState<SlashCommand[] | null>(
-    null,
-  );
-  const [modelMenuSignal, setModelMenuSignal] = useState<{ n: number } | null>(
-    null,
-  );
-  const [accountMenu, setAccountMenu] = useState(false);
-  // The signed-in person's display name, fetched when the account
-  // popover opens (the BE proxies ``/portal/me``). Billing tiers are
-  // retired, so nothing else from that call is shown.
-  const [cloudName, setCloudName] = useState<string>("");
-  // Best thing we can currently say about who is signed in, in
-  // descending order of how much it sounds like a person. The org is
-  // last because it is not a person at all — it was the only thing
-  // this header ever showed, which is the bug.
-  const accountName =
-    cloudName || status?.cloud_email || status?.cloud_org || "Account";
 
-  // ── Signed in, or nothing ───────────────────────────────────────
-  //
-  // igni is self-hosted: every document, version and comment lives on
-  // the server an organisation runs, so a session with no account has
-  // nowhere to put any of it. The app does not open behind a prompt
-  // that can be dismissed — there is nothing behind it to use.
-  //
-  // Waited on rather than assumed. ``status`` is null until the first
-  // push arrives, and treating that as signed-out would flash the
-  // wall at somebody who is signed in, on every launch.
+  // igni is self-hosted: a session with no account has nowhere to put
+  // anything. ``status`` is null until the first push; treating that as
+  // signed-out would flash the wall at somebody who is signed in.
   const signedIn = Boolean(status?.cloud_email);
   const knowYet = status !== null;
-
-  // ── What is waiting on you ──────────────────────────────────────
-  //
-  // The floor's notifications (igni server's
-  // ``docs/service-identity.md`` §10): what igni server delivered to
-  // whoever is signed in, and what extensions on this machine told the
-  // backend, counted per extension. The bell is the total; each
-  // extension's sidebar entry and chip carry its own share. No
-  // extension computes a count of its own any more, and neither does
-  // this — the backend pushes ``notifications_changed`` whenever
-  // either path moves, and this only listens.
-  const [notificationCounts, setNotificationCounts] = useNotificationCounts(
-    client,
-    conn === "connected",
-  );
-  const waiting = notificationCounts.unread;
-
-  // The directory this window's session is locked to (tools + shell
-  // cwd) — the window model's, beside the session.
-  const projectDir = useWindowField(windowModel, "project_dir");
-  // "Trust this folder?" — opened while the folder's decision is `ask`
-  // (see ``workspaceTrust/model.ts``).
-  useWorkspaceTrust(client, conn === "connected", projectDir, windowModel, dialog);
-  const setProjectDir = useCallback(
-    (dir: string) => windowModel.write("project_dir", dir),
-    [windowModel],
-  );
-
-  // Tauri title-bar bridge. macOS Finder convention: the window
-  // title is the folder name; the org goes after a middle dot.
-  // This effect re-runs every time projectDir or status.cloud_org
-  // changes so the title stays current across login/logout and
-  // project-lock switches.
-  useEffect(() => {
-    const setTitle = (
-      window as unknown as {
-        __IGNI_HOST__?: {
-          setAppTitle?: (folder: string, org: string) => void;
-        };
-      }
-    ).__IGNI_HOST__?.setAppTitle;
-    if (typeof setTitle !== "function") return;
-    const folder = projectDir
-      ? projectDir.split("/").filter(Boolean).pop() || projectDir
-      : "";
-    const org = status?.cloud_org || "";
-    try {
-      setTitle(folder, org);
-    } catch {
-      /* shell unavailable — title falls back to whatever the
-         Tauri builder set at window create. */
-    }
-  }, [projectDir, status?.cloud_org]);
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const headerRef = useRef<HTMLElement>(null);
-  // Synchronous mirror of ``runPhase`` for handlers that can't wait
-  // for React's next render (Escape-key handler, submit handler, WS
-  // event handler). Kept in sync inside ``setRunPhase``.
-  const runPhaseRef = useRef<RunPhase>("idle");
-  // Derived from runPhase. ``processing`` still consumed by the
-  // Composer + stats/tokens views below. ``finalizing`` no longer
-  // needed as a separate variable — the JSX reads runPhase directly
-  // through ``shouldShowSpinner`` + ``phaseLabel``.
-  const processing = isProcessing(runPhase);
-
-  // Bind window-drag via a native mousedown listener — React's
-  // synthetic onMouseDown was firing but Tauri's drag-region path
-  // wasn't, and the CSS ``-webkit-app-region: drag`` rule was being
-  // skipped by WebKit when the header is absolutely positioned with
-  // a near-transparent background. Native listener + a direct call
-  // to ``startDragging`` bypasses every layer of hit-test indirection.
-  useEffect(() => {
-    const el = headerRef.current;
-    if (!el) return;
-    const tauri = (
-      window as unknown as {
-        __TAURI__?: {
-          window?: {
-            getCurrentWindow?: () => {
-              startDragging: () => Promise<void> | void;
-            };
-          };
-        };
-      }
-    ).__TAURI__;
-    if (!tauri?.window?.getCurrentWindow) return; // not a Tauri host
-    const onDown = (e: MouseEvent) => {
-      if (e.button !== 0) return;
-      const target = e.target as HTMLElement | null;
-      if (!target) return;
-      // Skip interactive children so they keep their click behaviour.
-      if (
-        target.closest(
-          "button, input, textarea, a, .chip, .file-pill, .file-pill-wrap",
-        )
-      ) {
-        return;
-      }
-      e.preventDefault();
-      try {
-        const cur = tauri.window!.getCurrentWindow!();
-        void cur.startDragging();
-      } catch (err) {
-        console.warn("[igni] startDragging failed", err);
-      }
-    };
-    el.addEventListener("mousedown", onDown);
-    return () => el.removeEventListener("mousedown", onDown);
-  }, []);
-  // The think-tag parser state previously lived here (streamRef)
-  // — it moved to the BE (see docs/STREAMING_BUG_INVESTIGATION.md)
-  // so React StrictMode's double-fire can no longer contaminate it.
-
-  // Bumped on /clear: late events from a pre-clear run (Agno's
-  // post-stream tail, e.g. run_completed) must not leak into the
-  // fresh conversation.
-  const viewGenRef = useRef(0);
-
-  /** Ping the OS / favicon when a reply finishes while the tab is
-   *  not focused, so the user knows to come back. */
-  const notifyDone = useCallback(() => {
-    // Don't bother if the user is watching the tab.
-    if (
-      typeof document !== "undefined" &&
-      document.visibilityState === "visible"
-    )
-      return;
-    try {
-      if (typeof Notification === "undefined") return;
-      if (Notification.permission === "granted") {
-        new Notification("igni", {
-          body: "Your reply is ready.",
-          silent: true,
-        });
-      } else if (Notification.permission !== "denied") {
-        // Request permission once; subsequent runs honour the choice.
-        void Notification.requestPermission();
-      }
-    } catch {
-      /* notifications unsupported / blocked */
-    }
-  }, []);
-
-  const append = useCallback(
-    (item: ChatItem) => setItems((prev) => [...prev, item]),
-    [],
-  );
-
-  // Single-point setter for the run lifecycle. Every setter site in
-  // this file goes through here so ``runPhaseRef`` stays in lockstep
-  // with the React state. See ``chat/runPhase.ts`` for the model.
-  const setRunPhase = useCallback((p: RunPhase) => {
-    runPhaseRef.current = p;
-    setRunPhaseState(p);
-  }, []);
 
   const refreshStatus = useCallback(async () => {
     try {
@@ -831,2068 +157,179 @@ export default function App() {
       /* disconnected */
     }
     try {
-      setProjectDir(await client.rpc<string>("get_project_dir"));
+      windowModel.write("project_dir", await client.rpc<string>("get_project_dir"));
     } catch {
       /* older BE */
     }
-  }, [client, setProjectDir]);
-
-  // Tracks an acceptEdits flip that was triggered by the HITL
-  // dialog's *"Accept all edits during this session"* shortcut. The
-  // mental model the user signed up for is "auto-approve edits FOR
-  // THIS TASK" — not "permanently lower the gate". When the run's
-  // content stream ends (``streaming_done``) we revert by firing
-  // ``/accept off`` so the next user turn starts in default mode.
-  const autoAcceptForRunRef = useRef(false);
-
-  // ── Streamed event handler (run + HITL-resume streams) ───────────
-  const onStreamEvent = useCallback(
-    (m: ServerMessage) => {
-      if (m.type === "streaming_done") {
-        // Same contract as the TUI: unblock input when content ends,
-        // even though the BE tail (memory, compression) still drains.
-        // Hand off to ``finalizing`` so the indicator stays visible
-        // through the tail — see ``chat/runPhase.ts`` for the model.
-        setRunPhase("finalizing");
-        // Revert the auto-accept-for-this-run flip the shortcut put
-        // in place. Runs ``/accept off`` silently so the chat list
-        // doesn't show a fake typed slash command.
-        if (autoAcceptForRunRef.current) {
-          autoAcceptForRunRef.current = false;
-          void runCommand("/accept off", false);
-        }
-        return;
-      }
-      if (m.type === "run_paused") {
-        setHitl(m.requirements);
-        return;
-      }
-      if (m.type === "requirement_details") {
-        // Arrives on the run stream, where the safety check's question
-        // was raised — not as a broadcast.
-        setHitl((prev) => withDetails(prev, m));
-        return;
-      }
-      if (m.type === "status_update") {
-        setStatus(m);
-        return;
-      }
-      if (m.type === "command_result") {
-        const text = m.display_content || m.content;
-        if (text) {
-          setItems((prev) => [
-            ...prev,
-            m.kind === "error" ? chatItems.error(text) : chatItems.assistant(text),
-          ]);
-        }
-        return;
-      }
-      if (m.type === "run_started") {
-        // Fresh run starting on this view. The submit path already
-        // set phase="starting"; transition to "streaming" now that
-        // the BE confirmed it's live.
-        setRunPhase("streaming");
-      }
-      setItems((prev) => transcript(prev).applyServerMessage(m).items);
-      // After a top-level run finishes, Agno's reported ``input_tokens``
-      // is a sum across model iterations and is 2-3× the real session
-      // size on multi-step turns. The TUI long since switched its
-      // context meter to ``count_context_tokens`` (Agno's per-model
-      // tokenizer over the actual session messages); do the same in
-      // the web stats line by patching the just-emitted stats item
-      // with the corrected number.
-      if (m.type === "run_completed" && !m.parent_run_id && m.run_id) {
-        // Tail drained — transition to done. If a new run has
-        // already started, run_started will bump us back to
-        // streaming; this line just ensures the terminal transition
-        // isn't skipped when the FE was already in "finalizing".
-        setRunPhase("done");
-        const runId = m.run_id;
-        // The BE has just persisted the run — flip the matching
-        // user item's ``persisted`` flag so a subsequent edit/delete
-        // calls ``truncate_history`` instead of falling back to a
-        // local-only trim. Must be a separate setItems call from
-        // the stats fix below so both run in the same render pass.
-        setItems((prev) => transcript(prev).markRunPersisted(runId).items);
-        // Refresh the sidebar session list. Agno writes the session
-        // row to SQLite on the first user message, so before this
-        // run completed the freshly-created session was invisible
-        // to ``list_sessions``. The auto-name push also triggers a
-        // refresh, but only when naming succeeds — without this
-        // explicit refresh a session whose auto-name failed (or
-        // raced the run) would stay orphaned in the sidebar until
-        // app restart. Cheap RPC, called once per top-level run.
-        void refreshSessions();
-        void client
-          .rpc<number>("count_context_tokens")
-          .then((ctx) => {
-            if (typeof ctx === "number" && ctx > 0) {
-              setItems((prev) => transcript(prev).correctStats(runId, ctx).items);
-              // The same RPC latches the corrected ctx into the BE's
-              // _last_input_tokens. Refresh the status payload so the
-              // footer meter swaps from Agno's inflated wire number to
-              // the corrected one immediately, instead of waiting for
-              // the next 5s poll tick.
-              void refreshStatus();
-            }
-          })
-          .catch(() => {
-            /* leave the un-corrected (inflated) number — better than nothing */
-          });
-      }
-    },
-    [client, refreshStatus, setRunPhase, addToast],
-  );
-
-  // Persisted history + interrupted-message markers for a session,
-  // as renderable items. Used on initial attach AND session picks.
-  // Parallel to ``items``: ``historyIndexToItemIndex[i]`` is the FE
-  // items position of the i-th turn in ``get_chat_history``'s output,
-  // or -1 if the turn was filtered out by ``HistoryTurnMapper``. The chat
-  // search bar uses this to translate BE match indices into FE
-  // scroll-to positions without re-walking the items array.
-  const [historyIndexToItemIndex, setHistoryIndexToItemIndex] = useState<
-    number[]
-  >([]);
-
-  const fetchHistoryItems = useCallback(
-    async (
-      id: string,
-    ): Promise<{ items: ChatItem[]; historyMap: number[] }> => {
-      const loaded: ChatItem[] = [];
-      const historyMap: number[] = [];
-      try {
-        const turns = await client.rpc<unknown[]>(
-          "get_chat_history",
-          { session_id: id },
-        );
-        // Accumulate visible assistant text per run_id so the stats
-        // turn can estimate ``visibleOutTokens`` from the same string
-        // the user sees — matching the live path's behavior.
-        const assistantTextByRun = new Map<string, string>();
-        for (const raw of turns || []) {
-          const turn = parseHistoryTurn(raw);
-          const runId = turn.run_id;
-          if (turn.role === "stats") {
-            historyMap.push(loaded.length);
-            loaded.push(
-              history.stats(turn, assistantTextByRun.get(runId) ?? ""),
-            );
-            continue;
-          }
-          const item = history.map(turn);
-          if (item) {
-            // Attach the BE-side run_id to user items so they're
-            // edit/delete-targetable after a session restore. The
-            // run is by definition already in the BE (that's where
-            // the history came from), so stamp ``persisted: true``
-            // up front — edit/delete can skip the local-only path.
-            if (item.kind === "user" && runId) {
-              item.runId = runId;
-              item.persisted = true;
-            }
-            if (item.kind === "assistant" && runId) {
-              const prev = assistantTextByRun.get(runId) ?? "";
-              assistantTextByRun.set(
-                runId,
-                prev ? `${prev} ${item.text}` : item.text,
-              );
-            }
-            historyMap.push(loaded.length);
-            loaded.push(item);
-          } else {
-            // The mapper filtered this turn out (empty after
-            // stripping). Record -1 so the search-result mapping
-            // marks this match as unreachable rather than landing on
-            // the wrong item.
-            historyMap.push(-1);
-          }
-        }
-      } catch {
-        /* no history — fresh session */
-      }
-      // PlanCards are emitted inline by ``get_chat_history`` (a
-      // synthetic ``role: "plan"`` turn replaces each
-      // ``exit_plan_mode`` tool result) so the card renders at the
-      // conversation position where the agent submitted it — not
-      // bolted onto the end. No separate fetch needed.
-      try {
-        const pending = await client.rpc<{ content?: unknown }[]>(
-          "get_pending_messages",
-          { session_id: id },
-        );
-        if (pending?.length) {
-          for (const p of pending) {
-            // Pending stores the post-process prompt (with the
-            // <attached-files> wrapper). Route through the mapper
-            // so the bubble displays only the user-typed text; the
-            // @<path> tokens render as inline pills.
-            const item = history.map(
-              parseHistoryTurn({ role: "user", content: p.content }),
-            );
-            if (item) loaded.push(item);
-          }
-          loaded.push(
-            chatItems.info(
-              `${countOf(pending.length, "message")} above ${
-                pending.length === 1 ? "was" : "were"
-              } interrupted before completion — the agent knows and can pick up where it left off.`,
-            ),
-          );
-        }
-      } catch {
-        /* crash recovery is best-effort */
-      }
-      return { items: loaded, historyMap };
-    },
-    [client],
-  );
-
+  }, [client, windowModel]);
   const refreshSessions = useCallback(async () => {
     try {
-      // BE wraps the rows: {type: "session_list_result", sessions: [...]}.
-      const res = await client.rpc<{ sessions?: Record<string, unknown>[] }>(
-        "list_sessions",
-      );
-      const list = Array.isArray(res)
-        ? (res as Record<string, unknown>[])
-        : (res?.sessions ?? []);
-      setSessions(
-        list.map((s) => {
-          const id = String(s.session_id ?? s.id ?? "");
-          const ts = Number(s.updated_at ?? s.created_at ?? 0);
-          const when = ts
-            ? new Date(ts * 1000).toLocaleString([], {
-                month: "short",
-                day: "numeric",
-                hour: "2-digit",
-                minute: "2-digit",
-              })
-            : "";
-          // Auto-naming runs after the first turn; until then a
-          // readable timestamp beats a hex id.
-          return {
-            session_id: id,
-            name: String(s.name ?? "") || (when ? `Chat · ${when}` : id),
-            detail: [id, when].filter(Boolean).join(" · "),
-          };
-        }),
-      );
+      setSessions(SessionRow.listFrom(await client.rpc<unknown>("list_sessions")).map((row) => row.toEntry()));
     } catch {
       /* older BE or empty */
     }
   }, [client]);
 
-  // ── Wiring ────────────────────────────────────────────────────────
-  useEffect(() => {
-    const offState = client.onStateChange((s) => {
-      setConn(s);
-      if (s !== "connected") setSessionBound(false);
-      if (s === "connected") {
-        void (async () => {
-          try {
-            // Read this window's model before any session-binding
-            // decision — the session it shows is what tells us whether
-            // to attach to an existing session or fall through to the
-            // BE's default. The page it was on, its sidebar and its
-            // draft come back with it.
-            await windowModel.hydrate();
-            // Nothing stored for the sidebar: a wide window opens with
-            // it out, a narrow one without.
-            if (windowModel.unset().includes("sidebar")) {
-              windowModel.write("sidebar", {
-                ...windowModel.get("sidebar"),
-                open: window.innerWidth > 700,
-              });
-            }
-            // A link wins over wherever this window was last. Somebody
-            // following one asked for that page; putting them back on
-            // the chat they had open a week ago answers a question
-            // nobody asked, and the page they came for is then two
-            // clicks away with no sign it is there.
-            if (arrival) {
-              windowModel.write("route", [
-                { kind: arrival.page, label: arrival.page, params: arrival.params },
-              ]);
-            }
-            // Say whether this window has focus, now that it is open.
-            windowModel.write("focused", document.hasFocus());
-            // Adopt a session for this view. An already-bound
-            // sessionId wins outright (reconnect mid-session — don't
-            // churn it); otherwise the plan comes from the window's
-            // ``?dir=`` param and what this client had stored. See
-            // ``chat/sessionBinding.ts`` for why the stored *folder*
-            // is part of the decision and not just the session id.
-            if (!client.sessionId) {
-              const plan = planSessionBinding({
-                wantedDir: windowProjectDir,
-                storedSession: windowModel.get("session"),
-                storedDir: windowModel.get("project_dir"),
-              });
-              const attach = async (args: Record<string, string>) => {
-                const res = await client.rpc<{
-                  session_id: string;
-                  project_dir: string;
-                }>("attach_session", args);
-                client.sessionId = res.session_id;
-                setProjectDir(res.project_dir);
-              };
-              try {
-                switch (plan.kind) {
-                  case "bind-folder":
-                    await attach({ project_dir: plan.projectDir });
-                    break;
-                  case "resume-in-folder":
-                    await attach({
-                      session_id: plan.sessionId,
-                      project_dir: plan.projectDir,
-                    });
-                    break;
-                  case "resume":
-                    await attach({ session_id: plan.sessionId });
-                    break;
-                  case "default":
-                    client.sessionId =
-                      await client.rpc<string>("get_session_id");
-                    break;
-                }
-              } catch {
-                // Unusable binding — fall through to the default
-                // session rather than leaving the window dead.
-                client.sessionId = await client.rpc<string>("get_session_id");
-              }
-            }
-            setSessionId(client.sessionId);
-            // Resumed BE session (--resume-session / crash restart):
-            // show its history instead of an empty welcome. The
-            // actual "land at the most recent message" scroll fires
-            // from the ``bootScrollDoneRef`` effect below — we
-            // can't call ``scrollToBottom`` inline here because
-            // ``setItems`` is async and Virtuoso's ``data`` prop
-            // hasn't updated yet, so ``scrollToIndex("LAST")``
-            // would resolve against the still-empty list.
-            const loaded = await fetchHistoryItems(client.sessionId);
-            if (loaded.items.length) setItems(loaded.items);
-            setHistoryIndexToItemIndex(loaded.historyMap);
-          } catch {
-            /* ignore */
-          }
-          // Bound, or failed to and working with what it has: either
-          // way nothing will replace the draft now.
-          setSessionBound(true);
-          // Recompute the real session-context size before fetching
-          // status — the BE's ``_last_input_tokens`` may still be the
-          // inflated value latched by ``RunCompleted.input_tokens``
-          // from a turn that pre-dated the count_context_tokens
-          // overwrite fix. ``count_context_tokens`` re-tokenises the
-          // actual session messages and writes the corrected number
-          // back into ``_last_input_tokens``, so the immediately
-          // following ``refreshStatus`` reads the right value into
-          // the footer instead of waiting for the next run.
-          try {
-            await client.rpc<number>("count_context_tokens");
-          } catch {
-            /* tokenizer not ready / older BE — fall through */
-          }
-          void refreshStatus();
-          void refreshSessions();
-          try {
-            const defs = await client.rpc<
-              { name: string; description: string }[]
-            >("get_skill_definitions");
-            setSkills(
-              (defs || []).map((d) => ({
-                name: `/${d.name}`,
-                description: d.description || "skill",
-              })),
-            );
-          } catch {
-            /* skills optional */
-          }
-          // The command list the backend actually dispatches. The
-          // composer used to carry its own copy of this, which had
-          // drifted both ways — advertising one command that does not
-          // exist and hiding nine that do.
-          try {
-            const cmds =
-              await client.rpc<{ name: string; description: string }[]>(
-                "get_slash_commands",
-              );
-            if (cmds?.length) {
-              setBackendCommands(
-                cmds.map((c) => ({
-                  // The backend leaves the slash off deliberately —
-                  // adding it is the caller's job.
-                  name: `/${c.name}`,
-                  description: c.description || "",
-                })),
-              );
-            }
-          } catch {
-            /* older backend — the composer's fallback covers it */
-          }
-          // Silent startup check — populates the version chip and
-          // surfaces an OS notification + modal sheet if a newer
-          // build is available. The same helper is wired to the
-          // native "Check for Updates…" menu item, called with
-          // ``silent=false`` so the user gets feedback either way.
-          void checkForUpdate(true);
-        })();
-      }
-    });
-    const offEvent = client.onEvent((m) => {
-      // ── Mirroring events ────────────────────────────────────────
-      if (m.type === "welcome") return; // client stored its id
-      if (m.type === "typing") {
-        // No remote-typing indicator — dropped per user request.
-        return;
-      }
-      if (m.type === "user_message_received") {
-        // An extension's message (``host.chat.post``) is nobody's echo:
-        // every view paints it, labelled as the extension's.
-        if (m.extension_id) {
-          // Its id, as a reload restores it; the bubble shows the name.
-          append(chatItems.user(m.text, m.extension_id));
-          if (m.queued)
-            append(chatItems.info("Queued — will run after the current turn."));
-          return;
-        }
-        // Another view submitted — paint its bubble here. Our own
-        // echo is skipped (we already painted on submit).
-        if (m.client_id !== client.clientId) {
-          append(chatItems.user(m.text));
-          if (m.queued)
-            append(chatItems.info("Queued — will run after the current turn."));
-        }
-        return;
-      }
-      if (m.type === "requirement_resolved") {
-        // Another view answered the permission dialog — drop it here.
-        setHitl((prev) => {
-          if (!prev) return prev;
-          const left = prev.filter(
-            (r) => r.requirement_id !== m.requirement_id,
-          );
-          return left.length ? left : null;
-        });
-        return;
-      }
+  // Navigation: every move is a write of ``ui.route``, which an
+  // extension's ``navigate`` writes too. "Take me to X" means the top of
+  // X, even when X already shows one of its own sub-views.
+  const navigate = useCallback((next: PageRoute[]) => windowModel.write("route", next), [windowModel]);
+  const goPage = useCallback((to: PageRoute) => navigate(openRoot(to)), [navigate]);
+  const goChat = useCallback(() => navigate([]), [navigate]);
 
-      if (m.type === "requirement_details") {
-        setHitl((prev) => withDetails(prev, m));
-        return;
-      }
+  const pushRouter = useMemo(
+    () =>
+      new PushChannelRouter({
+        windowModel,
+        chatItems,
+        transcript: view.transcript,
+        setItems,
+        setStatus,
+        notifier,
+        host,
+        refreshSessions,
+        events: window,
+      }),
+    [windowModel, chatItems, view, setItems, notifier, refreshSessions],
+  );
+  const shell = useMemo<ShellPort>(
+    () => ({ setStatus, setSessions, refreshStatus, refreshSessions, goPage, openModelMenu, seedComposer }),
+    [refreshStatus, refreshSessions, goPage, openModelMenu, seedComposer],
+  );
+  const controller = useChatController({
+    client,
+    windowModel,
+    view,
+    hitl: hitl.requests,
+    run: run.controls,
+    historyLoader,
+    workflows,
+    notifier,
+    pushRouter,
+    shell,
+  });
+  useObserver(client, controller.mirror);
 
-      if (m.type === "run_paused") setHitl(m.requirements);
-      else if (m.type === "status_update") setStatus(m);
-      else if (m.type === "push_notification") {
-        if (m.channel === "background_process_done") {
-          // Background processes complete asynchronously — they aren't
-          // tied to a specific position in the conversation, so we
-          // route them to a toast instead of injecting an info item
-          // between chat turns. Same pattern as scheduler events
-          // below. (Inline info items here used to split the
-          // team-progress card in two when one landed mid-team-run —
-          // the orchestrate_event router checked ``last item``.)
-          const p = m.payload as {
-            cmd?: string;
-            exit_code?: number;
-            duration_seconds?: number;
-          };
-          const cmd = String(p.cmd ?? "");
-          const cmdShort = cmd.length > 160 ? cmd.slice(0, 159) + "…" : cmd;
-          const ok = p.exit_code === 0;
-          const dur =
-            typeof p.duration_seconds === "number"
-              ? ` · ${p.duration_seconds.toFixed(1)}s`
-              : "";
-          const title = ok
-            ? `Background process finished${dur}`
-            : `Background process failed (exit ${p.exit_code})${dur}`;
-          void notifyHost({
-            title,
-            body: cmdShort,
-            data: { channel: m.channel },
-          });
-        } else if (
-          m.channel === "scheduler_started" ||
-          m.channel === "scheduler_completed"
-        ) {
-          // Scheduled tasks are project-scoped, not chat-scoped — they
-          // don't belong in whichever conversation the user happens to
-          // be in. Render as a toast (top-right, persistent across
-          // conversation switches) and, if the app is backgrounded,
-          // additionally fire a native host notification (the desktop
-          // app) so the user notices.
-          const desc =
-            String(m.payload.description ?? "").trim() || "(no description)";
-          const result = String(m.payload.result ?? "").trim();
-          const title =
-            m.channel === "scheduler_started"
-              ? `⏱ Scheduled task started`
-              : `⏱ Scheduled task completed`;
-          const body =
-            m.channel === "scheduler_completed" && result
-              ? `${desc}\n\n${result.length > 240 ? result.slice(0, 240) + "…" : result}`
-              : desc;
-          void notifyHost({
-            title,
-            body,
-            target: { kind: "schedule", label: "Scheduled tasks" },
-            data: { channel: m.channel, task_id: m.payload.task_id },
-          });
-        } else if (m.channel === "open_external") {
-          // An extension asked this window to open a link
-          // (``host.app.open_external``); the backend checked it, and
-          // ``openExternal`` checks it again.
-          if (m.payload.window === windowModel.clientId) {
-            void host.openExternal(String(m.payload.url ?? ""));
-          }
-        } else if (m.channel === "window_model_changed") {
-          // A change to a window's model — this window's own echo,
-          // another window's, or an extension's through ``host.ui``.
-          // The model applies what is about this window; the views
-          // re-render from it.
-          windowModel.applyPush(
-            m.payload as unknown as Parameters<WindowModel["applyPush"]>[0],
-          );
-        } else if (m.channel === "file_edited") {
-          // BE edit_file / edit_file_replace_all / create_file just
-          // wrote to disk. Neither the desktop app nor the web client
-          // holds an editor buffer to refresh, so there is nothing to
-          // do; the branch keeps the push out of the fall-through.
-        } else if (m.channel === "orchestrate_event") {
-          // Visualizer streaming path: the visualizer sub-agent emits
-          // its whole response as one JSON object (a json-render spec),
-          // and orchestrate.py forwards the ACCUMULATED string on
-          // this channel as ``{type: "visualization_delta", spec_id,
-          // json, final?}`` throttled to ~50ms. We partial-parse the
-          // JSON on each delta so the card fills in progressively as
-          // tokens arrive. An extension's ``chat.append`` sends the
-          // same event carrying its ``title`` and ``source``.
-          const delta = visualizationDeltaFromPayload(m.payload);
-          if (delta) {
-            setItems((prev) => applyVisualizationDelta(prev, delta, chatItems));
-            return; // Fully handled; don't fall through to team-card logic
-          }
+  // What a bound window asks its session for. Re-tokenised first, so the
+  // footer does not start from a count an older run inflated; the update
+  // check is silent unless there is something newer.
+  const onBound = useCallback(async () => {
+    try {
+      await client.rpc<unknown>("count_context_tokens");
+    } catch {
+      /* tokenizer not ready / older BE */
+    }
+    void refreshStatus();
+    void refreshSessions();
+    await loadCatalog();
+    void checkRef.current(true);
+  }, [client, refreshStatus, refreshSessions, loadCatalog, checkRef]);
+  const { conn, sessionBound } = useSessionBinding({
+    client,
+    windowModel,
+    sessions: controller.sessions,
+    opening,
+    onBound,
+  });
+  const connected = conn === "connected";
 
-          // Structured tree-event from orchestrate.py, routed to its
-          // card by the BE-stamped ``card_id``; see
-          // ``ChatTranscript.applyOrchestrateEvent``.
-          const envelope = parseOrchestrateEvent(m.payload);
-          if (envelope) {
-            setItems((prev) => transcript(prev).applyOrchestrateEvent(envelope).items);
-          }
-        } else if (m.channel === "workflow_event") {
-          // Live progress from the BE's workflow runner (the
-          // process that executes .igni/workflows/*.mjs). Each
-          // event is a single line from the Node subprocess's
-          // stdout, already validated + envelope-wrapped by the
-          // BE. We fold into the matching workflow chat item by
-          // ``workflow_run_id``; a fresh event with an unknown
-          // id (e.g. the user opened a new tab on a long run)
-          // creates a card on the fly.
-          const ev = parseWorkflowEvent(m.payload);
-          if (ev) setItems((prev) => transcript(prev).applyWorkflowEvent(ev).items);
-          return;
-        } else if (m.channel === "orchestrate_progress") {
-          // Legacy text channel — kept for backward compat in case a
-          // path in orchestrate.py still emits strings. Wraps the
-          // line as a content_preview against the "root" agent path
-          // so it shows up in the same card without ASCII art. No
-          // card_id is carried — fold into the most recent active
-          // card, or open a fresh one with an empty cardId.
-          const line = String(m.payload.line ?? "").trim();
-          if (!line) return;
-          const envelope: OrchestrateEventEnvelope = {
-            cardId: "",
-            event: {
-              type: "content_preview",
-              agent_path: "root",
-              text: line.slice(0, 120),
-            },
-          };
-          setItems((prev) => transcript(prev).applyOrchestrateEvent(envelope).items);
-        } else if (m.channel === "session_named") {
-          void refreshSessions();
-        } else if (m.channel === "permission_mode_changed") {
-          // BE flipped the live ``PermissionEvaluator.mode``. The
-          // status badge reads from ``status.permission_mode``;
-          // patch the cached status so the badge updates without
-          // waiting for the next ``status_update`` push (which
-          // only fires on token-counter changes).
-          const mode = String(
-            (m.payload as { mode?: unknown }).mode ?? "default",
-          );
-          setStatus((prev) =>
-            prev ? { ...prev, permission_mode: mode } : prev,
-          );
-          // When the AGENT entered plan mode (via the
-          // ``enter_plan_mode`` tool, not the user's /plan
-          // command) inject an inline info banner so the user
-          // sees what happened and why. The basic flip
-          // broadcast lacks ``source`` so we only paint the
-          // banner on the follow-up agent-attributed event.
-          const src = String((m.payload as { source?: unknown }).source ?? "");
-          if (src === "agent" && mode === "plan") {
-            const reason = String(
-              (m.payload as { reason?: unknown }).reason ?? "",
-            ).trim();
-            const text = reason
-              ? `Agent entered plan mode — ${reason}`
-              : "Agent entered plan mode.";
-            append(chatItems.info(text));
-          }
-        } else if (m.channel === "http_retry_attempt") {
-          // HTTP request is being retried. Dispatch a window event
-          // so the RetryBanner can listen and display progress.
-          const payload = m.payload as {
-            attempt?: number;
-            delay_seconds?: number;
-            url?: string;
-          };
-          window.dispatchEvent(
-            new CustomEvent("ember:http_retry_attempt", {
-              detail: {
-                attempt: payload.attempt,
-                delay_seconds: payload.delay_seconds,
-                url: payload.url,
-              },
-            }),
-          );
-        } else if (m.channel === "http_retry_succeeded") {
-          // HTTP request succeeded after retries. Dismiss the banner.
-          window.dispatchEvent(new Event("ember:http_retry_succeeded"));
-        } else if (m.channel === "plan_submitted") {
-          // Agent called ``exit_plan_mode(plan, tasks=[...])``.
-          // Append a ``plan`` ChatItem so the user sees the
-          // plan card + Approve / Refine buttons inline in the
-          // conversation. ``tasks`` (optional) seeds the live
-          // checklist; ``todos_updated`` pushes refresh the
-          // statuses during execution. ``run_id`` is the BE-side
-          // key for approve/dismiss RPCs — stamped onto the
-          // payload at drain time by the run loop.
-          const payload = m.payload as {
-            plan?: unknown;
-            tasks?: unknown;
-            run_id?: unknown;
-          };
-          const planText = String(payload.plan ?? "").trim();
-          const runId = String(payload.run_id ?? "");
-          if (planText) {
-            append(
-              chatItems.plan({
-                plan: planText,
-                tasks: PlanTaskList.parse(payload.tasks).tasks,
-                runId,
-              }),
-            );
-          }
-        } else if (m.channel === "plan_decided") {
-          // Server-of-truth state change. Fired by
-          // ``Session.approve_plan`` / ``dismiss_plan`` after
-          // the decision is persisted. We update the matching
-          // PlanCard by ``runId`` so multiple stacked plans in
-          // the chat each flip independently.
-          const payload = m.payload as { run_id?: unknown; decision?: unknown };
-          const runId = String(payload.run_id ?? "");
-          const decision = String(payload.decision ?? "");
-          if (runId && (decision === "approved" || decision === "dismissed")) {
-            setItems((prev) =>
-              prev.map((it) =>
-                it.kind === "plan" && it.runId === runId
-                  ? { ...it, state: decision }
-                  : it,
-              ),
-            );
-          }
-        } else if (m.channel === "todos_updated") {
-          // ``todo_write`` mutated the TodoStore. Patch every open
-          // ``plan`` ChatItem's tasks — see ``PlanTaskList.mergeTodos``
-          // for the matching/preserve semantics.
-          const todos = (m.payload as { todos?: unknown }).todos;
-          setItems((prev) =>
-            prev.map((it) =>
-              it.kind === "plan"
-                ? { ...it, tasks: new PlanTaskList(it.tasks).mergeTodos(todos).tasks }
-                : it,
-            ),
-          );
-        }
-      } else {
-        // Cross-view busy-indicator update. The state machine —
-        // including the ``stream_end`` quirk where it fires after
-        // ``run_completed`` and MUST NOT re-arm finalizing — lives
-        // in ``chat/observerBusy.ts`` and is exercised by direct
-        // reducer tests. Adapter: our source of truth is
-        // ``runPhaseRef``; convert to the reducer's
-        // ``{proc, finalizing}`` shape at the boundary and translate
-        // back — the observer reducer is A-tier and we intentionally
-        // don't change its interface.
-        const prev = phaseToProcFinalizing(runPhaseRef.current);
-        const next = nextObserverBusyState(prev, m);
-        setRunPhase(phaseFromProcFinalizing(next, runPhaseRef.current));
-        // Item rendering (content deltas, tool cards, stats line,
-        // etc.) is orthogonal to the busy indicator — always apply
-        // except for the pure-terminator events that carry no
-        // renderable payload.
-        if (m.type !== "streaming_done" && m.type !== "stream_end") {
-          setItems((prev) => transcript(prev).applyServerMessage(m).items);
-        }
-      }
-    });
-    client.connect();
-    return () => {
-      offState();
-      offEvent();
-      client.close();
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [client]);
+  useHostBindings({
+    client,
+    windowModel,
+    view,
+    updateCheck,
+    arrival: opening.arrival,
+    signedIn,
+    projectDir,
+    org: status?.cloud_org || "",
+  });
+  const { groupName, groupMark } = useGroupBranding(status?.theme);
+
+  // The floor's notifications per extension; the backend pushes
+  // ``notifications_changed`` and this only listens.
+  const [notificationCounts, setNotificationCounts] = useNotificationCounts(client, connected);
+  const { contributions, extensions, setExtensions, extensionNames } = useExtensions(
+    client,
+    connected,
+    windowModel,
+  );
+  // "Trust this folder?" while the folder's decision is ``ask``.
+  useWorkspaceTrust(client, connected, projectDir, windowModel, dialog);
+  // Events and host-model signals for installed extensions.
+  const extensionTraffic = useExtensionTraffic(client, connected);
 
   // Status poll — mirrors the TUI status-bar cadence.
   useEffect(() => {
-    if (conn !== "connected") return;
+    if (!connected) return;
     const t = setInterval(refreshStatus, 5_000);
     return () => clearInterval(t);
-  }, [conn, refreshStatus]);
+  }, [connected, refreshStatus]);
 
-  // Events and host-model signals for installed extensions. One push
-  // each for all of them; the payload says which frame it is for, and
-  // nothing is posted into a frame it was not addressed to.
-  const extensionTraffic = useExtensionTraffic(client, conn === "connected");
-
-  /**
-   * What is installed, and its contributions folded into the nav.
-   *
-   * Runs on connect rather than once on mount: extensions live in the
-   * backend, so a reconnect to a backend that has installed or
-   * removed one has to be noticed. The registry is module scope and
-   * outlives this effect, which is why the cleanup uninstalls —
-   * without it a reconnect would fold the same pages in twice and
-   * every one of them would be refused as a collision with itself.
-   */
-  useEffect(() => {
-    if (conn !== "connected") return;
-    let alive = true;
-    const owners: string[] = [];
-
-    void client
-      .rpc<{ extensions: ExtensionSummary[] }>("list_extensions")
-      .then((result) => {
-        if (!alive) return;
-        setExtensions(result.extensions);
-        for (const extension of result.extensions) {
-          // A FAILED extension still contributes its sidebar entry.
-          // The page it opens says what went wrong, which is the
-          // thing an administrator is looking for — an entry that
-          // silently vanishes is a worse answer than one that
-          // explains itself.
-          const refusals = contributions.install(extension.id, {
-            pages: extension.pages,
-            menu: extension.menu,
-          });
-          owners.push(extension.id);
-          for (const refusal of refusals) {
-            console.warn(`[extensions] ${refusal.owner}: ${refusal.reason}`);
-          }
-        }
-        // A page a link opened before its extension was listed carries
-        // its kind for a label (see ``arrival``); it has a name now.
-        const named = new Map(
-          result.extensions.flatMap((e) => e.pages.map((p) => [p.kind, p.label] as const)),
-        );
-        const route = windowModel.get("route");
-        if (route.some((r) => r.label === r.kind && named.has(r.kind))) {
-          windowModel.write(
-            "route",
-            route.map((r) =>
-              r.label === r.kind && named.has(r.kind) ? { ...r, label: named.get(r.kind) ?? r.label } : r,
-            ),
-          );
-        }
-      })
-      .catch((error: unknown) => {
-        // A backend without extension support, or an older one that
-        // has never heard of the method. Not worth a banner: the
-        // absence of extensions is indistinguishable from none being
-        // installed, which is the common case.
-        console.info("[extensions] not listed:", error);
-      });
-
-    return () => {
-      alive = false;
-      for (const owner of owners) contributions.uninstall(owner);
-    };
-  }, [client, conn, windowModel]);
-
-  // Navigation. Every move is a write of ``ui.route`` — the window's
-  // model, which an extension's ``navigate`` writes too — so what is
-  // rendered, what is stored and what is signalled cannot drift.
-  const navigate = useCallback(
-    (next: PageRoute[]) => windowModel.write("route", next),
-    [windowModel],
-  );
-
-  // "Take me to X" means the top of X, even when X is already on
-  // screen showing one of its own sub-views. The write counts even
-  // when the route is the same (see ``pageHome``): without that the
-  // sidebar link for the page you are on is a control that does
-  // nothing, and Add source or a document you were reading stays
-  // exactly where it was.
-  const goPage = useCallback(
-    (route: PageRoute) => navigate(openRoot(route)),
-    [navigate],
-  );
-  const goBack = useCallback(() => navigate(popPage(pages)), [navigate, pages]);
-  const goCrumb = useCallback(
-    (index: number) => navigate(truncateTo(pages, index)),
-    [navigate, pages],
-  );
-  const goChat = useCallback(() => navigate([]), [navigate]);
-
+  // The part of the route this window can draw: an extension's page
+  // appears once its extension is listed. Computed each render because
+  // the page registry fills in place as extensions install.
+  const pages = visiblePages(route, contributions.pages);
   const page = currentPage(pages);
+  const goBack = () => navigate(popPage(pages));
+  const goCrumb = (index: number) => navigate(truncateTo(pages, index));
 
-  // Group branding. Keyed on the serialised theme rather than the
-  // object: status arrives every five seconds and carries a fresh
-  // object each time, so an identity-keyed effect would re-apply the
-  // same values twelve times a minute. ``applyTheme`` clears what it
-  // owns before setting, so losing a theme restores igni's palette
-  // instead of leaving the last one stuck until reload.
-  const themeKey = JSON.stringify(status?.theme ?? null);
-  useEffect(() => {
-    applyTheme(status?.theme, document.documentElement);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [themeKey]);
-  const groupName = brandName(status?.theme);
-  const groupMark = brandMark(status?.theme);
+  // Where the transcript is scrolled (``ui.scroll``), and finding in it.
+  const scroll = useTranscriptScroll(windowModel, items);
+  const search = useChatSearch(windowModel, items, scroll.virtuosoRef, panel);
 
-  // Esc behavior (single global handler, fires once per keydown):
-  //
-  //   1. **HITL dialog open** → reject all pending requirements.
-  //      The agent is paused waiting on user input; dismissing the
-  //      dialog also stops the run (the agent resumes the same
-  //      way as if the user clicked Reject on each row). Beats the
-  //      old behavior where Esc did nothing and the user felt
-  //      "bombarded" — every Esc should reduce pressure, not be
-  //      silently ignored.
-  //
-  //   2. **Active generation** (no HITL) → cancel the run (TUI
-  //      parity). Single state transition — see
-  //      ``chat/runPhase.ts``. Setting phase locally to "cancelled"
-  //      immediately clears the spinner; the WS message tells the
-  //      BE to actually stop.
-  //
-  //   3. **Idle** → no-op (lets the OS do its default — close
-  //      menus, exit popovers, etc.).
-  //
-  // **Fullscreen quirk**: when the app is in macOS-native
-  // fullscreen (green traffic-light button), WebKit fires the
-  // ``keydown`` event for Esc to JS BEFORE the OS intercepts it
-  // for the "exit fullscreen" gesture. Calling ``preventDefault()``
-  // here blocks the OS gesture so Esc stays in-app. Without this,
-  // every Esc inside fullscreen would exit the app — annoying
-  // when the agent is mid-stream.
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      const action = handleEsc(e, {
-        hitl,
-        isProcessing: shouldShowSpinner(runPhaseRef.current),
-        isFullscreen: document.documentElement.dataset.fullscreen === "true",
-      });
-      if (action.preventDefault) e.preventDefault();
-      switch (action.decision?.kind) {
-        case "reject_hitl_and_cancel":
-          // Dismiss the dialog and reject every pending req in one
-          // batch. The BE resumes the agent, sees the rejections,
-          // aborts the run. ``resolveHitl`` is declared further
-          // down (line ~2140) — we can't reference it here due to
-          // the TDZ. Inline the minimal slice we need: ``setHitl``
-          // clears the dialog locally; ``client.resolveHitlBatch``
-          // sends the rejection. ``resolveHitl`` does more (sets
-          // the run phase, refreshes status, continues loops), but
-          // for the cancel path we cancel the run ourselves via
-          // ``client.cancel()`` + ``setRunPhase`` so the post-flow
-          // doesn't matter — the run is over.
-          const rejected = hitl!.map((req) => ({
-            requirement_id: req.requirement_id,
-            action: "reject" as const,
-            choice: "",
-          }));
-          setHitl(null);
-          void client.resolveHitlBatch(rejected, () => {});
-          setRunPhase("cancelled");
-          client.cancel();
-          setItems((prev) => transcript(prev).markInterrupted("cancelled").items);
-          return;
-        case "cancel_generation":
-          setRunPhase("cancelled");
-          client.cancel();
-          setItems((prev) => transcript(prev).markInterrupted("cancelled").items);
-          return;
-        case "block_fullscreen_exit":
-          // Esc was swallowed (preventDefault above) — the OS no
-          // longer gets to exit fullscreen on its own. The user
-          // can exit via the green button or by holding Esc for
-          // ~1s (WebKit's hold-to-exit hint) — both are explicit
-          // gestures, not accidental presses.
-          return;
-        default:
-          // null decision — let the event propagate so the OS /
-          // browser does its default (close menus, etc.).
-          return;
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [client, hitl]);
+  const resolveHitl = (decisions: HitlDecision[]) => {
+    hitl.requests.clear();
+    void controller.streamer.resume(decisions);
+  };
 
-  // Autoscroll that respects user intent: stick to the bottom while
-  // the user is already there (within a small slack zone), release
-  // the lock the moment they scroll away. A floating "↓" button
-  // appears in the gap so they can jump back.
-  // Virtuoso owns scroll. We just observe the "at bottom" state to
-  // toggle the scroll-to-bottom button. ``followOutput="auto"`` keeps
-  // the view glued to the tail whenever the user is already there;
-  // when they've scrolled up to read history it leaves the position
-  // alone (no jumping mid-read).
-  //
-  // Where the transcript is, is ``ui.scroll``: whether it follows the
-  // newest message, and the message at the top once it comes to rest.
-  // Both are told to the model as they happen — a transition, a
-  // settle — never per pixel.
-  const scroll = useWindowField(windowModel, "scroll");
-  const stickToBottom = scroll.at_bottom;
-  const virtuosoRef = useRef<VirtuosoHandle>(null);
-  // The scroller element, for the indicator to measure: a DOM handle,
-  // not something the window shows.
-  const [scrollEl, setScrollEl] = useState<HTMLElement | null>(null);
-  // Keep the legacy ``scrollRef`` populated so anything still reaching
-  // for it (debug, tests) sees the real scroller.
-  useEffect(() => {
-    scrollRef.current = scrollEl as HTMLDivElement | null;
-  }, [scrollEl]);
-  // The first item in view, as Virtuoso last reported it — measured,
-  // and told to the model when scrolling stops.
-  const topIndexRef = useRef(0);
-  const itemsForScroll = useRef(items);
-  itemsForScroll.current = items;
-  const tellScroll = useCallback(
-    (atBottom: boolean) =>
-      windowModel.write("scroll", {
-        message_id: atBottom
-          ? null
-          : runAt(itemsForScroll.current, topIndexRef.current),
-        at_bottom: atBottom,
-      }),
-    [windowModel],
-  );
-  // Virtuoso's "at bottom", once it agrees with the page (V6).
-  const follow = useChatFollow(items.length, AT_BOTTOM_THRESHOLD, tellScroll);
-  const scrollToBottom = useCallback(() => {
-    virtuosoRef.current?.scrollToIndex({ index: "LAST", behavior: "auto" });
-    tellScroll(true);
-  }, [tellScroll]);
+  const pickProject = async () => {
+    const pick = await folderPicker.pick(projectDir);
+    if (pick.kind === "picked") void controller.sessions.attachFolder(pick.path);
+    else if (pick.kind === "in-app") windowModel.openPanel("dir-picker");
+  };
 
-  // ── Boot scroll: land the resumed session at its most recent
-  // message instead of the very first user prompt. Fires once,
-  // the first time ``items`` transitions from empty to populated
-  // (after React commits + Virtuoso has the new ``data`` prop —
-  // calling ``scrollToBottom`` inline from the boot effect runs
-  // BEFORE the commit, so ``scrollToIndex("LAST")`` resolves
-  // against the still-empty list and lands on nothing).
-  const bootScrollDoneRef = useRef(false);
-  useEffect(() => {
-    if (bootScrollDoneRef.current) return;
-    if (items.length === 0) return;
-    bootScrollDoneRef.current = true;
-    scrollToBottom();
-  }, [items.length, scrollToBottom]);
-  // Find-in-conversation. Cmd/Ctrl+F opens the bar; a small icon
-  // button near the chat header opens it too. It is the ``search``
-  // panel of ``ui.panel``.
-  const searchOpen = panel.kind === "search";
-  const toggleSearch = useCallback(() => {
-    const open = windowModel.get("panel")?.kind === "search";
-    windowModel.write("panel", open ? null : { kind: "search" });
-  }, [windowModel]);
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      const cmdLike = e.metaKey || e.ctrlKey;
-      if (cmdLike && e.key.toLowerCase() === "f") {
-        // Only intercept when there's something to search.
-        if (items.length === 0) return;
-        e.preventDefault();
-        toggleSearch();
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [items.length, toggleSearch]);
-
-  // The picked-out message is ``ui.selection.message_id`` — a search
-  // result jumped to, or an extension's ``select``. When it changes the
-  // row pulses, so the eye lands on it; the pulse is an animation with
-  // a timer, and so the view's own (``pulsingItemId``).
-  const selection = useWindowField(windowModel, "selection");
-  const [pulsingItemId, setPulsingItemId] = useState<number | null>(null);
-  const pulseTimerRef = useRef<number | null>(null);
-  const pulse = useCallback((itemId: number) => {
-    setPulsingItemId(itemId);
-    if (pulseTimerRef.current !== null) window.clearTimeout(pulseTimerRef.current);
-    pulseTimerRef.current = window.setTimeout(() => setPulsingItemId(null), 2400);
-  }, []);
-  // Set when this window pulsed the row itself (a search jump lands on
-  // the hit, which may be the answer rather than the question).
-  const pulsedRunRef = useRef<string | null>(null);
-  useEffect(() => {
-    const run = selection.message_id;
-    if (!run) return;
-    if (pulsedRunRef.current === run) {
-      pulsedRunRef.current = null;
-      return;
-    }
-    const index = indexOfRun(itemsForScroll.current, run);
-    if (index >= 0) pulse(itemsForScroll.current[index].id);
-  }, [selection.message_id, pulse]);
-  useEffect(
-    () => () => {
-      if (pulseTimerRef.current !== null)
-        window.clearTimeout(pulseTimerRef.current);
-    },
-    [],
-  );
-  const onSearchJump = useCallback(
-    (itemIndex: number) => {
-      virtuosoRef.current?.scrollToIndex({
-        index: itemIndex,
-        align: "center",
-        behavior: "auto",
-      });
-      const target = items[itemIndex];
-      if (!target) return;
-      const run = runAt(items, itemIndex);
-      // A result in a run is the message picked out; one before any run
-      // (an info line) can only pulse.
-      if (run && windowModel.get("selection").message_id !== run) {
-        pulsedRunRef.current = run;
-        windowModel.write("selection", { ...windowModel.get("selection"), message_id: run });
-      }
-      pulse(target.id);
-    },
-    [items, pulse, windowModel],
-  );
-
-  // An extension's ``scroll_to``: the model says where, this window goes.
-  useEffect(
-    () =>
-      windowModel.onRemote((change) => {
-        if (change.field !== "scroll") return;
-        const where = change.value as { message_id: string | null; at_bottom: boolean };
-        if (where.at_bottom) {
-          virtuosoRef.current?.scrollToIndex({ index: "LAST", behavior: "auto" });
-          return;
-        }
-        const index = where.message_id
-          ? indexOfRun(itemsForScroll.current, where.message_id)
-          : -1;
-        if (index >= 0) {
-          virtuosoRef.current?.scrollToIndex({ index, align: "start", behavior: "auto" });
-        }
-      }),
-    [windowModel],
-  );
-
-  // Text selected in the transcript is ``ui.selection.text``, told when
-  // the gesture that made it ends rather than at every step of a drag.
-  useEffect(() => {
-    const settle = () => {
-      const picked = window.getSelection();
-      const frame = document.querySelector(".conversation-frame");
-      const inside =
-        picked && picked.rangeCount > 0 && frame
-          ? frame.contains(picked.getRangeAt(0).commonAncestorContainer)
-          : false;
-      const text = inside ? picked!.toString().trim() : "";
-      const current = windowModel.get("selection");
-      const next = text || null;
-      if (current.text !== next) windowModel.write("selection", { ...current, text: next });
-    };
-    document.addEventListener("mouseup", settle);
-    document.addEventListener("keyup", settle);
-    return () => {
-      document.removeEventListener("mouseup", settle);
-      document.removeEventListener("keyup", settle);
-    };
-  }, [windowModel]);
-
-  // Whether this window has focus is ``windows.focused``.
-  useEffect(() => {
-    const focus = () => windowModel.write("focused", true);
-    const blur = () => windowModel.write("focused", false);
-    window.addEventListener("focus", focus);
-    window.addEventListener("blur", blur);
-    return () => {
-      window.removeEventListener("focus", focus);
-      window.removeEventListener("blur", blur);
-    };
-  }, [windowModel]);
-
-  // Memoize the Virtuoso ``components`` map so its identity is
-  // stable across App re-renders that don't change the footer
-  // state — without this, every state update (token streamed, status
-  // ticked) would hand Virtuoso a fresh Footer component and force
-  // it to remount the indicator.
-  const virtuosoComponents = useMemo(
-    () => ({
-      // 78 px spacer so the first message's edit/delete chip clears
-      // the OS-level drag region of the frosted header. Matches the
-      // original ``.conversation > .col { padding-top: 78px }`` rule
-      // that lived on the single column wrapper before virtualization.
-      Header: () => <div aria-hidden="true" style={{ height: 78 }} />,
-      Footer: () =>
-        shouldShowSpinner(runPhase) ? (
-          <div className="chat-row">
-            <div className="typing-indicator" aria-live="polite">
-              <span className="typing-dots">
-                <span />
-                <span />
-                <span />
-              </span>
-              <span className="typing-label">{phaseLabel(runPhase)}</span>
-              {isProcessing(runPhase) && (
-                <span className="typing-hint">Esc to cancel</span>
-              )}
-            </div>
-          </div>
-        ) : null,
-    }),
-    [runPhase],
-  );
-
-  // ── Loop continuation (TUI parity: refire after each run) ────────
-  const continueLoopIfPending = useCallback(async () => {
+  const pickModel = async (name: string) => {
     try {
-      const next = await client.rpc<{ prompt?: string } | null>(
-        "pop_pending_loop_iteration",
-      );
-      if (next?.prompt) {
-        // The BE wraps each iteration's prompt with autonomous-loop
-        // instructions; the chat panel renders a tidy iteration card
-        // (badge + the user's actual ask) instead of dumping the
-        // wrapper text verbatim. The full wrapped prompt is still
-        // sent to the model below.
-        append(chatItems.loop(next.prompt));
-        await runUserMessage(next.prompt);
-      }
-    } catch {
-      /* no loop pending */
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [client]);
-
-  const runUserMessage = useCallback(
-    async (text: string) => {
-      setRunPhase("starting");
-      // (parser state was dropped when tag splitter moved to BE)
-      const gen = viewGenRef.current;
-      try {
-        await client.runMessage(text, (m) => {
-          if (gen === viewGenRef.current) onStreamEvent(m);
-        });
-        // If we exited without a run_completed / cancel / error
-        // event landing (shouldn't happen but defensive), still
-        // transition to done so the spinner clears.
-        if (
-          runPhaseRef.current === "starting" ||
-          runPhaseRef.current === "streaming"
-        ) {
-          setRunPhase("done");
-        }
-      } catch (e) {
-        append(chatItems.error(String(e)));
-        setRunPhase("errored");
-        // Stamp the trailing assistant bubble so the banner's
-        // Retry / Discard / Edit-prompt render. The BE has its own
-        // explicit interrupted record (``reason='errored'``,
-        // ``last_error``) that surfaces via ``GET_INTERRUPTED_RUNS``
-        // on next reload — this stamp is for the live UX in the
-        // current session.
-        setItems((prev) => transcript(prev).markInterrupted("errored").items);
-      } finally {
-        void refreshStatus(); // keep the ctx counter live after each run
-        notifyDone();
-        void continueLoopIfPending();
-      }
-    },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [client, onStreamEvent],
-  );
-
-  // ── Edit / delete a previous user message ────────────────────────
-  // Truncates BE session history at the given run, then either stops
-  // (delete) or re-runs the new text (edit).
-  const truncateAndTrim = useCallback(
-    async (target: Extract<ChatItem, { kind: "user" }>): Promise<boolean> => {
-      if (!target.runId || !sessionId) return false;
-      // A run cancelled or errored before the BE persisted it is not
-      // in the session: the RPC would only fail, so trim locally.
-      if (target.persisted === true) {
-        try {
-          const r = await client.rpc<{ removed?: number; error?: string }>(
-            "truncate_history",
-            { session_id: sessionId, run_id: target.runId },
-          );
-          if (r?.error) {
-            append(chatItems.error(`Couldn't edit/delete: ${r.error}`));
-            return false;
-          }
-        } catch (e) {
-          append(
-            chatItems.error(
-              `Couldn't edit/delete: ${e instanceof Error ? e.message : String(e)}`,
-            ),
-          );
-          return false;
-        }
-      }
-      // Local trim: keep everything strictly BEFORE the target item.
-      setItems((prev) => {
-        const idx = prev.findIndex((p) => p.id === target.id);
-        return idx === -1 ? prev : prev.slice(0, idx);
-      });
-      // The latched ctx number was for the old (longer) history;
-      // grab a fresh status so the footer meter reflects the trim.
+      const res = await client.switchModel(name);
+      if (res.type === "info") view.info(res.text);
       void refreshStatus();
-      return true;
+    } catch (e) {
+      view.error(String(e));
+    }
+  };
+
+  // The permission-mode picker flips the backend through its slash
+  // command directly: a mode picked from the UI needs no chat line. The
+  // ``permission_mode_changed`` push moves the badge.
+  const pickMode = useCallback(
+    (mode: PermissionMode) => {
+      const cmd = modeSwitchCommand(status?.permission_mode ?? "default", mode);
+      if (!cmd) return;
+      void client.handleCommand(cmd).catch((e) => {
+        view.error(`Mode switch failed: ${e instanceof Error ? e.message : String(e)}`);
+      });
     },
-    [client, sessionId, append, refreshStatus],
+    [client, status?.permission_mode, view],
   );
 
-  const onDeleteUser = useCallback(
-    async (target: Extract<ChatItem, { kind: "user" }>) => {
-      await truncateAndTrim(target);
-    },
-    [truncateAndTrim],
-  );
-
-  const onEditUser = useCallback(
-    async (target: Extract<ChatItem, { kind: "user" }>, newText: string) => {
-      const ok = await truncateAndTrim(target);
-      if (!ok) return;
-      // Mirror the typed-submit path: optimistic user item, then run.
-      append(chatItems.user(newText));
-      await runUserMessage(newText);
-    },
-    [append, runUserMessage, truncateAndTrim],
-  );
-
-  // ── Banner actions on interrupted assistant bubbles ───────────
-  //
-  // Driven by ``AssistantMessage`` via the three callbacks below,
-  // which reach it as ``chatItemHandlers.interrupted``.
-  // All three start from the same place: find the user message that
-  // triggered the interrupted run, trim everything from it onward
-  // (FE-local — the BE has the explicit interrupted record but no
-  // Agno session entry, so ``truncate_history`` would 404).
-  //
-  // ``force=true`` on the re-fire tells the BE to supersede any
-  // stale interrupted row for this session before recording the
-  // new pending row — without it, the retry would create a second
-  // pending row that dangles until the new run completes (see
-  // ``protocol/schemas/fe_actions.py:UserMessage.force``).
-
-  const onRetryInterrupted = useCallback(
-    async (assistantItemId: number) => {
-      const precedingUser = transcript(items).precedingUserOf(assistantItemId);
-      if (!precedingUser || !precedingUser.runId) return;
-      // Snapshot the view-gen BEFORE the trim so the streamed
-      // events from the new run still route to the live items
-      // list (mirrors the runUserMessage path — see above).
-      const gen = viewGenRef.current;
-      const ok = await truncateAndTrim(precedingUser);
-      if (!ok) return;
-      // Re-add the user bubble optimistically. Without this the
-      // WS ``UserMessageReceived`` echo gets suppressed by the
-      // client_id mirror filter (same client as before) and the
-      // user's message visually disappears — they'd see the agent
-      // working but with no record of what they asked. Mirrors
-      // what ``onEditUser`` does (trim → append fresh bubble →
-      // fire run).
-      append(chatItems.user(precedingUser.text));
-      // Re-fire with the original prompt + force=true so the BE
-      // discards the stale interrupted record before writing the
-      // new pending row. Without force, a retry on a cancelled run
-      // would leave BOTH the old + new rows stamped interrupted
-      // (the old one never got cleared).
-      try {
-        await client.runMessage(
-          precedingUser.text,
-          (m) => {
-            if (gen === viewGenRef.current) onStreamEvent(m);
-          },
-          undefined,
-          { force: true },
-        );
-      } catch (e) {
-        append(
-          chatItems.error(
-            `Couldn't retry: ${e instanceof Error ? e.message : String(e)}`,
-          ),
-        );
-      }
-    },
-    [items, truncateAndTrim, client, append, onStreamEvent],
-  );
-
-  const onDiscardInterrupted = useCallback(
-    async (assistantItemId: number) => {
-      const precedingUser = transcript(items).precedingUserOf(assistantItemId);
-      if (!precedingUser) return;
-      // Two-step discard: FE-local trim (drops the partial assistant
-      // + any tool/think items in the tail) + BE-side
-      // ``DISCARD_INTERRUPTED_RUN`` RPC so the durable interrupted
-      // record is gone too. Either side failing is non-fatal — the
-      // other cleanup still leaves the UI in a sane state.
-      await truncateAndTrim(precedingUser);
-      if (precedingUser.runId && sessionId) {
-        // Look up the interrupted record's message_id via
-        // ``GET_INTERRUPTED_RUNS`` so we can target the right row.
-        // The user prompt's text is also the message we recorded —
-        // the BE matches on text+session, so we can also pass
-        // ``pending_message_text=precedingUser.text`` as a fallback
-        // key if the message_id round-trip is too chatty for the
-        // v1 surface.
-        try {
-          const runs = await client.rpc<
-            Array<{ message_id: string; content: string }>
-          >("get_interrupted_runs", { session_id: sessionId });
-          const match = runs?.find((r) => r.content === precedingUser.text);
-          if (match) {
-            await client.rpc("discard_interrupted_run", {
-              session_id: sessionId,
-              message_id: match.message_id,
-            });
-          }
-        } catch (e) {
-          // Non-fatal — the FE-local trim already removed the
-          // partial from the user's view. The interrupted record
-          // will be cleaned up on next ``detect_interrupted_run``
-          // if the discard RPC failed.
-          console.warn("discard_interrupted_run RPC failed", e);
-        }
-      }
-    },
-    [items, truncateAndTrim, client, sessionId],
-  );
-
-  const onEditPromptFromAssistant = useCallback(
-    async (assistantItemId: number) => {
-      const precedingUser = transcript(items).precedingUserOf(assistantItemId);
-      if (!precedingUser) return;
-      // Trim first (FE-local), then put the original prompt back in
-      // the composer so the user can re-edit it.
-      await truncateAndTrim(precedingUser);
-      seedComposer(precedingUser.text);
-    },
-    [items, truncateAndTrim, seedComposer],
-  );
-
-  // Stable per-item callbacks. ``chatItemHandlers`` below groups them
-  // into the one object every ChatItemView gets; if they were inline
-  // arrows, React.memo's shallow compare would always miss and every
-  // item would re-render on every App state change (status,
-  // processing, stream events).
-  // STOP button for the team card. Same rules as the Esc keybinding
-  // above — set phase locally first so the spinner clears
-  // immediately, then send the WS cancel.
-  const onStopTeam = useCallback(() => {
-    setRunPhase("cancelled");
-    client.cancel();
-    // Stamp the trailing assistant bubble so the Retry / Discard /
-    // Edit-prompt banner surfaces. See Esc-handler comment for the
-    // BE-side stamp that this parallels.
-    setItems((prev) => transcript(prev).markInterrupted("cancelled").items);
-  }, [client, setRunPhase]);
-  const onStopAgent = useCallback(
-    (runId: string) =>
-      void client
-        .rpc("cancel_agent_run", { run_id: runId })
-        .catch((err) => console.warn("cancel_agent_run failed", err)),
-    [client],
-  );
-  const onRetryAgent = useCallback(
-    (agentName: string, newTask: string) => {
-      // Send a follow-up user message asking the main agent to
-      // respawn the specialist with the (possibly tweaked) task —
-      // free-form text so the model can pick the right mode.
-      const msg =
-        `Please retry the ${agentName} sub-agent with this task:` +
-        `\n\n${newTask}`;
-      void runUserMessage(msg);
-    },
-    [runUserMessage],
-  );
-
-  // ── Workflow actions (rerun / cancel) ─────────────────────────
-  // Both wrap the same ``run_workflow`` / ``cancel_workflow``
-  // RPCs the ``/workflows`` slash command uses, but driven
-  // directly from the chat item so the user can recover from a
-  // failure without re-typing the command.
-  const onRerunWorkflow = useCallback(
-    (run: { name: string; args?: Record<string, unknown> }) => {
-      // Optimistically append a new workflow item so the user
-      // sees the result immediately. The RPC result will fold
-      // into it via the workflow_event reducer.
-      const newItem = chatItems.workflow(
-        run.name,
-        `wf_${Math.random().toString(36).slice(2, 14)}`,
-      );
-      setItems((prev) => [...prev, newItem]);
-      void client
-        .rpc("run_workflow", {
-          name: run.name,
-          args: run.args ?? {},
-          session_id: client.sessionId,
-        })
-        .catch((err) => console.warn("run_workflow failed", err));
-    },
-    [client, setItems],
-  );
-  const onCancelWorkflow = useCallback(
-    (run: { workflowRunId: string }) => {
-      void client
-        .rpc("cancel_workflow", { workflow_run_id: run.workflowRunId })
-        .catch((err) => console.warn("cancel_workflow failed", err));
-    },
-    [client],
-  );
-
-  // ── Plan-card actions (row 50) ──────────────────────────────────
-  // Approve = call ``approve_plan(run_id)`` on the BE so the
-  // decision is persisted (survives reload), then send a brief
-  // user message to wake the agent into executing. The BE RPC
-  // is what flips ``PermissionEvaluator.mode`` back to default
-  // AND emits a ``plan_decided`` push that updates the card's
-  // visual state — we don't pre-flip in the FE so the BE stays
-  // the single source of truth. The wake-up message is still
-  // FE-driven because it's logically a user-typed continuation
-  // (it lands in the chat transcript as such).
-  // Refine = persist the dismissal via ``dismiss_plan(run_id)``
-  // and stay in plan mode so the user can iterate.
-  const onApprovePlan = useCallback(
-    (id: number) => {
-      const card = items.find(
-        (it): it is Extract<ChatItem, { kind: "plan" }> =>
-          it.kind === "plan" && it.id === id,
-      );
-      const runId = card?.runId ?? "";
-      void (async () => {
-        if (runId) {
-          try {
-            await client.approvePlan(runId);
-          } catch (e) {
-            console.warn("approve_plan RPC failed", e);
-          }
-        }
-        await runUserMessage("Plan approved — execute it now.");
-      })();
-    },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [items],
-  );
-  // Round-trip for interactive components inside a
-  // ``<JsonRenderView>`` card (Button click, Select change, etc.).
-  // See ``JsonRenderView`` — every named action funnels through the
-  // ``handlers`` Proxy to this callback, which RPCs the BE so any
-  // agent that cares can observe the event on
-  // ``session._visualization_actions``.
-  const onDispatchVisualizationAction = useCallback(
-    async (action: string, params: Record<string, unknown>) => {
-      try {
-        return await client.rpc<{
-          ok: boolean;
-          action: string;
-          params: unknown;
-        }>("dispatch_visualization_action", { action, params });
-      } catch (e) {
-        // eslint-disable-next-line no-console
-        console.warn("dispatch_visualization_action failed", e);
-        return undefined;
-      }
-    },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [],
-  );
-
-  const onRejectPlan = useCallback(
-    (id: number) => {
-      const card = items.find(
-        (it): it is Extract<ChatItem, { kind: "plan" }> =>
-          it.kind === "plan" && it.id === id,
-      );
-      const runId = card?.runId ?? "";
-      if (runId) {
-        void client.dismissPlan(runId).catch((e) => {
-          console.warn("dismiss_plan RPC failed", e);
-        });
-      }
-    },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [items],
-  );
-  // One object for every transcript row, rebuilt only when a callback
-  // changes, so ChatItemView's memo keeps hitting while tokens stream.
-  const chatItemHandlers = useMemo<ChatItemHandlers>(
-    () => ({
-      user: { edit: onEditUser, delete: onDeleteUser },
-      team: { stopTeam: onStopTeam, stopAgent: onStopAgent, retryAgent: onRetryAgent },
-      plan: { approve: onApprovePlan, reject: onRejectPlan },
-      interrupted: {
-        retry: onRetryInterrupted,
-        discard: onDiscardInterrupted,
-        editPrompt: onEditPromptFromAssistant,
-      },
-      workflow: { rerun: onRerunWorkflow, cancel: onCancelWorkflow },
-      visualization: { dispatchAction: onDispatchVisualizationAction },
-    }),
-    [
-      onEditUser,
-      onDeleteUser,
-      onStopTeam,
-      onStopAgent,
-      onRetryAgent,
-      onApprovePlan,
-      onRejectPlan,
-      onRetryInterrupted,
-      onDiscardInterrupted,
-      onEditPromptFromAssistant,
-      onRerunWorkflow,
-      onCancelWorkflow,
-      onDispatchVisualizationAction,
-    ],
-  );
-  // ── Slash command routing ─────────────────────────────────────────
-  // `echo=false` is the UI-affordance path (menu/button clicks): the
-  // command runs silently instead of appearing as a fake typed
-  // message in the chat. Typed slash commands keep echoing.
-  const runCommand = useCallback(
-    async (text: string, echo = true) => {
-      // /workflows <name> [json-args] — client-side intercept so
-      // the BE's command dispatcher doesn't have to grow a new
-      // verb. The RPC returns a ``workflow_run_id``; we
-      // optimistically create a chat item and the push channel
-      // folds subsequent ``workflow_event`` updates into it.
-      const wfMatch = /^\/workflows(?:\s+(\S+))?(?:\s+(\{[\s\S]*\}))?$/.exec(
-        text.trim(),
-      );
-      if (wfMatch) {
-        const [, name, rawArgs] = wfMatch;
-        if (!name) {
-          // No name → the listing, which is a place rather than a
-          // message. Appending it here is what used to destroy the
-          // chat's start screen: the welcome renders only while
-          // ``items.length === 0``, so browsing what exists replaced
-          // it permanently — and the start screen's own card was the
-          // only place ``/workflows`` was advertised.
-          //
-          // Running one still streams into the chat below, because a
-          // run belongs in the conversation that asked for it.
-          goPage({ kind: "workflows", label: "Workflows" });
-          return;
-        }
-        let parsedArgs: Record<string, unknown> = {};
-        if (rawArgs) {
-          try {
-            parsedArgs = JSON.parse(rawArgs);
-          } catch (err) {
-            append(chatItems.error(`/workflows: invalid JSON args: ${err}`));
-            return;
-          }
-        }
-        try {
-          const resp = await client.rpc<{
-            workflow_run_id: string;
-            name: string;
-          }>("run_workflow", {
-            name,
-            args: parsedArgs,
-            session_id: client.sessionId,
-          });
-          const item = chatItems.workflow(resp.name, resp.workflow_run_id);
-          setItems((prev) => [...prev, item]);
-        } catch (err) {
-          append(chatItems.error(`/workflows: run failed: ${err}`));
-        }
-        return;
-      }
-      if (echo) append(chatItems.user(text));
-      /** Move the composer draft from a retired session id onto its
-       *  replacement.
-       *
-       *  ``/clear`` and ``/fork`` rotate the session id one RPC round
-       *  trip after the click, and the Composer hydrates its draft
-       *  from ``draft:<sessionId>`` whenever that key changes. So
-       *  anything typed in that window was blanked: the user hit
-       *  "+ New chat", typed, and watched the composer empty itself.
-       *
-       *  It read worst with ``@``. Typing ``@`` opens the file picker
-       *  and leaves the ``@`` in the editor for the mention parser to
-       *  find; the rotation removed it, so the menu stayed on screen
-       *  and every keystroke after it went to a parser that could no
-       *  longer see an ``@`` — a picker that lists 42 files, filters
-       *  to none, and sends your query to the model as chat. It looks
-       *  like @-mentions are broken. They are not: the ``@`` was
-       *  taken out from under them.
-       *
-       *  Carrying the draft is the fix rather than not-clearing,
-       *  because a genuine session switch *should* swap the draft —
-       *  that is the feature — and text following you into an
-       *  unrelated conversation is its own hazard. */
-      const carryDraft = (from: string, to: string) => {
-        if (!from || !to || from === to) return;
-        const draft = windowModel.get("composer");
-        // Binding the new session shows that session's (empty) draft;
-        // the draft is then written onto it — forced, because to this
-        // window's eye it is already showing.
-        setSessionId(to);
-        if (draft.text) windowModel.write("composer", draft, { force: true });
-      };
-      // ── The window between issuing a view-clearing command and its
-      // answer coming back ────────────────────────────────────────────
-      //
-      // `/clear` and `/fork` empty the transcript when the *response*
-      // arrives, which is one round trip after the click. A message
-      // the user sent inside that window was destroyed twice over:
-      // `setItems([])` threw away the bubble that had just been
-      // appended, and `viewGenRef.current++` invalidated the run that
-      // had just started, so its reply was dropped too. The composer
-      // emptied — proof the submit ran — and absolutely nothing
-      // appeared. No bubble, no answer, no error. Measured on roughly
-      // one attempt in four; a wait of a few seconds always worked,
-      // which is what made it look like flakiness in the tests rather
-      // than a defect in the app.
-      //
-      // Two fixes, one per half.
-      //
-      // `itemBoundary` is the highest item id at *issue* time.
-      // Everything above it was added afterwards and is not what the
-      // user asked to clear, so the clear filters rather than empties.
-      //
-      // The generation bumps at issue time too, instead of on the
-      // response. That is the correct moment anyway: the view changes
-      // when the user asks for a new one. Runs already streaming
-      // captured the old generation and are still dropped, which is
-      // what the counter is for; a run started after the click
-      // captures the new one and survives.
-      //
-      // Recognised from the text because the action is only known once
-      // the backend answers, and by then the window has closed. The
-      // `case` branches still bump if the text did not say so — a
-      // skill that expands to a clear server-side keeps the old
-      // behaviour rather than none.
-      const clearsTheView = /^\/(clear|fork)\b/.test(text.trim());
-      const itemBoundary = chatItems.ids.last();
-      if (clearsTheView) viewGenRef.current++;
-      try {
-        const result = await client.handleCommand(text);
-        if (result.type !== "command_result") {
-          onStreamEvent(result);
-          return;
-        }
-        const content = result.display_content || result.content;
-        switch (result.action) {
-          case "clear": {
-            if (!clearsTheView) viewGenRef.current++;
-            // Keep whatever the user added while this was in flight.
-            setItems((prev) => prev.filter((it) => it.id > itemBoundary));
-            setHistoryIndexToItemIndex([]);
-            // The session id rotated and the new conversation has 0
-            // context; pull a fresh StatusUpdate so the footer
-            // doesn't keep showing the prior session's count.
-            void refreshStatus();
-            let renewed = "";
-            const retiring = client.sessionId;
-            try {
-              // /clear renews the runtime's session id — rebind so
-              // this view follows the fresh conversation.
-              renewed = await client.rpc<string>("get_session_id");
-              client.sessionId = renewed;
-              carryDraft(retiring, renewed);
-              setSessionId(renewed);
-            } catch {
-              /* ignore */
-            }
-            // Optimistic insert: push the new (un-named) session
-            // into the sidebar immediately so the user can see
-            // "New chat" appear without waiting for the first
-            // message to land. Agno doesn't register the session
-            // row until the first ``run_message`` — without this
-            // optimistic insert, the sidebar would only catch up
-            // when ``run_completed`` triggers ``refreshSessions``,
-            // which means the new chat is invisible for the
-            // duration of the first message round-trip. The
-            // subsequent ``refreshSessions()`` (below) will
-            // overwrite this placeholder with the BE's view
-            // (id, name, updated_at) once the first message lands.
-            if (renewed) {
-              setSessions((prev) => [
-                { session_id: renewed, name: "New chat" },
-                ...prev.filter((s) => s.session_id !== renewed),
-              ]);
-            }
-            // No info line — an empty item list renders the welcome hero.
-            void refreshSessions();
-            return;
-          }
-          case "sessions":
-            setSidebarOpen(true);
-            void refreshSessions();
-            return;
-          case "fork": {
-            const newId = content.trim();
-            if (!newId) {
-              append(chatItems.error("Fork failed: backend returned no session id"));
-              return;
-            }
-            // Same dance as ``/clear`` but we also rehydrate the
-            // cloned history so the fork opens with the same context
-            // the user just left in the source session.
-            if (!clearsTheView) viewGenRef.current++;
-            // Same window as `/clear`. The survivors are re-appended
-            // after the fork's history loads below, so they sit at the
-            // end of the cloned conversation where they were typed.
-            setItems((prev) => prev.filter((it) => it.id > itemBoundary));
-            setHistoryIndexToItemIndex([]);
-            const forkedFrom = client.sessionId;
-            client.sessionId = newId;
-            carryDraft(forkedFrom, newId);
-            setSessionId(newId);
-            try {
-              const loaded = await fetchHistoryItems(newId);
-              // `prev` is only the survivors — the filter above ran
-              // before the history fetch minted any ids.
-              setItems((prev) => [...loaded.items, ...prev]);
-              setHistoryIndexToItemIndex(loaded.historyMap);
-            } catch (e) {
-              append(
-                chatItems.error(`Loaded fork id but history fetch failed: ${e}`),
-              );
-            }
-            append(
-              chatItems.info("Forked to a new session — continuing the dialogue."),
-            );
-            void refreshStatus();
-            void refreshSessions();
-            return;
-          }
-          case "model":
-            // One picker UI: the composer's model menu (next to Send).
-            setModelMenuSignal({ n: Date.now() });
-            return;
-          case "model_switched":
-            if (content) append(chatItems.info(content));
-            void refreshStatus();
-            return;
-          case "login":
-            setPanel({ kind: "login" });
-            return;
-          case "mcp":
-            goPage({ kind: "mcp", label: "MCP servers" });
-            return;
-          case "loop":
-            if (content && echo) append(chatItems.assistant(content));
-            goPage({ kind: "loop", label: "Loop" });
-            return;
-          case "schedule":
-            if (content && echo) append(chatItems.assistant(content));
-            goPage({ kind: "schedule", label: "Scheduled tasks" });
-            return;
-          case "agents":
-            goPage({ kind: "agents", label: "Agents" });
-            return;
-          case "skills":
-            goPage({ kind: "skills", label: "Skills" });
-            return;
-          case "plugins":
-            goPage({ kind: "plugins", label: "Plugins" });
-            return;
-          case "extensions":
-            goPage({ kind: "extensions", label: "Extensions" });
-            return;
-          case "hooks":
-            goPage({ kind: "hooks", label: "Hooks" });
-            return;
-          case "watcher":
-            goPage({ kind: "watcher", label: "Watcher" });
-            return;
-          case "help":
-            goPage({ kind: "help", label: "Help" });
-            return;
-          case "ctx":
-            goPage({ kind: "context", label: "Context" });
-            return;
-          case "programs":
-            goPage({ kind: "programs", label: "Programs" });
-            return;
-          case "run_prompt":
-            // Two sources land here:
-            //  - Skills expand to a bare prompt → render nothing extra,
-            //    just hand it to the run path.
-            //  - ``/loop`` iteration 1 — the BE puts the wrapped prompt
-            //    in ``result.content`` (the bare ask is in
-            //    ``display_content``). Detect the wrapper and paint
-            //    the same iteration card the live/restore paths use
-            //    so the chat shows "↻ Iteration 1" instead of nothing.
-            if (
-              typeof result.content === "string" &&
-              result.content.startsWith("<loop-iteration ")
-            ) {
-              append(chatItems.loop(result.content));
-              await runUserMessage(result.content);
-              return;
-            }
-            if (content) await runUserMessage(content);
-            return;
-          case "compact": {
-            // BE packs status into ``content`` and the model-generated
-            // summary into ``display_content`` (see _cmd_compact). The
-            // compact card surfaces both with proper markdown.
-            const status = String(result.content ?? "Context compacted.");
-            const summary = String(result.display_content ?? "");
-            append(chatItems.compact(status, summary));
-            // The context just shrunk — refresh the footer meter.
-            void refreshStatus();
-            return;
-          }
-          case "quit":
-            append(chatItems.info("Use the window/tab close button to quit."));
-            return;
-          default:
-            if (content) {
-              onStreamEvent(result);
-            }
-        }
-      } catch (e) {
-        append(chatItems.error(String(e)));
-      }
-    },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [client, onStreamEvent, skills],
-  );
-
-  // ── Submit (message / command / shell) ────────────────────────────
-  const submit = useCallback(
-    async (text: string) => {
-      if (text.startsWith("/")) {
-        await runCommand(text);
-        return;
-      }
-      if (text.startsWith("$")) {
-        const command = text.slice(1).trim();
-        const item = chatItems.shell(command);
-        append(item);
-        try {
-          const res = await client.runShell(command);
-          setItems((prev) =>
-            prev.map((it) =>
-              it.id === item.id && it.kind === "shell"
-                ? { ...it, output: res.output, exitCode: res.exit_code }
-                : it,
-            ),
-          );
-        } catch (e) {
-          append(chatItems.error(String(e)));
-        }
-        return;
-      }
-      append(chatItems.user(text));
-      if (isProcessing(runPhaseRef.current)) {
-        client.queueMessage(text);
-        append(chatItems.info("Queued — will run after the current turn."));
-        return;
-      }
-      // If the previous assistant bubble was interrupted, the
-      // user typing any new message (including bare ``continue``)
-      // expects the agent to resume from the partial. The
-      // helper prepends a fenced context block; we send that
-      // to the BE but show the user's original text in the
-      // bubble — the partial was already visible in the chat
-      // before this submission.
-      //
-      // We use ``itemsRef.current`` (kept in sync with ``items``
-      // via an effect below) instead of the closure ``items``
-      // variable, because the submit useCallback's deps don't
-      // include ``items`` — when the user hits Send, the closure
-      // here is from the last render where ``items`` had NOT
-      // been mutated by the Esc handler's ``markInterrupted``
-      // call. Without the ref, ``buildContinuedPrompt`` would see
-      // a stale ``items`` array missing the interrupted bubble
-      // and silently no-op (the bug the user reported as "the AI
-      // knows nothing about the partial").
-      const continued = buildContinuedPrompt(itemsRef.current, text);
-      if (continued.clearIndex >= 0) {
-        // Clear the ``interrupted`` flag on the consumed bubble
-        // so the same partial isn't prepended twice.
-        setItems((prev) =>
-          prev.map((it, i) =>
-            i === continued.clearIndex &&
-            it.kind === "assistant" &&
-            it.interrupted
-              ? { ...it, interrupted: undefined }
-              : it,
-          ),
-        );
-      }
-      await runUserMessage(continued.text);
-    },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [client, runCommand, runUserMessage],
-  );
-
-  const resolveHitl = useCallback(
-    async (decisions: HitlDecision[]) => {
-      setHitl(null);
-      // Resuming from a HITL pause — same phase-model transition as
-      // a fresh submit. The BE will re-emit run events which drive
-      // the rest of the state machine.
-      setRunPhase("streaming");
-      const gen = viewGenRef.current;
-      try {
-        await client.resolveHitlBatch(decisions, (m) => {
-          if (gen === viewGenRef.current) onStreamEvent(m);
-        });
-        if (runPhaseRef.current === "streaming") {
-          setRunPhase("done");
-        }
-      } catch (e) {
-        append(chatItems.error(String(e)));
-        setRunPhase("errored");
-      } finally {
-        void refreshStatus(); // keep the ctx counter live after each run
-        notifyDone();
-        void continueLoopIfPending();
-      }
-    },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [client, onStreamEvent],
-  );
-
-  const attachInFolder = useCallback(
-    async (dir: string) => {
-      setPanel({ kind: "none" });
-      try {
-        // Pool-level attach: creates a fresh session whose tools and
-        // $-shell run in that directory; the binding persists with
-        // the session (global session→dir registry on the BE).
-        const res = await client.rpc<{
-          session_id: string;
-          project_dir: string;
-        }>("attach_session", { project_dir: dir });
-        client.sessionId = res.session_id;
-        setProjectDir(res.project_dir);
-        setSessionId(res.session_id);
-        setItems([]);
-        setHistoryIndexToItemIndex([]);
-        append(chatItems.info(`Session locked to ${res.project_dir}`));
-        void refreshSessions();
-        void refreshStatus();
-      } catch (e) {
-        append(chatItems.error(String(e)));
-      }
-    },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [client],
-  );
-
-  const pickSession = useCallback(
-    async (id: string) => {
-      try {
-        // Bind this VIEW to the session — no switch_session RPC.
-        // The BE's session pool lazily resumes it in its own
-        // runtime, so other tabs keep their sessions running in
-        // parallel. First contact can take a few seconds (Session
-        // construction), hence the loading note.
-        client.sessionId = id;
-        setSessionId(id);
-        setItems([]);
-        // Show the first 8 hex chars only — full UUIDs are noisy in
-        // an info bubble and the short prefix is uniquely identifying
-        // in practice across the sidebar listing.
-        const short = id.slice(0, 8);
-        append(chatItems.info(`Loading session ${short}…`));
-        const loaded = await fetchHistoryItems(id);
-        setItems([...loaded.items, chatItems.info(`Resumed session ${short}.`)]);
-        setHistoryIndexToItemIndex(loaded.historyMap);
-        void refreshStatus();
-      } catch (e) {
-        append(chatItems.error(String(e)));
-      }
-      if (window.innerWidth <= 700) setSidebarOpen(false);
-    },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [client],
-  );
-
-  // An extension moved this window to another session
-  // (``host.sessions.current``). Everything else it changes is drawn
-  // from the model as it arrives; a session also has a transcript to
-  // load, which is what picking it does.
-  useEffect(
-    () =>
-      windowModel.onRemote((change) => {
-        const id = change.field === "session" ? String(change.value ?? "") : "";
-        if (id && id !== client.sessionId) void pickSession(id);
-      }),
-    [windowModel, client, pickSession],
-  );
-
-  const pickModel = useCallback(
-    async (name: string) => {
-      try {
-        const res = await client.switchModel(name);
-        if (res.type === "info") append(chatItems.info(res.text));
-        void refreshStatus();
-      } catch (e) {
-        append(chatItems.error(String(e)));
-      }
-    },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [client],
-  );
+  const sidebarOpen = sidebar.open;
+  const { runPhase, processing } = run;
 
   // ── Render ────────────────────────────────────────────────────────
-  const ctxPct = status
-    ? Math.round(
-        (status.context_tokens / Math.max(status.max_context, 1)) * 100,
-      )
-    : 0;
-
   if (knowYet && !signedIn) {
     return (
       <>
-        <SignInWall
-          client={client}
-          onSignIn={() => setPanel({ kind: "login" })}
-        />
-        {/* The login dialog belongs to this branch too. It is rendered
-            at the foot of the app below, which this return skips —
-            without it the Sign in button would set a state nothing
-            draws. */}
-        {panel.kind === "login" && (
-          <LoginPanel
+        <SignInWall client={client} onSignIn={() => windowModel.openPanel("login")} />
+        {/* The login dialog belongs to this branch too: the overlays at
+            the foot of the app are not drawn here. */}
+        {panel?.kind === "login" && (
+          <LoginDialog
             client={client}
-            onDone={(ok, detail) => {
-              setPanel({ kind: "none" });
-              if (ok) {
-                // The wall is gated on ``status.cloud_email``, which
-                // arrives with the next push. Asked for rather than
-                // waited on, so the app opens as soon as it can.
-                void refreshStatus();
-              } else {
-                append(chatItems.error(`Login failed: ${detail}`));
-              }
-            }}
+            onClose={() => windowModel.closePanel()}
+            // The wall is gated on ``status.cloud_email``; asked for
+            // rather than waited on, so the app opens as soon as it can.
+            onSignedIn={() => void refreshStatus()}
+            onFailed={(detail) => view.error(`Login failed: ${detail}`)}
           />
         )}
       </>
@@ -2911,13 +348,7 @@ export default function App() {
           : undefined
       }
     >
-      {/* Live FPS overlay — hidden by default. Toggle with
-          ``Ctrl+Alt+Shift+F`` (or ``Cmd+Alt+Shift+F`` on macOS).
-          State persists per-origin via localStorage so the
-          overlay stays put across reloads until the user turns
-          it off again. Documented in the plugin README so
-          contributors verifying rendering-pipeline changes can
-          find it, invisible to everyone else. */}
+      {/* Live FPS overlay, hidden by default: Ctrl/Cmd+Alt+Shift+F. */}
       <FPSCounterOverlay />
       <Sidebar
         open={sidebarOpen}
@@ -2926,8 +357,7 @@ export default function App() {
         links={contributions.sidebar()}
         activeLink={page?.kind}
         // Each entry an extension contributed carries that extension's
-        // unread count — the floor's, igni server's and this machine's
-        // together.
+        // unread count.
         badges={Object.fromEntries(
           contributions
             .sidebar()
@@ -2940,8 +370,8 @@ export default function App() {
           const link = contributions.sidebar().find((l) => l.kind === kind);
           if (link) goPage({ kind: link.kind, label: link.label });
         }}
-        onNewChat={() => void runCommand("/clear", false)}
-        onPick={(id) => void pickSession(id)}
+        onNewChat={() => void controller.commands.run("/clear", false)}
+        onPick={(id) => void controller.sessions.pick(id)}
         onClose={() => setSidebarOpen(false)}
         section={sidebar.section}
         onSection={(section) =>
@@ -2950,262 +380,36 @@ export default function App() {
       />
 
       <div className={`main${page ? " main--paged" : ""}`}>
-        {/* Window drag in the Tauri shell. Three layers of fallback —
-            we want this to work on every Tauri build / WebKit quirk:
-              1. ``data-tauri-drag-region`` attribute (Tauri's preferred
-                 v2 path; missed by some WebKit builds when the host is
-                 absolutely positioned with no opaque background).
-              2. CSS ``-webkit-app-region: drag`` (in theme.css; same
-                 caveat as above).
-              3. Explicit ``onMouseDown`` that calls
-                 ``getCurrentWindow().startDragging()`` — bypasses
-                 both hit-test paths and works regardless. We bail
-                 on interactive elements (buttons, inputs, anchors,
-                 chips, pills) so they keep their click behaviour.
-            All three are no-ops in non-Tauri hosts (the data
-            attribute is ignored, the CSS is gated by
-            ``[data-host="tauri"]``, and the JS branch checks the
-            global before calling). */}
-        <header ref={headerRef} className="app-header" data-tauri-drag-region>
-          {/* Solid opaque panel painted behind the header content
-              (``z-index: -1``) so messages scrolling under the
-              header disappear at the bottom edge. Also the Tauri
-              window-drag hit-area (hangs 28 px past the header). */}
-          <div className="app-header-blur" aria-hidden="true" />
-          <button
-            className="icon-btn"
-            title="Toggle sessions"
-            onClick={() => setSidebarOpen(!sidebarOpen)}
-          >
-            <MenuIcon />
-          </button>
-          {/* Brand always renders in the main column's app-header.
-              When the sidebar is open it still has its own internal
-              "Sessions" section title, but the app identity belongs
-              to the main pane so the user's eye anchors there. */}
-          <div className="brand">
-            {/* A group's mark renders as an ``img``, never inlined as
-                markup — an SVG document can carry script, the same
-                bytes in an ``img`` cannot. See ``lib/theme.ts``. */}
-            {groupMark ? (
-              <img
-                src={groupMark}
-                alt=""
-                width={20}
-                height={20}
-                style={{ objectFit: "contain" }}
-              />
-            ) : (
-              <FlameIcon size={20} />
-            )}
-            <span>{groupName}</span>
-            <span
-              className={`dot ${conn === "replaced" ? "disconnected" : conn}`}
-              title={`backend ${conn}`}
-              style={{ cursor: "default" }}
-            />
-            {/* Version last in the brand row — reads as
-                ``igni ● v0.9.0``. Renders only when a host
-                embedded the values (Tauri); the
-                component itself paints nothing otherwise. */}
-            <BackendVersionChip />
-          </div>
-          <div className="header-spacer" />
-          {items.length > 0 && (
-            <button
-              className={`chip chip-search${searchOpen ? " active" : ""}`}
-              title="Find in conversation (⌘F)"
-              aria-label="Find in conversation"
-              onClick={toggleSearch}
-            >
-              <svg
-                width="14"
-                height="14"
-                viewBox="0 0 16 16"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.6"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden="true"
-                style={{ display: "block" }}
-              >
-                <circle cx="7" cy="7" r="4.5" />
-                <path d="M10.5 10.5L13.5 13.5" />
-              </svg>
-            </button>
-          )}
-          {/* Project chip — opens the folder picker. */}
-          <button
-            className="chip"
-            title={
-              projectDir
-                ? `Session locked to ${projectDir} — click to lock a different project`
-                : "Lock this session to a project folder"
-            }
-            onClick={() =>
-              void (async () => {
-                // 1. Shell-injected native dialog (the desktop app).
-                const native = await pickNativeDirectory(projectDir);
-                if (native) return void attachInFolder(native);
-                if (native === null) return; // user cancelled
-                // 2. BE-side native dialog: the BE runs on the user's
-                //    machine, so it can open the real OS picker even
-                //    for a plain browser tab. 10-min timeout — the
-                //    dialog waits for a human.
-                try {
-                  const res = await client.rpc<{
-                    path: string;
-                    cancelled: boolean;
-                    error: string;
-                  }>("pick_dir_native", {}, 600_000);
-                  if (res.path) return void attachInFolder(res.path);
-                  if (res.cancelled) return;
-                  // fall through on error (headless Linux, etc.)
-                } catch {
-                  /* fall through to in-app picker */
-                }
-                // 3. Last resort: in-app server-side browser.
-                setPanel({ kind: "dir-picker" });
-              })()
-            }
-          >
-            <FolderIcon />{" "}
-            <span
-              className="chip-label"
-              style={{
-                // Full path, truncated from the LEFT so the project
-                // name (the informative end) stays visible.
-                maxWidth: 380,
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-                whiteSpace: "nowrap",
-                direction: "rtl",
-                textAlign: "left",
-              }}
-            >
-              {projectDir ? `⁨${projectDir}⁩` : "project"}
-            </span>
-          </button>
-          {(status?.cloud_connected || waiting > 0) && (
-            <button
-              className={
-                waiting ? "chip chip-bell has-waiting" : "chip chip-bell"
-              }
-              title={
-                waiting
-                  ? `${waiting} unread ${waiting === 1 ? "notification" : "notifications"}`
-                  : "Nothing is waiting on you"
-              }
-              aria-label="Notifications"
-              onClick={() =>
-                setPanel(
-                  panel.kind === "notifications"
-                    ? { kind: "none" }
-                    : { kind: "notifications" },
-                )
-              }
-            >
-              <Glyph name="bell" />
-              {/* The count, not a dot. "Three people are waiting" and
-                  "somebody is waiting" are different amounts of
-                  urgency and the difference costs one character. */}
-              {!!waiting && (
-                <span className="chip-bell-count">
-                  {waiting > 99 ? "99+" : waiting}
-                </span>
-              )}
-            </button>
-          )}
-          <AccountChip
-            status={status}
-            name={accountName}
-            onLogIn={() => setPanel({ kind: "login" })}
-            onOpenAccount={() => {
-              const opening = !accountMenu;
-              setAccountMenu(opening);
-              if (opening) {
-                // Fresh fetch every time the popover opens so seat
-                // tier changes show up without an app restart. The
-                // BE proxies to ``/portal/me`` on the cloud.
-                void client
-                  .rpc<{
-                    tier?: string | null;
-                    full_name?: string | null;
-                    email?: string | null;
-                  } | null>("get_cloud_plan")
-                  .then((info) => {
-                    // The display name only exists on the cloud, so
-                    // it arrives here. Until it does the chip shows
-                    // the address, which is on disk and correct —
-                    // rather than nothing while a request is out.
-                    if (info?.full_name) setCloudName(info.full_name);
-                  })
-                  .catch(() => {
-                    // Offline: the chip keeps showing the address.
-                  });
-              }
-            }}
-          />
-          {conn === "replaced" && (
-            <button
-              className="chip"
-              title="This chat was opened in another tab/window. Click to take over here."
-              onClick={() => client.connect()}
-            >
-              <span className="dot disconnected" />
-              <span className="chip-label">opened elsewhere — reconnect</span>
-            </button>
-          )}
+        <AppHeader
+          conn={conn}
+          groupName={groupName}
+          groupMark={groupMark}
+          onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
+          canSearch={items.length > 0}
+          searchOpen={search.searchOpen}
+          onToggleSearch={search.toggleSearch}
+          projectDir={projectDir}
+          onPickProject={() => void pickProject()}
+          status={status}
+          waiting={notificationCounts.unread}
+          onToggleNotifications={() => windowModel.togglePanel("notifications")}
+          client={client}
+          onLogIn={() => windowModel.openPanel("login")}
+          onLogOut={() => void controller.commands.run("/logout", false)}
+        />
 
-          {accountMenu && (
-            <>
-              <div
-                style={{ position: "fixed", inset: 0, zIndex: 39 }}
-                onClick={() => setAccountMenu(false)}
-              />
-              <div className="dropdown" style={{ width: 220 }}>
-                <div className="popup-item" style={{ cursor: "default" }}>
-                  <span className="desc">
-                    Signed in as{" "}
-                    <span style={{ color: "var(--fg)", fontWeight: 500 }}>
-                      {accountName}
-                    </span>
-                    {/* The organisation is still worth saying — it
-                        decides which seat and which models — but it is
-                        not the answer to "who am I signed in as". */}
-                    {status?.cloud_org ? ` · ${status.cloud_org}` : ""}
-                  </span>
-                </div>
-                <div
-                  className="popup-item"
-                  onClick={() => {
-                    setAccountMenu(false);
-                    void runCommand("/logout", false);
-                  }}
-                >
-                  <span className="cmd">Log out</span>
-                </div>
-              </div>
-            </>
-          )}
-        </header>
-
-        {/* Custom scroll-position indicator — the native scrollbar is
-            hidden because it would render inside the ``.conversation``
-            layer (z:1) and get blurred by the header. Placed as a
-            sibling of ``.conversation`` (not a child) so it doesn't
-            scroll with the content; positioned absolutely against the
-            ``.main`` column at z:30, above the header blur. */}
-        <ScrollIndicator element={scrollEl} />
-        {searchOpen && sessionId && items.length > 0 && (
+        {/* The scroll indicator stands in for the hidden native
+            scrollbar, outside ``.conversation`` so the header blur does
+            not cover it. */}
+        <ScrollIndicator element={scroll.scrollEl} />
+        {search.searchOpen && sessionId && items.length > 0 && (
           <ChatSearchBar
             client={client}
             sessionId={sessionId}
             historyIndexToItemIndex={historyIndexToItemIndex}
             liveItemCount={items.length}
-            onJumpTo={onSearchJump}
-            onClose={() => setPanel({ kind: "none" })}
+            onJumpTo={search.onSearchJump}
+            onClose={() => windowModel.closePanel()}
           />
         )}
         <div className="conversation-frame">
@@ -3214,395 +418,74 @@ export default function App() {
               the page down to an h3. F138. */}
           <h2 className="sr-only">Conversation</h2>
           {items.length === 0 ? (
-            <div className="conversation">
-              <div className="col">
-                <div className="welcome">
-                  {/* Branded the same way as the header row — an org
-                    that renames the product in one place and not the
-                    other has it staring back at them on every empty
-                    chat, which is the most-looked-at screen there is. */}
-                  <div style={{ display: "flex", justifyContent: "center" }}>
-                    {groupMark ? (
-                      <img
-                        src={groupMark}
-                        alt=""
-                        width={56}
-                        height={56}
-                        style={{ objectFit: "contain" }}
-                      />
-                    ) : (
-                      <FlameIcon size={56} />
-                    )}
-                  </div>
-                  <h1>{groupName}</h1>
-                  <p>Your AI coding agent, in this project.</p>
-                  {/* Nothing below this line works without a model, so on a
-                    fresh install the screen said "Dispatch to a
-                    specialist" to someone whose every click would come
-                    back "No model configured. Run /login". The one thing
-                    that would help was the only thing not offered. */}
-                  {status && status.model_configured === false ? (
-                    <FirstRunSetup
-                      onLogin={() => setPanel({ kind: "login" })}
-                    />
-                  ) : null}
-                  <div className="welcome-caps">
-                    {(
-                      [
-                        [
-                          "/agents",
-                          "Dispatch to a specialist — architect, debugger, …",
-                        ],
-                        [
-                          "/skills",
-                          "Workflows like /commit and /pr",
-                        ],
-                        ["/workflows", "Run a CC-style multi-phase workflow"],
-                        ["/schedule", "Background tasks that report back"],
-                        ["/loop", "Repeat a prompt across a batch until done"],
-                        ["/mcp", "Plug in external tools and data sources"],
-                        ["/plugins", "Install skills, agents and hooks"],
-                      ] as const
-                    ).map(([cmd, desc]) => (
-                      <div
-                        key={cmd}
-                        className="welcome-cap"
-                        onClick={() => void runCommand(cmd, false)}
-                      >
-                        <code>{cmd}</code>
-                        <span>{desc}</span>
-                      </div>
-                    ))}
-                  </div>
-                  <p
-                    style={{
-                      color: "var(--fg-faint)",
-                      fontSize: 12.5,
-                      marginTop: 22,
-                    }}
-                  >
-                    Enter to send · Shift+Enter newline · / commands · @ files ·
-                    $ shell
-                  </p>
-                </div>
-              </div>
-            </div>
-          ) : (
-            <Virtuoso
-              ref={virtuosoRef}
-              className="conversation"
-              data={items}
-              // Keys items by id so React reuses DOM across reorders /
-              // edits. Falling back to index would defeat the memo on
-              // ChatItemView.
-              computeItemKey={(_idx, item) => item.id}
-              // Auto-follow the tail only while the user is already
-              // there; ``smooth`` is intentionally not used so streaming
-              // doesn't visibly chase tokens.
-              // Not before Virtuoso's "at bottom" agrees with the page: a
-              // stale one at mount would carry the view to the end on its
-              // own (V6, ``chat/followOutput``).
-              followOutput={follow.followOutput}
-              totalListHeightChanged={follow.totalListHeightChanged}
-              // Virtuoso's default ``atBottomThreshold`` is 4px which
-              // misses the "at bottom" transition by a sub-pixel after
-              // every layout change (composer height grows on Send,
-              // streamed assistant content rewrites the last row, etc).
-              // ``followOutput="auto"`` then bails on the follow because
-              // its sample reads false. 50px is generous enough to
-              // ride out the layout shifts without papering over a real
-              // "I scrolled up to read history" intent — pinned by
-              // ``e2e/chat-scroll.spec.ts``.
-              atBottomThreshold={AT_BOTTOM_THRESHOLD}
-              atBottomStateChange={follow.atBottomStateChange}
-              rangeChanged={(range) => {
-                topIndexRef.current = range.startIndex;
-              }}
-              // Come to rest: where the top of the view is, for
-              // ``ui.scroll``. Told once per stop, not per frame.
-              isScrolling={(moving) => {
-                if (!moving) tellScroll(windowModel.get("scroll").at_bottom);
-              }}
-              scrollerRef={(el) => {
-                follow.scrollerRef(el);
-                setScrollEl(el as HTMLElement | null);
-              }}
-              increaseViewportBy={{ top: 400, bottom: 800 }}
-              itemContent={(idx, item) => {
-                // ``streaming`` lights the blinking caret CSS on the
-                // live tail assistant row only.
-                const isStreamingTail =
-                  processing &&
-                  idx === items.length - 1 &&
-                  item.kind === "assistant";
-                const isSearchTarget = item.id === pulsingItemId;
-                return (
-                  <div
-                    className={`chat-row${isStreamingTail ? " streaming" : ""}${isSearchTarget ? " search-target" : ""}`}
-                  >
-                    <ChatItemView
-                      item={item}
-                      copyResponseText={
-                        item.kind === "stats"
-                          ? findAssistantTextForStats(items, idx)
-                          : undefined
-                      }
-                      handlers={chatItemHandlers}
-                    />
-                  </div>
-                );
-              }}
-              components={virtuosoComponents}
+            <WelcomeScreen
+              groupName={groupName}
+              groupMark={groupMark}
+              status={status}
+              onLogin={() => windowModel.openPanel("login")}
+              onCommand={(cmd) => void controller.commands.run(cmd, false)}
             />
-          )}
-          {items.length > 0 && !stickToBottom && (
-            <button
-              type="button"
-              className="scroll-to-bottom"
-              title="Scroll to latest"
-              aria-label="Scroll to latest"
-              onClick={scrollToBottom}
-            >
-              <svg
-                width="16"
-                height="16"
-                viewBox="0 0 16 16"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.8"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden="true"
-              >
-                <path d="M8 3v9.5M3.8 8.3L8 12.5l4.2-4.2" />
-              </svg>
-            </button>
+          ) : (
+            <ConversationList
+              items={items}
+              transcript={view.transcript}
+              runPhase={runPhase}
+              processing={processing}
+              pulsingItemId={search.pulsingItemId}
+              handlers={controller.handlers}
+              scroll={scroll}
+              atBottomNow={() => windowModel.get("scroll").at_bottom}
+            />
           )}
         </div>
 
-        {/* The page, when there is one. Rendered inside ``.main`` and
-            positioned over the conversation rather than replacing it
-            in the flow — the transcript keeps its box and its scroll
-            offset, so coming back lands where you left. ``.main--paged``
-            hides what is underneath with ``visibility``, which also
-            takes it out of the tab order.
-
-            Every panel below still renders its own ``Drawer``; the
-            context is what turns that into page chrome. */}
         {page && (
-          <PageContext.Provider
-            value={{
-              trail: pages,
-              onCrumb: goCrumb,
-              onBack: goBack,
-              onClose: goChat,
+          <AppPages
+            page={page}
+            trail={pages}
+            onCrumb={goCrumb}
+            onBack={goBack}
+            registry={contributions.pages}
+            homeWindow={windowModel.clientId}
+            theme={frameTheme}
+            signals={extensionTraffic.signals}
+            services={{
+              client,
+              close: goChat,
+              seed: (text) => {
+                goChat();
+                seedComposer(text);
+              },
+              compact: () => {
+                goChat();
+                void controller.commands.run("/compact", false);
+              },
+              resumeLoop: (prompt) => {
+                goChat();
+                void controller.streamer.sendLoopIteration(prompt);
+              },
+              extensions,
+              setExtensions,
+              skills: commands.skills,
+              maxContext: status?.max_context ?? 0,
             }}
-          >
-            {page.kind === "plugins" && (
-              <PluginsPanel client={client} onClose={goChat} />
-            )}
-            {page.kind === "extensions" && (
-              <ExtensionsPanel
-                client={client}
-                extensions={extensions}
-                // `set_extension_settings` answers with the whole
-                // list, so the panel hands it straight back rather
-                // than merging one row into state it does not own.
-                onChanged={setExtensions}
-                onClose={goChat}
-              />
-            )}
-            {page.kind === "agents" && (
-              <AgentsPanel client={client} onClose={goChat} />
-            )}
-            {page.kind === "schedule" && (
-              <SchedulePanel client={client} onClose={goChat} />
-            )}
-            {page.kind === "watcher" && (
-              <WatcherPanel client={client} onClose={goChat} />
-            )}
-            {page.kind === "hooks" && (
-              <HooksPanel client={client} onClose={goChat} />
-            )}
-            {page.kind === "programs" && (
-              <ProgramsPanel client={client} onClose={goChat} />
-            )}
-            {page.kind === "workflows" && (
-              <WorkflowsPage
-                client={client}
-                onRun={(command) => {
-                  // Into the composer: several take a JSON argument
-                  // object, and the phase list is what tells you
-                  // whether you want this one at all.
-                  goChat();
-                  seedComposer(command);
-                }}
-                onClose={goChat}
-              />
-            )}
-            {page.kind === "help" && (
-              <HelpPage
-                skills={skills}
-                onRun={(name) => {
-                  // Into the composer, not straight to the backend:
-                  // reading help is not deciding to run something, and
-                  // several of these take arguments.
-                  goChat();
-                  seedComposer(name);
-                }}
-                onClose={goChat}
-              />
-            )}
-            {page.kind === "context" && (
-              <ContextPage
-                client={client}
-                maxContext={status?.max_context ?? 0}
-                onCompact={() => {
-                  goChat();
-                  void runCommand("/compact", false);
-                }}
-                onClose={goChat}
-              />
-            )}
-            {page.kind === "loop" && (
-              <LoopPanel
-                client={client}
-                onClose={goChat}
-                onResume={(prompt) => {
-                  // Back to the chat so the user can watch the
-                  // iteration stream — same as the slash-command path
-                  // for /loop resume.
-                  goChat();
-                  append(chatItems.loop(prompt));
-                  void runUserMessage(prompt);
-                }}
-              />
-            )}
-            {/*
-              An extension's page.
-
-              Matched last and by *ownership* rather than by name: a
-              base page kind is a literal in one of the branches
-              above, and an extension's is whatever its manifest
-              said. Asking the registry who owns the kind is what
-              keeps the two sets from having to know about each
-              other.
-            */}
-            {(() => {
-              const owner = contributions.pages.ownerOf(page.kind);
-              if (owner === null || owner === "igni") return null;
-              const extension = extensions.find((e) => e.id === owner);
-              if (extension === undefined) return null;
-              // In the page chrome every other page gets from its
-              // ``Drawer``: positioned over the conversation, with the
-              // trail back to the chat. Mounted bare, the frame sat in
-              // the column's flow at an iframe's default 150px height.
-              // ``titleInBody``: the extension draws its own heading.
-              return (
-                <Drawer title={page.label} titleInBody onClose={goChat}>
-                <ExtensionPage
-                  extension={extension}
-                  kind={page.kind}
-                  // Launch params — a notification's target.params,
-                  // when one is what opened it.
-                  params={page.params}
-                  theme={frameTheme}
-                  signals={extensionTraffic.signals[extension.id]}
-                  // `bridge.host…`: the host object model, as this
-                  // extension, from the window it is framed in — the
-                  // backend checks its `permissions.host`.
-                  onHost={(request) =>
-                    client
-                      .asExtension(extension.id)
-                      .rpc<{
-                        ok: boolean;
-                        result?: unknown;
-                        error?: { code: string; message: string };
-                      }>(
-                        "host_model",
-                        { ...request, home_window: windowModel.clientId },
-                        // A dialog waits on the person, for as long as
-                        // they take.
-                        request.path === "ui.show_dialog" ? 24 * 3_600_000 : undefined,
-                      )
-                  }
-                  // `bridge.service`: a token for this extension's own
-                  // service. Asked as this extension, so the backend
-                  // decides the audience — never the frame.
-                  onServiceToken={() =>
-                    client
-                      .asExtension(extension.id)
-                      .rpc<{
-                        ok: boolean;
-                        access_token?: string;
-                        expires_in?: number;
-                        error?: string;
-                      }>("extension_service_token", {})
-                      .then((reply) => ({
-                        ok: reply.ok,
-                        token: reply.access_token,
-                        expiresIn: reply.expires_in,
-                        error: reply.error,
-                      }))
-                  }
-                  onClose={goChat}
-                  // Every call carries its caller, which is what lets
-                  // the backend enforce this extension's
-                  // `permissions.rpc` rather than trusting this
-                  // process to have done it.
-                  onCall={(method, args) =>
-                    client.asExtension(extension.id).rpc(method, args)
-                  }
-                />
-                </Drawer>
-              );
-            })()}
-            {page.kind === "mcp" && (
-              <McpPanel
-                client={client}
-                onClose={goChat}
-                onAddServer={(seed) => {
-                  goChat();
-                  seedComposer(seed);
-                }}
-              />
-            )}
-            {page.kind === "skills" && (
-              <SkillsPanel
-                client={client}
-                onRun={(cmd) => {
-                  // Don't fire the skill — drop it into the composer so
-                  // the user can add arguments and send when ready. No
-                  // trailing space, so the autocomplete menu stays open.
-                  goChat();
-                  seedComposer(cmd);
-                }}
-                onClose={goChat}
-              />
-            )}
-          </PageContext.Provider>
+          />
         )}
 
         <Composer
           brandName={groupName}
           hitlSlot={
-            hitl ? (
+            hitl.pending ? (
               <HitlDialog
-                requirements={hitl}
-                onResolve={(d) => void resolveHitl(d)}
+                requirements={hitl.pending}
+                onResolve={resolveHitl}
                 currentMode={status?.permission_mode}
                 onAcceptEditsThisRun={() => {
-                  // Mark so ``streaming_done`` fires ``/accept off``
-                  // and the gate doesn't quietly persist past this
-                  // task. The mode flip itself now happens
-                  // atomically with the HITL resolve — the
-                  // ``set_permission_mode`` field on the decision
-                  // tells the BE to flip BEFORE resuming the agent,
-                  // closing the race where a separate ``/accept on``
-                  // slash command was dispatched concurrently and
-                  // lost. See ``HITLDecision.set_permission_mode``
-                  // in protocol/messages.ts.
-                  autoAcceptForRunRef.current = true;
+                  // ``streaming_done`` turns it back off, so the gate
+                  // does not quietly outlive this task. The flip itself
+                  // rides on the HITL decision
+                  // (``HITLDecision.set_permission_mode``).
+                  run.controls.autoAcceptForRunRef.current = true;
                 }}
               />
             ) : null
@@ -3610,214 +493,51 @@ export default function App() {
           client={client}
           connected={conn === "connected" && sessionBound}
           processing={processing}
-          skills={skills}
-          backendCommands={backendCommands}
+          skills={commands.skills}
+          backendCommands={commands.backendCommands}
           tools={contributions.tools()}
           focusRef={composerFocus}
           windowModel={windowModel}
           model={status?.model}
-          modelMenuSignal={modelMenuSignal}
+          modelMenuSignal={commands.modelMenuSignal}
           onPickModel={(name) => void pickModel(name)}
-          onTool={(cmd) => void runCommand(cmd, false)}
-          onSubmit={(t) => void submit(t)}
-          onStop={() => {
-            setRunPhase("cancelled");
-            client.cancel();
-          }}
+          onTool={(cmd) => void controller.commands.run(cmd, false)}
+          onSubmit={(t) => void controller.submitter.submit(t)}
+          onStop={run.cancel}
           permissionMode={status?.permission_mode}
-          onPickMode={(mode: PermissionMode) => {
-            // The split send button hands us one of the four
-            // ``PermissionEvaluator.mode`` values. Each maps to
-            // an existing slash command that flips the BE side.
-            // ``default`` is "leave the current non-default
-            // mode" — figure out which one is on and toggle it
-            // off; if we were already in default the picker
-            // wouldn't have fired (the menu hides the active
-            // option as a no-op).
-            //
-            // We call ``client.handleCommand`` directly instead
-            // of ``runCommand`` so the BE's confirmation chatter
-            // ("Permission mode: plan → acceptEdits...") doesn't
-            // land in the conversation. The user picked a mode
-            // from the UI — they don't need a system message
-            // narrating it. The ``permission_mode_changed`` push
-            // broadcast still updates the badge / button tint
-            // via the existing handler.
-            const current = status?.permission_mode ?? "default";
-            if (mode === current) return;
-            const cmd =
-              mode === "plan"
-                ? "/plan on"
-                : mode === "acceptEdits"
-                  ? "/accept on"
-                  : mode === "bypassPermissions"
-                    ? "/bypass on"
-                    : // mode === "default" — turn off whichever
-                      // non-default mode is currently active.
-                      current === "plan"
-                      ? "/plan off"
-                      : current === "acceptEdits"
-                        ? "/accept off"
-                        : current === "bypassPermissions"
-                          ? "/bypass off"
-                          : "";
-            if (!cmd) return;
-            void client.handleCommand(cmd).catch((e) => {
-              // Surface real errors (network, BE shutdown) but
-              // not the normal success-with-confirmation case.
-              append(
-                chatItems.error(
-                  `Mode switch failed: ${e instanceof Error ? e.message : String(e)}`,
-                ),
-              );
-            });
-          }}
+          onPickMode={pickMode}
         />
-        <div className="statusline" style={{ marginTop: 0, paddingBottom: 8 }}>
-          {status && (
-            <>
-              <SessionChip sessionId={sessionId} />
-              {/* Context meter sits next to the session chip —
-                  both are "this session's identity / footprint"
-                  signals and read more naturally side by side
-                  than separated by the mode controls. */}
-              <CtxMeter
-                tokens={status.context_tokens}
-                max={status.max_context}
-                pct={ctxPct}
-              />
-              {/* Mode visibility moved to the send-button
-                  picker itself — the left half tints per mode
-                  so the user gets the at-a-glance signal
-                  without a separate footer chip. */}
-              <WatcherIndicator
-                client={client}
-                onOpen={() => goPage({ kind: "watcher", label: "Watcher" })}
-              />
-              <GroupIndicator client={client} />
-              {/*
-                Installed extensions' own chips, beside igni's two.
-                Data rather than frames: a chip is twenty pixels. The
-                extension decides what it says and the host draws it.
-              */}
-              {extensions.flatMap((extension) =>
-                extension.indicators.map((indicator) => (
-                  <ExtensionIndicator
-                    key={indicator.id}
-                    extensionId={extension.id}
-                    indicator={indicator}
-                    unread={unreadFor(notificationCounts, extension.id)}
-                    onCall={(method, args) =>
-                      client.asExtension(extension.id).rpc(method, args)
-                    }
-                    onOpen={(kind) => {
-                      const page = extension.pages.find((p) => p.kind === kind);
-                      if (page) goPage({ kind: page.kind, label: page.label });
-                    }}
-                  />
-                )),
-              )}
-            </>
-          )}
-          {pendingUpdate && (
-            <button
-              type="button"
-              className="brand-update"
-              title={`Update to v${pendingUpdate.latest_version}`}
-              onClick={() => showUpdate(pendingUpdate)}
-            >
-              Update to v{pendingUpdate.latest_version}
-            </button>
-          )}
-        </div>
+        <StatusLine
+          status={status}
+          sessionId={sessionId}
+          client={client}
+          extensions={extensions}
+          notificationCounts={notificationCounts}
+          pendingUpdate={updateCheck.pendingUpdate}
+          onShowUpdate={updateCheck.showUpdate}
+          onOpen={goPage}
+        />
       </div>
 
-      {preview && (
-        <FilePreview
-          client={client}
-          path={preview.path}
-          onClose={() => windowModel.write("preview", null)}
-        />
-      )}
-      <Toasts items={toasts} onDismiss={dismissToast} onOpen={goPage} />
-      <RetryBanner />
-      {dialog?.spec.kind === "update" && (
-        <UpdatePrompt
-          info={dialog.spec as unknown as UpdateInfo}
-          onDismiss={() => windowModel.answerDialog(dialog.id, null)}
-        />
-      )}
-      {dialog?.spec.kind === TRUST_DIALOG_KIND && isTrustStatus(dialog.spec) && (
-        <WorkspaceTrustDialog
-          key={dialog.id}
-          client={client}
-          status={dialog.spec}
-          onClose={() => windowModel.answerDialog(dialog.id, null)}
-        />
-      )}
-      {dialog?.spec.kind === "extension" && (
-        <HostDialog
-          key={dialog.id}
-          dialog={dialog}
-          sourceName={
-            extensions.find((e) => e.id === dialog.source)?.name ??
-            dialog.source ??
-            ""
-          }
-          onAnswer={(answer) => windowModel.answerDialog(dialog.id, answer)}
-        />
-      )}
-      {panel.kind === "dir-picker" && (
-        <DirectoryPicker
-          client={client}
-          title="Lock session to a project folder"
-          initialPath={projectDir}
-          onSelect={(dir) => void attachInFolder(dir)}
-          onCancel={() => setPanel({ kind: "none" })}
-        />
-      )}
-      {panel.kind === "notifications" && (
-        <NotificationsPanel
-          client={client}
-          sourceName={(source) =>
-            extensions.find((e) => e.id === source)?.name ?? source
-          }
-          canOpen={(kind) => contributions.pages.has(kind)}
-          // Marking something read moves every badge, and the push
-          // that says so may land after the panel has already read
-          // the new counts — so it reports what it read too.
-          onCountsChanged={setNotificationCounts}
-          onOpenTarget={(target) => {
-            // The extension's own page, with the params the
-            // notification carries: the same route its sidebar entry
-            // opens, so the page arrives through the door it always
-            // does and reads where to go from its launch params.
-            const owner = contributions.pages.ownerOf(target.page);
-            const extension = extensions.find((e) => e.id === owner);
-            const label =
-              extension?.pages.find((p) => p.kind === target.page)?.label ??
-              contributions.sidebar().find((l) => l.kind === target.page)
-                ?.label ??
-              target.page;
-            goPage({ kind: target.page, label, params: target.params });
-          }}
-          onClose={() => setPanel({ kind: "none" })}
-        />
-      )}
-      {panel.kind === "login" && (
-        <LoginPanel
-          client={client}
-          onDone={(ok, detail) => {
-            setPanel({ kind: "none" });
-            append(
-              ok
-                ? chatItems.info(`Logged in as ${detail}`)
-                : chatItems.error(`Login failed: ${detail}`),
-            );
-            void refreshStatus();
-          }}
-        />
-      )}
+      <AppOverlays
+        client={client}
+        windowModel={windowModel}
+        notifier={notifier}
+        contributions={contributions}
+        extensions={extensions}
+        projectDir={projectDir}
+        onOpen={goPage}
+        onPickFolder={(dir) => void controller.sessions.attachFolder(dir)}
+        onCountsChanged={setNotificationCounts}
+        onSignedIn={(who) => {
+          view.info(`Logged in as ${who}`);
+          void refreshStatus();
+        }}
+        onLoginFailed={(detail) => {
+          view.error(`Login failed: ${detail}`);
+          void refreshStatus();
+        }}
+      />
     </div>
     </ExtensionNamesContext.Provider>
   );

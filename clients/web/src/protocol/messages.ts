@@ -220,18 +220,13 @@ export interface RPCResponse extends BaseMessage {
   error: string | null;
 }
 
+/** A broadcast on one channel. The channels this client acts on, and
+ *  their payloads, are typed in ``pushChannels.ts``. */
 export interface PushNotification extends BaseMessage {
   type: "push_notification";
   channel: string;
   payload: Record<string, unknown>;
 }
-
-/** Channels emitted by the BE for plan-mode UI (row 50 — full UI).
- *  Kept as string-literal types so the App.tsx router gets exhaustive
- *  narrowing for the channels we care about while still allowing
- *  future channels through the open ``string`` type on the parent. */
-export type PermissionModeChangedPayload = { mode: string; previous: string };
-export type PlanSubmittedPayload = { plan: string };
 
 // ── Multi-client session mirroring ──────────────────────────────────
 

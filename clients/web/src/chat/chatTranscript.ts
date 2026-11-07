@@ -68,6 +68,19 @@ export class ChatTranscript {
     return undefined;
   }
 
+  /** The assistant text that closes the turn the ``stats`` item at
+   *  ``index`` belongs to — what its copy-response button copies.
+   *  Stops at the turn's user message. */
+  assistantTextForStats(index: number): string | undefined {
+    if (this.items[index]?.kind !== "stats") return undefined;
+    for (let i = index - 1; i >= 0; i--) {
+      const it = this.items[i];
+      if (it.kind === "user") return undefined;
+      if (it.kind === "assistant") return it.text;
+    }
+    return undefined;
+  }
+
   /** Replace a run's billed input with the real session size. */
   correctStats(runId: string, contextTokens: number): ChatTranscript {
     if (!this.items.some((it) => it.kind === "stats" && it.runId === runId)) return this;
@@ -82,6 +95,15 @@ export class ChatTranscript {
 
   applyServerMessage(msg: ServerMessage): ChatTranscript {
     return new ServerMessageReducer(this).apply(msg);
+  }
+
+  /** The card for a run ``run_workflow`` just started — unless its
+   *  first event got here first and already opened it. */
+  startWorkflow(name: string, workflowRunId: string): ChatTranscript {
+    const open = this.items.some(
+      (it) => it.kind === "workflow" && it.run.workflowRunId === workflowRunId,
+    );
+    return open ? this : this.append(this.factory.workflow(name, workflowRunId));
   }
 
   /** Fold into the run's card, opening one when this is the first

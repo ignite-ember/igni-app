@@ -12,7 +12,7 @@ const mergePlanTasks = (existing: PlanTask[], todos: unknown) =>
 // ``plan_submitted`` push lands. The shape from the BE is loose
 // (dict[str, Any]) so we have to be defensive about every field
 // — a malformed task must drop, not crash the chat. These tests
-// pin the contract the App.tsx channel handler relies on.
+// pin the contract chat/pushChannelRouter.ts relies on.
 
 describe("PlanTaskList.parseTask", () => {
   it("normalizes a fully-formed task", () => {

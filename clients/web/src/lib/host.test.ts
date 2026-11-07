@@ -394,3 +394,108 @@ describe("Host.viewKey", () => {
     expect(host.viewKey).toBe("w-5");
   });
 });
+
+// ── Desktop-shell glue the app used to reach for itself ─────────
+
+describe("Host.stampPlatform", () => {
+  it("stamps the host and platform under Tauri", () => {
+    win.__TAURI__ = {};
+    const html = { dataset: {} as Record<string, string> };
+    new HostMod.Host().stampPlatform(html as unknown as HTMLElement, "MacIntel");
+    expect(html.dataset).toEqual({ host: "tauri", platform: "mac" });
+    new HostMod.Host().stampPlatform(html as unknown as HTMLElement, "Win32");
+    expect(html.dataset.platform).toBe("win");
+    new HostMod.Host().stampPlatform(html as unknown as HTMLElement, "Linux x86_64");
+    expect(html.dataset.platform).toBe("linux");
+  });
+
+  it("leaves a plain browser alone", () => {
+    const html = { dataset: {} as Record<string, string> };
+    new HostMod.Host().stampPlatform(html as unknown as HTMLElement, "MacIntel");
+    expect(html.dataset).toEqual({});
+  });
+});
+
+describe("Host.onMenu", () => {
+  it("hands known menu ids to the handler and ignores the rest", () => {
+    const listeners: ((e: unknown) => void)[] = [];
+    win.addEventListener = (_type, fn) => listeners.push(fn as (e: unknown) => void);
+    win.removeEventListener = (_type, fn) => listeners.splice(listeners.indexOf(fn as never), 1);
+    const seen: string[] = [];
+    const off = new HostMod.Host().onMenu((id) => seen.push(id));
+    const fire = (detail: unknown) => listeners.forEach((l) => l({ detail }));
+    fire({ type: "igni:menu", payload: { id: "new_chat" } });
+    fire({ type: "igni:menu", payload: { id: "unknown" } });
+    fire({ type: "other", payload: { id: "check_update" } });
+    fire(null);
+    expect(seen).toEqual(["new_chat"]);
+    off();
+    expect(listeners).toHaveLength(0);
+  });
+});
+
+describe("Host.setAppTitle", () => {
+  it("sends the folder name and the org to the shell", () => {
+    const setAppTitle = vi.fn();
+    (win.__IGNI_HOST__ as Record<string, unknown> | undefined) = { setAppTitle };
+    new HostMod.Host().setAppTitle("/Users/me/proj/", "acme");
+    expect(setAppTitle).toHaveBeenCalledWith("proj", "acme");
+    new HostMod.Host().setAppTitle("", "");
+    expect(setAppTitle).toHaveBeenLastCalledWith("", "");
+  });
+
+  it("does nothing without a shell", () => {
+    expect(() => new HostMod.Host().setAppTitle("/a", "b")).not.toThrow();
+  });
+});
+
+describe("Host.bindDragRegion", () => {
+  function element() {
+    const handlers: ((e: unknown) => void)[] = [];
+    return {
+      handlers,
+      el: {
+        addEventListener: (_t: string, fn: (e: unknown) => void) => handlers.push(fn),
+        removeEventListener: (_t: string, fn: (e: unknown) => void) =>
+          handlers.splice(handlers.indexOf(fn), 1),
+      },
+    };
+  }
+
+  it("starts a window drag on a primary press outside interactive children", () => {
+    const startDragging = vi.fn();
+    win.__TAURI__ = { window: { getCurrentWindow: () => ({ startDragging }) } };
+    const { el, handlers } = element();
+    const off = new HostMod.Host().bindDragRegion(el as unknown as HTMLElement);
+    const press = (button: number, interactive: boolean) => {
+      const e = { button, target: { closest: () => (interactive ? {} : null) }, preventDefault: vi.fn() };
+      handlers.forEach((h) => h(e));
+      return e;
+    };
+    expect(press(0, false).preventDefault).toHaveBeenCalled();
+    press(0, true);
+    press(2, false);
+    expect(startDragging).toHaveBeenCalledOnce();
+    off();
+    expect(handlers).toHaveLength(0);
+  });
+
+  it("binds nothing outside Tauri", () => {
+    const { el, handlers } = element();
+    new HostMod.Host().bindDragRegion(el as unknown as HTMLElement)();
+    expect(handlers).toHaveLength(0);
+  });
+});
+
+describe("Host.checkUpdate", () => {
+  it("asks the desktop shell when it can", async () => {
+    const invoke = vi.fn(async () => ({ available: false }));
+    win.__TAURI__ = { core: { invoke } };
+    await expect(new HostMod.Host().checkUpdate()).resolves.toEqual({ available: false });
+    expect(invoke).toHaveBeenCalledWith("igni_check_update");
+  });
+
+  it("says there is no shell to ask otherwise", () => {
+    expect(new HostMod.Host().checkUpdate()).toBeNull();
+  });
+});

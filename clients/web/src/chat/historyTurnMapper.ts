@@ -44,6 +44,15 @@ export class HistoryTurnMapper {
     return mapTurn ? mapTurn(turn) : null;
   }
 
+  /** {@link map}, for history the backend already holds: a user
+   *  message is stamped with its run and as persisted, so editing or
+   *  deleting it truncates the backend's copy too. */
+  mapPersisted(turn: HistoryTurn): ChatItem | null {
+    const item = this.map(turn);
+    if (item?.kind !== "user" || !turn.run_id) return item;
+    return { ...item, runId: turn.run_id, persisted: true };
+  }
+
   /** ``visibleOutText`` is the reply text the run rendered. Thinking is
    *  not restored, and no ``count_context_tokens`` will follow, so the
    *  line lands corrected with no think estimate. */

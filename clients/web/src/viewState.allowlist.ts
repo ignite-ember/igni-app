@@ -79,7 +79,7 @@ export const MODEL_NAMES =
 
 /** Why a state named like the model's is not the model's, by file. */
 export const BECAUSE: Record<string, Record<string, string>> = {
-  "App.tsx": {
+  "chat/useTranscriptScroll.ts": {
     scrollEl: "The scroller element, for the indicator to measure — where it is scrolled is ui.scroll.",
   },
   "components/chatItems/useMessageEditor.ts": {
@@ -93,13 +93,42 @@ export const BECAUSE: Record<string, Record<string, string>> = {
 /** Every view state, by file and category. */
 export const VIEW_STATE: Record<string, Partial<Record<Category, string[]>>> = {
   "App.tsx": {
-    data: ["conn", "sessionBound", "items", "runPhase", "status", "hitl", "extensions", "pendingUpdate", "sessions", "skills", "backendCommands", "cloudName", "historyIndexToItemIndex"],
-    menu: ["modelMenuSignal", "accountMenu"],
-    measure: ["scrollEl"],
-    animation: ["pulsingItemId"],
+    data: ["status", "sessions"],
+  },
+  "chat/useCommands.ts": {
+    data: ["skills", "backendCommands"],
+    menu: ["modelMenuSignal"],
+  },
+  "chat/useHitl.ts": {
+    data: ["pending"],
+  },
+  "chat/useSessionBinding.ts": {
+    data: ["conn", "sessionBound"],
+  },
+  "chat/useTranscriptState.ts": {
+    data: ["items", "historyIndexToItemIndex"],
   },
   "chat/followOutput.ts": {
     measure: ["agreed"],
+  },
+  "chat/useChatSearch.ts": {
+    animation: ["pulsingItemId"],
+  },
+  "chat/useRunPhase.ts": {
+    data: ["runPhase"],
+  },
+  "chat/useTranscriptScroll.ts": {
+    measure: ["scrollEl"],
+  },
+  "components/AccountMenu.tsx": {
+    menu: ["accountMenu"],
+    data: ["cloudName"],
+  },
+  "extensions/useExtensions.ts": {
+    data: ["extensions"],
+  },
+  "update/useUpdateCheck.ts": {
+    data: ["pendingUpdate"],
   },
   "components/CopyButton.tsx": {
     animation: ["copied"],

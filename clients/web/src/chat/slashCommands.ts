@@ -5,6 +5,8 @@
  * Not UI: the composer filters it, and the Help page lists it.
  */
 
+import { WirePayload } from "../protocol/wirePayload";
+
 export interface SlashCommand {
   name: string;
   description: string;
@@ -69,7 +71,7 @@ export const BUILTIN_COMMANDS: SlashCommand[] = [
 
 /** Commands that exist only in this client.
  *
- *  `/workflows` is intercepted in `App.tsx` and never reaches the
+ *  `/workflows` is intercepted (`chat/workflowLauncher.ts`) and never reaches the
  *  backend, so it is legitimately absent from `get_slash_commands`.
  *  Anything else missing from the backend's answer is drift, not a
  *  feature. */
@@ -110,6 +112,30 @@ export class SlashCommandCatalog {
       ...clientOnly,
       ...skills.filter((s) => !seen.has(s.name)),
     ]);
+  }
+
+  /** ``get_skill_definitions``: each skill as the command that runs it. */
+  static fromSkillDefinitions(raw: unknown): SlashCommand[] {
+    return SlashCommandCatalog.definitions(raw, "skill");
+  }
+
+  /** ``get_slash_commands``: what the backend dispatches. It leaves the
+   *  slash off deliberately — adding it is the caller's job. */
+  static fromBackendCommands(raw: unknown): SlashCommand[] {
+    return SlashCommandCatalog.definitions(raw, "");
+  }
+
+  /** ``{name, description}`` rows, slashed; a row without a name is dropped. */
+  private static definitions(raw: unknown, fallbackDescription: string): SlashCommand[] {
+    if (!Array.isArray(raw)) return [];
+    const out: SlashCommand[] = [];
+    for (const row of raw) {
+      const p = new WirePayload(row);
+      const name = p.string("name");
+      if (!name) continue;
+      out.push({ name: `/${name}`, description: p.string("description") || fallbackDescription });
+    }
+    return out;
   }
 
   /** Case-insensitive prefix match on the name after the leading `/`,

@@ -290,7 +290,7 @@ describe("SlashCommandCatalog.merge", () => {
   });
 
   it("still offers client-only commands the backend cannot know about", () => {
-    // `/workflows` is intercepted in App.tsx and never reaches the
+    // `/workflows` is intercepted (chat/workflowLauncher.ts) and never reaches the
     // backend, so its absence from the RPC is correct.
     const merged = SlashCommandCatalog.merge(be("/help"), []).commands;
 
@@ -325,5 +325,31 @@ describe("SlashCommandCatalog.merge", () => {
     ]).commands;
 
     expect(merged.map((c) => c.name)).toContain("/solo");
+  });
+});
+
+describe("SlashCommandCatalog definition builders", () => {
+  it("slashes skill definitions, describing a bare one as a skill", () => {
+    expect(
+      SlashCommandCatalog.fromSkillDefinitions([
+        { name: "commit", description: "Commit it" },
+        { name: "pr" },
+        { description: "nameless" },
+      ]),
+    ).toEqual([
+      { name: "/commit", description: "Commit it" },
+      { name: "/pr", description: "skill" },
+    ]);
+  });
+
+  it("slashes the backend's commands", () => {
+    expect(SlashCommandCatalog.fromBackendCommands([{ name: "help", description: "" }])).toEqual([
+      { name: "/help", description: "" },
+    ]);
+  });
+
+  it("reads anything that is not a list as nothing", () => {
+    expect(SlashCommandCatalog.fromSkillDefinitions(null)).toEqual([]);
+    expect(SlashCommandCatalog.fromBackendCommands({ name: "x" })).toEqual([]);
   });
 });
