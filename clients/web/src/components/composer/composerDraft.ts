@@ -9,6 +9,7 @@
  */
 
 import type { Composer, ComposerMode } from "../../clientState";
+import type { CompletionMenu, MenuEntry } from "./completionMenu";
 
 /** What the completion menu is asked to look at: a text and a caret in it. */
 export interface MenuProbe {
@@ -46,6 +47,36 @@ export class ComposerDraft {
 
   withText(text: string): ComposerDraft {
     return new ComposerDraft(text, this.mode);
+  }
+
+  /** Something to send: more than whitespace. */
+  get sendable(): boolean {
+    return this.text.trim() !== "";
+  }
+
+  /** `@path ` added at the end, a space before it unless the text is
+   *  empty or already ends in whitespace. How an uploaded file joins. */
+  withMentionAppended(path: string): ComposerDraft {
+    const { text } = this;
+    const sep = text && !text.endsWith(" ") && !text.endsWith("\n") ? " " : "";
+    return this.withText(`${text}${sep}@${path} `);
+  }
+
+  /** `snippet` inserted at `offset`. */
+  withInsertedAt(offset: number, snippet: string): ComposerDraft {
+    return this.withText(this.text.slice(0, offset) + snippet + this.text.slice(offset));
+  }
+
+  /** `entry` accepted from `menu` with the caret at `caret`: a command
+   *  replaces the whole draft (without its `/` in command mode, where the
+   *  badge stands for it); a file replaces the `@` token up to the caret. */
+  withCompletion(menu: CompletionMenu, entry: MenuEntry, caret: number): ComposerDraft {
+    if (menu.kind === "slash") {
+      return this.withText(this.mode === "command" ? `${entry.key.slice(1)} ` : `${entry.key} `);
+    }
+    return this.withText(
+      `${this.text.slice(0, menu.tokenStart)}@${entry.key} ${this.text.slice(caret)}`,
+    );
   }
 
   /** The text with its mode's prefix: what is sent, and what history keeps. */

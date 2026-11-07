@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import type { MentionMenu, SlashMenu } from "./completionMenu";
 import { ComposerDraft } from "./composerDraft";
 
 describe("ComposerDraft", () => {
@@ -53,6 +54,67 @@ describe("ComposerDraft", () => {
     it("on the trigger keystroke, the wire form is probed with the caret past the prefix", () => {
       expect(new ComposerDraft("", "command").triggerProbe(0)).toEqual({ value: "/", caret: 1 });
       expect(new ComposerDraft("ls", "shell").triggerProbe(3)).toEqual({ value: "$ ls", caret: 3 });
+    });
+  });
+
+  describe("sendable", () => {
+    it.each([
+      ["", false],
+      ["  \n ", false],
+      [" hi ", true],
+    ] as const)("%j is sendable: %s", (text, sendable) => {
+      expect(new ComposerDraft(text, "chat").sendable).toBe(sendable);
+    });
+  });
+
+  describe("withMentionAppended", () => {
+    it.each([
+      ["", "@a.png "],
+      ["see ", "see @a.png "],
+      ["see\n", "see\n@a.png "],
+      ["see", "see @a.png "],
+    ])("%j becomes %j", (text, joined) => {
+      expect(new ComposerDraft(text, "shell").withMentionAppended("a.png")).toEqual(
+        new ComposerDraft(joined, "shell"),
+      );
+    });
+  });
+
+  it("withInsertedAt puts the snippet at the offset", () => {
+    expect(new ComposerDraft("ab", "chat").withInsertedAt(1, "XY").text).toBe("aXYb");
+  });
+
+  describe("withCompletion", () => {
+    const slash: SlashMenu = { kind: "slash", entries: [], active: 0, tokenStart: 0 };
+    const entry = { key: "/help", label: "/help" };
+
+    it("a command in chat mode replaces the draft with the command", () => {
+      expect(new ComposerDraft("/he", "chat").withCompletion(slash, entry, 3)).toEqual(
+        new ComposerDraft("/help ", "chat"),
+      );
+    });
+
+    it("a command in command mode leaves the / to the badge", () => {
+      expect(new ComposerDraft("he", "command").withCompletion(slash, entry, 2)).toEqual(
+        new ComposerDraft("help ", "command"),
+      );
+    });
+
+    it("a file replaces the @ token up to the caret and keeps what follows", () => {
+      const mention: MentionMenu = {
+        kind: "mention",
+        entries: [],
+        active: 0,
+        tokenStart: 4,
+        total: 0,
+        limit: 0,
+        query: "sr",
+      };
+      const draft = new ComposerDraft("see @sr more", "chat");
+
+      expect(draft.withCompletion(mention, { key: "src/a.ts", label: "a.ts" }, 7).text).toBe(
+        "see @src/a.ts  more",
+      );
     });
   });
 });

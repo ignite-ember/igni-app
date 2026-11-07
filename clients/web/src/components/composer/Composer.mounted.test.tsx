@@ -50,12 +50,14 @@ vi.hoisted(() => {
 });
 
 import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react";
+import { createRef } from "react";
 import type React from "react";
 
 import type { SlashCommand } from "../../chat/slashCommands";
 import { WindowModel } from "../../clientState";
 import { IgniClient } from "../../protocol/client";
 import { Composer } from "./Composer";
+import type { ComposerCatalog, ComposerHandle } from "./composerContract";
 import type { ToolEntry } from "./popups";
 
 type Rpc = (method: string, params?: Record<string, unknown>) => Promise<unknown>;
@@ -96,22 +98,25 @@ const TOOLS: ToolEntry[] = [
 
 type Props = React.ComponentProps<typeof Composer>;
 
-function mount(over: Partial<Props> = {}, stub: Stub = stubClient()) {
+/** Props to mount with; a partial catalog fills in from the defaults. */
+type MountProps = Omit<Partial<Props>, "catalog"> & { catalog?: Partial<ComposerCatalog> };
+
+function mount({ catalog, ...over }: MountProps = {}, stub: Stub = stubClient()) {
   const windowModel = new WindowModel(stub.client, "w-test", 0);
   const props: Props = {
     client: stub.client,
     connected: true,
-    processing: false,
-    skills: [],
-    backendCommands: null,
-    tools: TOOLS,
+    runPhase: "idle",
+    catalog: { skills: [], backendCommands: null, tools: TOOLS, ...catalog },
     windowModel,
-    onPickModel: vi.fn(),
-    onTool: vi.fn(),
-    onTyping: vi.fn(),
-    onSubmit: vi.fn(),
-    onStop: vi.fn(),
-    onPickMode: vi.fn(),
+    actions: {
+      onPickModel: vi.fn(),
+      onTool: vi.fn(),
+      onTyping: vi.fn(),
+      onSubmit: vi.fn(),
+      onStop: vi.fn(),
+      onPickMode: vi.fn(),
+    },
     ...over,
   };
   const view = render(<Composer {...props} />);
@@ -171,9 +176,9 @@ describe("sending", () => {
     const notPrevented = press(editor, "Enter");
 
     expect(notPrevented).toBe(false); // the newline is not inserted
-    expect(props.onSubmit).toHaveBeenCalledExactlyOnceWith("explain this module");
+    expect(props.actions.onSubmit).toHaveBeenCalledExactlyOnceWith("explain this module");
     expect(windowModel.get("composer")).toMatchObject({ text: "", mode: "chat" });
-    expect(props.onTyping).toHaveBeenLastCalledWith("");
+    expect(props.actions.onTyping).toHaveBeenLastCalledWith("");
   });
 
   it("the send button sends what is in the editor", () => {
@@ -183,7 +188,7 @@ describe("sending", () => {
 
     act(() => sendButton()!.click());
 
-    expect(props.onSubmit).toHaveBeenCalledExactlyOnceWith("hello");
+    expect(props.actions.onSubmit).toHaveBeenCalledExactlyOnceWith("hello");
   });
 
   it("Shift+Enter does not send and leaves the newline to the editor", () => {
@@ -193,7 +198,7 @@ describe("sending", () => {
     const notPrevented = press(editor, "Enter", { shiftKey: true });
 
     expect(notPrevented).toBe(true);
-    expect(props.onSubmit).not.toHaveBeenCalled();
+    expect(props.actions.onSubmit).not.toHaveBeenCalled();
   });
 
   it("whitespace alone is not a message", () => {
@@ -202,7 +207,7 @@ describe("sending", () => {
 
     press(editor, "Enter");
 
-    expect(props.onSubmit).not.toHaveBeenCalled();
+    expect(props.actions.onSubmit).not.toHaveBeenCalled();
     expect(sendButton()!.disabled).toBe(true);
   });
 
@@ -210,30 +215,46 @@ describe("sending", () => {
     const { editor, props, windowModel } = mount();
     typeInto(editor, "draft text");
 
-    expect(props.onTyping).toHaveBeenLastCalledWith("draft text");
+    expect(props.actions.onTyping).toHaveBeenLastCalledWith("draft text");
     expect(windowModel.get("composer").text).toBe("draft text");
   });
 });
 
 describe("while a turn is running", () => {
   it("shows Stop instead of Send, and Stop interrupts", () => {
-    const { container, props, sendButton } = mount({ processing: true });
+    const { container, props, sendButton } = mount({ runPhase: "streaming" });
 
     expect(sendButton()).toBeNull();
     const stop = container.querySelector(".send-btn.stop") as HTMLButtonElement;
     expect(stop).not.toBeNull();
     act(() => stop.click());
 
-    expect(props.onStop).toHaveBeenCalledOnce();
-    expect(props.onSubmit).not.toHaveBeenCalled();
+    expect(props.actions.onStop).toHaveBeenCalledOnce();
+    expect(props.actions.onSubmit).not.toHaveBeenCalled();
   });
 
   it("switches back to Send when the turn ends", () => {
-    const { container, rerender, props, sendButton } = mount({ processing: true });
-    rerender(<Composer {...props} processing={false} />);
+    const { container, rerender, props, sendButton } = mount({ runPhase: "streaming" });
+    rerender(<Composer {...props} runPhase="idle" />);
 
     expect(container.querySelector(".send-btn.stop")).toBeNull();
     expect(sendButton()).not.toBeNull();
+  });
+
+  it("keeps Send while the backend finalizes", () => {
+    const { container, sendButton } = mount({ runPhase: "finalizing" });
+
+    expect(container.querySelector(".send-btn.stop")).toBeNull();
+    expect(sendButton()).not.toBeNull();
+  });
+
+  it("Enter still sends while the model is replying", () => {
+    const { editor, props } = mount({ runPhase: "streaming" });
+    typeInto(editor, "and also this");
+
+    press(editor, "Enter");
+
+    expect(props.actions.onSubmit).toHaveBeenCalledExactlyOnceWith("and also this");
   });
 });
 
@@ -307,13 +328,13 @@ describe("@ file completion", () => {
     press(editor, "Enter");
     await nextFrame();
 
-    expect(props.onSubmit).not.toHaveBeenCalled();
+    expect(props.actions.onSubmit).not.toHaveBeenCalled();
     expect(windowModel.get("composer").text).toBe("look at @src/api.ts ");
     expect(container.querySelector(".popup-menu")).toBeNull();
     expect(editor.querySelector("[data-pill-path]")!.getAttribute("data-pill-path")).toBe("src/api.ts");
 
     press(editor, "Enter");
-    expect(props.onSubmit).toHaveBeenCalledExactlyOnceWith("look at @src/api.ts");
+    expect(props.actions.onSubmit).toHaveBeenCalledExactlyOnceWith("look at @src/api.ts");
   });
 
   it("clicking an entry inserts it", async () => {
@@ -455,10 +476,10 @@ describe("$ shell mode", () => {
     expect(editor.getAttribute("data-placeholder")).toContain("Shell command");
 
     typeInto(editor, "ls -la");
-    expect(props.onTyping).toHaveBeenLastCalledWith("$ ls -la");
+    expect(props.actions.onTyping).toHaveBeenLastCalledWith("$ ls -la");
     press(editor, "Enter");
 
-    expect(props.onSubmit).toHaveBeenCalledExactlyOnceWith("$ ls -la");
+    expect(props.actions.onSubmit).toHaveBeenCalledExactlyOnceWith("$ ls -la");
     expect(windowModel.get("composer").mode).toBe("chat");
     expect(container.querySelector(".mode-badge")).toBeNull();
   });
@@ -494,7 +515,7 @@ describe("$ shell mode", () => {
     press(editor, "Escape");
 
     expect(windowModel.get("composer")).toMatchObject({ text: "", mode: "chat" });
-    expect(props.onSubmit).not.toHaveBeenCalled();
+    expect(props.actions.onSubmit).not.toHaveBeenCalled();
   });
 
   it("Escape in plain chat with no menu is left for the app (cancel run)", () => {
@@ -514,7 +535,7 @@ describe("/ command mode", () => {
   ];
 
   it("typing / opens the command menu from the backend's list, with the GUI's wording", () => {
-    const { editor, container, windowModel } = mount({ backendCommands: backend });
+    const { editor, container, windowModel } = mount({ catalog: { backendCommands: backend } });
 
     typeInto(editor, "/");
 
@@ -533,29 +554,29 @@ describe("/ command mode", () => {
   });
 
   it("Enter on a fully typed command runs it in one press", () => {
-    const { editor, props } = mount({ backendCommands: backend });
+    const { editor, props } = mount({ catalog: { backendCommands: backend } });
     typeInto(editor, "/");
     typeInto(editor, "plugin");
 
     press(editor, "Enter");
 
-    expect(props.onSubmit).toHaveBeenCalledExactlyOnceWith("/plugin");
+    expect(props.actions.onSubmit).toHaveBeenCalledExactlyOnceWith("/plugin");
   });
 
   it("Tab completes the highlighted command without sending", () => {
-    const { editor, props, windowModel } = mount({ backendCommands: backend });
+    const { editor, props, windowModel } = mount({ catalog: { backendCommands: backend } });
     typeInto(editor, "/");
     typeInto(editor, "rev");
 
     press(editor, "Tab");
 
-    expect(props.onSubmit).not.toHaveBeenCalled();
+    expect(props.actions.onSubmit).not.toHaveBeenCalled();
     expect(windowModel.get("composer")).toMatchObject({ text: "review ", mode: "command" });
   });
 
   it("skills are offered beside the commands", () => {
     const { editor, container } = mount({
-      skills: [{ name: "/deploy-docs", description: "Publish the docs" }],
+      catalog: { skills: [{ name: "/deploy-docs", description: "Publish the docs" }] },
     });
     typeInto(editor, "/");
     typeInto(editor, "depl");
@@ -565,7 +586,7 @@ describe("/ command mode", () => {
   });
 
   it("a query that matches nothing closes the menu", () => {
-    const { editor, container } = mount({ backendCommands: backend });
+    const { editor, container } = mount({ catalog: { backendCommands: backend } });
     typeInto(editor, "/");
     typeInto(editor, "zzz");
 
@@ -646,7 +667,7 @@ describe("pasting code", () => {
 
     press(editor, "Enter");
 
-    const sent = (props.onSubmit as ReturnType<typeof vi.fn>).mock.calls[0][0] as string;
+    const sent = (props.actions.onSubmit as ReturnType<typeof vi.fn>).mock.calls[0][0] as string;
     expect(sent).toContain(`[code-paste src/hello.py:9 lines=9-12]\n${SNIPPET}\n[/code-paste]`);
   });
 
@@ -660,7 +681,7 @@ describe("pasting code", () => {
     expect(windowModel.get("composer").text).toBe(SNIPPET);
     expect(editor.querySelector("[data-pill-code]")).toBeNull();
     press(editor, "Enter");
-    expect(props.onSubmit).toHaveBeenCalledExactlyOnceWith(SNIPPET.trim());
+    expect(props.actions.onSubmit).toHaveBeenCalledExactlyOnceWith(SNIPPET.trim());
   });
 
   it("a short or single-line paste is left to the browser and searches nothing", () => {
@@ -712,8 +733,9 @@ describe("attachments", () => {
     const stub = stubClient({
       upload_attachment: () => new Promise((r) => (finish = r)),
     });
-    const { editor, container, props, windowModel } = mount({}, stub);
+    const { editor, container, props, windowModel, sendButton } = mount({}, stub);
     typeInto(editor, "with file");
+    expect(sendButton()!.disabled).toBe(false);
 
     act(() => {
       fireEvent.drop(container.querySelector(".composer-zone")!, {
@@ -723,12 +745,15 @@ describe("attachments", () => {
     await waitFor(() => expect(container.querySelector(".composer-chip-attach.uploading")).not.toBeNull());
     expect(container.querySelector(".composer-chip-name")!.textContent).toBe("a.png");
 
+    // Send and Enter go by the same gate: neither works mid-upload.
+    expect(sendButton()!.disabled).toBe(true);
     press(editor, "Enter");
-    expect(props.onSubmit).not.toHaveBeenCalled();
+    expect(props.actions.onSubmit).not.toHaveBeenCalled();
 
     await act(async () => finish({ path: "att/a.png", size: 1 }));
     await waitFor(() => expect(container.querySelector(".composer-chip-attach")).toBeNull());
     expect(windowModel.get("composer").text).toBe("with file @att/a.png ");
+    expect(sendButton()!.disabled).toBe(false);
   });
 
   it("dragging files over the composer highlights it", () => {
@@ -782,7 +807,7 @@ describe("the bar's menus", () => {
     expect(items.map((i) => i.querySelector(".cmd")!.textContent)).toEqual(["Compact", "Sessions"]);
     act(() => (items[1] as HTMLElement).click());
 
-    expect(props.onTool).toHaveBeenCalledExactlyOnceWith("/sessions");
+    expect(props.actions.onTool).toHaveBeenCalledExactlyOnceWith("/sessions");
     expect(container.querySelector(".popup-menu")).toBeNull();
   });
 
@@ -800,7 +825,7 @@ describe("the bar's menus", () => {
     expect(rows[1].className).toContain("active");
     act(() => (rows[0] as HTMLElement).click());
 
-    expect(props.onPickModel).toHaveBeenCalledExactlyOnceWith("alpha-27b");
+    expect(props.actions.onPickModel).toHaveBeenCalledExactlyOnceWith("alpha-27b");
     expect(container.querySelector(".model-menu")).toBeNull();
   });
 
@@ -852,11 +877,11 @@ describe("the bar's menus", () => {
 
     // Picking the mode already in force is not a change.
     act(() => (items[2] as HTMLElement).click());
-    expect(props.onPickMode).not.toHaveBeenCalled();
+    expect(props.actions.onPickMode).not.toHaveBeenCalled();
 
     act(() => trigger.click());
     act(() => (container.querySelectorAll('[role="menuitem"]')[1] as HTMLElement).click());
-    expect(props.onPickMode).toHaveBeenCalledExactlyOnceWith("plan");
+    expect(props.actions.onPickMode).toHaveBeenCalledExactlyOnceWith("plan");
     expect(container.querySelector('[role="menu"]')).toBeNull();
   });
 });
@@ -922,17 +947,17 @@ describe("embedding", () => {
     expect(container.querySelector(".composer .composer-hitl [data-testid=hitl]")).not.toBeNull();
   });
 
-  it("hands the app a focus function, and takes it back on unmount", async () => {
-    const focusRef: React.MutableRefObject<(() => void) | null> = { current: null };
-    const { editor, unmount } = mount({ focusRef });
-    expect(focusRef.current).toBeTypeOf("function");
+  it("hands the app a handle that focuses the editor, and takes it back on unmount", async () => {
+    const ref = createRef<ComposerHandle>();
+    const { editor, unmount } = mount({ ref });
+    expect(ref.current).not.toBeNull();
 
-    act(() => focusRef.current!());
+    act(() => ref.current!.focusAtEnd());
     await nextFrame();
     expect(document.activeElement).toBe(editor);
 
     unmount();
-    expect(focusRef.current).toBeNull();
+    expect(ref.current).toBeNull();
   });
 
   it("shows a draft another view put in the model", () => {

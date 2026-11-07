@@ -168,15 +168,15 @@ export const VIEW_STATE: Record<string, Partial<Record<Category, string[]>>> = {
     page: ["activeIdx"],
     pending: ["pending"],
   },
-  "components/composer/Composer.tsx": {
-    data: ["history"],
-  },
   "components/composer/useAttachments.ts": {
     pending: ["uploads"],
     hover: ["dragHot"],
   },
   "components/composer/useCompletionMenu.ts": {
     menu: ["menu"],
+  },
+  "components/composer/useComposerController.ts": {
+    data: ["history"],
   },
   "components/composer/useComposerPopup.ts": {
     menu: ["popup"],

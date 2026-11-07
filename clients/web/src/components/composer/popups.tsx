@@ -5,6 +5,8 @@
 
 import type { ModelChoice } from "../../protocol/composerWire";
 import type { CompletionMenu, MenuEntry } from "./completionMenu";
+import type { CompletionMenuApi } from "./useCompletionMenu";
+import type { ComposerPopupApi } from "./useComposerPopup";
 
 /** A tool the `/` button lists. */
 export interface ToolEntry {
@@ -115,5 +117,56 @@ export function CompletionMenuView({
         </div>
       )}
     </div>
+  );
+}
+
+/** Whichever popup is open above the editor: a bar menu or the
+ *  completion menu. Picking from a bar menu closes it first. */
+export function ComposerPopupLayer({
+  popups,
+  tools,
+  onTool,
+  onPickModel,
+  completion,
+  onChoose,
+}: {
+  popups: ComposerPopupApi;
+  tools: ToolEntry[];
+  onTool: (command: string) => void;
+  onPickModel: (name: string) => void;
+  completion: Pick<CompletionMenuApi, "menu" | "loadMore">;
+  onChoose: (entry: MenuEntry) => void;
+}) {
+  const { popup } = popups;
+  return (
+    <>
+      {popup.kind === "tools" && (
+        <ToolsMenu
+          tools={tools}
+          onClose={popups.close}
+          onPick={(command) => {
+            popups.close();
+            onTool(command);
+          }}
+        />
+      )}
+      {popup.kind === "model" && (
+        <ModelMenu
+          models={popup.models}
+          onClose={popups.close}
+          onPick={(name) => {
+            popups.close();
+            onPickModel(name);
+          }}
+        />
+      )}
+      {completion.menu && (
+        <CompletionMenuView
+          menu={completion.menu}
+          onChoose={onChoose}
+          onNearBottom={() => void completion.loadMore()}
+        />
+      )}
+    </>
   );
 }

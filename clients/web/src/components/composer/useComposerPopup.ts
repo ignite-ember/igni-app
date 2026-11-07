@@ -15,6 +15,12 @@ export type ComposerPopup =
   | { kind: "model"; models: ModelChoice[] }
   | { kind: "mode" };
 
+/** A request from outside (the /model command) to open the model picker.
+ *  Each request is a new `n`. */
+export interface ModelMenuRequest {
+  n: number;
+}
+
 const NONE: ComposerPopup = { kind: "none" };
 
 export interface ComposerPopupApi {
@@ -31,8 +37,7 @@ export function useComposerPopup({
   onOpen,
 }: {
   client: Pick<IgniClient, "modelRegistry">;
-  /** A request from outside (the /model command) to open the model picker. */
-  modelMenuSignal?: { n: number } | null;
+  modelMenuSignal?: ModelMenuRequest | null;
   /** A popup is opening: whatever else is open should close. */
   onOpen: () => void;
 }): ComposerPopupApi {

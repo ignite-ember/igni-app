@@ -37,6 +37,7 @@ import {
 import { useExtensionTraffic } from "./extensions/useExtensionTraffic";
 import { ChatSearchBar } from "./components/ChatSearchBar";
 import { Composer } from "./components/composer/Composer";
+import type { ComposerHandle } from "./components/composer/composerContract";
 import { ComposerDraft } from "./components/composer/composerDraft";
 import { modeSwitchCommand, type PermissionMode } from "./components/composer/permissionModes";
 import { FPSCounterOverlay } from "./components/FPSCounter";
@@ -129,12 +130,12 @@ export default function App() {
   // A skill picked from a panel, a message to edit and resend: the text
   // is the model's (``ui.composer``); the caret is the editor's, reached
   // through the handle the Composer fills in.
-  const composerFocus = useRef<(() => void) | null>(null);
+  const composerRef = useRef<ComposerHandle>(null);
   const seedComposer = useCallback(
     (entry: string) => {
       // A pre-fill enters the mode its prefix asks for, as typing it would.
       windowModel.write("composer", ComposerDraft.fromWire(entry).toModel(), { force: true });
-      composerFocus.current?.();
+      composerRef.current?.focusAtEnd();
     },
     [windowModel],
   );
@@ -490,22 +491,26 @@ export default function App() {
               />
             ) : null
           }
+          ref={composerRef}
           client={client}
           connected={conn === "connected" && sessionBound}
-          processing={processing}
-          skills={commands.skills}
-          backendCommands={commands.backendCommands}
-          tools={contributions.tools()}
-          focusRef={composerFocus}
+          runPhase={runPhase}
+          catalog={{
+            skills: commands.skills,
+            backendCommands: commands.backendCommands,
+            tools: contributions.tools(),
+          }}
+          actions={{
+            onPickModel: (name) => void pickModel(name),
+            onTool: (cmd) => void controller.commands.run(cmd, false),
+            onSubmit: (t) => void controller.submitter.submit(t),
+            onStop: run.cancel,
+            onPickMode: pickMode,
+          }}
           windowModel={windowModel}
           model={status?.model}
           modelMenuSignal={commands.modelMenuSignal}
-          onPickModel={(name) => void pickModel(name)}
-          onTool={(cmd) => void controller.commands.run(cmd, false)}
-          onSubmit={(t) => void controller.submitter.submit(t)}
-          onStop={run.cancel}
           permissionMode={status?.permission_mode}
-          onPickMode={pickMode}
         />
         <StatusLine
           status={status}

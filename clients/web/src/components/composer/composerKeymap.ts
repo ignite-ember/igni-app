@@ -9,14 +9,18 @@
  * the run).
  *
  * Built per render from that render's state; it holds none of its own.
+ * Its context is the render's `ComposerController`.
  */
+
+import type { KeyboardEvent } from "react";
 
 import type { CompletionMenu, MenuEntry } from "./completionMenu";
 import { ComposerDraft } from "./composerDraft";
 import type { HistoryStep, InputHistory } from "./InputHistory";
 
-type KeyEvent = React.KeyboardEvent<HTMLDivElement>;
+type KeyEvent = KeyboardEvent<HTMLDivElement>;
 
+/** What the keymap reads and asks for; `ComposerController` is one. */
 export interface KeymapContext {
   menu: CompletionMenu | null;
   moveMenu: (delta: number) => void;
