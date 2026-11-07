@@ -56,6 +56,12 @@ export class WirePayload {
     return allowed.find((a) => a === v) ?? fallback;
   }
 
+  /** The field when it is an array, else empty. */
+  list(key: string): unknown[] {
+    const v = this.fields[key];
+    return Array.isArray(v) ? v : [];
+  }
+
   plainObject(key: string): Record<string, unknown> | undefined {
     const v = this.fields[key];
     return WirePayload.isRecord(v) ? v : undefined;

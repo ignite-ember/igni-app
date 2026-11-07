@@ -14,8 +14,8 @@ export interface PageContextValue {
  *
  * `panels/Drawer` reads it and delegates here. That indirection is what
  * kept the conversion to one edit instead of nine: every panel keeps
- * its own `title`, `headerExtras` and `toolbar` — a thousand lines of
- * `PluginsPanel` included — and only the frame around them changes.
+ * its own `title`, `headerExtras` and `toolbar`, and only the frame
+ * around them changes.
  */
 export const PageContext = createContext<PageContextValue | null>(null);
 

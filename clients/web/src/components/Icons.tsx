@@ -349,3 +349,22 @@ export function TrashIcon() {
     </svg>
   );
 }
+
+/** Cog: "settings", "manage". */
+export function GearIcon() {
+  return (
+    <svg viewBox="0 0 16 16" width="13" height="13" fill="none" aria-hidden="true">
+      <path
+        d="M8 5.6a2.4 2.4 0 1 0 0 4.8 2.4 2.4 0 0 0 0-4.8z"
+        stroke="currentColor"
+        strokeWidth="1.2"
+      />
+      <path
+        d="M13.5 8a5.6 5.6 0 0 0-.09-1.01l1.36-1.06-1.4-2.42-1.6.65a5.6 5.6 0 0 0-1.75-1.01L9.7.5h-2.8l-.32 1.65a5.6 5.6 0 0 0-1.75 1.01l-1.6-.65-1.4 2.42L3.19 6.99A5.6 5.6 0 0 0 3.1 8c0 .34.03.68.09 1.01L1.83 10.07l1.4 2.42 1.6-.65a5.6 5.6 0 0 0 1.75 1.01l.32 1.65h2.8l.32-1.65a5.6 5.6 0 0 0 1.75-1.01l1.6.65 1.4-2.42-1.36-1.06c.06-.33.09-.67.09-1.01z"
+        stroke="currentColor"
+        strokeWidth="1.1"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}

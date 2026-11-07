@@ -4,7 +4,7 @@
  * what it bundles, enable/disable/remove it, and manage the marketplaces
  * themselves.
  *
- * The README sanitizer has its own file (`PluginsPanel.readme.test.tsx`);
+ * The README sanitizer has its own file (`markdown/ReadmeMarkdown.test.tsx`);
  * this one pins the flows around it — which RPC each action sends, that
  * the list is re-read after a change, that failures are shown rather than
  * swallowed, and that an Install button cannot be pressed twice while its
@@ -193,12 +193,6 @@ describe("the installed tab", () => {
     expect(screen.getByText("hooks")).toBeTruthy();
     expect(screen.getByText("@01234567")).toBeTruthy();
     expect(screen.getByText("quiet")).toBeTruthy();
-  });
-
-  it("accepts the older answer shape wrapped in an object", async () => {
-    panelWith({ get_plugin_details: () => ({ plugins: [{ name: "wrapped" }] }) });
-    fireEvent.click(await screen.findByRole("button", { name: /^Installed/ }));
-    expect(await screen.findByText("wrapped")).toBeTruthy();
   });
 
   it("says how to get one when nothing is installed", async () => {

@@ -267,10 +267,15 @@ export const VIEW_STATE: Record<string, Partial<Record<Category, string[]>>> = {
     pending: ["busy"],
   },
   "components/panels/PluginsPanel.tsx": {
-    data: ["plugins", "markets", "contents"],
-    page: ["tab", "selected", "view"],
+    page: ["view"],
     field: ["installRef", "marketUrl", "query"],
-    pending: ["busy", "error", "loading"],
+  },
+  "components/panels/plugins/usePlugins.ts": {
+    data: ["installed", "catalog"],
+    pending: ["pending", "error"],
+  },
+  "components/panels/plugins/usePluginContents.ts": {
+    data: ["contents"],
   },
   "components/panels/SchedulePanel.tsx": {
     menu: ["open"],
