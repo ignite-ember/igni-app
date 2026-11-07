@@ -99,7 +99,10 @@ export function HitlDialog({
   };
 
   const decide = (action: "confirm" | "reject", choice: string) => {
-    const next = [...decisions, { requirement_id: req.requirement_id, action, choice }];
+    const next = [
+      ...decisions,
+      { requirement_id: req.requirement_id, action, choice },
+    ];
     const nextIdx = nextUndecided(index, next);
     if (nextIdx === -1) {
       onResolve(next);
@@ -178,7 +181,8 @@ export function HitlDialog({
             the user never saw is asking to run something. F136. */}
         {agentPath(req.agent_path) && (
           <div className="dialog-sub">
-            Requested by <span className="hitl-agent-path">{agentPath(req.agent_path)}</span>
+            Requested by{" "}
+            <span className="hitl-agent-path">{agentPath(req.agent_path)}</span>
           </div>
         )}
         {req.details_pending ? (
@@ -189,7 +193,7 @@ export function HitlDialog({
         ) : (
           req.details && <div className="dialog-sub">{req.details}</div>
         )}
-        <HitlArgsView args={req.tool_args as Record<string, unknown> | undefined} />
+        <HitlArgsView args={req.tool_args} />
         {/* Action rows are indented to align with col-2 of the
             ``.hitl-args`` grid above — that's where the args' value
             "rectangles" (file pill, diff old/new, command block)
@@ -218,29 +222,47 @@ export function HitlDialog({
               <button className="btn" onClick={() => decide("confirm", "once")}>
                 Allow once
               </button>
-              <button className="btn" onClick={() => decide("confirm", "always")}>
+              <button
+                className="btn"
+                onClick={() => decide("confirm", "always")}
+              >
                 Always allow
               </button>
-              <button className="btn" onClick={() => decide("confirm", "similar")}>
+              <button
+                className="btn"
+                onClick={() => decide("confirm", "similar")}
+              >
                 Allow similar
               </button>
-              <button className="btn btn-danger" onClick={() => decide("reject", "")}>
+              <button
+                className="btn btn-danger"
+                onClick={() => decide("reject", "")}
+              >
                 Reject
               </button>
             </div>
           </div>
         ) : (
           <div className="dialog-actions" style={{ paddingLeft: 86 }}>
-            <button className="btn btn-primary" onClick={() => decide("confirm", "once")}>
+            <button
+              className="btn btn-primary"
+              onClick={() => decide("confirm", "once")}
+            >
               Allow once
             </button>
             <button className="btn" onClick={() => decide("confirm", "always")}>
               Always allow
             </button>
-            <button className="btn" onClick={() => decide("confirm", "similar")}>
+            <button
+              className="btn"
+              onClick={() => decide("confirm", "similar")}
+            >
               Allow similar
             </button>
-            <button className="btn btn-danger" onClick={() => decide("reject", "")}>
+            <button
+              className="btn btn-danger"
+              onClick={() => decide("reject", "")}
+            >
               Reject
             </button>
           </div>
