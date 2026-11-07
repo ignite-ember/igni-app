@@ -249,9 +249,6 @@ export const VIEW_STATE: Record<string, Partial<Record<Category, string[]>>> = {
   "components/WorkspaceTrustDialog.tsx": {
     pending: ["busy", "error"],
   },
-  "components/WatcherIndicator.tsx": {
-    data: ["pids"],
-  },
   "components/WorkflowRun.tsx": {
     disclosure: ["collapsed"],
   },
@@ -325,9 +322,21 @@ export const VIEW_STATE: Record<string, Partial<Record<Category, string[]>>> = {
     data: ["skills"],
   },
   "components/panels/WatcherPanel.tsx": {
-    data: ["rows", "logsByPid"],
-    page: ["selectedPid", "filter", "autoScroll"],
+    page: ["filter"],
+  },
+  "components/panels/watcher/useNow.ts": {
     animation: ["now"],
+  },
+  "components/panels/watcher/useProcessTable.ts": {
+    data: ["table"],
+    pending: ["loadError"],
+  },
+  "components/panels/watcher/useWatcher.ts": {
+    page: ["selectedPid"],
+    pending: ["actionError"],
+  },
+  "components/panels/watcher/WatcherTail.tsx": {
+    page: ["autoScroll"],
   },
   "extensions/ExtensionIndicator.tsx": {
     data: ["state"],
