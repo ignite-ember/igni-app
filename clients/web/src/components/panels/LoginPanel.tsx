@@ -23,7 +23,7 @@ export function LoginPanel({
         onDone(Boolean(m.payload.success), String(m.payload.result ?? ""));
       }
     });
-    client.login().catch((e) => onDone(false, String(e)));
+    client.calls.login().catch((e) => onDone(false, String(e)));
     return off;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

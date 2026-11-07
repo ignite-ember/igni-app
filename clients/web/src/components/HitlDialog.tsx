@@ -1,25 +1,6 @@
 import { useState } from "react";
-import type { HITLRequest } from "../protocol/messages";
+import type { HITLDecision, HITLRequest } from "../protocol/messages";
 import { HitlArgsView } from "./HitlArgsView";
-
-export interface HitlDecision {
-  requirement_id: string;
-  action: "confirm" | "reject";
-  choice: string;
-  /**
-   * Optional atomic-mode-flip carried with the decision. When set,
-   * the BE applies the mode to the session BEFORE resuming the
-   * agent — so the next tool check after this HITL pause resolves
-   * already sees the new mode. Used by the "Accept all edits during
-   * this session" shortcut (sets ``"acceptEdits"``) so the agent's
-   * very next edit auto-approves instead of re-prompting.
-   *
-   * Empty string (default) is the no-op and matches the BE's
-   * "skip the flip" branch — back-compat with callers that don't
-   * know about this field.
-   */
-  set_permission_mode?: "acceptEdits" | "bypassPermissions" | "";
-}
 
 /** Tools that mutate files — the set ``acceptEdits`` mode auto-allows.
  *  When the dialog is asking about one of these AND the session is
@@ -64,7 +45,7 @@ export function HitlDialog({
   onAcceptEditsThisRun,
 }: {
   requirements: HITLRequest[];
-  onResolve: (decisions: HitlDecision[]) => void;
+  onResolve: (decisions: HITLDecision[]) => void;
   /** Active permission mode from the live ``StatusUpdate``. Used to
    *  gate the acceptEdits shortcut button — only shown when
    *  ``"default"`` (or empty for back-compat with older statuses). */
@@ -77,7 +58,7 @@ export function HitlDialog({
   onAcceptEditsThisRun?: () => void;
 }) {
   const [index, setIndex] = useState(0);
-  const [decisions, setDecisions] = useState<HitlDecision[]>([]);
+  const [decisions, setDecisions] = useState<HITLDecision[]>([]);
   const req = requirements[index];
   if (!req) return null;
 
@@ -89,7 +70,7 @@ export function HitlDialog({
    *  edit-tool requirements *ahead* of the cursor in one go, so a
    *  naive increment would re-prompt for a requirement that already
    *  has a decision and submit it twice. */
-  const nextUndecided = (from: number, decided: HitlDecision[]) => {
+  const nextUndecided = (from: number, decided: HITLDecision[]) => {
     const answered = new Set(decided.map((d) => d.requirement_id));
     for (let i = from + 1; i < requirements.length; i++) {
       const candidate = requirements[i];
@@ -98,7 +79,7 @@ export function HitlDialog({
     return -1;
   };
 
-  const decide = (action: "confirm" | "reject", choice: string) => {
+  const decide = (action: HITLDecision["action"], choice: HITLDecision["choice"]) => {
     const next = [
       ...decisions,
       { requirement_id: req.requirement_id, action, choice },
@@ -129,7 +110,7 @@ export function HitlDialog({
     // slash command. ``onAcceptEditsThisRun`` still flips the
     // ref so the parent fires `/accept off` on ``streaming_done``
     // and the gate doesn't quietly persist past this task.
-    const head: HitlDecision = {
+    const head: HITLDecision = {
       requirement_id: req.requirement_id,
       action: "confirm",
       choice: "once",
@@ -147,11 +128,13 @@ export function HitlDialog({
     const rest = requirements
       .slice(index + 1)
       .filter((r) => EDIT_TOOL_NAMES.has(r.tool_name))
-      .map((r) => ({
-        requirement_id: r.requirement_id,
-        action: "confirm" as const,
-        choice: "once",
-      }));
+      .map(
+        (r): HITLDecision => ({
+          requirement_id: r.requirement_id,
+          action: "confirm",
+          choice: "once",
+        }),
+      );
     const next = [...decisions, head, ...rest];
     onAcceptEditsThisRun?.();
     const nextIdx = nextUndecided(index, next);

@@ -7,7 +7,8 @@
  * can (a headless Linux box), the in-app browser.
  */
 
-import { pickNativeDirectory, type IgniClient } from "../protocol/client";
+import type { IgniClient } from "../protocol/client";
+import { pickNativeDirectory } from "../protocol/nativeDirectory";
 import { PickDirResult } from "../protocol/rpcResults";
 
 /** The backend's dialog waits for a person, for as long as they take. */

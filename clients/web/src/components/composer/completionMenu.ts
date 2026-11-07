@@ -10,7 +10,7 @@
  * and an open picker swallows the next Enter (T23).
  */
 
-import type { IgniClient } from "../../protocol/client";
+import type { BackendCalls } from "../../protocol/backendCalls";
 
 export interface MenuEntry {
   key: string;
@@ -56,7 +56,7 @@ export function moveActive<M extends CompletionMenu>(menu: M, delta: number): M 
 }
 
 /** The part of the client a file lookup needs. */
-type FileCompleter = Pick<IgniClient, "completeFiles">;
+type FileCompleter = Pick<BackendCalls, "completeFiles">;
 
 export class MentionCompleter {
   private seq = 0;

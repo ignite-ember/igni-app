@@ -7,7 +7,7 @@
 import type { ClipboardEvent } from "react";
 
 import { CodeMatchSet } from "../../chat/codeMatchSet";
-import type { IgniClient } from "../../protocol/client";
+import type { BackendCalls } from "../../protocol/backendCalls";
 import { CodePillRegistry } from "./CodePillRegistry";
 import type { ComposerEditor } from "./ComposerEditor";
 import type { AttachmentsApi } from "./useAttachments";
@@ -18,7 +18,7 @@ import type { ComposerDraftBinding } from "./useComposerDraft";
 const CODE_PASTE_MIN_CHARS = 30;
 
 export interface PasteHandlerDeps {
-  client: Pick<IgniClient, "searchCode">;
+  client: { calls: Pick<BackendCalls, "searchCode"> };
   registry: CodePillRegistry;
   binding: ComposerDraftBinding;
   editor: ComposerEditor;
@@ -50,7 +50,7 @@ export class PasteHandler {
   /** Swap a pasted snippet for a pill when the repository has it. */
   private async pillCodePaste(snippet: string): Promise<void> {
     const { client, registry, binding, editor } = this.deps;
-    const result = await client.searchCode(snippet);
+    const result = await client.calls.searchCode(snippet);
     if (!result.ok) {
       console.warn("search_code failed", result.reason);
       return;

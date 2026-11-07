@@ -14,7 +14,7 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { ExtensionCaller } from "./client";
+import { ExtensionCaller } from "./extensionCaller";
 import type { IgniClient } from "./client";
 import { fe } from "./messages";
 

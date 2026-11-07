@@ -23,8 +23,8 @@
  */
 
 import { useState } from "react";
-import { HitlDialog, type HitlDecision } from "../components/HitlDialog";
-import type { HITLRequest } from "../protocol/messages";
+import { HitlDialog } from "../components/HitlDialog";
+import type { HITLDecision, HITLRequest } from "../protocol/messages";
 
 function req(overrides: Partial<HITLRequest> = {}): HITLRequest {
   return {
@@ -137,7 +137,7 @@ export function HitlDemo() {
   const append = (text: string) =>
     setLog((prev) => [{ ts: 1_000 + prev.length, text }, ...prev].slice(0, 20));
 
-  const handleResolve = (decisions: HitlDecision[]) => {
+  const handleResolve = (decisions: HITLDecision[]) => {
     append(
       `resolve: [${decisions.map((d) => `${d.requirement_id}:${d.action}/${d.choice || "—"}`).join(", ")}]`,
     );

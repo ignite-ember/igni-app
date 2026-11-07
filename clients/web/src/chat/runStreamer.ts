@@ -7,9 +7,8 @@
  */
 
 import type { IgniClient } from "../protocol/client";
-import type { ServerMessage } from "../protocol/messages";
+import type { HITLDecision, ServerMessage } from "../protocol/messages";
 import { PendingLoopIteration } from "../protocol/rpcResults";
-import type { HitlDecision } from "../components/HitlDialog";
 import type { Notifier } from "../notifications/notifier";
 import type { RunPhase } from "./runPhase";
 import type { ShellPort } from "./shellPort";
@@ -72,7 +71,7 @@ export class RunStreamer {
 
   /** Answer the open approvals; the backend's re-emitted run events
    *  drive the rest. */
-  async resume(decisions: HitlDecision[]): Promise<void> {
+  async resume(decisions: HITLDecision[]): Promise<void> {
     const { client, run, view } = this.deps;
     run.setRunPhase("streaming");
     await this.stream({

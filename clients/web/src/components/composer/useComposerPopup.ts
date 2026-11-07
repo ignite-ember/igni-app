@@ -6,7 +6,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import type { IgniClient } from "../../protocol/client";
+import type { BackendCalls } from "../../protocol/backendCalls";
 import type { ModelChoice } from "../../protocol/composerWire";
 
 export type ComposerPopup =
@@ -36,7 +36,7 @@ export function useComposerPopup({
   modelMenuSignal,
   onOpen,
 }: {
-  client: Pick<IgniClient, "modelRegistry">;
+  client: { calls: Pick<BackendCalls, "modelRegistry"> };
   modelMenuSignal?: ModelMenuRequest | null;
   /** A popup is opening: whatever else is open should close. */
   onOpen: () => void;
@@ -53,7 +53,7 @@ export function useComposerPopup({
   );
 
   const openModel = useCallback(async () => {
-    const result = await client.modelRegistry();
+    const result = await client.calls.modelRegistry();
     if (result.ok) open({ kind: "model", models: result.models });
     else console.warn("Model registry unavailable:", result.reason);
   }, [client, open]);

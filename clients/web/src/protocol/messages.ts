@@ -380,5 +380,15 @@ export const fe = {
     args,
     ...(caller === undefined ? {} : { caller }),
   }),
+  cancelLogin: () => ({ type: "cancel_login" }),
+  mcpToggle: (serverName: string, connect: boolean, id: string) => ({
+    type: "mcp_toggle",
+    id,
+    server_name: serverName,
+    connect,
+  }),
   shutdown: () => ({ type: "shutdown" }),
 };
+
+/** Anything this client sends: what one of the {@link fe} builders made. */
+export type ClientMessage = ReturnType<(typeof fe)[keyof typeof fe]>;

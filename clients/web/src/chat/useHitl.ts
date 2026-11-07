@@ -43,7 +43,7 @@ export function useHitl(
         const rejected = pending.map((req) => ({
           requirement_id: req.requirement_id,
           action: "reject" as const,
-          choice: "",
+          choice: "" as const,
         }));
         requests.clear();
         void client.resolveHitlBatch(rejected, () => {});

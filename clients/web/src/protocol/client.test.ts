@@ -24,9 +24,9 @@ interface MetaTagLike {
 
 let win: WindowLike;
 let metaTag: MetaTagLike | null;
-let resolveWsUrl: typeof import("./client").resolveWsUrl;
-let resolveWsToken: typeof import("./client").resolveWsToken;
-let wsProtocols: typeof import("./client").wsProtocols;
+let resolveWsUrl: typeof import("./wsEndpoint").resolveWsUrl;
+let resolveWsToken: typeof import("./wsEndpoint").resolveWsToken;
+let wsProtocols: typeof import("./wsEndpoint").wsProtocols;
 
 beforeEach(async () => {
   vi.resetModules();
@@ -39,7 +39,7 @@ beforeEach(async () => {
   // Silence the diagnostic ``console.info`` the resolver always
   // emits — it's noise here, not signal.
   vi.spyOn(console, "info").mockImplementation(() => undefined);
-  ({ resolveWsUrl, resolveWsToken, wsProtocols } = await import("./client"));
+  ({ resolveWsUrl, resolveWsToken, wsProtocols } = await import("./wsEndpoint"));
 });
 
 afterEach(() => {

@@ -8,7 +8,7 @@
 
 import { useRef, useState } from "react";
 
-import type { IgniClient } from "../../protocol/client";
+import type { BackendCalls } from "../../protocol/backendCalls";
 
 /** A file still uploading, shown as a chip. */
 export interface PendingUpload {
@@ -33,7 +33,7 @@ export function useAttachments({
   client,
   onLanded,
 }: {
-  client: Pick<IgniClient, "uploadAttachment">;
+  client: { calls: Pick<BackendCalls, "uploadAttachment"> };
   /** A file reached the project at `path`. */
   onLanded: (path: string) => void;
 }): AttachmentsApi {
@@ -50,7 +50,7 @@ export function useAttachments({
     }));
     setUploads((prev) => [...prev, ...pending]);
     for (const [i, file] of list.entries()) {
-      const result = await client.uploadAttachment(file);
+      const result = await client.calls.uploadAttachment(file);
       setUploads((prev) => prev.filter((u) => u.key !== pending[i].key));
       if (result.ok) onLanded(result.path);
       else console.warn("Attachment not uploaded:", file.name, result.reason);

@@ -4,6 +4,7 @@
  * from an interrupted reply's partial when there is one.
  */
 
+import type { BackendCalls } from "../protocol/backendCalls";
 import type { IgniClient } from "../protocol/client";
 import { buildContinuedPrompt } from "./continueInterrupted";
 import { QUEUED_NOTE } from "./mirrorEventRouter";
@@ -14,7 +15,7 @@ import type { TranscriptView } from "./transcriptView";
 import type { RunControls } from "./useRunPhase";
 
 export interface MessageSubmitterDeps {
-  client: Pick<IgniClient, "runShell" | "queueMessage">;
+  client: Pick<IgniClient, "queueMessage"> & { calls: Pick<BackendCalls, "runShell"> };
   view: TranscriptView;
   run: Pick<RunControls, "runPhaseRef">;
   commands: Pick<SlashCommandRouter, "run">;
@@ -35,11 +36,11 @@ export class MessageSubmitter {
     const item = view.chatItems.shell(command);
     view.append(item);
     try {
-      const res = await client.runShell(command);
+      const res = await client.calls.runShell(command);
       view.edit((items) =>
         items.map((it) =>
           it.id === item.id && it.kind === "shell"
-            ? { ...it, output: res.output, exitCode: res.exit_code }
+            ? { ...it, output: res.output, exitCode: res.exitCode }
             : it,
         ),
       );

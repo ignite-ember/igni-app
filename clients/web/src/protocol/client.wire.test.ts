@@ -48,6 +48,7 @@ class FakeWebSocket {
 
 type Client = import("./client").IgniClient;
 let mod: typeof import("./client");
+let picker: typeof import("./nativeDirectory");
 let win: Record<string, unknown>;
 
 beforeEach(async () => {
@@ -63,6 +64,7 @@ beforeEach(async () => {
   (globalThis as { document?: unknown }).document = { querySelector: () => null };
   vi.spyOn(console, "info").mockImplementation(() => undefined);
   mod = await import("./client");
+  picker = await import("./nativeDirectory");
 });
 
 afterEach(() => {
@@ -142,16 +144,16 @@ describe("an RPC", () => {
   it("carries the convenience calls' method names and arguments", () => {
     const { client, ws } = connected();
     const calls: [() => Promise<unknown>, string, Record<string, unknown>][] = [
-      [() => client.completeFiles("src/"), "complete_files", { query: "src/", limit: 50 }],
+      [() => client.calls.completeFiles("src/"), "complete_files", { query: "src/", limit: 50 }],
       [
-        () => client.searchChat("s1", "bug", 5),
+        () => client.calls.searchChat("s1", "bug", 5),
         "search_chat",
         { session_id: "s1", query: "bug", limit: 5 },
       ],
-      [() => client.runShell("ls"), "run_shell", { command: "ls" }],
-      [() => client.login(), "login", {}],
-      [() => client.approvePlan("r1"), "approve_plan", { run_id: "r1" }],
-      [() => client.dismissPlan("r2"), "dismiss_plan", { run_id: "r2" }],
+      [() => client.calls.runShell("ls"), "run_shell", { command: "ls" }],
+      [() => client.calls.login(), "login", {}],
+      [() => client.calls.approvePlan("r1"), "approve_plan", { run_id: "r1" }],
+      [() => client.calls.dismissPlan("r2"), "dismiss_plan", { run_id: "r2" }],
     ];
     for (const [call, method, args] of calls) {
       void call().catch(() => undefined);
@@ -244,7 +246,7 @@ describe("session routing", () => {
     client.sessionId = "s-mine";
     client.cancel();
     expect(ws.last).toEqual({ type: "cancel", session_id: "s-mine" });
-    void client.searchChat("other", "q").catch(() => undefined);
+    void client.calls.searchChat("other", "q").catch(() => undefined);
     expect(ws.last.session_id).toBe("s-mine");
   });
 
@@ -314,19 +316,19 @@ describe("fire-and-forget messages", () => {
 
 describe("the native folder picker", () => {
   it("is undefined where the shell offers none", async () => {
-    await expect(mod.pickNativeDirectory("/a")).resolves.toBeUndefined();
+    await expect(picker.pickNativeDirectory("/a")).resolves.toBeUndefined();
   });
 
   it("passes the start folder and returns the pick", async () => {
     const pick = vi.fn(async (start?: string) => `${start}/b`);
     win.__IGNI_PICK_DIR__ = pick;
-    await expect(mod.pickNativeDirectory("/a")).resolves.toBe("/a/b");
+    await expect(picker.pickNativeDirectory("/a")).resolves.toBe("/a/b");
   });
 
   it("reads a picker that throws as a cancel", async () => {
     win.__IGNI_PICK_DIR__ = async () => {
       throw new Error("dialog crashed");
     };
-    await expect(mod.pickNativeDirectory()).resolves.toBeNull();
+    await expect(picker.pickNativeDirectory()).resolves.toBeNull();
   });
 });

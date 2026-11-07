@@ -3,188 +3,70 @@
  *
  * Responsibilities:
  *  - connect/reconnect to `python -m igni_core.backend --ws-port N`
- *  - correlate request/response pairs via the `id` field
- *  - demultiplex streamed run events (same `id` until `stream_end`)
+ *  - correlate request/response pairs and streams via the `id` field
+ *    ({@link ReplyCorrelator})
  *  - fan out uncorrelated events (status updates, push notifications)
+ *  - the protocol messages igni's UI sends (runs, commands, HITL, …)
  *
- * The WS URL is provided by the embedding shell (Tauri) via the `?ws=`
- * query param; `ws://127.0.0.1:8765` is the dev-server fallback.
- *
- * The backend's WebSocket is open to every web page and local process
- * unless it checks who connects, so a backend the desktop shell spawned
- * requires the shell's per-launch token. The shell puts it in the URL
- * fragment (`#igni_ws_token=…`, never sent to a server, kept across
- * reloads); an embedder can also use `<meta name="igni-ws-token">` or
- * `window.__IGNI_WS_TOKEN__`. It goes to the backend as the WebSocket
- * subprotocol `igni-token.<token>` next to `igni.v1` — the one handshake
- * field a browser lets a page set, and unlike the query string it ends
- * up in no request log. See `src/igni_core/transport/ws_auth.py`.
+ * Where to connect, and with which token, is {@link resolveWsUrl} and
+ * {@link resolveWsToken}. The named RPCs (`search_chat`, `run_shell`, …)
+ * and their typed answers are {@link BackendCalls}, reached as `calls`.
  */
 
-import { bytesToBase64 } from "../lib/base64";
-import {
-  MAX_ATTACHMENT_BYTES,
-  failureReason,
-  type CodeSearchResult,
-  type ModelRegistryResponse,
-  type ModelRegistryResult,
-  type SearchCodeResponse,
-  type UploadAttachmentResponse,
-  type UploadResult,
-} from "./composerWire";
-import type { RPCResponse, ServerMessage } from "./messages";
+import { BackendCalls } from "./backendCalls";
+import { ExtensionCaller } from "./extensionCaller";
+import type { ClientMessage, HITLDecision, ServerMessage } from "./messages";
 import { fe } from "./messages";
-
-declare global {
-  interface Window {
-    /** The backend's per-launch WebSocket token, for an embedder that
-     *  injects globals rather than navigating with a fragment. */
-    __IGNI_WS_TOKEN__?: string;
-    /** Native OS folder picker, injected by the embedding shell
-     *  (Tauri dialog plugin). Receives the session's currently locked dir
-     *  as the starting location; resolves to an absolute path or
-     *  null on cancel. */
-    __IGNI_PICK_DIR__?: (start?: string) => Promise<string | null>;
-  }
-}
-
-/** Pick a folder via the shell's native dialog, or undefined if
- *  this context has none (→ try the BE-side native dialog next). */
-export async function pickNativeDirectory(
-  start?: string,
-): Promise<string | null | undefined> {
-  if (!window.__IGNI_PICK_DIR__) return undefined;
-  try {
-    return await window.__IGNI_PICK_DIR__(start);
-  } catch {
-    return null;
-  }
-}
-
-export function resolveWsUrl(): string {
-  const param = new URLSearchParams(window.location.search).get("ws");
-  const url = param || "ws://127.0.0.1:8765";
-  // Confirms which URL ended up on the wire. Logged once at
-  // construction time.
-  // eslint-disable-next-line no-console
-  console.info("[igni] WS URL:", url, "(param:", param, ")");
-  return url;
-}
-
-/** The subprotocol igni's backend speaks (and selects). */
-export const WS_SUBPROTOCOL = "igni.v1";
-/** The offered subprotocol that carries the token. */
-export const WS_TOKEN_PROTOCOL_PREFIX = "igni-token.";
-const WS_TOKEN_FRAGMENT_KEY = "igni_ws_token";
-
-/** The backend's per-launch token, or "" when this backend needs none
- *  (one started by hand or by an IDE plugin). Never logged. */
-export function resolveWsToken(): string {
-  const hash = (typeof window !== "undefined" && window.location?.hash) || "";
-  const fromFragment = new URLSearchParams(hash.replace(/^#/, "")).get(WS_TOKEN_FRAGMENT_KEY);
-  const metaTag =
-    typeof document !== "undefined"
-      ? (document.querySelector('meta[name="igni-ws-token"]') as HTMLMetaElement | null)
-      : null;
-  return (
-    fromFragment ||
-    metaTag?.content ||
-    (typeof window !== "undefined" ? window.__IGNI_WS_TOKEN__ : "") ||
-    ""
-  ).trim();
-}
-
-/** What to offer as `Sec-WebSocket-Protocol`. Nothing without a token,
- *  so a client still reaches a backend that predates the check. */
-export function wsProtocols(token: string): string[] | undefined {
-  return token ? [WS_SUBPROTOCOL, `${WS_TOKEN_PROTOCOL_PREFIX}${token}`] : undefined;
-}
-
-export interface ChatSearchMatch {
-  /** Position in ``get_chat_history``'s output; caller maps to its
-   *  in-memory items index via the parallel mapping. */
-  history_index: number;
-  role: "user" | "assistant" | string;
-  run_id: string;
-  /** Snippet from the matched turn's content with ellipses on the
-   *  trimmed ends. UTF-16 / surrogate-safe by construction. */
-  snippet: string;
-  /** Match offset within ``snippet`` (not the full content). */
-  match_start: number;
-  match_end: number;
-  /** Epoch seconds (Agno-issued); 0 if the turn pre-dates the
-   *  ``created_at`` field. Formatted to a relative or locale-time
-   *  string per result row on the FE. */
-  created_at: number;
-}
+import { ReplyCorrelator, type StreamHandler } from "./replyCorrelator";
+import { RPC_TIMEOUT_MS, type RpcCaller } from "./rpcCaller";
+import { TypingThrottle } from "./typingThrottle";
+import { resolveWsToken, resolveWsUrl, wsProtocols } from "./wsEndpoint";
 
 export type ConnectionState =
   | "connecting"
   | "connected"
   | "disconnected"
-  /** Displaced by a newer tab/webview (BE close 1008). No
-   *  auto-reconnect — reconnecting would kick the other tab and
-   *  start a war. The user reconnects explicitly. */
+  /** Displaced by a newer tab (close 1008); no auto-reconnect. */
   | "replaced";
 
-type StreamHandler = (msg: ServerMessage) => void;
-
-let nextId = 0;
-function genId(prefix: string): string {
-  nextId += 1;
-  return `${prefix}-${Date.now().toString(36)}-${nextId}`;
-}
-
-const RPC_TIMEOUT_MS = 60_000;
-
-export class IgniClient {
+export class IgniClient implements RpcCaller {
   private ws: WebSocket | null = null;
-  private url: string;
-  private token: string;
   private closed = false;
-  /** Per-request stream handlers, keyed by message id. */
-  private streams = new Map<string, StreamHandler>();
-  /** One-shot RPC resolvers, keyed by message id. */
-  private rpcWaiters = new Map<
-    string,
-    { resolve: (m: ServerMessage) => void; reject: (e: Error) => void; timer: number }
-  >();
+  private readonly replies = new ReplyCorrelator();
   /** Uncorrelated event listeners (status updates, pushes, HITL...). */
-  private eventListeners = new Set<StreamHandler>();
-  private stateListeners = new Set<(s: ConnectionState) => void>();
+  private readonly eventListeners = new Set<StreamHandler>();
+  private readonly stateListeners = new Set<(s: ConnectionState) => void>();
   private reconnectDelay = 500;
-  /** Handle of a scheduled reconnect, so teardown can cancel it.
-   *
-   *  Without this, ``close()`` left the timer running: it fired,
-   *  ``connect()`` reset the closed latch, and a client the caller had
-   *  finished with produced a fresh socket. The BE serves one client at a
-   *  time, so that zombie could take the slot from a legitimate client —
-   *  which then gets close code 1008 and, by design, does not
-   *  auto-reconnect. The user is left on a dead session, caused by a
-   *  connection that was supposed to be gone. */
+  /** The pending reconnect, cancelled by close() so a closed client opens no socket. */
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  /** Per-client counter behind {@link nextId}. */
+  private idSeq = 0;
+  private readonly typing = new TypingThrottle((text) => {
+    try {
+      this.send(fe.typing(text, this.clientId));
+    } catch {
+      /* disconnected — drafts are best-effort */
+    }
+  });
 
-  constructor(url: string = resolveWsUrl(), token: string = resolveWsToken()) {
-    this.url = url;
-    this.token = token;
-  }
+  /** The named backend calls, with typed answers. */
+  readonly calls = new BackendCalls(this);
+
+  /** This view's id from the BE's Welcome; used to skip our own echoes. */
+  clientId = "";
+
+  /** Bound session: stamped on outgoing messages, filters incoming events. Empty = BE default. */
+  sessionId = "";
+
+  constructor(
+    private readonly url: string = resolveWsUrl(),
+    private readonly token: string = resolveWsToken(),
+  ) {}
 
   connect(): void {
-    // Any retry queued by a previous failure is now moot: we are
-    // connecting right now, and letting it fire would open a second
-    // socket behind this one.
-    this.cancelReconnect();
-
-    // Reset the closed latch: React StrictMode mounts effects twice
-    // (mount → cleanup → mount), and cleanup calls close(). Without
-    // the reset, the second mount's connect() would no-op and the UI
-    // would sit on "Connecting…" forever.
-    this.closed = false;
-
-    // Tear down any previous socket BEFORE creating a new one. An
-    // orphaned CONNECTING socket would otherwise win the race for
-    // the BE's single-client slot and lock every subsequent
-    // reconnect out with close code 1008.
+    this.cancelReconnect(); // a queued retry would open a second socket
+    this.closed = false; // StrictMode remounts after close()
+    // Drop the old socket first, or it can take the BE's single-client slot.
     const old = this.ws;
     if (old) {
       old.onopen = old.onmessage = old.onclose = old.onerror = null;
@@ -199,8 +81,7 @@ export class IgniClient {
     const protocols = wsProtocols(this.token);
     const ws = protocols ? new WebSocket(this.url, protocols) : new WebSocket(this.url);
     this.ws = ws;
-    // Every handler checks it still belongs to the active socket —
-    // events from a replaced socket must not flip the shared state.
+    // Handlers ignore events from a replaced socket.
     ws.onopen = () => {
       if (this.ws !== ws) return;
       this.reconnectDelay = 500;
@@ -212,10 +93,8 @@ export class IgniClient {
     };
     ws.onclose = (ev) => {
       if (this.ws !== ws) return;
-      this.failPending(new Error("connection closed"));
-      // 1008 "replaced by a newer client": another tab took the BE
-      // slot. Yield — do NOT auto-reconnect, or the two tabs would
-      // displace each other forever. The UI offers manual reconnect.
+      this.replies.failAll(new Error("connection closed"));
+      // 1008: another tab took the slot; reconnecting would start a war.
       if (ev.code === 1008) {
         this.closed = true;
         this.emitState("replaced");
@@ -241,13 +120,6 @@ export class IgniClient {
     this.ws?.close();
   }
 
-  private cancelReconnect(): void {
-    if (this.reconnectTimer !== null) {
-      clearTimeout(this.reconnectTimer);
-      this.reconnectTimer = null;
-    }
-  }
-
   onEvent(fn: StreamHandler): () => void {
     this.eventListeners.add(fn);
     return () => this.eventListeners.delete(fn);
@@ -260,39 +132,16 @@ export class IgniClient {
 
   // ── Core flows ────────────────────────────────────────────────────
 
-  /** This view's identity, assigned by the BE's Welcome at attach.
-   *  Used to skip rendering echoes of our own messages/typing. */
-  clientId = "";
-
-  /** The session this view is bound to. Stamped on every outgoing
-   *  message (BE routes to the matching runtime, lazily resuming
-   *  it); incoming events from OTHER sessions are filtered out so
-   *  each tab can live on a different session. Empty until the
-   *  initial get_session_id resolves (routes to the BE default). */
-  sessionId = "";
-
-  /**
-   * Send a user message; `onMessage` receives every streamed event
-   * for this run. Resolves when `stream_end` arrives.
-   *
-   * The fourth ``options`` arg is optional — currently just the
-   * ``force`` flag that tells the BE to supersede any pending /
-   * interrupted rows for the session before starting. Used by the
-   * FE's Retry action on an interrupted banner so a stale
-   * interrupted record doesn't linger after the retry.
-   */
+  /** Send a user message, streaming its run to `onMessage` until `stream_end`.
+   *  `force` supersedes interrupted rows (the Retry action). */
   runMessage(
     text: string,
     onMessage: StreamHandler,
     fileContents?: Record<string, string>,
     options: { force?: boolean } = {},
   ): Promise<void> {
-    const id = genId("run");
-    return this.stream(
-      fe.userMessage(text, id, this.clientId, fileContents, options),
-      id,
-      onMessage,
-    );
+    const id = this.nextId("run");
+    return this.stream(fe.userMessage(text, id, this.clientId, fileContents, options), id, onMessage);
   }
 
   /** Queue a message while a run is in flight. Fire-and-forget. */
@@ -300,399 +149,122 @@ export class IgniClient {
     this.send(fe.queueMessage(text, this.clientId));
   }
 
-  private typingTimer: number | null = null;
-  private typingPending: string | null = null;
-
-  /**
-   * Broadcast this view's live composer draft (mirroring). Trailing-
-   * edge throttled to ~10/s; always flushes the final value so other
-   * views never display a stale draft.
-   */
+  /** Broadcast the composer draft, throttled by {@link TypingThrottle}. */
   sendTyping(text: string): void {
-    this.typingPending = text;
-    if (this.typingTimer !== null) return;
-    this.typingTimer = window.setTimeout(() => {
-      this.typingTimer = null;
-      if (this.typingPending === null) return;
-      const value = this.typingPending;
-      this.typingPending = null;
-      try {
-        this.send(fe.typing(value, this.clientId));
-      } catch {
-        /* disconnected — drafts are best-effort */
-      }
-    }, 100);
+    this.typing.push(text);
   }
 
-  /**
-   * Execute a slash command; resolves with the CommandResult.
-   * Commands are request/reply (single correlated message, no
-   * stream_end) — see the Command branch in backend/__main__.py.
-   */
+  /** Execute a slash command; request/reply, resolves with the CommandResult. */
   handleCommand(text: string): Promise<ServerMessage> {
-    const id = genId("cmd");
+    const id = this.nextId("cmd");
     return this.request(fe.command(text, id), id);
   }
 
   /** Resolve a batch of HITL requirements; streams the resumed run. */
-  resolveHitlBatch(
-    decisions: { requirement_id: string; action: "confirm" | "reject"; choice: string }[],
-    onMessage: StreamHandler,
-  ): Promise<void> {
-    const id = genId("hitl");
-    return this.stream(
-      fe.hitlResponseBatch(
-        decisions.map((d) => ({ ...d, choice: d.choice as never })),
-        id,
-      ),
-      id,
-      onMessage,
-    );
+  resolveHitlBatch(decisions: HITLDecision[], onMessage: StreamHandler): Promise<void> {
+    const id = this.nextId("hitl");
+    return this.stream(fe.hitlResponseBatch(decisions, id), id, onMessage);
   }
 
   cancel(): void {
     this.send(fe.cancel());
   }
 
-  /**
-   * Generic RPC, correlated by id. The BE replies with either an
-   * `rpc_response` envelope (plain values) or a typed protocol
-   * message carrying the request id directly (e.g. `get_status` →
-   * `status_update`) — see _handle_message in backend/__main__.py.
-   * Both shapes resolve here; typed messages resolve as themselves.
-   */
-  rpc<T = unknown>(
+  /** Switch model — request/reply, resolves with the BE's Info ack. */
+  switchModel(modelName: string): Promise<ServerMessage> {
+    const id = this.nextId("model");
+    return this.request(fe.modelSwitch(modelName, id), id);
+  }
+
+  cancelLogin(): void {
+    this.send(fe.cancelLogin());
+  }
+
+  mcpToggle(serverName: string, connect: boolean): Promise<ServerMessage> {
+    const id = this.nextId("mcp");
+    return this.request(fe.mcpToggle(serverName, connect, id), id);
+  }
+
+  /** Generic RPC correlated by id: an `rpc_response` resolves to its result, a typed
+   *  reply as itself. `T` is unchecked; parse answers via {@link BackendCalls}. */
+  async rpc<T = unknown>(
     method: string,
     args: Record<string, unknown> = {},
     timeoutMs: number = RPC_TIMEOUT_MS,
-    /**
-     * Which extension is asking. Omitted for igni's own UI.
-     *
-     * Prefer {@link asExtension} over passing this by hand — it is
-     * the fourth positional argument of a method called on nearly
-     * every line of this file, which is not a thing to rely on
-     * anybody remembering.
-     */
+    /** Asking extension, omitted for igni's own UI; set via {@link asExtension}. */
     caller?: string,
   ): Promise<T> {
-    const id = genId("rpc");
-    return new Promise<T>((resolve, reject) => {
-      const timer = window.setTimeout(() => {
-        this.rpcWaiters.delete(id);
-        reject(new Error(`RPC ${method} timed out`));
-      }, timeoutMs);
-      this.rpcWaiters.set(id, {
-        resolve: (m) => {
-          if (m.type === "rpc_response") {
-            const r = m as RPCResponse;
-            if (r.error) reject(new Error(r.error));
-            else resolve(r.result as T);
-          } else {
-            resolve(m as unknown as T);
-          }
-        },
-        reject,
-        timer,
-      });
-      // As in `request()`: a send that throws (no socket) must take its
-      // waiter and timer with it. Thrown from the executor, the promise
-      // rejected but the waiter stayed registered for the full timeout —
-      // one per attempt from a panel polling a backend that is down.
-      try {
-        this.send(fe.rpcRequest(method, args, id, caller));
-      } catch (e) {
-        clearTimeout(timer);
-        this.rpcWaiters.delete(id);
-        reject(e);
-      }
-    });
+    const id = this.nextId("rpc");
+    const reply = await this.replies.request(
+      id,
+      () => this.send(fe.rpcRequest(method, args, id, caller)),
+      timeoutMs,
+      `RPC ${method} timed out`,
+    );
+    if (reply.type !== "rpc_response") return reply as T;
+    if (reply.error) throw new Error(reply.error);
+    return reply.result as T;
   }
 
-  /**
-   * This client, speaking for one extension.
-   *
-   * Every call made through the returned object carries that
-   * extension's id, which is what lets the backend enforce the
-   * manifest's `permissions.rpc` rather than trusting this process
-   * to have done it. The host frame checks the grant too, but that
-   * check is a courtesy that produces a good error message — a
-   * renderer is not where a decision about what may be read belongs.
-   */
+  /** This client speaking for one extension, so the BE can enforce its `permissions.rpc`. */
   asExtension(extensionId: string): ExtensionCaller {
     return new ExtensionCaller(this, extensionId);
   }
 
-  /** Switch model — request/reply, resolves with the BE's Info ack. */
-  switchModel(modelName: string): Promise<ServerMessage> {
-    const id = genId("model");
-    return this.request(fe.modelSwitch(modelName, id), id);
-  }
-
-  /** @-mention file completions (BE-side FileIndex). */
-  completeFiles(
-    query: string,
-    limit = 50,
-  ): Promise<{ matches: string[]; total: number }> {
-    return this.rpc<{ matches: string[]; total: number }>("complete_files", {
-      query,
-      limit,
-    });
-  }
-
-  /** Ship a file from the OS to the backend, which writes it under the
-   *  session's attachments folder and answers with its path. */
-  async uploadAttachment(file: File): Promise<UploadResult> {
-    if (file.size > MAX_ATTACHMENT_BYTES) {
-      return { ok: false, reason: `${file.name} is too large (${file.size} bytes)` };
-    }
-    try {
-      const content_base64 = bytesToBase64(new Uint8Array(await file.arrayBuffer()));
-      const res = await this.rpc<UploadAttachmentResponse>("upload_attachment", {
-        filename: file.name,
-        content_base64,
-      });
-      if (res.error) return { ok: false, reason: res.error };
-      if (!res.path) return { ok: false, reason: `no path came back for ${file.name}` };
-      return { ok: true, path: res.path };
-    } catch (e) {
-      return { ok: false, reason: failureReason(e) };
-    }
-  }
-
-  /** Where in the repository a pasted snippet appears. */
-  async searchCode(snippet: string): Promise<CodeSearchResult> {
-    try {
-      const res = await this.rpc<SearchCodeResponse>("search_code", { snippet });
-      return { ok: true, matches: res.matches ?? [] };
-    } catch (e) {
-      return { ok: false, reason: failureReason(e) };
-    }
-  }
-
-  /** The models the picker offers, by name, with the default marked. */
-  async modelRegistry(): Promise<ModelRegistryResult> {
-    try {
-      const reg = await this.rpc<ModelRegistryResponse>("get_model_registry");
-      const models = Object.keys(reg.registry)
-        .sort()
-        .map((name) => ({ name, current: name === reg.default }));
-      return { ok: true, models };
-    } catch (e) {
-      return { ok: false, reason: failureReason(e) };
-    }
-  }
-
-  /**
-   * Case-insensitive substring search over the persisted history of
-   * ``sessionId`` (Agno SQLite session). Cheap for any reasonable
-   * conversation length — the BE walks pre-deserialized turn dicts.
-   *
-   * ``history_index`` aligns with ``get_chat_history``'s emission
-   * order; the caller maps it to its in-memory items list through
-   * the parallel ``historyIndex → itemIndex`` map it builds at
-   * session-load time.
-   */
-  searchChat(
-    sessionId: string,
-    query: string,
-    limit = 50,
-  ): Promise<ChatSearchMatch[]> {
-    return this.rpc<ChatSearchMatch[]>("search_chat", {
-      session_id: sessionId,
-      query,
-      limit,
-    });
-  }
-
-  /** $-prefix shell mode — captured output from the BE. */
-  runShell(command: string): Promise<{ output: string; exit_code: number }> {
-    return this.rpc("run_shell", { command });
-  }
-
-  /**
-   * Start the browser login flow. Progress arrives as push
-   * notifications on channels `login_status` / `login_result`.
-   */
-  login(): Promise<{ started: boolean }> {
-    return this.rpc("login", {});
-  }
-
-  /**
-   * Record the user's approval of the plan submitted in ``runId``.
-   * BE persists the decision (survives reload), flips
-   * ``permission_mode`` → default, then broadcasts ``plan_decided``
-   * so the PlanCard's footer text catches up. The wake-up
-   * message that tells the agent to execute the plan is sent
-   * separately by the caller — keeping it FE-driven so it lands
-   * in the chat transcript like a user-typed continuation.
-   */
-  approvePlan(
-    runId: string,
-  ): Promise<{ run_id: string; decision: string; mode_status: string }> {
-    return this.rpc("approve_plan", { run_id: runId });
-  }
-
-  /**
-   * Record the user's dismissal (Refine click). BE persists the
-   * decision and emits ``plan_decided``; permission mode stays
-   * in ``plan`` so the user can iterate.
-   */
-  dismissPlan(
-    runId: string,
-  ): Promise<{ run_id: string; decision: string; mode_status: string }> {
-    return this.rpc("dismiss_plan", { run_id: runId });
-  }
-
-  cancelLogin(): void {
-    this.send({ type: "cancel_login" });
-  }
-
-  mcpToggle(serverName: string, connect: boolean): Promise<ServerMessage> {
-    const id = genId("mcp");
-    return this.request(
-      { type: "mcp_toggle", id, server_name: serverName, connect },
-      id,
-    );
-  }
-
   // ── Internals ─────────────────────────────────────────────────────
 
-  /** One-shot request/reply correlated by id (reuses the RPC waiter map). */
-  private request(payload: object, id: string): Promise<ServerMessage> {
-    return new Promise((resolve, reject) => {
-      const timer = window.setTimeout(() => {
-        this.rpcWaiters.delete(id);
-        reject(new Error("request timed out"));
-      }, RPC_TIMEOUT_MS);
-      this.rpcWaiters.set(id, { resolve, reject, timer });
-      try {
-        this.send(payload);
-      } catch (e) {
-        clearTimeout(timer);
-        this.rpcWaiters.delete(id);
-        reject(e);
-      }
-    });
+  private nextId(prefix: string): string {
+    this.idSeq += 1;
+    return `${prefix}-${Date.now().toString(36)}-${this.idSeq}`;
   }
 
-  private stream(
-    payload: object,
-    id: string,
-    onMessage: StreamHandler,
-  ): Promise<void> {
-    return new Promise((resolve, reject) => {
-      this.streams.set(id, (m) => {
-        if (m.type === "stream_end") {
-          this.streams.delete(id);
-          resolve();
-          return;
-        }
-        onMessage(m);
-      });
-      try {
-        this.send(payload);
-      } catch (e) {
-        this.streams.delete(id);
-        reject(e);
-      }
-    });
+  /** One-shot request/reply correlated by id. */
+  private request(payload: ClientMessage, id: string): Promise<ServerMessage> {
+    return this.replies.request(id, () => this.send(payload), RPC_TIMEOUT_MS, "request timed out");
   }
 
-  private send(payload: object): void {
+  private stream(payload: ClientMessage, id: string, onMessage: StreamHandler): Promise<void> {
+    return this.replies.stream(id, () => this.send(payload), onMessage);
+  }
+
+  private send(payload: ClientMessage): void {
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
       throw new Error("not connected to backend");
     }
-    // Session routing: stamp this view's bound session unless the
-    // caller already targeted one explicitly.
-    const stamped = payload as { session_id?: string };
-    if (!stamped.session_id && this.sessionId) {
-      stamped.session_id = this.sessionId;
-    }
-    this.ws.send(JSON.stringify(payload));
+    this.ws.send(JSON.stringify(this.routed(payload)));
+  }
+
+  /** A copy of ``payload`` stamped with the bound session unless it names one. */
+  private routed(payload: ClientMessage): ClientMessage & { session_id?: string } {
+    const named = "session_id" in payload ? payload.session_id : "";
+    if (named || !this.sessionId) return payload;
+    return { ...payload, session_id: this.sessionId };
   }
 
   private dispatch(msg: ServerMessage): void {
     if (msg.type === "welcome") {
       this.clientId = msg.client_id;
-      // Fall through to listeners so the app can react to attach.
     }
 
-    const id = msg.id ?? "";
+    // Replies to our requests win over the session filter.
+    if (this.replies.deliver(msg)) return;
 
-    // RPC replies are correlated purely by id: either an rpc_response
-    // envelope or a typed message echoed back with the request id.
-    // Correlation beats session filtering — replies to OUR requests
-    // are always for us.
-    if (id && this.rpcWaiters.has(id)) {
-      const waiter = this.rpcWaiters.get(id)!;
-      this.rpcWaiters.delete(id);
-      clearTimeout(waiter.timer);
-      waiter.resolve(msg);
-      return;
-    }
-
-    const stream = id ? this.streams.get(id) : undefined;
-    if (stream) {
-      stream(msg);
-      return;
-    }
-
-    // Session filter for uncorrelated broadcasts: this view only
-    // renders events from its bound session. Unstamped events
-    // (Welcome, global pushes) pass through.
+    // Broadcasts from other sessions are dropped; unstamped ones pass.
     if (msg.session_id && this.sessionId && msg.session_id !== this.sessionId) {
       return;
     }
 
-    // Uncorrelated: status pushes, HITL arriving outside a tracked
-    // stream, scheduler notifications, etc.
     for (const fn of this.eventListeners) fn(msg);
   }
 
-  private failPending(err: Error): void {
-    for (const [, waiter] of this.rpcWaiters) {
-      clearTimeout(waiter.timer);
-      waiter.reject(err);
+  private cancelReconnect(): void {
+    if (this.reconnectTimer !== null) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
     }
-    this.rpcWaiters.clear();
-    // Streams: synthesize stream_end so awaiting callers resolve and
-    // the UI unblocks rather than hanging on a dead socket.
-    for (const [sid, fn] of this.streams) {
-      fn({ type: "stream_end", id: sid } as ServerMessage);
-    }
-    this.streams.clear();
   }
 
   private emitState(s: ConnectionState): void {
     for (const fn of this.stateListeners) fn(s);
-  }
-}
-
-/**
- * An {@link IgniClient} bound to one extension.
- *
- * A class rather than a bound function because the binding is the
- * whole point: there is no way to call through this without the
- * caller being set, and no fourth positional argument for anybody to
- * forget. Obtained from {@link IgniClient.asExtension}.
- */
-export class ExtensionCaller {
-  constructor(
-    private readonly client: IgniClient,
-    readonly extensionId: string,
-  ) {}
-
-  /** Call a backend method as this extension. */
-  rpc<T = unknown>(
-    method: string,
-    args: Record<string, unknown> = {},
-    timeoutMs?: number,
-  ): Promise<T> {
-    return this.client.rpc<T>(
-      method,
-      args,
-      timeoutMs ?? RPC_TIMEOUT_MS,
-      this.extensionId,
-    );
   }
 }

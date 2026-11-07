@@ -1,21 +1,21 @@
 // @vitest-environment jsdom
 /**
- * The composer's RPCs on {@link IgniClient}: each expected failure comes
- * back as a Result, never as a rejection, and the happy path sends the
- * same wire call the backend has always received.
+ * The named calls on {@link BackendCalls}: the composer's expected
+ * failures come back as a Result, never as a rejection, the happy path
+ * sends the same wire call the backend has always received, and every
+ * answer is parsed rather than trusted.
  */
 import { describe, expect, it, vi } from "vitest";
 
-import { IgniClient } from "./client";
+import { BackendCalls } from "./backendCalls";
 import { MAX_ATTACHMENT_BYTES } from "./composerWire";
 
 type Rpc = (method: string, params?: Record<string, unknown>) => Promise<unknown>;
 
-/** A client whose only seam is `rpc`. */
-function clientAnswering(rpc: Rpc): { client: IgniClient; rpc: ReturnType<typeof vi.fn<Rpc>> } {
+/** Calls over a transport whose only seam is `rpc`. */
+function clientAnswering(rpc: Rpc): { client: BackendCalls; rpc: ReturnType<typeof vi.fn<Rpc>> } {
   const spy = vi.fn<Rpc>(rpc);
-  const client = Object.assign(Object.create(IgniClient.prototype) as IgniClient, { rpc: spy });
-  return { client, rpc: spy };
+  return { client: new BackendCalls({ rpc: spy }), rpc: spy };
 }
 
 describe("uploadAttachment", () => {
@@ -115,5 +115,63 @@ describe("modelRegistry", () => {
     });
 
     expect((await client.modelRegistry()).ok).toBe(false);
+  });
+});
+
+describe("modelRegistry without a registry", () => {
+  it("is a failure, not an empty list", async () => {
+    const { client } = clientAnswering(async () => ({ default: "x" }));
+
+    expect((await client.modelRegistry()).ok).toBe(false);
+  });
+});
+
+describe("searchCode rows", () => {
+  it("drops a row without a path and keeps end_line when sent", async () => {
+    const { client } = clientAnswering(async () => ({
+      matches: [{ line: 3 }, { path: "b.py", line: 2, end_line: 4, preview: "y" }],
+    }));
+
+    expect(await client.searchCode("snip")).toEqual({
+      ok: true,
+      matches: [{ path: "b.py", line: 2, end_line: 4, preview: "y" }],
+    });
+  });
+});
+
+describe("the chat-side calls", () => {
+  it("parses search_chat hits into camel-cased matches", async () => {
+    const { client, rpc } = clientAnswering(async () => [
+      {
+        history_index: 4,
+        role: "user",
+        run_id: "r1",
+        snippet: "…a bug…",
+        match_start: 3,
+        match_end: 6,
+        created_at: 10,
+      },
+      "not a row",
+    ]);
+
+    const hits = await client.searchChat("s1", "bug", 5);
+
+    expect(rpc).toHaveBeenCalledWith("search_chat", { session_id: "s1", query: "bug", limit: 5 });
+    expect(hits).toHaveLength(1);
+    expect(hits[0]).toMatchObject({ historyIndex: 4, runId: "r1", matchStart: 3, matchEnd: 6, createdAt: 10 });
+  });
+
+  it("reads a non-list search answer as no hits", async () => {
+    const { client } = clientAnswering(async () => null);
+
+    expect(await client.searchChat("s1", "q")).toEqual([]);
+  });
+
+  it("parses run_shell output and file completions", async () => {
+    const shell = clientAnswering(async () => ({ output: "ok", exit_code: 2 }));
+    expect(await shell.client.runShell("ls")).toMatchObject({ output: "ok", exitCode: 2 });
+
+    const files = clientAnswering(async () => ({ matches: ["a.ts", 7], total: 9 }));
+    expect(await files.client.completeFiles("a")).toMatchObject({ matches: ["a.ts"], total: 9 });
   });
 });

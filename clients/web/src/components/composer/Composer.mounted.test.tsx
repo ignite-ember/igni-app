@@ -55,6 +55,7 @@ import type React from "react";
 
 import type { SlashCommand } from "../../chat/slashCommands";
 import { WindowModel } from "../../clientState";
+import { BackendCalls } from "../../protocol/backendCalls";
 import { IgniClient } from "../../protocol/client";
 import { Composer } from "./Composer";
 import type { ComposerCatalog, ComposerHandle } from "./composerContract";
@@ -68,9 +69,9 @@ interface Stub {
   completeFiles: ReturnType<typeof vi.fn<(q: string, limit?: number) => Promise<{ matches: string[]; total: number }>>>;
 }
 
-/** An `IgniClient` that answers the RPCs the composer makes. Its typed
+/** An `IgniClient` that answers the RPCs the composer makes. Its named
  *  calls (`uploadAttachment`, `searchCode`, `modelRegistry`) are the real
- *  ones, all going through the stubbed `rpc`. */
+ *  `BackendCalls`, all going through the stubbed `rpc`. */
 function stubClient(answers: Record<string, (params: Record<string, unknown>) => unknown> = {}): Stub {
   // The window model's revision: every write the backend accepts is a
   // newer one, as on the real backend. (A constant here makes a later
@@ -83,9 +84,10 @@ function stubClient(answers: Record<string, (params: Record<string, unknown>) =>
     throw new Error(`unexpected rpc ${method}`);
   });
   const completeFiles = vi.fn(async (_q: string, _limit?: number) => ({ matches: [] as string[], total: 0 }));
+  const calls = Object.assign(new BackendCalls({ rpc }), { completeFiles });
   const client = Object.assign(Object.create(IgniClient.prototype) as IgniClient, {
     rpc,
-    completeFiles,
+    calls,
     clientId: "conn-test",
   });
   return { client, rpc, completeFiles };

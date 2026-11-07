@@ -4,6 +4,7 @@
  * Cancel, and an interactive visualization's actions.
  */
 
+import type { BackendCalls } from "../protocol/backendCalls";
 import type { IgniClient } from "../protocol/client";
 import { VisualizationActionResult } from "../protocol/rpcResults";
 import type { ChatItem } from "./chatItem";
@@ -12,7 +13,7 @@ import type { TranscriptView } from "./transcriptView";
 import type { WorkflowLauncher } from "./workflowLauncher";
 
 export interface ItemActionsDeps {
-  client: Pick<IgniClient, "rpc" | "approvePlan" | "dismissPlan">;
+  client: Pick<IgniClient, "rpc"> & { calls: Pick<BackendCalls, "approvePlan" | "dismissPlan"> };
   view: TranscriptView;
   streamer: Pick<RunStreamer, "send">;
   workflows: Pick<WorkflowLauncher, "start">;
@@ -29,7 +30,7 @@ export class ItemActions {
     void (async () => {
       if (runId) {
         try {
-          await this.deps.client.approvePlan(runId);
+          await this.deps.client.calls.approvePlan(runId);
         } catch (e) {
           console.warn("approve_plan RPC failed", e);
         }
@@ -42,7 +43,7 @@ export class ItemActions {
   readonly rejectPlan = (id: number): void => {
     const runId = this.planRunId(id);
     if (!runId) return;
-    void this.deps.client.dismissPlan(runId).catch((e) => {
+    void this.deps.client.calls.dismissPlan(runId).catch((e) => {
       console.warn("dismiss_plan RPC failed", e);
     });
   };

@@ -6,7 +6,7 @@
 import { useCallback, useMemo, useState } from "react";
 
 import { SlashCommandCatalog, type SlashCommand } from "../../chat/slashCommands";
-import type { IgniClient } from "../../protocol/client";
+import type { BackendCalls } from "../../protocol/backendCalls";
 import { MentionCompleter, STALE, moveActive, type CompletionMenu } from "./completionMenu";
 
 export interface CompletionMenuApi {
@@ -25,12 +25,13 @@ export function useCompletionMenu({
   backendCommands,
   skills,
 }: {
-  client: Pick<IgniClient, "completeFiles">;
+  client: { calls: Pick<BackendCalls, "completeFiles"> };
   backendCommands: SlashCommand[] | null;
   skills: SlashCommand[];
 }): CompletionMenuApi {
   const [menu, setMenu] = useState<CompletionMenu | null>(null);
-  const completer = useMemo(() => new MentionCompleter(client), [client]);
+  const files = client.calls;
+  const completer = useMemo(() => new MentionCompleter(files), [files]);
   // Keyed on both lists, so the `/` filter never reads a stale pool.
   const catalog = useMemo(
     () => SlashCommandCatalog.merge(backendCommands, skills),
