@@ -6,58 +6,11 @@ use std::path::PathBuf;
 use tauri::AppHandle;
 use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
 
-use crate::runtime;
+use crate::runtime::{self, DevOverride, ManagedRuntime};
 
 /// The marker shows its own placeholder when the probe fails.
 const PROBE_FAILED: &str = "<probe failed>";
-
-/// The developer override variables, as the environment states them.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub(crate) struct DevOverrideEnv {
-    dev_backend: Option<String>,
-    igni_python: Option<String>,
-    dev_ack: Option<String>,
-}
-
-impl DevOverrideEnv {
-    pub fn from_env() -> Self {
-        DevOverrideEnv {
-            dev_backend: std::env::var("IGNI_DEV_BACKEND").ok(),
-            igni_python: std::env::var("IGNI_PYTHON").ok(),
-            dev_ack: std::env::var("IGNITE_EMBER_DEV").ok(),
-        }
-    }
-
-    /// Overrides count only with `IGNITE_EMBER_DEV` acknowledging them.
-    pub fn is_active(&self) -> bool {
-        self.dev_ack
-            .as_deref()
-            .is_some_and(|v| v == "1" || v.eq_ignore_ascii_case("true"))
-    }
-
-    /// The interpreter the overrides name, if they are in force.
-    pub fn override_path(&self) -> Option<PathBuf> {
-        if !self.is_active() {
-            return None;
-        }
-        Self::non_empty(&self.dev_backend)
-            .or_else(|| Self::non_empty(&self.igni_python))
-            .map(PathBuf::from)
-    }
-
-    /// Whether any override variable is set, acknowledged or not.
-    pub fn override_set(&self) -> bool {
-        Self::non_empty(&self.dev_backend).is_some() || Self::non_empty(&self.igni_python).is_some()
-    }
-
-    fn non_empty(value: &Option<String>) -> Option<&str> {
-        value.as_deref().filter(|s| !s.is_empty())
-    }
-
-    fn shown(value: &Option<String>) -> &str {
-        value.as_deref().unwrap_or("<unset>")
-    }
-}
+const UNSET: &str = "<unset>";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct VersionReport {
@@ -82,17 +35,17 @@ struct MarkerReport {
 pub(crate) struct BackendDiagnostics {
     versions: VersionReport,
     interpreter: InterpreterReport,
-    dev: DevOverrideEnv,
+    dev: DevOverride,
     marker: MarkerReport,
 }
 
 impl BackendDiagnostics {
     /// Probe this machine. Spawns the interpreter, so not on the main thread.
     pub fn collect() -> Self {
-        let cache = runtime::cache_root_or_display();
-        let venv_python = runtime::venv_python_path(&cache);
-        let marker_path = cache.join("igni-install.json");
-        let dev = DevOverrideEnv::from_env();
+        let managed = ManagedRuntime::locate_for_display();
+        let venv_python = managed.venv_python();
+        let marker_path = managed.marker().path().to_path_buf();
+        let dev = DevOverride::from_env();
         let active_python = dev.override_path().unwrap_or_else(|| venv_python.clone());
         BackendDiagnostics {
             versions: VersionReport {
@@ -101,7 +54,7 @@ impl BackendDiagnostics {
                     .unwrap_or_else(|| PROBE_FAILED.to_string()),
             },
             interpreter: InterpreterReport {
-                venv_present: runtime::is_executable_path(&venv_python),
+                venv_present: runtime::is_executable(&venv_python),
                 active_python,
                 venv_python,
             },
@@ -171,17 +124,17 @@ impl fmt::Display for BackendDiagnostics {
         writeln!(
             f,
             "IGNI_DEV_BACKEND        : {}",
-            DevOverrideEnv::shown(&dev.dev_backend)
+            dev.dev_backend().unwrap_or(UNSET)
         )?;
         writeln!(
             f,
             "IGNI_PYTHON             : {}",
-            DevOverrideEnv::shown(&dev.igni_python)
+            dev.igni_python().unwrap_or(UNSET)
         )?;
         writeln!(
             f,
             "IGNITE_EMBER_DEV         : {}",
-            DevOverrideEnv::shown(&dev.dev_ack)
+            dev.ack().unwrap_or(UNSET)
         )?;
         if dev.override_set() && !dev.is_active() {
             writeln!(
@@ -207,15 +160,15 @@ mod tests {
         dev_backend: Option<&str>,
         igni_python: Option<&str>,
         dev_ack: Option<&str>,
-    ) -> DevOverrideEnv {
-        DevOverrideEnv {
-            dev_backend: dev_backend.map(str::to_string),
-            igni_python: igni_python.map(str::to_string),
-            dev_ack: dev_ack.map(str::to_string),
-        }
+    ) -> DevOverride {
+        DevOverride::new(
+            dev_backend.map(str::to_string),
+            igni_python.map(str::to_string),
+            dev_ack.map(str::to_string),
+        )
     }
 
-    fn report(actual: &str, dev: DevOverrideEnv) -> String {
+    fn report(actual: &str, dev: DevOverride) -> String {
         BackendDiagnostics {
             versions: VersionReport {
                 app_version: "1.0.3".into(),
@@ -276,18 +229,9 @@ mod tests {
 
     #[test]
     fn an_acknowledged_override_is_the_interpreter() {
-        let env = dev(Some(""), Some("/py/python"), Some("TRUE"));
-        assert!(env.is_active());
-        assert_eq!(env.override_path(), Some(PathBuf::from("/py/python")));
-        let text = report("1.0.3", env);
+        let text = report("1.0.3", dev(Some(""), Some("/py/python"), Some("TRUE")));
         assert!(text.contains("Backend source           : dev override"));
         assert!(text.contains("Interpreter path         : /py/python"));
         assert!(!text.contains("ignored"));
-    }
-
-    #[test]
-    fn the_dev_backend_variable_wins_over_igni_python() {
-        let env = dev(Some("/a"), Some("/b"), Some("1"));
-        assert_eq!(env.override_path(), Some(PathBuf::from("/a")));
     }
 }

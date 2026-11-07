@@ -6,7 +6,7 @@ use crate::backend::BackendSupervisor;
 use crate::error::{LogOnError, ShellError};
 use crate::events::ShellEvent;
 use crate::launch_args::LaunchArgs;
-use crate::runtime;
+use crate::runtime::ManagedRuntime;
 use crate::windows::{WindowLabel, WindowManager, WindowTitle};
 
 /// The loading view the reinstall path walks the main window back to.
@@ -26,7 +26,9 @@ impl<'a> Bootstrap<'a> {
     /// navigate the main window to the chat UI.
     pub fn run(&self) -> Result<(), ShellError> {
         if self.launch.reinstall() {
-            runtime::reset_cache().log_on_error("--reinstall cache reset");
+            ManagedRuntime::locate()
+                .and_then(|runtime| runtime.reset())
+                .log_on_error("--reinstall cache reset");
         }
         let app = self.app.clone();
         let progress = move |msg: &str| {
@@ -70,7 +72,7 @@ impl<'a> Bootstrap<'a> {
 #[tauri::command]
 pub(crate) fn reinstall_backend(app: AppHandle) -> Result<(), ShellError> {
     app.state::<BackendSupervisor>().release_for_reinstall()?;
-    runtime::reset_cache()?;
+    ManagedRuntime::locate()?.reset()?;
     if let Some(main) = app.get_webview_window(WindowLabel::MAIN) {
         WindowManager::navigate(&main, REINSTALL_ROUTE);
     }

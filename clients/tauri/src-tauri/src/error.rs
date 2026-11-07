@@ -14,7 +14,7 @@ use serde::{Serialize, Serializer};
 
 #[derive(Debug)]
 pub(crate) enum ShellError {
-    /// A failure reported by `runtime.rs`, which still speaks `String`.
+    /// A failure reported by `runtime/`, which still speaks `String`.
     Runtime(String),
     /// The backend interpreter could not be started at all.
     Spawn {
