@@ -293,12 +293,16 @@ export const VIEW_STATE: Record<string, Partial<Record<Category, string[]>>> = {
   "components/panels/LoopPanel.tsx": {
     data: ["status"],
   },
-  "components/panels/McpPanel.tsx": {
+  "components/panels/mcp/McpRows.tsx": {
     disclosure: ["expanded"],
     measure: ["overflowing"],
+  },
+  "components/panels/mcp/McpServerEntry.tsx": {
     menu: ["open"],
+  },
+  "components/panels/mcp/useMcpServers.ts": {
     data: ["servers"],
-    pending: ["busy"],
+    pending: ["busy", "loadError", "actionError"],
   },
   "components/panels/PluginsPanel.tsx": {
     page: ["view"],
