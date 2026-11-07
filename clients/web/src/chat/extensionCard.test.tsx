@@ -11,13 +11,20 @@ import { cleanup, render, screen } from "@testing-library/react";
 
 import { ChatItemView } from "../components/ChatItems";
 import { ExtensionNamesContext } from "../extensions/extensionNames";
-import { restoredItem, type ChatItem } from "./model";
+import { parseHistoryTurn } from "../protocol/historyTurns";
+import type { ChatItem } from "./chatItem";
+import { ChatItemFactory } from "./chatItemFactory";
+import { ChatItemIds } from "./chatItemIds";
+import { HistoryTurnMapper } from "./historyTurnMapper";
 import {
   applyVisualizationDelta,
   visualizationDeltaFromPayload,
 } from "./visualizationStream";
 
 afterEach(() => cleanup());
+
+const factory = new ChatItemFactory(new ChatItemIds());
+const restored = (raw: unknown) => new HistoryTurnMapper(factory).map(parseHistoryTurn(raw));
 
 const SPEC = { root: "t", elements: { t: { type: "Text", props: { text: "3 open" } } } };
 const NAMES = new Map([["acme.claims", "Claims desk"]]);
@@ -45,7 +52,7 @@ describe("a card an extension appended", () => {
   it("shows the extension's name and the title as it arrives", () => {
     const event = visualizationDeltaFromPayload(APPENDED);
     expect(event).not.toBeNull();
-    const [item] = applyVisualizationDelta([], event!);
+    const [item] = applyVisualizationDelta([], event!, factory);
     renderCard(item);
     expect(screen.getByText("Open claims")).toBeTruthy();
     expect(screen.getByText("via Claims desk")).toBeTruthy();
@@ -53,7 +60,7 @@ describe("a card an extension appended", () => {
   });
 
   it("shows the extension's name and the title after a reload", () => {
-    const item = restoredItem({
+    const item = restored({
       role: "visualization",
       spec_id: "ext-0123456789ab",
       spec: SPEC,
@@ -69,10 +76,11 @@ describe("a card an extension appended", () => {
   });
 
   it("keeps its title when a replace sends none", () => {
-    const first = applyVisualizationDelta([], visualizationDeltaFromPayload(APPENDED)!);
+    const first = applyVisualizationDelta([], visualizationDeltaFromPayload(APPENDED)!, factory);
     const replaced = applyVisualizationDelta(
       first,
       visualizationDeltaFromPayload({ ...APPENDED, title: undefined })!,
+      factory,
     );
     expect(replaced[0].kind === "visualization" && replaced[0].title).toBe("Open claims");
   });
@@ -86,13 +94,13 @@ describe("a card the visualizer drew", () => {
       spec_id: "viz-1",
       json: JSON.stringify(SPEC),
     });
-    const [item] = applyVisualizationDelta([], event!);
+    const [item] = applyVisualizationDelta([], event!, factory);
     renderCard(item);
     expect(screen.getByText("via visualizer")).toBeTruthy();
   });
 
   it("is not taken for an extension's on a reload", () => {
-    const item = restoredItem({
+    const item = restored({
       role: "visualization",
       spec_id: "viz-1",
       spec: SPEC,

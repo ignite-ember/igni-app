@@ -22,7 +22,9 @@
  */
 
 import { Component, useCallback, useMemo, useRef, useState, type ReactNode } from "react";
-import type { ChatItem } from "../chat/model";
+import type { ChatItem } from "../chat/chatItem";
+import { ChatItemFactory } from "../chat/chatItemFactory";
+import { ChatItemIds } from "../chat/chatItemIds";
 import { applyVisualizationDelta } from "../chat/visualizationStream";
 import { ChatItemView } from "../components/ChatItems";
 import { countOf } from "../lib/plural";
@@ -115,6 +117,7 @@ const TARGET_JSON = JSON.stringify(AAPL_SPEC);
 const SPEC_ID = "demo-run";
 
 export function VisualizerStreamDemo() {
+  const chatItems = useMemo(() => new ChatItemFactory(new ChatItemIds()), []);
   const [items, setItems] = useState<ChatItem[]>([]);
   const [status, setStatus] = useState<"idle" | "streaming" | "done">("idle");
   const [cursor, setCursor] = useState(0);
@@ -146,23 +149,23 @@ export function VisualizerStreamDemo() {
       setCursor(pos);
       const slice = TARGET_JSON.slice(0, pos);
       setItems((prev) =>
-        applyVisualizationDelta(prev, { spec_id: SPEC_ID, json: slice }),
+        applyVisualizationDelta(prev, { spec_id: SPEC_ID, json: slice }, chatItems),
       );
       if (pos >= TARGET_JSON.length) {
         stop();
         setStatus("done");
       }
     }, 50);
-  }, [reset, stop]);
+  }, [reset, stop, chatItems]);
 
   const one = useCallback(() => {
     reset();
     setItems((prev) =>
-      applyVisualizationDelta(prev, { spec_id: SPEC_ID, json: TARGET_JSON }),
+      applyVisualizationDelta(prev, { spec_id: SPEC_ID, json: TARGET_JSON }, chatItems),
     );
     setCursor(TARGET_JSON.length);
     setStatus("done");
-  }, [reset]);
+  }, [reset, chatItems]);
 
   const progressPct = useMemo(
     () => Math.round((cursor / TARGET_JSON.length) * 100),

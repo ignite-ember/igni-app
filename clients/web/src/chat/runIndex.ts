@@ -8,7 +8,7 @@
  * cards; the assistant's text sits under the person's message it answers.
  */
 
-import type { ChatItem } from "./model";
+import type { ChatItem } from "./chatItem";
 
 function runOf(item: ChatItem): string {
   if ((item.kind === "user" || item.kind === "tool") && item.runId) return item.runId;

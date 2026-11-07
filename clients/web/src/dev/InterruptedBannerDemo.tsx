@@ -30,8 +30,8 @@
 
 import { useCallback, useState } from "react";
 import { AssistantMessage } from "../components/ChatItems";
-import type { ChatItem } from "../chat/model";
-import type { AssistantInterrupted } from "../chat/model";
+import type { ChatItem } from "../chat/chatItem";
+import type { AssistantInterrupted } from "../chat/chatItem";
 
 interface LogEntry {
   ts: number;
@@ -73,7 +73,7 @@ const SCENARIOS: Scenario[] = [
     title: "User hit Esc mid-stream",
     subtitle:
       "Banner reason: cancelled. Left-border accent: igni-orange. " +
-      "FE-side stamp via markAssistantInterrupted('cancelled'); " +
+      "FE-side stamp via markInterrupted('cancelled'); " +
       "BE-side stamp via run_controller.cancel_run.",
     reason: "cancelled",
     partial: PARTIAL_1,

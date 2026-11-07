@@ -3,7 +3,7 @@
  *
  * Each test runs against a fresh ``FixtureBackend`` that speaks the
  * actual WS wire format. This catches bugs in ``protocol/client.ts``,
- * ``chat/model.ts``, ``App.tsx``'s push-event router, and the
+ * ``chat/chatTranscript.ts``, ``App.tsx``'s push-event router, and the
  * connection-state machine — none of which the demo suite exercises.
  *
  * The fixture deliberately implements the BARE MINIMUM the FE needs

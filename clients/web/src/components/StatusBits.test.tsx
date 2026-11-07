@@ -41,7 +41,7 @@ describe("ModeBadge", () => {
     // If the BE ever pushes a new mode the FE doesn't know about,
     // render nothing rather than crashing or rendering a malformed
     // chip. Mirrors the same forward-compat strategy used in
-    // ``normalizePlanTask``.
+    // ``PlanTaskList.parseTask``.
     const { container } = render(<ModeBadge mode="brandNewMode" />);
     expect(container.firstChild).toBeNull();
   });

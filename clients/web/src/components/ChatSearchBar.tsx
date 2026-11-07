@@ -16,7 +16,7 @@ export interface ChatSearchBarProps {
   client: IgniClient;
   sessionId: string;
   /** Maps a BE ``history_index`` to the FE item index (or -1 if the
-   *  history turn was filtered out by ``restoredItem``). */
+   *  history turn was filtered out by ``HistoryTurnMapper``). */
   historyIndexToItemIndex: number[];
   /** Total items currently in the chat — used as the upper bound for
    *  index translation when search runs while live items have been
@@ -133,7 +133,7 @@ export function cleanSnippetText(s: string): string {
   return s
     // Drop the entire ``<system-context>…</system-context>`` and
     // ``<attached-files>…</attached-files>`` BLOCKS, contents
-    // included — mirrors what ``restoredItem`` strips so the
+    // included — mirrors what ``HistoryTurnMapper`` strips so the
     // search-result snippet matches what the user sees in the
     // chat (no leaked "Current datetime: …" prefix).
     .replace(/<system-context>[\s\S]*?<\/system-context>\s*/g, "")

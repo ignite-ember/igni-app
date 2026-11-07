@@ -16,7 +16,12 @@
 import { useState } from "react";
 import { ChatItemView } from "../components/ChatItems";
 import { CtxMeter, PlanBadge, SessionChip } from "../components/StatusBits";
-import { planItem, type ChatItem, type PlanTask } from "../chat/model";
+import type { PlanItem } from "../chat/chatItem";
+import { ChatItemFactory } from "../chat/chatItemFactory";
+import { ChatItemIds } from "../chat/chatItemIds";
+import type { PlanTask } from "../chat/planTasks";
+
+const chatItems = new ChatItemFactory(new ChatItemIds());
 
 const SAMPLE_PLAN_MARKDOWN = `## JWT Auth Refactor — Implementation Plan
 
@@ -55,10 +60,8 @@ const SAMPLE_TASKS: PlanTask[] = [
 function makePlan(
   state: CardState,
   tasks: PlanTask[] = SAMPLE_TASKS,
-): Extract<ChatItem, { kind: "plan" }> {
-  const base = planItem(SAMPLE_PLAN_MARKDOWN, tasks);
-  if (base.kind !== "plan") throw new Error("planItem produced wrong kind");
-  return { ...base, state };
+): PlanItem {
+  return chatItems.plan({ plan: SAMPLE_PLAN_MARKDOWN, tasks, state });
 }
 
 /** Mid-execution snapshot — first task done, second in flight,

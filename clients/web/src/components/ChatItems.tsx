@@ -5,10 +5,13 @@ import remarkGfm from "remark-gfm";
 import { MermaidBlock } from "@ignite-ember/ui-react";
 import rehypeHighlight from "rehype-highlight";
 import "highlight.js/styles/github-dark-dimmed.css";
-import { formatStats, type AssistantInterrupted, ASSISTANT_INTERRUPTED_LABELS, type ChatItem } from "../chat/model";
+import type { AssistantInterrupted, ChatItem } from "../chat/chatItem";
+import type { OrchestrateAgent } from "../chat/orchestrateAgentTree";
 import type { DiffRow } from "../protocol/messages";
 import type { Spec } from "@json-render/core";
 import { ChevronIcon } from "./Icons";
+import { ASSISTANT_INTERRUPTED_LABELS } from "./interruptedLabels";
+import { formatStats } from "./statsLine";
 import { useExtensionName } from "../extensions/extensionNames";
 import { FilePill } from "./FilePill";
 import { JsonRenderView } from "./JsonRenderView";
@@ -973,7 +976,7 @@ function OrchestrateAgentRow({
   onStop,
   onRetry,
 }: {
-  agent: import("../chat/model").OrchestrateAgent;
+  agent: OrchestrateAgent;
   onStop?: (runId: string) => void;
   onRetry?: (agentName: string, newTask: string) => void;
 }) {

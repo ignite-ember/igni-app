@@ -10,8 +10,8 @@
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { WorkflowRun } from "./WorkflowRun";
-import type { WorkflowRunState } from "../chat/model";
+import { WorkflowRun, __test_formatResultSummary as formatResultSummary } from "./WorkflowRun";
+import type { WorkflowRunState } from "../chat/workflowRun";
 
 function makeRun(overrides: Partial<WorkflowRunState> = {}): WorkflowRunState {
   return {
@@ -262,5 +262,37 @@ describe("WorkflowRun — Rerun + Cancel actions", () => {
     expect(phaseErrors.textContent).toContain(
       "free-function-with-state-arg still present",
     );
+  });
+});
+
+describe("formatResultSummary", () => {
+  it("returns null for null / undefined / non-object", () => {
+    expect(formatResultSummary(null)).toBeNull();
+    expect(formatResultSummary(undefined)).toBeNull();
+    expect(formatResultSummary("plain string")).toBe("plain string");
+    expect(formatResultSummary(42)).toBe("42");
+  });
+
+  it("returns null for an empty object", () => {
+    expect(formatResultSummary({})).toBeNull();
+  });
+
+  it("formats a clean / chosen_design / tests_passed result", () => {
+    const out = formatResultSummary({
+      target: "src/example.py",
+      status: "clean",
+      chosen_design: "minimal-OOP",
+      verification: { tests_passed: 47, tests_failed: 0 },
+    });
+    expect(out).toBe("clean · design: minimal-OOP · 47 tests passed");
+  });
+
+  it("formats a failing-tests result with the failure count", () => {
+    const out = formatResultSummary({
+      status: "needs-attention",
+      chosen_design: "architectural-OOP",
+      verification: { tests_passed: 12, tests_failed: 3 },
+    });
+    expect(out).toBe("needs-attention · design: architectural-OOP · 12 passed, 3 failed");
   });
 });

@@ -21,7 +21,7 @@ import type {
   WorkflowAgentRun,
   WorkflowPhase,
   WorkflowRunState,
-} from "../chat/model";
+} from "../chat/workflowRun";
 import { CheckIcon, ChevronIcon, CircleIcon, StatusIcon, XIcon } from "./Icons";
 
 function fmtDuration(ms: number): string {
@@ -263,7 +263,7 @@ function formatResultSummary(result: unknown): string | null {
   return parts.join(" · ");
 }
 
-// Re-exported for the unit tests in :file:`chat/model.test.ts`.
+// Re-exported for the unit tests in :file:`WorkflowRun.test.tsx`.
 // Pure function over the workflow's return value; lives here next
 // to its only caller but is exposed for testing.
 export { formatResultSummary as __test_formatResultSummary };

@@ -6,7 +6,7 @@
 
 import { describe, expect, it } from "vitest";
 import { buildContinuedPrompt } from "./continueInterrupted";
-import type { ChatItem } from "./model";
+import type { ChatItem } from "./chatItem";
 
 function userItem(id: number, text: string): ChatItem {
   return { kind: "user", id, text };

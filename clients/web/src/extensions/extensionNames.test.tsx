@@ -9,7 +9,10 @@ import { afterEach, describe, expect, it } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
 
 import { ChatItemView } from "../components/ChatItems";
-import { restoredItem } from "../chat/model";
+import { ChatItemFactory } from "../chat/chatItemFactory";
+import { ChatItemIds } from "../chat/chatItemIds";
+import { HistoryTurnMapper } from "../chat/historyTurnMapper";
+import { parseHistoryTurn } from "../protocol/historyTurns";
 import { ExtensionNamesContext } from "./extensionNames";
 
 afterEach(() => cleanup());
@@ -21,7 +24,7 @@ const POSTED = {
 
 describe("a message an extension posted", () => {
   it("is labelled with the extension's name once it is known", () => {
-    const item = restoredItem(POSTED)!;
+    const item = new HistoryTurnMapper(new ChatItemFactory(new ChatItemIds())).map(parseHistoryTurn(POSTED))!;
     expect(item.kind === "user" && item.fromExtension).toBe("acme.reviewer");
     const { rerender } = render(
       <ExtensionNamesContext.Provider value={new Map()}>

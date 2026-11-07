@@ -168,7 +168,7 @@ describe("cleanSnippetText", () => {
 describe("translateIndex", () => {
   // Map shape: ``historyIndexToItemIndex[historyIdx] = itemIdx``,
   // -1 for history turns the FE skipped (e.g. system_context-only
-  // turns ``restoredItem`` filters out).
+  // turns ``HistoryTurnMapper`` filters out).
   const MAP = [0, 1, -1, 2, 3]; // history idx 2 dropped at restore
   const LIVE = 8; // 5 from history + 3 appended live
 

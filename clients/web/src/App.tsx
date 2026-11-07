@@ -1,31 +1,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { ChatItem } from "./chat/chatItem";
+import { ChatItemFactory } from "./chat/chatItemFactory";
+import { ChatItemIds } from "./chat/chatItemIds";
+import { ChatTranscript } from "./chat/chatTranscript";
+import { HistoryTurnMapper } from "./chat/historyTurnMapper";
+import { PlanTaskList } from "./chat/planTasks";
+import { parseHistoryTurn } from "./protocol/historyTurns";
 import {
-  lastItemId,
-  applyEvent,
-  applyOrchestrateEvent,
-  assistantItem,
-  compactItem,
-  correctStatsCtx,
-  findPrecedingUserItem,
-  markAssistantInterrupted,
-  markUserRunPersisted,
-  restoredItem,
-  restoredStatsItem,
-  errorItem,
-  infoItem,
-  isOrchestrateActive,
-  loopItem,
-  mergePlanTasks,
-  normalizePlanTasks,
-  planItem,
-  reduceWorkflowEvent,
-  shouldSkipTruncateRpc,
-  shellItem,
-  userItem,
-  workflowItem,
-  type ChatItem,
-  type OrchestrateEvent,
-} from "./chat/model";
+  parseOrchestrateEvent,
+  type OrchestrateEventEnvelope,
+} from "./protocol/orchestrateEvents";
+import { parseWorkflowEvent } from "./protocol/workflowEvents";
 import {
   applyVisualizationDelta,
   visualizationDeltaFromPayload,
@@ -277,6 +262,14 @@ const AT_BOTTOM_THRESHOLD = 50;
 
 export default function App() {
   const client = useMemo(() => new IgniClient(), []);
+  // The one id allocator for this window's list: the ids are React keys,
+  // so every item in it must come from here.
+  const chatItems = useMemo(() => new ChatItemFactory(new ChatItemIds()), []);
+  const history = useMemo(() => new HistoryTurnMapper(chatItems), [chatItems]);
+  const transcript = useCallback(
+    (items: ChatItem[]) => new ChatTranscript(items, chatItems),
+    [chatItems],
+  );
   // This window's model: the page it is on, the panel over its chat,
   // its sidebar, the preview, the selection, the composer, toasts, the
   // dialog, where the transcript is, focus, and the session it shows.
@@ -893,7 +886,7 @@ export default function App() {
         if (text) {
           setItems((prev) => [
             ...prev,
-            m.kind === "error" ? errorItem(text) : assistantItem(text),
+            m.kind === "error" ? chatItems.error(text) : chatItems.assistant(text),
           ]);
         }
         return;
@@ -904,7 +897,7 @@ export default function App() {
         // the BE confirmed it's live.
         setRunPhase("streaming");
       }
-      setItems((prev) => applyEvent(prev, m));
+      setItems((prev) => transcript(prev).applyServerMessage(m).items);
       // After a top-level run finishes, Agno's reported ``input_tokens``
       // is a sum across model iterations and is 2-3× the real session
       // size on multi-step turns. The TUI long since switched its
@@ -924,7 +917,7 @@ export default function App() {
         // calls ``truncate_history`` instead of falling back to a
         // local-only trim. Must be a separate setItems call from
         // the stats fix below so both run in the same render pass.
-        setItems((prev) => markUserRunPersisted(prev, runId));
+        setItems((prev) => transcript(prev).markRunPersisted(runId).items);
         // Refresh the sidebar session list. Agno writes the session
         // row to SQLite on the first user message, so before this
         // run completed the freshly-created session was invisible
@@ -938,7 +931,7 @@ export default function App() {
           .rpc<number>("count_context_tokens")
           .then((ctx) => {
             if (typeof ctx === "number" && ctx > 0) {
-              setItems((prev) => correctStatsCtx(prev, runId, ctx));
+              setItems((prev) => transcript(prev).correctStats(runId, ctx).items);
               // The same RPC latches the corrected ctx into the BE's
               // _last_input_tokens. Refresh the status payload so the
               // footer meter swaps from Agno's inflated wire number to
@@ -959,7 +952,7 @@ export default function App() {
   // as renderable items. Used on initial attach AND session picks.
   // Parallel to ``items``: ``historyIndexToItemIndex[i]`` is the FE
   // items position of the i-th turn in ``get_chat_history``'s output,
-  // or -1 if the turn was filtered out by ``restoredItem``. The chat
+  // or -1 if the turn was filtered out by ``HistoryTurnMapper``. The chat
   // search bar uses this to translate BE match indices into FE
   // scroll-to positions without re-walking the items array.
   const [historyIndexToItemIndex, setHistoryIndexToItemIndex] = useState<
@@ -973,7 +966,7 @@ export default function App() {
       const loaded: ChatItem[] = [];
       const historyMap: number[] = [];
       try {
-        const history = await client.rpc<Record<string, unknown>[]>(
+        const turns = await client.rpc<unknown[]>(
           "get_chat_history",
           { session_id: id },
         );
@@ -981,17 +974,17 @@ export default function App() {
         // turn can estimate ``visibleOutTokens`` from the same string
         // the user sees — matching the live path's behavior.
         const assistantTextByRun = new Map<string, string>();
-        for (const turn of history || []) {
-          const role = String(turn.role ?? "");
-          const runId = typeof turn.run_id === "string" ? turn.run_id : "";
-          if (role === "stats") {
+        for (const raw of turns || []) {
+          const turn = parseHistoryTurn(raw);
+          const runId = turn.run_id;
+          if (turn.role === "stats") {
             historyMap.push(loaded.length);
             loaded.push(
-              restoredStatsItem(turn, assistantTextByRun.get(runId) ?? ""),
+              history.stats(turn, assistantTextByRun.get(runId) ?? ""),
             );
             continue;
           }
-          const item = restoredItem(turn);
+          const item = history.map(turn);
           if (item) {
             // Attach the BE-side run_id to user items so they're
             // edit/delete-targetable after a session restore. The
@@ -1012,7 +1005,7 @@ export default function App() {
             historyMap.push(loaded.length);
             loaded.push(item);
           } else {
-            // ``restoredItem`` filtered this turn out (empty after
+            // The mapper filtered this turn out (empty after
             // stripping). Record -1 so the search-result mapping
             // marks this match as unreachable rather than landing on
             // the wrong item.
@@ -1028,24 +1021,23 @@ export default function App() {
       // conversation position where the agent submitted it — not
       // bolted onto the end. No separate fetch needed.
       try {
-        const pending = await client.rpc<Record<string, unknown>[]>(
+        const pending = await client.rpc<{ content?: unknown }[]>(
           "get_pending_messages",
           { session_id: id },
         );
         if (pending?.length) {
           for (const p of pending) {
             // Pending stores the post-process prompt (with the
-            // <attached-files> wrapper). Route through restoredItem
+            // <attached-files> wrapper). Route through the mapper
             // so the bubble displays only the user-typed text; the
             // @<path> tokens render as inline pills.
-            const item = restoredItem({
-              role: "user",
-              content: String(p.content ?? ""),
-            });
+            const item = history.map(
+              parseHistoryTurn({ role: "user", content: p.content }),
+            );
             if (item) loaded.push(item);
           }
           loaded.push(
-            infoItem(
+            chatItems.info(
               `${countOf(pending.length, "message")} above ${
                 pending.length === 1 ? "was" : "were"
               } interrupted before completion — the agent knows and can pick up where it left off.`,
@@ -1264,17 +1256,17 @@ export default function App() {
         // every view paints it, labelled as the extension's.
         if (m.extension_id) {
           // Its id, as a reload restores it; the bubble shows the name.
-          append(userItem(m.text, m.extension_id));
+          append(chatItems.user(m.text, m.extension_id));
           if (m.queued)
-            append(infoItem("Queued — will run after the current turn."));
+            append(chatItems.info("Queued — will run after the current turn."));
           return;
         }
         // Another view submitted — paint its bubble here. Our own
         // echo is skipped (we already painted on submit).
         if (m.client_id !== client.clientId) {
-          append(userItem(m.text));
+          append(chatItems.user(m.text));
           if (m.queued)
-            append(infoItem("Queued — will run after the current turn."));
+            append(chatItems.info("Queued — will run after the current turn."));
         }
         return;
       }
@@ -1384,73 +1376,17 @@ export default function App() {
           // same event carrying its ``title`` and ``source``.
           const delta = visualizationDeltaFromPayload(m.payload);
           if (delta) {
-            setItems((prev) => applyVisualizationDelta(prev, delta));
+            setItems((prev) => applyVisualizationDelta(prev, delta, chatItems));
             return; // Fully handled; don't fall through to team-card logic
           }
 
-          // Structured tree-event from orchestrate.py. The BE stamps a
-          // stable ``card_id`` on every event of a single ``spawn_team``
-          // / ``spawn_agent`` invocation — we route by id so the card
-          // survives interleaved info items, page refreshes, and
-          // concurrent spawns. If we've never seen this card_id, push
-          // a fresh card and seed it with the event. Older BEs without
-          // card_id fall back to "last active orchestrate item" so a
-          // version mismatch still renders something.
-          const ev = m.payload as unknown as OrchestrateEvent;
-          const cardId = String(
-            (m.payload as { card_id?: unknown }).card_id ?? "",
-          );
-          setItems((prev) => {
-            let idx = -1;
-            if (cardId) {
-              idx = prev.findIndex(
-                (it) => it.kind === "orchestrate" && it.cardId === cardId,
-              );
-            }
-            if (idx < 0 && !cardId) {
-              // Legacy BE — fall back to the most recent active card.
-              for (let i = prev.length - 1; i >= 0; i--) {
-                const it = prev[i];
-                if (
-                  it.kind === "orchestrate" &&
-                  isOrchestrateActive(it.agents, it.order)
-                ) {
-                  idx = i;
-                  break;
-                }
-              }
-            }
-            if (idx >= 0) {
-              const target = prev[idx];
-              if (target.kind !== "orchestrate") return prev;
-              const { agents, order } = applyOrchestrateEvent(
-                target.agents,
-                target.order,
-                ev,
-              );
-              // ``applyOrchestrateEvent`` returns the same refs when
-              // nothing changed (dedupped content_preview). Skip the
-              // re-render — fast-streaming teams fire ~20 events/sec
-              // and a no-op state replacement freezes the composer.
-              if (agents === target.agents && order === target.order)
-                return prev;
-              const next = prev.slice();
-              next[idx] = { ...target, agents, order };
-              return next;
-            }
-            const { agents, order } = applyOrchestrateEvent({}, [], ev);
-            return [
-              ...prev,
-              {
-                kind: "orchestrate",
-                id: Date.now(),
-                cardId,
-                agents,
-                order,
-                streaming: true,
-              },
-            ];
-          });
+          // Structured tree-event from orchestrate.py, routed to its
+          // card by the BE-stamped ``card_id``; see
+          // ``ChatTranscript.applyOrchestrateEvent``.
+          const envelope = parseOrchestrateEvent(m.payload);
+          if (envelope) {
+            setItems((prev) => transcript(prev).applyOrchestrateEvent(envelope).items);
+          }
         } else if (m.channel === "workflow_event") {
           // Live progress from the BE's workflow runner (the
           // process that executes .igni/workflows/*.mjs). Each
@@ -1460,11 +1396,8 @@ export default function App() {
           // ``workflow_run_id``; a fresh event with an unknown
           // id (e.g. the user opened a new tab on a long run)
           // creates a card on the fly.
-          const ev =
-            m.payload as unknown as import("./chat/model").WorkflowEvent;
-          if (ev && typeof ev.workflow_run_id === "string") {
-            setItems((prev) => reduceWorkflowEvent(prev, ev));
-          }
+          const ev = parseWorkflowEvent(m.payload);
+          if (ev) setItems((prev) => transcript(prev).applyWorkflowEvent(ev).items);
           return;
         } else if (m.channel === "orchestrate_progress") {
           // Legacy text channel — kept for backward compat in case a
@@ -1475,50 +1408,15 @@ export default function App() {
           // card, or open a fresh one with an empty cardId.
           const line = String(m.payload.line ?? "").trim();
           if (!line) return;
-          const ev: OrchestrateEvent = {
-            type: "content_preview",
-            agent_path: "root",
-            text: line.slice(0, 120),
+          const envelope: OrchestrateEventEnvelope = {
+            cardId: "",
+            event: {
+              type: "content_preview",
+              agent_path: "root",
+              text: line.slice(0, 120),
+            },
           };
-          setItems((prev) => {
-            let idx = -1;
-            for (let i = prev.length - 1; i >= 0; i--) {
-              const it = prev[i];
-              if (
-                it.kind === "orchestrate" &&
-                isOrchestrateActive(it.agents, it.order)
-              ) {
-                idx = i;
-                break;
-              }
-            }
-            if (idx >= 0) {
-              const target = prev[idx];
-              if (target.kind !== "orchestrate") return prev;
-              const { agents, order } = applyOrchestrateEvent(
-                target.agents,
-                target.order,
-                ev,
-              );
-              if (agents === target.agents && order === target.order)
-                return prev;
-              const next = prev.slice();
-              next[idx] = { ...target, agents, order };
-              return next;
-            }
-            const { agents, order } = applyOrchestrateEvent({}, [], ev);
-            return [
-              ...prev,
-              {
-                kind: "orchestrate",
-                id: Date.now(),
-                cardId: "",
-                agents,
-                order,
-                streaming: true,
-              },
-            ];
-          });
+          setItems((prev) => transcript(prev).applyOrchestrateEvent(envelope).items);
         } else if (m.channel === "session_named") {
           void refreshSessions();
         } else if (m.channel === "permission_mode_changed") {
@@ -1547,7 +1445,7 @@ export default function App() {
             const text = reason
               ? `Agent entered plan mode — ${reason}`
               : "Agent entered plan mode.";
-            append(infoItem(text));
+            append(chatItems.info(text));
           }
         } else if (m.channel === "http_retry_attempt") {
           // HTTP request is being retried. Dispatch a window event
@@ -1587,7 +1485,11 @@ export default function App() {
           const runId = String(payload.run_id ?? "");
           if (planText) {
             append(
-              planItem(planText, normalizePlanTasks(payload.tasks), runId),
+              chatItems.plan({
+                plan: planText,
+                tasks: PlanTaskList.parse(payload.tasks).tasks,
+                runId,
+              }),
             );
           }
         } else if (m.channel === "plan_decided") {
@@ -1610,13 +1512,13 @@ export default function App() {
           }
         } else if (m.channel === "todos_updated") {
           // ``todo_write`` mutated the TodoStore. Patch every open
-          // ``plan`` ChatItem's tasks — see ``mergePlanTasks`` for
-          // the matching/preserve semantics.
+          // ``plan`` ChatItem's tasks — see ``PlanTaskList.mergeTodos``
+          // for the matching/preserve semantics.
           const todos = (m.payload as { todos?: unknown }).todos;
           setItems((prev) =>
             prev.map((it) =>
               it.kind === "plan"
-                ? { ...it, tasks: mergePlanTasks(it.tasks, todos) }
+                ? { ...it, tasks: new PlanTaskList(it.tasks).mergeTodos(todos).tasks }
                 : it,
             ),
           );
@@ -1639,7 +1541,7 @@ export default function App() {
         // except for the pure-terminator events that carry no
         // renderable payload.
         if (m.type !== "streaming_done" && m.type !== "stream_end") {
-          setItems((prev) => applyEvent(prev, m));
+          setItems((prev) => transcript(prev).applyServerMessage(m).items);
         }
       }
     });
@@ -1825,12 +1727,12 @@ export default function App() {
           void client.resolveHitlBatch(rejected, () => {});
           setRunPhase("cancelled");
           client.cancel();
-          setItems((prev) => markAssistantInterrupted(prev, "cancelled"));
+          setItems((prev) => transcript(prev).markInterrupted("cancelled").items);
           return;
         case "cancel_generation":
           setRunPhase("cancelled");
           client.cancel();
-          setItems((prev) => markAssistantInterrupted(prev, "cancelled"));
+          setItems((prev) => transcript(prev).markInterrupted("cancelled").items);
           return;
         case "block_fullscreen_exit":
           // Esc was swallowed (preventDefault above) — the OS no
@@ -2084,7 +1986,7 @@ export default function App() {
         // (badge + the user's actual ask) instead of dumping the
         // wrapper text verbatim. The full wrapped prompt is still
         // sent to the model below.
-        append(loopItem(next.prompt));
+        append(chatItems.loop(next.prompt));
         await runUserMessage(next.prompt);
       }
     } catch {
@@ -2112,7 +2014,7 @@ export default function App() {
           setRunPhase("done");
         }
       } catch (e) {
-        append(errorItem(String(e)));
+        append(chatItems.error(String(e)));
         setRunPhase("errored");
         // Stamp the trailing assistant bubble so the banner's
         // Retry / Discard / Edit-prompt render. The BE has its own
@@ -2120,7 +2022,7 @@ export default function App() {
         // ``last_error``) that surfaces via ``GET_INTERRUPTED_RUNS``
         // on next reload — this stamp is for the live UX in the
         // current session.
-        setItems((prev) => markAssistantInterrupted(prev, "errored"));
+        setItems((prev) => transcript(prev).markInterrupted("errored").items);
       } finally {
         void refreshStatus(); // keep the ctx counter live after each run
         notifyDone();
@@ -2137,25 +2039,21 @@ export default function App() {
   const truncateAndTrim = useCallback(
     async (target: Extract<ChatItem, { kind: "user" }>): Promise<boolean> => {
       if (!target.runId || !sessionId) return false;
-      // Run was cancelled or errored before the BE persisted it
-      // (``run_completed`` never fired for this ``runId``). The RPC
-      // would round-trip only to be told the run isn't in the
-      // session; skip it and trim locally. Decision logic lives in
-      // ``shouldSkipTruncateRpc`` so it's unit-testable without
-      // rendering the App.
-      if (!shouldSkipTruncateRpc(target)) {
+      // A run cancelled or errored before the BE persisted it is not
+      // in the session: the RPC would only fail, so trim locally.
+      if (target.persisted === true) {
         try {
           const r = await client.rpc<{ removed?: number; error?: string }>(
             "truncate_history",
             { session_id: sessionId, run_id: target.runId },
           );
           if (r?.error) {
-            append(errorItem(`Couldn't edit/delete: ${r.error}`));
+            append(chatItems.error(`Couldn't edit/delete: ${r.error}`));
             return false;
           }
         } catch (e) {
           append(
-            errorItem(
+            chatItems.error(
               `Couldn't edit/delete: ${e instanceof Error ? e.message : String(e)}`,
             ),
           );
@@ -2187,7 +2085,7 @@ export default function App() {
       const ok = await truncateAndTrim(target);
       if (!ok) return;
       // Mirror the typed-submit path: optimistic user item, then run.
-      append(userItem(newText));
+      append(chatItems.user(newText));
       await runUserMessage(newText);
     },
     [append, runUserMessage, truncateAndTrim],
@@ -2209,12 +2107,7 @@ export default function App() {
 
   const onRetryInterrupted = useCallback(
     async (assistantItemId: number) => {
-      // Local variable is named ``precedingUser`` to avoid shadowing
-      // the imported ``userItem`` factory — the previous version
-      // used the same name and ``append(userItem(precedingUser.text))``
-      // silently called the ChatItem object as a function, throwing
-      // TypeError after the trim had already cleared the items.
-      const precedingUser = findPrecedingUserItem(items, assistantItemId);
+      const precedingUser = transcript(items).precedingUserOf(assistantItemId);
       if (!precedingUser || !precedingUser.runId) return;
       // Snapshot the view-gen BEFORE the trim so the streamed
       // events from the new run still route to the live items
@@ -2229,7 +2122,7 @@ export default function App() {
       // working but with no record of what they asked. Mirrors
       // what ``onEditUser`` does (trim → append fresh bubble →
       // fire run).
-      append(userItem(precedingUser.text));
+      append(chatItems.user(precedingUser.text));
       // Re-fire with the original prompt + force=true so the BE
       // discards the stale interrupted record before writing the
       // new pending row. Without force, a retry on a cancelled run
@@ -2246,7 +2139,7 @@ export default function App() {
         );
       } catch (e) {
         append(
-          errorItem(
+          chatItems.error(
             `Couldn't retry: ${e instanceof Error ? e.message : String(e)}`,
           ),
         );
@@ -2257,9 +2150,7 @@ export default function App() {
 
   const onDiscardInterrupted = useCallback(
     async (assistantItemId: number) => {
-      // Local ``precedingUser`` avoids shadowing the imported
-      // ``userItem`` factory — see onRetryInterrupted's comment.
-      const precedingUser = findPrecedingUserItem(items, assistantItemId);
+      const precedingUser = transcript(items).precedingUserOf(assistantItemId);
       if (!precedingUser) return;
       // Two-step discard: FE-local trim (drops the partial assistant
       // + any tool/think items in the tail) + BE-side
@@ -2300,7 +2191,7 @@ export default function App() {
 
   const onEditPromptFromAssistant = useCallback(
     async (assistantItemId: number) => {
-      const precedingUser = findPrecedingUserItem(items, assistantItemId);
+      const precedingUser = transcript(items).precedingUserOf(assistantItemId);
       if (!precedingUser) return;
       // Trim first (FE-local), then put the original prompt back in
       // the composer so the user can re-edit it.
@@ -2323,7 +2214,7 @@ export default function App() {
     // Stamp the trailing assistant bubble so the Retry / Discard /
     // Edit-prompt banner surfaces. See Esc-handler comment for the
     // BE-side stamp that this parallels.
-    setItems((prev) => markAssistantInterrupted(prev, "cancelled"));
+    setItems((prev) => transcript(prev).markInterrupted("cancelled").items);
   }, [client, setRunPhase]);
   const onStopAgent = useCallback(
     (runId: string) =>
@@ -2355,7 +2246,7 @@ export default function App() {
       // Optimistically append a new workflow item so the user
       // sees the result immediately. The RPC result will fold
       // into it via the workflow_event reducer.
-      const newItem = workflowItem(
+      const newItem = chatItems.workflow(
         run.name,
         `wf_${Math.random().toString(36).slice(2, 14)}`,
       );
@@ -2486,7 +2377,7 @@ export default function App() {
           try {
             parsedArgs = JSON.parse(rawArgs);
           } catch (err) {
-            append(errorItem(`/workflows: invalid JSON args: ${err}`));
+            append(chatItems.error(`/workflows: invalid JSON args: ${err}`));
             return;
           }
         }
@@ -2499,14 +2390,14 @@ export default function App() {
             args: parsedArgs,
             session_id: client.sessionId,
           });
-          const item = workflowItem(resp.name, resp.workflow_run_id);
+          const item = chatItems.workflow(resp.name, resp.workflow_run_id);
           setItems((prev) => [...prev, item]);
         } catch (err) {
-          append(errorItem(`/workflows: run failed: ${err}`));
+          append(chatItems.error(`/workflows: run failed: ${err}`));
         }
         return;
       }
-      if (echo) append(userItem(text));
+      if (echo) append(chatItems.user(text));
       /** Move the composer draft from a retired session id onto its
        *  replacement.
        *
@@ -2572,7 +2463,7 @@ export default function App() {
       // skill that expands to a clear server-side keeps the old
       // behaviour rather than none.
       const clearsTheView = /^\/(clear|fork)\b/.test(text.trim());
-      const itemBoundary = lastItemId();
+      const itemBoundary = chatItems.ids.last();
       if (clearsTheView) viewGenRef.current++;
       try {
         const result = await client.handleCommand(text);
@@ -2632,7 +2523,7 @@ export default function App() {
           case "fork": {
             const newId = content.trim();
             if (!newId) {
-              append(errorItem("Fork failed: backend returned no session id"));
+              append(chatItems.error("Fork failed: backend returned no session id"));
               return;
             }
             // Same dance as ``/clear`` but we also rehydrate the
@@ -2656,11 +2547,11 @@ export default function App() {
               setHistoryIndexToItemIndex(loaded.historyMap);
             } catch (e) {
               append(
-                errorItem(`Loaded fork id but history fetch failed: ${e}`),
+                chatItems.error(`Loaded fork id but history fetch failed: ${e}`),
               );
             }
             append(
-              infoItem("Forked to a new session — continuing the dialogue."),
+              chatItems.info("Forked to a new session — continuing the dialogue."),
             );
             void refreshStatus();
             void refreshSessions();
@@ -2671,7 +2562,7 @@ export default function App() {
             setModelMenuSignal({ n: Date.now() });
             return;
           case "model_switched":
-            if (content) append(infoItem(content));
+            if (content) append(chatItems.info(content));
             void refreshStatus();
             return;
           case "login":
@@ -2681,11 +2572,11 @@ export default function App() {
             goPage({ kind: "mcp", label: "MCP servers" });
             return;
           case "loop":
-            if (content && echo) append(assistantItem(content));
+            if (content && echo) append(chatItems.assistant(content));
             goPage({ kind: "loop", label: "Loop" });
             return;
           case "schedule":
-            if (content && echo) append(assistantItem(content));
+            if (content && echo) append(chatItems.assistant(content));
             goPage({ kind: "schedule", label: "Scheduled tasks" });
             return;
           case "agents":
@@ -2728,7 +2619,7 @@ export default function App() {
               typeof result.content === "string" &&
               result.content.startsWith("<loop-iteration ")
             ) {
-              append(loopItem(result.content));
+              append(chatItems.loop(result.content));
               await runUserMessage(result.content);
               return;
             }
@@ -2740,13 +2631,13 @@ export default function App() {
             // compact card surfaces both with proper markdown.
             const status = String(result.content ?? "Context compacted.");
             const summary = String(result.display_content ?? "");
-            append(compactItem(status, summary));
+            append(chatItems.compact(status, summary));
             // The context just shrunk — refresh the footer meter.
             void refreshStatus();
             return;
           }
           case "quit":
-            append(infoItem("Use the window/tab close button to quit."));
+            append(chatItems.info("Use the window/tab close button to quit."));
             return;
           default:
             if (content) {
@@ -2754,7 +2645,7 @@ export default function App() {
             }
         }
       } catch (e) {
-        append(errorItem(String(e)));
+        append(chatItems.error(String(e)));
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -2770,7 +2661,7 @@ export default function App() {
       }
       if (text.startsWith("$")) {
         const command = text.slice(1).trim();
-        const item = shellItem(command);
+        const item = chatItems.shell(command);
         append(item);
         try {
           const res = await client.runShell(command);
@@ -2782,14 +2673,14 @@ export default function App() {
             ),
           );
         } catch (e) {
-          append(errorItem(String(e)));
+          append(chatItems.error(String(e)));
         }
         return;
       }
-      append(userItem(text));
+      append(chatItems.user(text));
       if (isProcessing(runPhaseRef.current)) {
         client.queueMessage(text);
-        append(infoItem("Queued — will run after the current turn."));
+        append(chatItems.info("Queued — will run after the current turn."));
         return;
       }
       // If the previous assistant bubble was interrupted, the
@@ -2805,7 +2696,7 @@ export default function App() {
       // variable, because the submit useCallback's deps don't
       // include ``items`` — when the user hits Send, the closure
       // here is from the last render where ``items`` had NOT
-      // been mutated by the Esc handler's ``markAssistantInterrupted``
+      // been mutated by the Esc handler's ``markInterrupted``
       // call. Without the ref, ``buildContinuedPrompt`` would see
       // a stale ``items`` array missing the interrupted bubble
       // and silently no-op (the bug the user reported as "the AI
@@ -2846,7 +2737,7 @@ export default function App() {
           setRunPhase("done");
         }
       } catch (e) {
-        append(errorItem(String(e)));
+        append(chatItems.error(String(e)));
         setRunPhase("errored");
       } finally {
         void refreshStatus(); // keep the ctx counter live after each run
@@ -2874,11 +2765,11 @@ export default function App() {
         setSessionId(res.session_id);
         setItems([]);
         setHistoryIndexToItemIndex([]);
-        append(infoItem(`Session locked to ${res.project_dir}`));
+        append(chatItems.info(`Session locked to ${res.project_dir}`));
         void refreshSessions();
         void refreshStatus();
       } catch (e) {
-        append(errorItem(String(e)));
+        append(chatItems.error(String(e)));
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -2900,13 +2791,13 @@ export default function App() {
         // an info bubble and the short prefix is uniquely identifying
         // in practice across the sidebar listing.
         const short = id.slice(0, 8);
-        append(infoItem(`Loading session ${short}…`));
+        append(chatItems.info(`Loading session ${short}…`));
         const loaded = await fetchHistoryItems(id);
-        setItems([...loaded.items, infoItem(`Resumed session ${short}.`)]);
+        setItems([...loaded.items, chatItems.info(`Resumed session ${short}.`)]);
         setHistoryIndexToItemIndex(loaded.historyMap);
         void refreshStatus();
       } catch (e) {
-        append(errorItem(String(e)));
+        append(chatItems.error(String(e)));
       }
       if (window.innerWidth <= 700) setSidebarOpen(false);
     },
@@ -2931,10 +2822,10 @@ export default function App() {
     async (name: string) => {
       try {
         const res = await client.switchModel(name);
-        if (res.type === "info") append(infoItem(res.text));
+        if (res.type === "info") append(chatItems.info(res.text));
         void refreshStatus();
       } catch (e) {
-        append(errorItem(String(e)));
+        append(chatItems.error(String(e)));
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -2970,7 +2861,7 @@ export default function App() {
                 // waited on, so the app opens as soon as it can.
                 void refreshStatus();
               } else {
-                append(errorItem(`Login failed: ${detail}`));
+                append(chatItems.error(`Login failed: ${detail}`));
               }
             }}
           />
@@ -3567,7 +3458,7 @@ export default function App() {
                   // iteration stream — same as the slash-command path
                   // for /loop resume.
                   goChat();
-                  append(loopItem(prompt));
+                  append(chatItems.loop(prompt));
                   void runUserMessage(prompt);
                 }}
               />
@@ -3760,7 +3651,7 @@ export default function App() {
               // Surface real errors (network, BE shutdown) but
               // not the normal success-with-confirmation case.
               append(
-                errorItem(
+                chatItems.error(
                   `Mode switch failed: ${e instanceof Error ? e.message : String(e)}`,
                 ),
               );
@@ -3905,8 +3796,8 @@ export default function App() {
             setPanel({ kind: "none" });
             append(
               ok
-                ? infoItem(`Logged in as ${detail}`)
-                : errorItem(`Login failed: ${detail}`),
+                ? chatItems.info(`Logged in as ${detail}`)
+                : chatItems.error(`Login failed: ${detail}`),
             );
             void refreshStatus();
           }}

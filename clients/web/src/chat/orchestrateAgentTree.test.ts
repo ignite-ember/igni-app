@@ -1,38 +1,28 @@
 /**
- * Reducer tests for ``applyOrchestrateEvent``.
- *
- * The function is pure and folds an event stream into an
- * ``{agents, order}`` shape. Each test feeds a small event sequence
- * and pins the resulting shape — keeps regressions visible the
- * moment they happen, no need to spin up a real broadcast.
+ * ``OrchestrateAgentTree.apply`` folds an event stream into the
+ * ``{agents, order}`` of one card. Each test feeds a small sequence and
+ * pins the resulting shape.
  */
 
-import { describe, expect, it } from "vitest";
-import {
-  applyOrchestrateEvent,
-  isOrchestrateActive,
-  PREVIEW_WINDOW,
-  type OrchestrateAgent,
-  type OrchestrateEvent,
-} from "./model";
+import { beforeEach, describe, expect, it } from "vitest";
+import type { OrchestrateEvent } from "../protocol/orchestrateEvents";
+import { ChatItemIds } from "./chatItemIds";
+import { OrchestrateAgentTree, PREVIEW_WINDOW } from "./orchestrateAgentTree";
 
-function play(events: OrchestrateEvent[]): {
-  agents: Record<string, OrchestrateAgent>;
-  order: string[];
-} {
-  let state: { agents: Record<string, OrchestrateAgent>; order: string[] } = {
-    agents: {},
-    order: [],
-  };
-  for (const ev of events) state = applyOrchestrateEvent(state.agents, state.order, ev);
-  return state;
+let ids: ChatItemIds;
+beforeEach(() => {
+  ids = new ChatItemIds();
+});
+
+function play(events: OrchestrateEvent[]): OrchestrateAgentTree {
+  return events.reduce((tree, ev) => tree.apply(ev), OrchestrateAgentTree.empty(ids));
 }
 
-describe("applyOrchestrateEvent", () => {
+describe("OrchestrateAgentTree.apply", () => {
   describe("agent_started", () => {
     it("registers a new agent in order with running status + zero tokens", () => {
       const { agents, order } = play([
-        { type: "agent_started", agent_path: "security", agent: "security" },
+        { type: "agent_started", parent: null, agent_path: "security", agent: "security" },
       ]);
       expect(order).toEqual(["security"]);
       const a = agents.security;
@@ -51,6 +41,7 @@ describe("applyOrchestrateEvent", () => {
       const { agents } = play([
         {
           type: "agent_started",
+          parent: null,
           agent_path: "qa",
           agent: "qa",
           run_id: "run-qa-1",
@@ -63,10 +54,10 @@ describe("applyOrchestrateEvent", () => {
 
     it("repeated agent_started doesn't duplicate or clobber existing data", () => {
       const { agents, order } = play([
-        { type: "agent_started", agent_path: "qa", agent: "qa", run_id: "run-1", task: "first" },
+        { type: "agent_started", parent: null, agent_path: "qa", agent: "qa", run_id: "run-1", task: "first" },
         { type: "content_preview", agent_path: "qa", text: "thinking…" },
         // Stray re-start (e.g. nested team re-issued the start event).
-        { type: "agent_started", agent_path: "qa", agent: "qa" },
+        { type: "agent_started", parent: null, agent_path: "qa", agent: "qa" },
       ]);
       expect(order).toEqual(["qa"]);
       expect(agents.qa.runId).toBe("run-1"); // preserved
@@ -76,8 +67,8 @@ describe("applyOrchestrateEvent", () => {
 
     it("backfills run_id / task on a later started event when first was bare", () => {
       const { agents } = play([
-        { type: "agent_started", agent_path: "qa", agent: "qa" },
-        { type: "agent_started", agent_path: "qa", agent: "qa", run_id: "late", task: "late" },
+        { type: "agent_started", parent: null, agent_path: "qa", agent: "qa" },
+        { type: "agent_started", parent: null, agent_path: "qa", agent: "qa", run_id: "late", task: "late" },
       ]);
       expect(agents.qa.runId).toBe("late");
       expect(agents.qa.task).toBe("late");
@@ -87,7 +78,7 @@ describe("applyOrchestrateEvent", () => {
   describe("tool lifecycle", () => {
     it("appends a running tool on tool_started", () => {
       const { agents } = play([
-        { type: "agent_started", agent_path: "sec", agent: "sec" },
+        { type: "agent_started", parent: null, agent_path: "sec", agent: "sec" },
         {
           type: "tool_started",
           agent_path: "sec",
@@ -108,7 +99,7 @@ describe("applyOrchestrateEvent", () => {
 
     it("matches completion by tool_call_id even with parallel same-name tools", () => {
       const { agents } = play([
-        { type: "agent_started", agent_path: "sec", agent: "sec" },
+        { type: "agent_started", parent: null, agent_path: "sec", agent: "sec" },
         { type: "tool_started", agent_path: "sec", tool: "rg", tool_call_id: "a", args: "first" },
         { type: "tool_started", agent_path: "sec", tool: "rg", tool_call_id: "b", args: "second" },
         // Complete the SECOND one first — id-based match must pick it.
@@ -131,7 +122,7 @@ describe("applyOrchestrateEvent", () => {
 
     it("falls back to last-running-with-same-name when no tool_call_id", () => {
       const { agents } = play([
-        { type: "agent_started", agent_path: "sec", agent: "sec" },
+        { type: "agent_started", parent: null, agent_path: "sec", agent: "sec" },
         { type: "tool_started", agent_path: "sec", tool: "rg", args: "first" },
         { type: "tool_started", agent_path: "sec", tool: "rg", args: "second" },
         {
@@ -150,7 +141,7 @@ describe("applyOrchestrateEvent", () => {
 
     it("marks tool as error on is_error=true", () => {
       const { agents } = play([
-        { type: "agent_started", agent_path: "sec", agent: "sec" },
+        { type: "agent_started", parent: null, agent_path: "sec", agent: "sec" },
         { type: "tool_started", agent_path: "sec", tool: "ls", tool_call_id: "x", args: "/missing" },
         {
           type: "tool_completed",
@@ -172,7 +163,7 @@ describe("applyOrchestrateEvent", () => {
       // (joined by \n). A single-line text means the agent has only
       // produced one non-empty line so far — the FE shows just that.
       const { agents } = play([
-        { type: "agent_started", agent_path: "p", agent: "p" },
+        { type: "agent_started", parent: null, agent_path: "p", agent: "p" },
         { type: "content_preview", agent_path: "p", text: "line one" },
         { type: "content_preview", agent_path: "p", text: "line one" }, // duplicate — dedupped, no change
         { type: "content_preview", agent_path: "p", text: "line two" }, // newer snapshot, replaces
@@ -182,7 +173,7 @@ describe("applyOrchestrateEvent", () => {
 
     it("multi-line text replaces the window with the split lines", () => {
       const { agents } = play([
-        { type: "agent_started", agent_path: "p", agent: "p" },
+        { type: "agent_started", parent: null, agent_path: "p", agent: "p" },
         {
           type: "content_preview",
           agent_path: "p",
@@ -195,7 +186,7 @@ describe("applyOrchestrateEvent", () => {
     it("caps at PREVIEW_WINDOW (keeps the last lines)", () => {
       const lines = Array.from({ length: PREVIEW_WINDOW + 4 }, (_, i) => `line ${i}`);
       const { agents } = play([
-        { type: "agent_started", agent_path: "p", agent: "p" },
+        { type: "agent_started", parent: null, agent_path: "p", agent: "p" },
         { type: "content_preview", agent_path: "p", text: lines.join("\n") },
       ]);
       expect(agents.p.previewLines).toHaveLength(PREVIEW_WINDOW);
@@ -208,42 +199,38 @@ describe("applyOrchestrateEvent", () => {
 
     it("empty preview text is ignored", () => {
       const { agents } = play([
-        { type: "agent_started", agent_path: "p", agent: "p" },
+        { type: "agent_started", parent: null, agent_path: "p", agent: "p" },
         { type: "content_preview", agent_path: "p", text: "   " }, // whitespace only
       ]);
       expect(agents.p.previewLines).toEqual([]);
     });
 
-    it("identical preview is dedupped (same references back)", () => {
-      let state: { agents: Record<string, OrchestrateAgent>; order: string[] } = {
-        agents: {},
-        order: [],
-      };
-      state = applyOrchestrateEvent(state.agents, state.order, {
-        type: "agent_started",
-        agent_path: "p",
-        agent: "p",
-      });
-      const afterFirst = applyOrchestrateEvent(state.agents, state.order, {
+    it("identical preview is dedupped (same tree back)", () => {
+      const afterFirst = play([
+        { type: "agent_started", agent_path: "p", agent: "p", parent: null },
+        { type: "content_preview", agent_path: "p", text: "alpha\nbeta" },
+      ]);
+      const afterSecond = afterFirst.apply({
         type: "content_preview",
         agent_path: "p",
         text: "alpha\nbeta",
       });
-      const afterSecond = applyOrchestrateEvent(afterFirst.agents, afterFirst.order, {
-        type: "content_preview",
-        agent_path: "p",
-        text: "alpha\nbeta",
-      });
-      // Same references → caller can short-circuit the React re-render.
+      // Same tree, so the caller can skip the React re-render.
+      expect(afterSecond).toBe(afterFirst);
       expect(afterSecond.agents).toBe(afterFirst.agents);
       expect(afterSecond.order).toBe(afterFirst.order);
+    });
+
+    it("whitespace-only preview on a known agent returns the same tree", () => {
+      const tree = play([{ type: "agent_started", agent_path: "p", agent: "p", parent: null }]);
+      expect(tree.apply({ type: "content_preview", agent_path: "p", text: "  " })).toBe(tree);
     });
   });
 
   describe("status transitions", () => {
     it("agent_completed flips status + records tokens", () => {
       const { agents } = play([
-        { type: "agent_started", agent_path: "p", agent: "p" },
+        { type: "agent_started", parent: null, agent_path: "p", agent: "p" },
         {
           type: "agent_completed",
           agent_path: "p",
@@ -261,7 +248,7 @@ describe("applyOrchestrateEvent", () => {
 
     it("agent_completed with is_error=true flips to error", () => {
       const { agents } = play([
-        { type: "agent_started", agent_path: "p", agent: "p" },
+        { type: "agent_started", parent: null, agent_path: "p", agent: "p" },
         { type: "agent_completed", agent_path: "p", is_error: true },
       ]);
       expect(agents.p.status).toBe("error");
@@ -269,7 +256,7 @@ describe("applyOrchestrateEvent", () => {
 
     it("agent_paused flips status to paused", () => {
       const { agents } = play([
-        { type: "agent_started", agent_path: "p", agent: "p" },
+        { type: "agent_started", parent: null, agent_path: "p", agent: "p" },
         { type: "agent_paused", agent_path: "p", count: 1 },
       ]);
       expect(agents.p.status).toBe("paused");
@@ -277,13 +264,44 @@ describe("applyOrchestrateEvent", () => {
 
     it("run_error appends to preview tail + flips status", () => {
       const { agents } = play([
-        { type: "agent_started", agent_path: "p", agent: "p" },
+        { type: "agent_started", parent: null, agent_path: "p", agent: "p" },
         { type: "content_preview", agent_path: "p", text: "doing stuff" },
         { type: "run_error", agent_path: "p", error: "timed out" },
       ]);
       expect(agents.p.status).toBe("error");
       const tail = agents.p.previewLines[agents.p.previewLines.length - 1];
       expect(tail).toContain("ERROR: timed out");
+    });
+  });
+
+  describe("task events", () => {
+    it("task_* on a known agent changes nothing (same tree back)", () => {
+      const tree = play([{ type: "agent_started", agent_path: "p", agent: "p", parent: null }]);
+      expect(tree.apply({ type: "task_created", agent_path: "p", title: "t" })).toBe(tree);
+      expect(tree.apply({ type: "task_updated", agent_path: "p", status: "done" })).toBe(tree);
+    });
+
+    it("task_* on an unknown agent registers it", () => {
+      const tree = play([{ type: "task_created", agent_path: "team.qa", title: "t" }]);
+      expect(tree.order).toEqual(["team.qa"]);
+      expect(tree.agents["team.qa"].name).toBe("qa");
+    });
+
+    it("a repeated bare agent_started returns the same tree", () => {
+      const tree = play([{ type: "agent_started", agent_path: "p", agent: "p", parent: null }]);
+      expect(tree.apply({ type: "agent_started", agent_path: "p", agent: "p", parent: null })).toBe(
+        tree,
+      );
+    });
+  });
+
+  describe("tool ids", () => {
+    it("come from the injected allocator", () => {
+      ids.next();
+      ids.next();
+      const tree = play([{ type: "tool_started", agent_path: "a", tool: "rg", args: "" }]);
+      expect(tree.agents.a.tools[0].id).toBe(3);
+      expect(ids.last()).toBe(3);
     });
   });
 
@@ -298,54 +316,54 @@ describe("applyOrchestrateEvent", () => {
 
     it("preserves insertion order across multiple agents", () => {
       const { order } = play([
-        { type: "agent_started", agent_path: "first", agent: "first" },
-        { type: "agent_started", agent_path: "second", agent: "second" },
+        { type: "agent_started", parent: null, agent_path: "first", agent: "first" },
+        { type: "agent_started", parent: null, agent_path: "second", agent: "second" },
         { type: "tool_started", agent_path: "first", tool: "rg", args: "" },
-        { type: "agent_started", agent_path: "third", agent: "third" },
+        { type: "agent_started", parent: null, agent_path: "third", agent: "third" },
       ]);
       expect(order).toEqual(["first", "second", "third"]);
     });
   });
 });
 
-describe("isOrchestrateActive", () => {
+describe("OrchestrateAgentTree#isActive", () => {
   it("true when any agent is running", () => {
-    const { agents, order } = play([
-      { type: "agent_started", agent_path: "a", agent: "a" },
-      { type: "agent_started", agent_path: "b", agent: "b" },
+    const tree = play([
+      { type: "agent_started", parent: null, agent_path: "a", agent: "a" },
+      { type: "agent_started", parent: null, agent_path: "b", agent: "b" },
       { type: "agent_completed", agent_path: "a", is_error: false },
     ]);
-    expect(isOrchestrateActive(agents, order)).toBe(true);
+    expect(tree.isActive()).toBe(true);
   });
 
   it("true when any agent is paused", () => {
-    const { agents, order } = play([
-      { type: "agent_started", agent_path: "a", agent: "a" },
+    const tree = play([
+      { type: "agent_started", parent: null, agent_path: "a", agent: "a" },
       { type: "agent_paused", agent_path: "a" },
     ]);
-    expect(isOrchestrateActive(agents, order)).toBe(true);
+    expect(tree.isActive()).toBe(true);
   });
 
   it("false when all agents have settled", () => {
-    const { agents, order } = play([
-      { type: "agent_started", agent_path: "a", agent: "a" },
-      { type: "agent_started", agent_path: "b", agent: "b" },
+    const tree = play([
+      { type: "agent_started", parent: null, agent_path: "a", agent: "a" },
+      { type: "agent_started", parent: null, agent_path: "b", agent: "b" },
       { type: "agent_completed", agent_path: "a", is_error: false },
       { type: "agent_completed", agent_path: "b", is_error: true },
     ]);
-    expect(isOrchestrateActive(agents, order)).toBe(false);
+    expect(tree.isActive()).toBe(false);
   });
 
   it("true for an empty card (waiting for the team to spin up)", () => {
-    expect(isOrchestrateActive({}, [])).toBe(true);
+    expect(OrchestrateAgentTree.empty(ids).isActive()).toBe(true);
   });
 });
 
 describe("token totals across agents (rendered as team sum)", () => {
   it("sums input/output across all agents", () => {
     const { agents } = play([
-      { type: "agent_started", agent_path: "a", agent: "a" },
-      { type: "agent_started", agent_path: "b", agent: "b" },
+      { type: "agent_started", parent: null, agent_path: "a", agent: "a" },
+      { type: "agent_started", parent: null, agent_path: "b", agent: "b" },
       {
         type: "agent_completed",
         agent_path: "a",

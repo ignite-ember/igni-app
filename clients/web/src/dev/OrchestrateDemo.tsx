@@ -22,11 +22,10 @@
  */
 
 import { useMemo, useState } from "react";
-import {
-  applyOrchestrateEvent,
-  type ChatItem,
-  type OrchestrateEvent,
-} from "../chat/model";
+import type { ChatItem, OrchestrateItem } from "../chat/chatItem";
+import { ChatItemIds } from "../chat/chatItemIds";
+import { OrchestrateAgentTree } from "../chat/orchestrateAgentTree";
+import type { OrchestrateEvent } from "../protocol/orchestrateEvents";
 import { ChatItemView } from "../components/ChatItems";
 import { HitlDialog } from "../components/HitlDialog";
 import type { DiffRow, HITLRequest } from "../protocol/messages";
@@ -1575,22 +1574,17 @@ const SCENARIOS: Scenario[] = [
   },
 ];
 
-function buildOrchestrateItem(
-  events: OrchestrateEvent[],
-): Extract<ChatItem, { kind: "orchestrate" }> {
-  let agents: Parameters<typeof applyOrchestrateEvent>[0] = {};
-  let order: string[] = [];
-  for (const ev of events) {
-    const r = applyOrchestrateEvent(agents, order, ev);
-    agents = r.agents;
-    order = r.order;
-  }
+function buildOrchestrateItem(events: OrchestrateEvent[]): OrchestrateItem {
+  const tree = events.reduce(
+    (t, ev) => t.apply(ev),
+    OrchestrateAgentTree.empty(new ChatItemIds()),
+  );
   return {
     kind: "orchestrate",
     id: 1,
     cardId: "demo",
-    agents,
-    order,
+    agents: tree.agents,
+    order: tree.order,
     streaming: events[events.length - 1]?.type !== "agent_completed",
   };
 }

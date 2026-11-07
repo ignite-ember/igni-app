@@ -29,7 +29,7 @@ import { describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach } from "vitest";
 import { ChatItemView } from "./ChatItems";
-import type { ChatItem } from "../chat/model";
+import type { ChatItem } from "../chat/chatItem";
 
 afterEach(() => cleanup());
 

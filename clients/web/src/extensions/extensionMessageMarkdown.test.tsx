@@ -10,10 +10,16 @@ import { afterEach, describe, expect, it } from "vitest";
 import { cleanup, render } from "@testing-library/react";
 
 import { ChatItemView } from "../components/ChatItems";
-import { restoredItem, userItem, type ChatItem } from "../chat/model";
+import type { ChatItem } from "../chat/chatItem";
+import { ChatItemFactory } from "../chat/chatItemFactory";
+import { ChatItemIds } from "../chat/chatItemIds";
+import { HistoryTurnMapper } from "../chat/historyTurnMapper";
+import { parseHistoryTurn } from "../protocol/historyTurns";
 import { ExtensionNamesContext } from "./extensionNames";
 
 afterEach(() => cleanup());
+
+const factory = new ChatItemFactory(new ChatItemIds());
 
 const NAMES = new Map([["acme.claims", "Claims desk"]]);
 
@@ -28,7 +34,7 @@ function renderItem(item: ChatItem) {
 describe("a message an extension posted", () => {
   it("renders its markdown, under the from label", () => {
     const { container } = renderItem(
-      userItem("Claim **C-1042** needs a decision:\n\n- photos\n- invoice", "acme.claims"),
+      factory.user("Claim **C-1042** needs a decision:\n\n- photos\n- invoice", "acme.claims"),
     );
     expect(container.querySelector(".msg-user-from")?.textContent).toBe("from Claims desk");
     expect(container.querySelector("strong")?.textContent).toBe("C-1042");
@@ -37,10 +43,10 @@ describe("a message an extension posted", () => {
   });
 
   it("renders its markdown after a reload", () => {
-    const item = restoredItem({
+    const item = new HistoryTurnMapper(factory).map(parseHistoryTurn({
       role: "user",
       content: '<extension-message from="acme.claims">\nSee **this**.\n</extension-message>',
-    })!;
+    }))!;
     const { container } = renderItem(item);
     expect(container.querySelector("strong")?.textContent).toBe("this");
     expect(container.querySelector(".msg-user-from")?.textContent).toBe("from Claims desk");
@@ -48,14 +54,14 @@ describe("a message an extension posted", () => {
 
   it("does not render raw HTML in the text", () => {
     const { container } = renderItem(
-      userItem('<img src=x onerror="alert(1)"><script>alert(2)</script> ok', "acme.claims"),
+      factory.user('<img src=x onerror="alert(1)"><script>alert(2)</script> ok', "acme.claims"),
     );
     expect(container.querySelector("img")).toBeNull();
     expect(container.querySelector("script")).toBeNull();
   });
 
   it("leaves a person's own message as it was typed", () => {
-    const { container } = renderItem(userItem("keep **these** stars"));
+    const { container } = renderItem(factory.user("keep **these** stars"));
     expect(container.querySelector("strong")).toBeNull();
     expect(container.textContent).toContain("keep **these** stars");
   });
