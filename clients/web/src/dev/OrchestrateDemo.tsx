@@ -1194,7 +1194,7 @@ const SCENARIOS: Scenario[] = [
     id: "markdown-rendering",
     title: "Markdown rendering — every block type",
     description:
-      "An assistant answer that exercises every renderable markdown surface: inline code, four fenced-block language variants (bash, console, shellsession, text), a long code block to verify the collapse + expand chevron, blockquotes, lists, tables, headings, links. Useful when tweaking ``ChatItems.tsx`` markdown components or the highlight.js token theme.",
+      "An assistant answer that exercises every renderable markdown surface: inline code, four fenced-block language variants (bash, console, shellsession, text), a long code block to verify the collapse + expand chevron, blockquotes, lists, tables, headings, links. Useful when tweaking the ``components/markdown/`` components (ChatMarkdown.tsx / CodeBlock.tsx) or the highlight.js token theme.",
     kind: "stream",
     items: [
       {
@@ -1209,7 +1209,7 @@ const SCENARIOS: Scenario[] = [
         text: [
           "# Heading 1 — markdown showcase",
           "",
-          "Below is one assistant turn that exercises every block type the chat can render. Useful for visually regression-checking changes to ``ChatItems.tsx`` or the syntax-highlight theme.",
+          "Below is one assistant turn that exercises every block type the chat can render. Useful for visually regression-checking changes to ``components/markdown/`` or the syntax-highlight theme.",
           "",
           "## Inline code",
           "",
@@ -1556,7 +1556,7 @@ const SCENARIOS: Scenario[] = [
           "",
           "External: [Tauri docs](https://v2.tauri.app/), [highlight.js languages](https://highlightjs.org/static/demo/).",
           "",
-          "That's everything currently rendered by ``ChatItems.tsx``'s assistant pipeline.",
+          "That's everything currently rendered by ``chatItems/AssistantMessage.tsx``'s assistant pipeline.",
         ].join("\n"),
       },
       {
