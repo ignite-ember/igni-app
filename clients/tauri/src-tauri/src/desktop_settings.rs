@@ -265,4 +265,129 @@ mod tests {
         }
         assert!(!air_gapped_value(None));
     }
+
+    // ── The update-check off switch (F126) ──
+    //
+    // `update_check_ttl: 0` is documented as the way to stop igni making
+    // outbound requests.
+
+    #[test]
+    fn zero_disables_checks() {
+        assert!(update_checks_disabled_in("update_check_ttl: 0\n"));
+    }
+
+    #[test]
+    fn a_negative_ttl_disables_too() {
+        // The Python side treats `<= 0` as off; the app and the CLI have to
+        // agree on whether the deployment is air-gapped.
+        assert!(update_checks_disabled_in("update_check_ttl: -1\n"));
+    }
+
+    #[test]
+    fn a_real_ttl_leaves_checks_on() {
+        assert!(!update_checks_disabled_in("update_check_ttl: 86400\n"));
+    }
+
+    #[test]
+    fn an_absent_key_leaves_checks_on() {
+        assert!(!update_checks_disabled_in("models:\n  default: x\n"));
+    }
+
+    #[test]
+    fn a_trailing_comment_is_not_part_of_the_number() {
+        assert!(update_checks_disabled_in("update_check_ttl: 0  # air-gapped\n"));
+    }
+
+    #[test]
+    fn an_indented_key_of_the_same_name_is_ignored() {
+        // A nested `update_check_ttl` belongs to whatever contains it.
+        assert!(!update_checks_disabled_in("plugins:\n  something:\n    update_check_ttl: 0\n"));
+    }
+
+    #[test]
+    fn a_garbled_value_leaves_checks_on() {
+        // Silently disabling updates strands a machine on an old build;
+        // leaving them on is visible and recoverable.
+        assert!(!update_checks_disabled_in("update_check_ttl: never\n"));
+    }
+
+    // ── DEC-11: where an install looks for releases ──
+    //
+    // `update_endpoint` replaces the compiled GitHub endpoint, which an
+    // air-gapped network cannot reach.
+
+    #[test]
+    fn absent_means_the_compiled_default() {
+        assert_eq!(configured_update_endpoint_in("update_check_ttl: 86400\n"), None);
+    }
+
+    #[test]
+    fn a_configured_endpoint_is_returned() {
+        assert_eq!(
+            configured_update_endpoint_in("update_endpoint: https://releases.acme.example/latest.json\n"),
+            Some("https://releases.acme.example/latest.json".to_string())
+        );
+    }
+
+    #[test]
+    fn quotes_are_stripped() {
+        // Returning the quotes would fail `Url::parse` with a message about
+        // the scheme, which points at the wrong thing.
+        for line in [
+            "update_endpoint: \"https://releases.acme.example/l.json\"\n",
+            "update_endpoint: 'https://releases.acme.example/l.json'\n",
+        ] {
+            assert_eq!(
+                configured_update_endpoint_in(line),
+                Some("https://releases.acme.example/l.json".to_string()),
+                "{line}"
+            );
+        }
+    }
+
+    #[test]
+    fn present_and_blank_means_the_compiled_default() {
+        assert_eq!(configured_update_endpoint_in("update_endpoint:\n"), None);
+        assert_eq!(configured_update_endpoint_in("update_endpoint:   \n"), None);
+    }
+
+    #[test]
+    fn a_fragment_survives() {
+        // Unlike the TTL parser, this key does not split on `#`.
+        assert_eq!(
+            configured_update_endpoint_in("update_endpoint: https://a.example/l.json#v2\n"),
+            Some("https://a.example/l.json#v2".to_string())
+        );
+    }
+
+    #[test]
+    fn an_indented_key_belongs_to_whatever_contains_it() {
+        // Where the binary comes from is a supply-chain question; a nested
+        // key must not decide it.
+        assert_eq!(
+            configured_update_endpoint_in("plugins:\n  something:\n    update_endpoint: https://evil.example/l.json\n"),
+            None
+        );
+    }
+
+    #[test]
+    fn the_first_top_level_occurrence_wins() {
+        assert_eq!(
+            configured_update_endpoint_in(
+                "update_endpoint: https://first.example/l.json\nupdate_endpoint: https://second.example/l.json\n"
+            ),
+            Some("https://first.example/l.json".to_string())
+        );
+    }
+
+    #[test]
+    fn a_configured_endpoint_parses_as_a_url() {
+        // A value that will not parse is an error, not a silent fallback to
+        // the vendor host.
+        let raw = configured_update_endpoint_in("update_endpoint: https://releases.acme.example/latest.json\n")
+            .expect("configured");
+        let url = tauri::Url::parse(&raw).expect("parses");
+        assert_eq!(url.scheme(), "https");
+        assert_eq!(url.host_str(), Some("releases.acme.example"));
+    }
 }

@@ -55,7 +55,7 @@ const MIN_BOOTSTRAP_FREE_BYTES: u64 = 1024 * 1024 * 1024;
 ///
 /// ``actual_cli_version`` is the ``igni_core.__version__`` reported
 /// by the chosen interpreter, captured at bootstrap time so
-/// ``lib.rs`` can propagate it into the WKWebView URL — the shared
+/// ``backend/conn.rs`` can propagate it into the WKWebView URL — the shared
 /// web bundle's ``BackendVersionChip`` reads the values off the
 /// query string and renders a mismatch warning when the installed
 /// CLI drifts from the pinned build. ``None`` on any probe failure
@@ -611,7 +611,7 @@ pub fn venv_python_path(cache: &Path) -> PathBuf {
 }
 
 /// Public thin wrapper around ``is_executable`` so the Doctor
-/// dialog in ``lib.rs`` can check "is the managed venv actually
+/// dialog in ``diagnostics.rs`` can check "is the managed venv actually
 /// present" without duplicating the metadata call.
 pub fn is_executable_path(p: &Path) -> bool {
     is_executable(p)

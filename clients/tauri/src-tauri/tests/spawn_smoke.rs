@@ -6,7 +6,7 @@
 //! gracefully shut it down and verify the parent-PID watchdog
 //! takes the BE down with it.
 //!
-//! Why this test exists: the unit tests in ``lib.rs``/``runtime.rs``
+//! Why this test exists: the unit tests in ``backend/*``/``runtime.rs``
 //! cover pure helpers but never instantiate the Tauri runtime.
 //! The Playwright suites exercise the shared web bundle against a
 //! browser, not against Tauri's WKWebView + IPC bridge. This test
