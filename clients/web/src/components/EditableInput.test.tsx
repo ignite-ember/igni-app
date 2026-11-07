@@ -4,8 +4,8 @@
  *
  * It is a `contenteditable` that keeps two representations in sync: a
  * canonical string (`"look at @src/a.py please"`) and a live DOM of text
- * nodes, `<br>`s and non-editable pill `<span>`s. `writeValue` goes one
- * way, `readValue` the other, and every keystroke crosses the boundary.
+ * nodes, `<br>`s and non-editable pill `<span>`s. `PillEditor` renders one
+ * way and reads back the other, and every keystroke crosses the boundary.
  *
  * When those two disagree the symptom is the worst kind: the user's text
  * silently changes as they type. Nothing checked it, so this drives the
@@ -28,8 +28,8 @@ function roundTrip(value: string): string {
   const el = container.querySelector('[contenteditable="true"]') as HTMLElement;
   expect(el, "the editable element should render").not.toBeNull();
 
-  // The DOM was built by writeValue from `value`; firing `input` makes the
-  // component read it back with readValue and report the result.
+  // The DOM was built from `value`; firing `input` makes the
+  // component read it back and report the result.
   fireEvent.input(el);
 
   expect(onValueChange).toHaveBeenCalled();
@@ -204,5 +204,28 @@ describe("the placeholder", () => {
     );
 
     expect(container.querySelector('[contenteditable="true"]')).toBeNull();
+  });
+});
+
+describe("Backspace after a pill", () => {
+  it("deletes the whole pill as one unit and reports the shorter value", () => {
+    const onValueChange = vi.fn();
+    const onKeyDown = vi.fn();
+    const { container } = render(
+      <EditableInput value="see @src/a.py" onValueChange={onValueChange} onKeyDown={onKeyDown} />,
+    );
+    const el = container.querySelector('[contenteditable="true"]') as HTMLElement;
+    const range = document.createRange();
+    range.setStart(el, el.childNodes.length);
+    range.collapse(true);
+    window.getSelection()!.removeAllRanges();
+    window.getSelection()!.addRange(range);
+
+    const notPrevented = fireEvent.keyDown(el, { key: "Backspace" });
+
+    expect(notPrevented).toBe(false);
+    expect(onKeyDown).not.toHaveBeenCalled();
+    expect(el.querySelector("[data-pill-path]")).toBeNull();
+    expect(onValueChange).toHaveBeenLastCalledWith("see ", 4);
   });
 });
