@@ -85,10 +85,6 @@ export const BECAUSE: Record<string, Record<string, string>> = {
   "components/chatItems/useMessageEditor.ts": {
     draft: "The text of a sent message being edited in place, before it is resent.",
   },
-  "components/Composer.tsx": {
-    attachments: "Uploads in flight, as placeholders; a landed file joins the draft as @path.",
-    draft: "What was typed before ArrowUp started recalling history, to come back to.",
-  },
   "components/panels/ExtensionsPanel.tsx": {
     draft: "An extension's settings as edited, before they are saved.",
   },
@@ -143,12 +139,18 @@ export const VIEW_STATE: Record<string, Partial<Record<Category, string[]>>> = {
     page: ["activeIdx"],
     pending: ["pending"],
   },
-  "components/Composer.tsx": {
-    pending: ["attachments"],
-    hover: ["dragHot"],
-    menu: ["menu", "toolsOpen", "modelMenu", "modeMenu"],
+  "components/composer/Composer.tsx": {
     data: ["history"],
-    field: ["histIdx", "draft"],
+  },
+  "components/composer/useAttachments.ts": {
+    pending: ["uploads"],
+    hover: ["dragHot"],
+  },
+  "components/composer/useCompletionMenu.ts": {
+    menu: ["menu"],
+  },
+  "components/composer/useComposerPopup.ts": {
+    menu: ["popup"],
   },
   "components/FPSCounter.tsx": {
     measure: ["fps"],

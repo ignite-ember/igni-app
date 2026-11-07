@@ -21,6 +21,17 @@
  * up in no request log. See `src/igni_core/transport/ws_auth.py`.
  */
 
+import { bytesToBase64 } from "../lib/base64";
+import {
+  MAX_ATTACHMENT_BYTES,
+  failureReason,
+  type CodeSearchResult,
+  type ModelRegistryResponse,
+  type ModelRegistryResult,
+  type SearchCodeResponse,
+  type UploadAttachmentResponse,
+  type UploadResult,
+} from "./composerWire";
 import type { RPCResponse, ServerMessage } from "./messages";
 import { fe } from "./messages";
 
@@ -426,6 +437,49 @@ export class IgniClient {
       query,
       limit,
     });
+  }
+
+  /** Ship a file from the OS to the backend, which writes it under the
+   *  session's attachments folder and answers with its path. */
+  async uploadAttachment(file: File): Promise<UploadResult> {
+    if (file.size > MAX_ATTACHMENT_BYTES) {
+      return { ok: false, reason: `${file.name} is too large (${file.size} bytes)` };
+    }
+    try {
+      const content_base64 = bytesToBase64(new Uint8Array(await file.arrayBuffer()));
+      const res = await this.rpc<UploadAttachmentResponse>("upload_attachment", {
+        filename: file.name,
+        content_base64,
+      });
+      if (res.error) return { ok: false, reason: res.error };
+      if (!res.path) return { ok: false, reason: `no path came back for ${file.name}` };
+      return { ok: true, path: res.path };
+    } catch (e) {
+      return { ok: false, reason: failureReason(e) };
+    }
+  }
+
+  /** Where in the repository a pasted snippet appears. */
+  async searchCode(snippet: string): Promise<CodeSearchResult> {
+    try {
+      const res = await this.rpc<SearchCodeResponse>("search_code", { snippet });
+      return { ok: true, matches: res.matches ?? [] };
+    } catch (e) {
+      return { ok: false, reason: failureReason(e) };
+    }
+  }
+
+  /** The models the picker offers, by name, with the default marked. */
+  async modelRegistry(): Promise<ModelRegistryResult> {
+    try {
+      const reg = await this.rpc<ModelRegistryResponse>("get_model_registry");
+      const models = Object.keys(reg.registry)
+        .sort()
+        .map((name) => ({ name, current: name === reg.default }));
+      return { ok: true, models };
+    } catch (e) {
+      return { ok: false, reason: failureReason(e) };
+    }
   }
 
   /**

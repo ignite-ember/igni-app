@@ -32,6 +32,10 @@ export interface EditableInputHandle {
   setValue: (v: string) => void;
 }
 
+/** Looks up a code pill's display label (e.g. "hello.py 9-11") by its
+ *  id; `undefined` for an id it does not know. */
+export type CodePillLabeler = (id: string) => string | undefined;
+
 interface Props {
   value: string;
   disabled?: boolean;
@@ -40,6 +44,10 @@ interface Props {
   onValueChange: (next: string, caret: number) => void;
   onKeyDown?: (e: React.KeyboardEvent<HTMLDivElement>) => void;
   onPaste?: (e: React.ClipboardEvent<HTMLDivElement>) => void;
+  /** Labels for `@code:<id>` pills, from whoever inserted them (the
+   *  Composer's pill registry). Without one, or for an id it does not
+   *  know, a pill reads "code". */
+  codePillLabel?: CodePillLabeler;
 }
 
 const PILL_ATTR = "data-pill-path";
@@ -54,12 +62,7 @@ const CODE_PILL_LABEL_ATTR = "data-pill-label";
 const PILL_RE = /(?:^|(?<=\s))@(\S+)(?=\s|$)/;
 const CODE_PILL_PREFIX = "code:";
 
-/** Map of code-pill id → display label (e.g. "hello.py 9-11"). Set
- *  externally by Composer when it inserts a code pill. The renderer
- *  reads from this so it can show a meaningful label instead of a
- *  raw uuid. ``label`` is also stored on the DOM node so deep-copy /
- *  re-render scenarios work without external state. */
-export const codePillLabels: Map<string, string> = new Map();
+const noLabels: CodePillLabeler = () => undefined;
 
 /** Walk the editor DOM and rebuild the canonical string. Pills emit
  *  their `data-pill-path` attribute back as `@<path>`. Line breaks
@@ -212,14 +215,14 @@ function childIndex(el: Element): number {
 
 /** HTML string for the given canonical value — used to decide
  *  whether the live DOM needs to be rebuilt. */
-function renderHtml(value: string): string {
+function renderHtml(value: string, labelOf: CodePillLabeler): string {
   const tmp = document.createElement("div");
-  writeValue(tmp, value);
+  writeValue(tmp, value, labelOf);
   return tmp.innerHTML;
 }
 
 /** Render the canonical string into the editor DOM (pills + text). */
-function writeValue(root: HTMLElement, value: string) {
+function writeValue(root: HTMLElement, value: string, labelOf: CodePillLabeler) {
   // Build into a doc fragment so we touch the live DOM only once.
   const frag = document.createDocumentFragment();
   let rest = value;
@@ -232,7 +235,7 @@ function writeValue(root: HTMLElement, value: string) {
     if (m.index > 0) appendText(frag, rest.slice(0, m.index));
     const inner = m[1];
     if (inner.startsWith(CODE_PILL_PREFIX)) {
-      frag.appendChild(makeCodePill(inner.slice(CODE_PILL_PREFIX.length)));
+      frag.appendChild(makeCodePill(inner.slice(CODE_PILL_PREFIX.length), labelOf));
     } else {
       frag.appendChild(makePill(inner));
     }
@@ -250,15 +253,15 @@ function appendText(parent: Node, text: string) {
 }
 
 /** Build the inline pill for a pasted code snippet. ``id`` is the
- *  opaque token used in the canonical text (``@code:<id>``). The
- *  display label is looked up in ``codePillLabels`` (a side-channel
- *  Map populated by Composer when it inserts the pill). */
-function makeCodePill(id: string): HTMLSpanElement {
+ *  opaque token used in the canonical text (``@code:<id>``); the label
+ *  comes from ``labelOf`` and is also stored on the DOM node, so a
+ *  re-render from the DOM keeps it. */
+function makeCodePill(id: string, labelOf: CodePillLabeler): HTMLSpanElement {
   const span = document.createElement("span");
   span.className = "file-pill code-pill inline-pill";
   span.setAttribute(CODE_PILL_ATTR, id);
   span.setAttribute("contenteditable", "false");
-  const label = codePillLabels.get(id) || "code";
+  const label = labelOf(id) || "code";
   span.setAttribute(CODE_PILL_LABEL_ATTR, label);
   span.title = label;
   const icon = document.createElement("span");
@@ -320,10 +323,16 @@ function pillSvg(_name: string): string {
 }
 
 export const EditableInput = forwardRef<EditableInputHandle, Props>(function EditableInput(
-  { value, disabled, placeholder, className, onValueChange, onKeyDown, onPaste },
+  { value, disabled, placeholder, className, onValueChange, onKeyDown, onPaste, codePillLabel },
   ref,
 ) {
   const elRef = useRef<HTMLDivElement>(null);
+  // The DOM sync runs in effects and imperative handles created once, so
+  // they read the latest labeler through a ref rather than a stale one.
+  const labelRef = useRef<CodePillLabeler>(noLabels);
+  useEffect(() => {
+    labelRef.current = codePillLabel ?? noLabels;
+  }, [codePillLabel]);
   // Tracks the most recent value our own ``handleInput`` reported up
   // to the parent. When the next ``value`` prop comes back equal, we
   // know the DOM is already authoritative and skip the reconcile —
@@ -352,7 +361,7 @@ export const EditableInput = forwardRef<EditableInputHandle, Props>(function Edi
     if (readValue(el) === value) return;
     const wasFocused = document.activeElement === el;
     const caret = wasFocused ? readCaret(el) : null;
-    writeValue(el, value);
+    writeValue(el, value, labelRef.current);
     if (caret !== null) setCaret(el, Math.min(caret, value.length));
   }, [value]);
 
@@ -382,7 +391,7 @@ export const EditableInput = forwardRef<EditableInputHandle, Props>(function Edi
         if (readValue(el) === v) return;
         const wasFocused = document.activeElement === el;
         const caret = wasFocused ? readCaret(el) : null;
-        writeValue(el, v);
+        writeValue(el, v, labelRef.current);
         if (caret !== null) setCaret(el, Math.min(caret, v.length));
       },
     }),
@@ -401,9 +410,9 @@ export const EditableInput = forwardRef<EditableInputHandle, Props>(function Edi
     // browser-built DOM diverges from our canonical shape.
     if (next.includes("@") && PILL_RE.test(next)) {
       const caret = readCaret(el);
-      const want = renderHtml(next);
+      const want = renderHtml(next, labelRef.current);
       if (el.innerHTML !== want) {
-        writeValue(el, next);
+        writeValue(el, next, labelRef.current);
         setCaret(el, Math.min(caret, next.length));
       }
     }

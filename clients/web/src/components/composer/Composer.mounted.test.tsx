@@ -2,9 +2,10 @@
 /**
  * The composer, mounted.
  *
- * `Composer.test.ts` covers the pure helpers it exports and never renders
- * the component, which left the one surface every interaction goes through
- * at 5.9% coverage (F77). This file mounts the whole `Composer` — its real
+ * The pure parts — the slash-command pool, the draft, history, the pill
+ * registry — have unit tests of their own beside it, and none of them
+ * renders the component, which left the one surface every interaction goes
+ * through at 5.9% coverage (F77). This file mounts the whole `Composer` — its real
  * `EditableInput`, a real `WindowModel` — against a stubbed `IgniClient`
  * and drives it the way a person does: put text in the editor and fire the
  * `input` event the browser would, press keys, paste, click.
@@ -51,9 +52,11 @@ vi.hoisted(() => {
 import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import type React from "react";
 
-import { WindowModel } from "../clientState";
-import type { IgniClient } from "../protocol/client";
-import { Composer, type SlashCommand, type ToolEntry } from "./Composer";
+import type { SlashCommand } from "../../chat/slashCommands";
+import { WindowModel } from "../../clientState";
+import { IgniClient } from "../../protocol/client";
+import { Composer } from "./Composer";
+import type { ToolEntry } from "./popups";
 
 type Rpc = (method: string, params?: Record<string, unknown>) => Promise<unknown>;
 
@@ -63,7 +66,9 @@ interface Stub {
   completeFiles: ReturnType<typeof vi.fn<(q: string, limit?: number) => Promise<{ matches: string[]; total: number }>>>;
 }
 
-/** An `IgniClient` that answers the RPCs the composer makes. */
+/** An `IgniClient` that answers the RPCs the composer makes. Its typed
+ *  calls (`uploadAttachment`, `searchCode`, `modelRegistry`) are the real
+ *  ones, all going through the stubbed `rpc`. */
 function stubClient(answers: Record<string, (params: Record<string, unknown>) => unknown> = {}): Stub {
   // The window model's revision: every write the backend accepts is a
   // newer one, as on the real backend. (A constant here makes a later
@@ -76,7 +81,11 @@ function stubClient(answers: Record<string, (params: Record<string, unknown>) =>
     throw new Error(`unexpected rpc ${method}`);
   });
   const completeFiles = vi.fn(async (_q: string, _limit?: number) => ({ matches: [] as string[], total: 0 }));
-  const client = { rpc, completeFiles, clientId: "conn-test" } as unknown as IgniClient;
+  const client = Object.assign(Object.create(IgniClient.prototype) as IgniClient, {
+    rpc,
+    completeFiles,
+    clientId: "conn-test",
+  });
   return { client, rpc, completeFiles };
 }
 
@@ -630,7 +639,7 @@ describe("pasting code", () => {
 
     expect(notPrevented).toBe(false);
     expect(stub.rpc).toHaveBeenCalledWith("search_code", { snippet: SNIPPET });
-    expect(windowModel.get("composer").text).toMatch(/@code:c1/);
+    expect(windowModel.get("composer").text).toMatch(/@code:c\S+/);
     expect(windowModel.get("composer").text).not.toContain("print('hi')");
     const pill = editor.querySelector("[data-pill-code]") as HTMLElement;
     expect(pill.getAttribute("data-pill-label")).toBe("hello.py 9-12 +1");
@@ -849,6 +858,60 @@ describe("the bar's menus", () => {
     act(() => (container.querySelectorAll('[role="menuitem"]')[1] as HTMLElement).click());
     expect(props.onPickMode).toHaveBeenCalledExactlyOnceWith("plan");
     expect(container.querySelector('[role="menu"]')).toBeNull();
+  });
+});
+
+describe("one popup at a time", () => {
+  function withFile() {
+    const stub = stubClient({
+      get_model_registry: () => ({ registry: { m1: {} }, default: "m1" }),
+    });
+    stub.completeFiles.mockImplementation(async () => ({ matches: ["a.ts"], total: 1 }));
+    return stub;
+  }
+
+  it("opening the tools closes an open @ menu", async () => {
+    const { editor, container } = mount({}, withFile());
+    typeInto(editor, "@a");
+    await flush();
+    expect(container.querySelector(".popup-item .cmd")!.textContent).toBe("a.ts");
+
+    act(() => (container.querySelector(".slash-btn") as HTMLButtonElement).click());
+
+    const items = Array.from(container.querySelectorAll(".popup-item .cmd")).map((e) => e.textContent);
+    expect(items).toEqual(["Compact", "Sessions"]);
+  });
+
+  it("opening one bar menu closes another", () => {
+    const { container } = mount();
+    act(() => (container.querySelector(".slash-btn") as HTMLButtonElement).click());
+
+    act(() => (container.querySelector(".send-split-mode") as HTMLButtonElement).click());
+
+    expect(container.querySelectorAll('[role="menu"]')).toHaveLength(1);
+    expect(container.querySelectorAll(".popup-menu")).toHaveLength(1);
+  });
+
+  it("the /model command replaces an open @ menu", async () => {
+    const stub = withFile();
+    const { editor, container, rerender, props } = mount({ model: "m1" }, stub);
+    typeInto(editor, "@a");
+    await flush();
+
+    rerender(<Composer {...props} modelMenuSignal={{ n: 1 }} />);
+    await flush();
+
+    expect(container.querySelector(".model-menu")).not.toBeNull();
+    expect(container.querySelectorAll(".popup-menu")).toHaveLength(1);
+  });
+
+  it("arrows in the editor do not move through the tools list", () => {
+    const { editor, container } = mount();
+    act(() => (container.querySelector(".slash-btn") as HTMLButtonElement).click());
+
+    press(editor, "ArrowDown");
+
+    expect(container.querySelector(".popup-item.active")).toBeNull();
   });
 });
 

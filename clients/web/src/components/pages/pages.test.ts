@@ -14,7 +14,7 @@
 
 import { describe, expect, it } from "vitest";
 
-import { BUILTIN_COMMANDS } from "../Composer";
+import { BUILTIN_COMMANDS } from "../../chat/slashCommands";
 import { groupingDrift } from "./HelpPage";
 import { shares } from "./ContextPage";
 

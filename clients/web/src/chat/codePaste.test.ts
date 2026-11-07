@@ -9,6 +9,7 @@
  */
 
 import { describe, expect, it } from "vitest";
+import { CodeMatchSet } from "./codeMatchSet";
 import { CodePasteBlock, CodePastePlaceholders } from "./codePaste";
 import { UserTextTokenizer } from "./userTextTokens";
 
@@ -177,5 +178,28 @@ describe("UserTextTokenizer", () => {
     const before = new CodePastePlaceholders().swap(text);
     UserTextTokenizer.tokenize(text);
     expect(new CodePastePlaceholders().swap(text)).toBe(before);
+  });
+});
+
+describe("CodePasteBlock.fromMatches", () => {
+  it("writes a block the tokenizer reads back unchanged", () => {
+    const snippet = "def hello():\n    return 1";
+    const matches = CodeMatchSet.of([
+      { path: "src/hello.py", line: 9, end_line: 11, preview: "" },
+      { path: "src/hello.py", line: 20, preview: "" },
+      { path: "tests/test_hello.py", line: 3, preview: "" },
+    ])!;
+
+    const written = CodePasteBlock.fromMatches(snippet, matches);
+    const [match] = Array.from(written.raw.matchAll(CodePasteBlock.PATTERN));
+    const read = CodePasteBlock.fromMatch(match);
+
+    expect(written.raw).toBe(`[code-paste src/hello.py:9 lines=9-11,20]\n${snippet}\n[/code-paste]`);
+    expect([read.path, read.line, read.lineSpec, read.snippet]).toEqual([
+      "src/hello.py",
+      9,
+      "9-11,20",
+      snippet,
+    ]);
   });
 });

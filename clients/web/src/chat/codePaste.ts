@@ -1,13 +1,17 @@
 /**
  * A pasted code snippet as it travels inside a user message. The
- * composer turns ``@code:c1`` into
+ * composer turns each ``@code:<id>`` pill into
  *
  *     [code-paste hello.py:9 lines=9-16]
  *     …the snippet…
  *     [/code-paste]
  *
- * at submit, so the bubble can find each snippet by its tag.
+ * at submit ({@link CodePasteBlock.fromMatches}), so the bubble can find
+ * each snippet by its tag ({@link CodePasteBlock.fromMatch}). The format
+ * is written and read here and nowhere else.
  */
+
+import type { CodeMatchSet } from "./codeMatchSet";
 
 export class CodePasteBlock {
   /** Shared and global: read only through ``matchAll`` and ``replace``,
@@ -28,6 +32,14 @@ export class CodePasteBlock {
   /** ``match`` is one match of {@link PATTERN}. */
   static fromMatch(match: RegExpMatchArray): CodePasteBlock {
     return new CodePasteBlock(match[1], Number(match[2]), match[3], match[4], match[0]);
+  }
+
+  /** The block for a snippet found at ``matches``: anchored on the first
+   *  file, carrying its merged ranges. */
+  static fromMatches(snippet: string, matches: CodeMatchSet): CodePasteBlock {
+    const { firstPath, anchor, lineSpec } = matches;
+    const raw = `[code-paste ${firstPath}:${anchor} lines=${lineSpec}]\n${snippet}\n[/code-paste]`;
+    return new CodePasteBlock(firstPath, anchor, lineSpec, snippet, raw);
   }
 
   get fileName(): string {

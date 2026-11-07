@@ -1,25 +1,24 @@
 /**
- * Tests for the Composer's slash-command surface — the parts
- * that don't need the contenteditable + state machine:
+ * The slash-command pool the composer's `/` menu offers.
  *
- *   • BUILTIN_COMMANDS — structural contract (the FE call sites
- *     trust this list to be well-formed and to include the
- *     commands the TUI's CommandHandler exposes).
- *   • filterSlashCommands — the pure prefix-filter helper the
- *     ``/`` autocomplete menu uses. Extracted from refreshMenu
- *     so we don't have to drive the contenteditable to test it.
- *
- * The full Composer component (mention menu, history, mode
- * machine, etc.) is left to manual / E2E verification — it owns
- * too much DOM-bound state to be useful as a unit test.
+ *   - BUILTIN_COMMANDS — structural contract (the FE call sites trust
+ *     this list to be well-formed and to include the commands the
+ *     backend's CommandHandler exposes).
+ *   - SlashCommandCatalog.merge — the menu offers what the backend can
+ *     run. It used to offer a hand-maintained copy of that list, which
+ *     had drifted both ways: one command advertised that does not
+ *     exist, and nine real ones nobody could discover from the menu.
+ *   - SlashCommandCatalog#filter — the prefix filter the `/`
+ *     autocomplete uses, testable without the contenteditable.
  */
 
 import { describe, expect, it } from "vitest";
 import {
   BUILTIN_COMMANDS,
-  filterSlashCommands,
+  CLIENT_ONLY_COMMANDS,
+  SlashCommandCatalog,
   type SlashCommand,
-} from "./Composer";
+} from "./slashCommands";
 
 describe("BUILTIN_COMMANDS — structural contract", () => {
   it("is non-empty (the built-in slash commands must exist)", () => {
@@ -102,7 +101,7 @@ describe("BUILTIN_COMMANDS — structural contract", () => {
   });
 });
 
-describe("filterSlashCommands", () => {
+describe("SlashCommandCatalog#filter", () => {
   // Use a stable mini-pool so the assertions don't churn when
   // someone adds a new built-in.
   const pool: SlashCommand[] = [
@@ -116,23 +115,23 @@ describe("filterSlashCommands", () => {
   it("returns the full pool for an empty query", () => {
     // User just typed ``/`` — show everything. Each command's
     // ``slice(1).startsWith("")`` is trivially true.
-    expect(filterSlashCommands(pool, "")).toEqual(pool);
+    expect(new SlashCommandCatalog(pool).filter("")).toEqual(pool);
   });
 
   it("prefix-matches on the name AFTER the leading '/'", () => {
     // Query ``co`` should match ``/compact`` and ``/context``
     // but not ``/clear`` (which starts with c, not co).
-    const out = filterSlashCommands(pool, "co");
+    const out = new SlashCommandCatalog(pool).filter("co");
     expect(out.map((c) => c.name)).toEqual(["/compact", "/context"]);
   });
 
   it("is case-insensitive", () => {
     // The user might shift their hand and type ``/COM`` —
     // still meant ``/compact``. Lowercased on both sides.
-    expect(filterSlashCommands(pool, "COM").map((c) => c.name)).toEqual([
+    expect(new SlashCommandCatalog(pool).filter("COM").map((c) => c.name)).toEqual([
       "/compact",
     ]);
-    expect(filterSlashCommands(pool, "Help").map((c) => c.name)).toEqual([
+    expect(new SlashCommandCatalog(pool).filter("Help").map((c) => c.name)).toEqual([
       "/help",
     ]);
   });
@@ -140,14 +139,14 @@ describe("filterSlashCommands", () => {
   it("returns [] when nothing matches", () => {
     // Empty result → the menu collapses, the user sees that
     // their query didn't match anything.
-    expect(filterSlashCommands(pool, "zz")).toEqual([]);
+    expect(new SlashCommandCatalog(pool).filter("zz")).toEqual([]);
   });
 
   it("does NOT match substring (e.g. 'lear' does not match /clear)", () => {
     // The autocomplete is prefix-based. Substring matching
     // would surface commands for queries that the user wasn't
     // trying to complete (typo'd ``/lear`` → unwanted match).
-    expect(filterSlashCommands(pool, "lear")).toEqual([]);
+    expect(new SlashCommandCatalog(pool).filter("lear")).toEqual([]);
   });
 
   it("caps at 12 results by default", () => {
@@ -158,7 +157,7 @@ describe("filterSlashCommands", () => {
       name: `/cmd${i.toString().padStart(2, "0")}`,
       description: `desc ${i}`,
     }));
-    expect(filterSlashCommands(big, "").length).toBe(12);
+    expect(new SlashCommandCatalog(big).filter("").length).toBe(12);
   });
 
   it("custom limit overrides the default cap", () => {
@@ -169,9 +168,9 @@ describe("filterSlashCommands", () => {
       name: `/cmd${i.toString().padStart(2, "0")}`,
       description: `desc ${i}`,
     }));
-    expect(filterSlashCommands(big, "", 3).length).toBe(3);
+    expect(new SlashCommandCatalog(big).filter("", 3).length).toBe(3);
     // limit=0 → empty (defensive; the helper doesn't ban it).
-    expect(filterSlashCommands(big, "", 0).length).toBe(0);
+    expect(new SlashCommandCatalog(big).filter("", 0).length).toBe(0);
   });
 
   it("preserves source order (no implicit reordering)", () => {
@@ -184,7 +183,7 @@ describe("filterSlashCommands", () => {
     // the front. That is the same principle, not a violation of it —
     // the first match is what Enter runs, so the command the user
     // finished typing has to be it.
-    const out = filterSlashCommands(pool, "");
+    const out = new SlashCommandCatalog(pool).filter("");
     expect(out.map((c) => c.name)).toEqual(pool.map((c) => c.name));
   });
 
@@ -204,7 +203,7 @@ describe("filterSlashCommands", () => {
       // the text to the other one. From the user's side `/plugin` did
       // nothing — no output, no panel, not even an echoed line.
       expect(
-        filterSlashCommands(prefixPair, "plugin").map((c) => c.name),
+        new SlashCommandCatalog(prefixPair).filter("plugin").map((c) => c.name),
       ).toEqual(["/plugin", "/plugins"]);
     });
 
@@ -212,7 +211,7 @@ describe("filterSlashCommands", () => {
       // Promotion, not filtering. `/plugins` must stay reachable —
       // one keystroke of ArrowDown away, and still in the list for
       // anyone reading rather than typing.
-      expect(filterSlashCommands(prefixPair, "plugin")).toHaveLength(2);
+      expect(new SlashCommandCatalog(prefixPair).filter("plugin")).toHaveLength(2);
     });
 
     it("leaves a partial query in source order", () => {
@@ -220,22 +219,19 @@ describe("filterSlashCommands", () => {
       // and it must not change: the pool's order is the product's
       // opinion about which command is likeliest.
       expect(
-        filterSlashCommands(prefixPair, "plug").map((c) => c.name),
+        new SlashCommandCatalog(prefixPair).filter("plug").map((c) => c.name),
       ).toEqual(["/plugins", "/plugin"]);
     });
 
     it("matches case-insensitively, like the filter itself", () => {
-      expect(filterSlashCommands(prefixPair, "PLUGIN")[0].name).toBe("/plugin");
+      expect(new SlashCommandCatalog(prefixPair).filter("PLUGIN")[0].name).toBe("/plugin");
     });
 
     it("does nothing when the exact match is already first", () => {
-      const out = filterSlashCommands(
-        [
-          { name: "/plugin", description: "a" },
-          { name: "/plugins", description: "b" },
-        ],
-        "plugin",
-      );
+      const out = new SlashCommandCatalog([
+        { name: "/plugin", description: "a" },
+        { name: "/plugins", description: "b" },
+      ]).filter("plugin");
       expect(out.map((c) => c.name)).toEqual(["/plugin", "/plugins"]);
     });
   });
@@ -248,8 +244,86 @@ describe("filterSlashCommands", () => {
       { name: "/my-skill", description: "User skill" },
     ];
     const merged = [...pool, ...skills];
-    expect(filterSlashCommands(merged, "my-").map((c) => c.name)).toEqual([
+    expect(new SlashCommandCatalog(merged).filter("my-").map((c) => c.name)).toEqual([
       "/my-skill",
     ]);
+  });
+});
+
+const be = (...names: string[]) =>
+  names.map((name) => ({ name, description: `be: ${name}` }));
+
+describe("SlashCommandCatalog.merge", () => {
+  it("offers what the backend reports", () => {
+    const merged = SlashCommandCatalog.merge(be("/commit", "/pr", "/watcher"), []).commands;
+
+    // All three were undiscoverable before: real commands the
+    // hardcoded list never mentioned.
+    expect(merged.map((c) => c.name)).toEqual(
+      expect.arrayContaining(["/commit", "/pr", "/watcher"]),
+    );
+  });
+
+  it("drops a name the backend does not have", () => {
+    const merged = SlashCommandCatalog.merge(be("/help"), []).commands;
+
+    expect(merged.map((c) => c.name)).not.toContain("/clear");
+  });
+
+  it("keeps the GUI's wording where both have an opinion", () => {
+    // The backend's descriptions are written for /help; these are
+    // written for this menu.
+    const curated = BUILTIN_COMMANDS.find((c) => c.name === "/login")!;
+    const merged = SlashCommandCatalog.merge(be("/login"), []).commands;
+
+    expect(merged.find((c) => c.name === "/login")!.description).toBe(
+      curated.description,
+    );
+  });
+
+  it("uses the backend's wording for commands the GUI never knew about", () => {
+    const merged = SlashCommandCatalog.merge(be("/gpu-ai"), []).commands;
+
+    expect(merged.find((c) => c.name === "/gpu-ai")!.description).toBe(
+      "be: /gpu-ai",
+    );
+  });
+
+  it("still offers client-only commands the backend cannot know about", () => {
+    // `/workflows` is intercepted in App.tsx and never reaches the
+    // backend, so its absence from the RPC is correct.
+    const merged = SlashCommandCatalog.merge(be("/help"), []).commands;
+
+    for (const name of CLIENT_ONLY_COMMANDS) {
+      expect(merged.map((c) => c.name)).toContain(name);
+    }
+  });
+
+  it("falls back to the hardcoded list before the RPC answers", () => {
+    // `null` is "not yet", not "nothing" — an empty menu during
+    // startup would read as a broken app.
+    expect(SlashCommandCatalog.merge(null, []).commands.length).toBe(BUILTIN_COMMANDS.length);
+  });
+
+  it("falls back when the backend is too old to answer", () => {
+    expect(SlashCommandCatalog.merge([], []).commands.length).toBe(BUILTIN_COMMANDS.length);
+  });
+
+  it("does not list a skill twice when it arrives by both routes", () => {
+    // Skills come back inside get_slash_commands (source: "skill")
+    // and also via the older get_skill_definitions path.
+    const merged = SlashCommandCatalog.merge(be("/help", "/my-skill"), [
+      { name: "/my-skill", description: "from the skills RPC" },
+    ]).commands;
+
+    expect(merged.filter((c) => c.name === "/my-skill")).toHaveLength(1);
+  });
+
+  it("appends skills the backend did not report", () => {
+    const merged = SlashCommandCatalog.merge(be("/help"), [
+      { name: "/solo", description: "skill" },
+    ]).commands;
+
+    expect(merged.map((c) => c.name)).toContain("/solo");
   });
 });

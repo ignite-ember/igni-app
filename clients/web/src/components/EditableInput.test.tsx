@@ -143,6 +143,26 @@ describe("pills survive as pills, not as text", () => {
       "README",
     );
   });
+  it("labels a code pill with the label it is given, and 'code' without one", () => {
+    const labels = new Map([["c1a2b3c4", "hello.py 9-12"]]);
+    const { container } = render(
+      <EditableInput
+        value="see @code:c1a2b3c4 and @code:unknown"
+        codePillLabel={(id) => labels.get(id)}
+        onValueChange={vi.fn()}
+      />,
+    );
+
+    const pills = Array.from(container.querySelectorAll("[data-pill-code]"));
+    expect(pills.map((p) => p.getAttribute("data-pill-label"))).toEqual(["hello.py 9-12", "code"]);
+    expect(pills[0].textContent).toBe("hello.py 9-12");
+  });
+
+  it("labels every code pill 'code' when nobody supplies labels", () => {
+    const { container } = render(<EditableInput value="@code:c1" onValueChange={vi.fn()} />);
+
+    expect(container.querySelector("[data-pill-code]")!.getAttribute("data-pill-label")).toBe("code");
+  });
 });
 
 describe("text is text, never markup", () => {

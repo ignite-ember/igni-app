@@ -56,7 +56,6 @@ import {
   WindowModel,
   ensureClientId,
   useWindowField,
-  type ComposerMode,
   type Panel,
 } from "./clientState";
 import { useExtensionTraffic } from "./extensions/useExtensionTraffic";
@@ -64,7 +63,10 @@ import { Virtuoso, type VirtuosoHandle } from "react-virtuoso";
 import { ChatItemView } from "./components/chatItems/ChatItemView";
 import type { ChatItemHandlers } from "./components/chatItems/handlers";
 import { ChatSearchBar } from "./components/ChatSearchBar";
-import { Composer, type SlashCommand } from "./components/Composer";
+import type { SlashCommand } from "./chat/slashCommands";
+import { Composer } from "./components/composer/Composer";
+import { ComposerDraft } from "./components/composer/composerDraft";
+import type { PermissionMode } from "./components/composer/permissionModes";
 import { GroupIndicator } from "./components/GroupIndicator";
 import { WatcherIndicator } from "./components/WatcherIndicator";
 import {
@@ -153,14 +155,6 @@ type PanelState =
 /** `ui.panel` as the render code below reads it. */
 function panelState(panel: Panel | null): PanelState {
   return panel ? ({ kind: panel.kind } as PanelState) : { kind: "none" };
-}
-
-/** A composer pre-fill, split into the mode its prefix asks for — the
- *  same rule as typing it (`/` a command, `$` a shell line). */
-function composerFrom(entry: string): { text: string; mode: ComposerMode } {
-  if (entry.startsWith("/")) return { text: entry.slice(1), mode: "command" };
-  if (entry.startsWith("$")) return { text: entry.slice(1).trimStart(), mode: "shell" };
-  return { text: entry, mode: "chat" };
 }
 
 interface UpdateInfo {
@@ -369,7 +363,8 @@ export default function App() {
     (entry: string) => {
       windowModel.write(
         "composer",
-        { ...composerFrom(entry), attachments: [] },
+        // A pre-fill enters the mode its prefix asks for, as typing it would.
+        ComposerDraft.fromWire(entry).toModel(),
         { force: true },
       );
       composerFocus.current?.();
@@ -3630,7 +3625,7 @@ export default function App() {
             client.cancel();
           }}
           permissionMode={status?.permission_mode}
-          onPickMode={(mode) => {
+          onPickMode={(mode: PermissionMode) => {
             // The split send button hands us one of the four
             // ``PermissionEvaluator.mode`` values. Each maps to
             // an existing slash command that flips the BE side.
