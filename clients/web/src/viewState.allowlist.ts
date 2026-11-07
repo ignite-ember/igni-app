@@ -207,8 +207,13 @@ export const VIEW_STATE: Record<string, Partial<Record<Category, string[]>>> = {
   "components/HostDialog.tsx": {
     field: ["value"],
   },
-  "components/JsonRenderView.tsx": {
-    disclosure: ["idx", "open", "active", "open", "open"],
+  "components/jsonRender/components/layout.tsx": {
+    disclosure: ["idx", "open", "active", "open"],
+  },
+  "components/jsonRender/components/actions.tsx": {
+    disclosure: ["open"],
+  },
+  "components/jsonRender/components/inputs.tsx": {
     field: ["checked", "val"],
   },
   "components/NotificationsPanel.tsx": {

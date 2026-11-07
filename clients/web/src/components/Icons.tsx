@@ -368,3 +368,33 @@ export function GearIcon() {
     </svg>
   );
 }
+
+/** Artwork the json-render catalog's ``Icon`` (and the icon slots on
+ *  ``Button``) can name. The visualizer agent picks the name, so an
+ *  unknown one falls back to ``info``. The ``triangle*`` and ``dot``
+ *  glyphs mark a ``Metric`` delta's direction. */
+const NAMED_ICON_PATHS: Record<string, string> = {
+  check: "M4 8l3 3 5-6",
+  x: "M4 4l8 8M12 4l-8 8",
+  info: "M8 5v3M8 11h.01M2 8a6 6 0 1 0 12 0 6 6 0 0 0-12 0",
+  warning: "M8 3l6 10H2L8 3zM8 7v3M8 11h.01",
+  chevron: "M4 6l4 4 4-4",
+  chevronUp: "M4 10l4-4 4 4",
+  chevronRight: "M6 4l4 4-4 4",
+  star: "M8 2l1.8 3.7 4 .6-2.9 2.9.7 4L8 11.3l-3.6 1.9.7-4L2.2 6.3l4-.6z",
+  plus: "M8 3v10M3 8h10",
+  minus: "M3 8h10",
+  arrowUp: "M8 3l4 4H10v6H6V7H4z",
+  arrowDown: "M8 13l-4-4h2V3h4v6h2z",
+  triangleUp: "M8 4l5 8H3z",
+  triangleDown: "M8 12L3 4h10z",
+  dot: "M6.5 8a1.5 1.5 0 1 0 3 0 1.5 1.5 0 0 0-3 0",
+};
+
+export function NamedIcon({ name, size = 14 }: IconProps & { name: string }) {
+  return (
+    <Svg size={size}>
+      <path d={NAMED_ICON_PATHS[name] ?? NAMED_ICON_PATHS.info} />
+    </Svg>
+  );
+}

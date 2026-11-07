@@ -4,9 +4,9 @@
  *
  * This file defines the SHAPE (Zod schemas for each component's props
  * + a short description + an example). The React implementations that
- * consume this catalog live in ``JsonRenderView.tsx`` and are wired
- * via ``defineRegistry(catalog, { components: {...} })`` — same
- * catalog, one place to change.
+ * consume this catalog live in ``components/`` (one module per group)
+ * and are wired in ``registry.tsx`` via ``defineRegistry(catalog,
+ * { components: {...} })`` — same catalog, one place to change.
  *
  * The visualizer sub-agent's system prompt is AUTO-GENERATED from
  * this catalog by ``scripts/gen-visualizer-prompt.mjs`` — never

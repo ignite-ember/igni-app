@@ -327,7 +327,13 @@
   color: var(--fg);
   font-variant-numeric: tabular-nums;
 }
-.jr-metric-delta { font-size: 12px; font-family: var(--font-mono); }
+.jr-metric-delta {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  font-family: var(--font-mono);
+}
 .jr-metric-up { color: var(--success); }
 .jr-metric-down { color: var(--danger); }
 .jr-metric-flat { color: var(--fg-faint); }
