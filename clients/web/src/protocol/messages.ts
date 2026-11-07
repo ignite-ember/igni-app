@@ -1,13 +1,17 @@
 /**
- * TypeScript mirror of src/igni_core/protocol/messages.py.
+ * TypeScript mirror of igni-core's BE→FE messages
+ * (``igni_core/protocol/schemas/``). What this client sends is in
+ * ``clientMessages.ts``.
  *
  * Wire format: one JSON object per WebSocket text frame; the `type`
  * field discriminates. Field names match the Pydantic models exactly —
  * this file must stay in lockstep with the Python side.
  */
 
+/** The fields every message carries, either direction. Each message
+ *  declares its own literal ``type``; there is no ``type: string`` here
+ *  to widen the discriminant. */
 export interface BaseMessage {
-  type: string;
   /** Correlation id for request/response and stream grouping. */
   id?: string;
   /** Session routing: which session a message targets (FE→BE) or
@@ -107,10 +111,9 @@ export interface HITLRequest extends BaseMessage {
   /** ``details`` is still being written (the safety check asks the
    *  model to describe the call); a ``requirement_details`` follows. */
   details_pending?: boolean;
-  /** Parent → leaf, e.g. ["igni", "safety check"]. The BE sends a list
-   *  (``HITLRequest.agent_path: list[str]``); typed ``string`` before,
-   *  which let React concatenate it into "ignisafety check". */
-  agent_path: string[] | string;
+  /** Parent → leaf, e.g. ["igni", "safety check"]; empty for igni's
+   *  own agent. */
+  agent_path: string[];
 }
 
 export interface RunPaused extends BaseMessage {
@@ -155,6 +158,17 @@ export interface CommandResult extends BaseMessage {
   display_content: string;
 }
 
+/** The backend's permission modes (``PermissionModeName``). */
+export const PERMISSION_MODE_NAMES = [
+  "default",
+  "plan",
+  "acceptEdits",
+  "bypassPermissions",
+  "dontAsk",
+] as const;
+
+export type PermissionModeName = (typeof PERMISSION_MODE_NAMES)[number];
+
 export interface StatusUpdate extends BaseMessage {
   type: "status_update";
   input_tokens: number;
@@ -166,9 +180,8 @@ export interface StatusUpdate extends BaseMessage {
    *  ``NoModelConfigured`` placeholder. Read it instead of comparing
    *  ``model`` against the placeholder's id string — that made a
    *  sentinel into a contract between two files that did not know they
-   *  shared one. Optional so an older BE still type-checks; treat a
-   *  missing value as configured, which is what it meant before. */
-  model_configured?: boolean;
+   *  shared one. */
+  model_configured: boolean;
   cloud_connected: boolean;
   cloud_org: string;
   /** The signed-in account's address. On disk, so it is present
@@ -176,18 +189,13 @@ export interface StatusUpdate extends BaseMessage {
   cloud_email?: string;
   /** Display name, once `/portal/me` has been asked. */
   cloud_name?: string;
-  /** Active permission mode (row 50 — plan-mode badge). One of
-   *  ``default`` / ``plan`` / ``acceptEdits`` / ``bypassPermissions`` /
-   *  ``dontAsk``. ``plan`` triggers the PlanBadge in the header.
-   *  Defaults to ``default`` so older BEs that don't send the
-   *  field still type-check. */
-  permission_mode: string;
-  /** Brand overrides from the signed-in user's group. Absent or null
-   *  means igni's own palette — which is also what an older backend
-   *  that doesn't send the field gets, hence optional. Values are
-   *  untrusted here: `lib/theme.ts` validates each one against its
-   *  allowlist before applying it. */
-  theme?: GroupTheme | null;
+  /** Active permission mode. ``plan`` triggers the PlanBadge in the
+   *  header. */
+  permission_mode: PermissionModeName;
+  /** Brand overrides from the signed-in user's group; null means
+   *  igni's own palette. Values are untrusted here: `lib/theme.ts`
+   *  validates each one against its allowlist before applying it. */
+  theme: GroupTheme | null;
 }
 
 /** Brand overrides a group can set. Every field optional; anything
@@ -220,12 +228,14 @@ export interface RPCResponse extends BaseMessage {
   error: string | null;
 }
 
-/** A broadcast on one channel. The channels this client acts on, and
- *  their payloads, are typed in ``pushChannels.ts``. */
+/** A broadcast on one channel, as it arrives: the producer set is open
+ *  on the backend, so ``payload`` is unread here. Nothing reads it
+ *  directly — ``parsePushChannel`` (``pushChannels.ts``) and the
+ *  feature parsers turn a known channel into its typed event. */
 export interface PushNotification extends BaseMessage {
   type: "push_notification";
   channel: string;
-  payload: Record<string, unknown>;
+  payload: unknown;
 }
 
 // ── Multi-client session mirroring ──────────────────────────────────
@@ -290,105 +300,3 @@ export type ServerMessage =
   | UserMessageReceived
   | RequirementResolved
   | RequirementDetails;
-
-// ── FE → BE messages ────────────────────────────────────────────────
-
-export interface HITLDecision {
-  requirement_id: string;
-  action: "confirm" | "reject";
-  choice: "once" | "always" | "similar" | "";
-  /**
-   * Optional atomic-mode-flip carried with the decision. When set,
-   * the BE applies the named mode to the session BEFORE resuming the
-   * agent, so the next tool permission check sees the new mode.
-   * Closes a race where a separate `/accept on` slash command fired
-   * alongside this batch was dispatched concurrently and lost —
-   * the agent resumed under the OLD mode and re-prompted.
-   *
-   * Empty string is the no-op default for back-compat with clients
-   * that don't know about this field.
-   */
-  set_permission_mode?: "acceptEdits" | "bypassPermissions" | "";
-}
-
-export const fe = {
-  userMessage: (
-    text: string,
-    id: string,
-    clientId = "",
-    fileContents: Record<string, string> = {},
-    options: { force?: boolean } = {},
-  ) => ({
-    type: "user_message",
-    id,
-    text,
-    file_contents: fileContents,
-    client_id: clientId,
-    force: options.force ?? false,
-  }),
-  queueMessage: (text: string, clientId = "") => ({
-    type: "queue_message",
-    text,
-    client_id: clientId,
-  }),
-  typing: (text: string, clientId: string) => ({
-    type: "typing",
-    text,
-    client_id: clientId,
-  }),
-  command: (text: string, id: string) => ({ type: "command", id, text }),
-  hitlResponse: (requirementId: string, action: string, choice: string, id: string) => ({
-    type: "hitl_response",
-    id,
-    requirement_id: requirementId,
-    action,
-    choice,
-  }),
-  hitlResponseBatch: (decisions: HITLDecision[], id: string) => ({
-    type: "hitl_response_batch",
-    id,
-    decisions,
-  }),
-  cancel: () => ({ type: "cancel" }),
-  modelSwitch: (modelName: string, id: string) => ({
-    type: "model_switch",
-    id,
-    model_name: modelName,
-  }),
-  sessionSwitch: (sessionId: string, id: string) => ({
-    type: "session_switch",
-    id,
-    session_id: sessionId,
-  }),
-  rpcRequest: (
-    method: string,
-    args: Record<string, unknown>,
-    id: string,
-    /**
-     * Which extension's frame this came from.
-     *
-     * Omitted for igni's own UI, and the backend refuses the `ext.*`
-     * namespace without it: an extension reaches its own service and
-     * no other, and with no caller there is nothing to check that
-     * against.
-     */
-    caller?: string,
-  ) => ({
-    type: "rpc_request",
-    id,
-    method,
-    args,
-    ...(caller === undefined ? {} : { caller }),
-  }),
-  cancelLogin: () => ({ type: "cancel_login" }),
-  mcpToggle: (serverName: string, connect: boolean, id: string) => ({
-    type: "mcp_toggle",
-    id,
-    server_name: serverName,
-    connect,
-  }),
-  shutdown: () => ({ type: "shutdown" }),
-};
-
-/** Anything this client sends: what one of the {@link fe} builders made. */
-export type ClientMessage = ReturnType<(typeof fe)[keyof typeof fe]>;

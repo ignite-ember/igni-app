@@ -15,8 +15,8 @@
 
 import { BackendCalls } from "./backendCalls";
 import { ExtensionCaller } from "./extensionCaller";
-import type { ClientMessage, HITLDecision, ServerMessage } from "./messages";
-import { fe } from "./messages";
+import { fe, type ClientMessage, type HITLDecision } from "./clientMessages";
+import type { ServerMessage } from "./messages";
 import { ReplyCorrelator, type StreamHandler } from "./replyCorrelator";
 import { RPC_TIMEOUT_MS, type RpcCaller } from "./rpcCaller";
 import { TypingThrottle } from "./typingThrottle";
@@ -79,7 +79,9 @@ export class IgniClient implements RpcCaller {
 
     this.emitState("connecting");
     const protocols = wsProtocols(this.token);
-    const ws = protocols ? new WebSocket(this.url, protocols) : new WebSocket(this.url);
+    const ws = protocols
+      ? new WebSocket(this.url, protocols)
+      : new WebSocket(this.url);
     this.ws = ws;
     // Handlers ignore events from a replaced socket.
     ws.onopen = () => {
@@ -141,7 +143,11 @@ export class IgniClient implements RpcCaller {
     options: { force?: boolean } = {},
   ): Promise<void> {
     const id = this.nextId("run");
-    return this.stream(fe.userMessage(text, id, this.clientId, fileContents, options), id, onMessage);
+    return this.stream(
+      fe.userMessage(text, id, this.clientId, fileContents, options),
+      id,
+      onMessage,
+    );
   }
 
   /** Queue a message while a run is in flight. Fire-and-forget. */
@@ -161,7 +167,10 @@ export class IgniClient implements RpcCaller {
   }
 
   /** Resolve a batch of HITL requirements; streams the resumed run. */
-  resolveHitlBatch(decisions: HITLDecision[], onMessage: StreamHandler): Promise<void> {
+  resolveHitlBatch(
+    decisions: HITLDecision[],
+    onMessage: StreamHandler,
+  ): Promise<void> {
     const id = this.nextId("hitl");
     return this.stream(fe.hitlResponseBatch(decisions, id), id, onMessage);
   }
@@ -220,10 +229,19 @@ export class IgniClient implements RpcCaller {
 
   /** One-shot request/reply correlated by id. */
   private request(payload: ClientMessage, id: string): Promise<ServerMessage> {
-    return this.replies.request(id, () => this.send(payload), RPC_TIMEOUT_MS, "request timed out");
+    return this.replies.request(
+      id,
+      () => this.send(payload),
+      RPC_TIMEOUT_MS,
+      "request timed out",
+    );
   }
 
-  private stream(payload: ClientMessage, id: string, onMessage: StreamHandler): Promise<void> {
+  private stream(
+    payload: ClientMessage,
+    id: string,
+    onMessage: StreamHandler,
+  ): Promise<void> {
     return this.replies.stream(id, () => this.send(payload), onMessage);
   }
 
@@ -235,9 +253,8 @@ export class IgniClient implements RpcCaller {
   }
 
   /** A copy of ``payload`` stamped with the bound session unless it names one. */
-  private routed(payload: ClientMessage): ClientMessage & { session_id?: string } {
-    const named = "session_id" in payload ? payload.session_id : "";
-    if (named || !this.sessionId) return payload;
+  private routed(payload: ClientMessage): ClientMessage {
+    if (payload.session_id || !this.sessionId) return payload;
     return { ...payload, session_id: this.sessionId };
   }
 

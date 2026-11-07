@@ -24,7 +24,8 @@
 
 import { useState } from "react";
 import { HitlDialog } from "../components/HitlDialog";
-import type { HITLDecision, HITLRequest } from "../protocol/messages";
+import type { HITLDecision } from "../protocol/clientMessages";
+import type { HITLRequest } from "../protocol/messages";
 
 function req(overrides: Partial<HITLRequest> = {}): HITLRequest {
   return {
@@ -38,7 +39,7 @@ function req(overrides: Partial<HITLRequest> = {}): HITLRequest {
       new_string: "# ember CLI entry point\n" + '"""CLI interface for igni."""',
     },
     details: "",
-    agent_path: "",
+    agent_path: [],
     ...overrides,
   };
 }
@@ -70,15 +71,27 @@ const SCENARIOS: Scenario[] = [
     requirements: [
       req({
         requirement_id: "r1",
-        tool_args: { file_path: "QUICKSTART.md", old_string: "", new_string: "header\n" },
+        tool_args: {
+          file_path: "QUICKSTART.md",
+          old_string: "",
+          new_string: "header\n",
+        },
       }),
       req({
         requirement_id: "r2",
-        tool_args: { file_path: "CHANGELOG.md", old_string: "", new_string: "header\n" },
+        tool_args: {
+          file_path: "CHANGELOG.md",
+          old_string: "",
+          new_string: "header\n",
+        },
       }),
       req({
         requirement_id: "r3",
-        tool_args: { file_path: "README.md", old_string: "", new_string: "header\n" },
+        tool_args: {
+          file_path: "README.md",
+          old_string: "",
+          new_string: "header\n",
+        },
       }),
     ],
     currentMode: "default",
@@ -145,17 +158,33 @@ export function HitlDemo() {
   };
 
   return (
-    <div style={{ padding: 24, fontFamily: "system-ui, sans-serif", color: "var(--fg)" }}>
+    <div
+      style={{
+        padding: 24,
+        fontFamily: "system-ui, sans-serif",
+        color: "var(--fg)",
+      }}
+    >
       <h1 style={{ marginTop: 0 }}>HITL dialog · UI sandbox</h1>
       <p style={{ color: "var(--fg-faint)", marginTop: -8 }}>
-        Drives <code>HitlDialog</code> with canned scenarios so layout iterations don't need
-        a paused agent. Pick a scenario; the dialog renders inline below.
+        Drives <code>HitlDialog</code> with canned scenarios so layout
+        iterations don't need a paused agent. Pick a scenario; the dialog
+        renders inline below.
       </p>
 
-      <div style={{ display: "flex", gap: 16, alignItems: "flex-start", marginTop: 24 }}>
+      <div
+        style={{
+          display: "flex",
+          gap: 16,
+          alignItems: "flex-start",
+          marginTop: 24,
+        }}
+      >
         {/* Scenario picker */}
         <div style={{ minWidth: 280, flexShrink: 0 }}>
-          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>Scenarios</div>
+          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>
+            Scenarios
+          </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
             {SCENARIOS.map((s) => (
               <button
@@ -173,18 +202,34 @@ export function HitlDemo() {
                     s.key === scenarioKey
                       ? "1px solid var(--accent, #4a9eff)"
                       : "1px solid var(--border, #333)",
-                  background: s.key === scenarioKey ? "var(--bg-elev, #1a1f2e)" : "transparent",
+                  background:
+                    s.key === scenarioKey
+                      ? "var(--bg-elev, #1a1f2e)"
+                      : "transparent",
                   color: "inherit",
                   cursor: "pointer",
                   fontSize: 13,
                 }}
               >
                 <div style={{ fontWeight: 600 }}>{s.label}</div>
-                <div style={{ color: "var(--fg-faint)", fontSize: 12, marginTop: 2 }}>
+                <div
+                  style={{
+                    color: "var(--fg-faint)",
+                    fontSize: 12,
+                    marginTop: 2,
+                  }}
+                >
                   {s.description}
                 </div>
-                <div style={{ marginTop: 4, fontSize: 11, color: "var(--fg-faint)" }}>
-                  shortcut: <strong>{s.withShortcut ? "visible" : "hidden"}</strong>
+                <div
+                  style={{
+                    marginTop: 4,
+                    fontSize: 11,
+                    color: "var(--fg-faint)",
+                  }}
+                >
+                  shortcut:{" "}
+                  <strong>{s.withShortcut ? "visible" : "hidden"}</strong>
                 </div>
               </button>
             ))}
@@ -220,12 +265,16 @@ export function HitlDemo() {
             onResolve={handleResolve}
             currentMode={scenario.currentMode}
             onAcceptEditsThisRun={() =>
-              append("onAcceptEditsThisRun fired — parent should `/accept on` + arm revert")
+              append(
+                "onAcceptEditsThisRun fired — parent should `/accept on` + arm revert",
+              )
             }
           />
 
           <div style={{ marginTop: 24 }}>
-            <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>Event log</div>
+            <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>
+              Event log
+            </div>
             <div
               style={{
                 background: "var(--bg-elev, #15171f)",

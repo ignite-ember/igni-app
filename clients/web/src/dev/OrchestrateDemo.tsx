@@ -63,7 +63,8 @@ function floodTools(agent: string, count: number): OrchestrateEvent[] {
     out.push({
       type: "tool_started",
       agent_path: agent,
-      tool: i % 3 === 0 ? "rg" : i % 3 === 1 ? "read_file" : "run_shell_command",
+      tool:
+        i % 3 === 0 ? "rg" : i % 3 === 1 ? "read_file" : "run_shell_command",
       tool_call_id: id,
       args:
         i % 3 === 0
@@ -75,7 +76,8 @@ function floodTools(agent: string, count: number): OrchestrateEvent[] {
     out.push({
       type: "tool_completed",
       agent_path: agent,
-      tool: i % 3 === 0 ? "rg" : i % 3 === 1 ? "read_file" : "run_shell_command",
+      tool:
+        i % 3 === 0 ? "rg" : i % 3 === 1 ? "read_file" : "run_shell_command",
       tool_call_id: id,
       result: `Result line for tool ${i} — would be longer in reality.`,
       is_error: i % 11 === 0,
@@ -304,7 +306,11 @@ const SCENARIOS: Scenario[] = [
         result: "ls: /missing-dir: No such file or directory",
         is_error: true,
       },
-      { type: "run_error", agent_path: "security", error: "Tool call failed after 1 attempt" },
+      {
+        type: "run_error",
+        agent_path: "security",
+        error: "Tool call failed after 1 attempt",
+      },
       {
         type: "agent_completed",
         agent_path: "security",
@@ -377,7 +383,13 @@ const SCENARIOS: Scenario[] = [
       "Exercises the per-agent body scroll. Each agent card should stay bounded; the tool list scrolls inside.",
     kind: "orchestrate",
     events: [
-      { type: "agent_started", agent_path: "explorer", agent: "explorer", parent: null, run_id: "run-explorer-1" },
+      {
+        type: "agent_started",
+        agent_path: "explorer",
+        agent: "explorer",
+        parent: null,
+        run_id: "run-explorer-1",
+      },
       {
         type: "content_preview",
         agent_path: "explorer",
@@ -408,7 +420,13 @@ const SCENARIOS: Scenario[] = [
       "Reproduces what a healthy run looks like once content_preview semantics are right: the BE emits the FULL window each tick, the FE replaces previewLines. Each tick here is a separate event so you can see the window roll.",
     kind: "orchestrate",
     events: [
-      { type: "agent_started", agent_path: "writer", agent: "writer", parent: null, run_id: "w1" },
+      {
+        type: "agent_started",
+        agent_path: "writer",
+        agent: "writer",
+        parent: null,
+        run_id: "w1",
+      },
       ...[
         ["Reading the spec to understand the contract."],
         [
@@ -440,22 +458,27 @@ const SCENARIOS: Scenario[] = [
           "About to write the failing test for the cancel race.",
           "Test is in — now wiring the handler to match.",
         ],
-      ].map(
-        (lines): OrchestrateEvent => ({
-          type: "content_preview",
-          agent_path: "writer",
-          text: lines.join("\n"),
-        }),
-      ),
+      ].map((lines): OrchestrateEvent => ({
+        type: "content_preview",
+        agent_path: "writer",
+        text: lines.join("\n"),
+      })),
     ],
   },
   {
     id: "paused-hitl",
     title: "Sub-agent paused waiting for approval",
-    description: "Specialist tried a destructive tool, gated for HITL approval.",
+    description:
+      "Specialist tried a destructive tool, gated for HITL approval.",
     kind: "orchestrate",
     events: [
-      { type: "agent_started", agent_path: "refactor", agent: "refactor", parent: null, run_id: "run-refactor-1" },
+      {
+        type: "agent_started",
+        agent_path: "refactor",
+        agent: "refactor",
+        parent: null,
+        run_id: "run-refactor-1",
+      },
       {
         type: "tool_started",
         agent_path: "refactor",
@@ -490,8 +513,16 @@ const SCENARIOS: Scenario[] = [
         isError: false,
         diffRows: makeDiff(
           12,
-          ["function getUser(id: string) {", "  return db.users.find(id);", "}"],
-          ["function loadUser(id: string) {", "  return db.users.find(id);", "}"],
+          [
+            "function getUser(id: string) {",
+            "  return db.users.find(id);",
+            "}",
+          ],
+          [
+            "function loadUser(id: string) {",
+            "  return db.users.find(id);",
+            "}",
+          ],
           [0],
           [0],
         ),
@@ -517,9 +548,20 @@ const SCENARIOS: Scenario[] = [
         result: "",
         isError: false,
         diffRows: [
-          ["+ " + String(12).padStart(4) + "   /** Load a user by id. */", "add"],
-          ["  " + String(13).padStart(4) + "   function loadUser(id: string) {", ""],
-          ["  " + String(14).padStart(4) + "     return db.users.find(id);", ""],
+          [
+            "+ " + String(12).padStart(4) + "   /** Load a user by id. */",
+            "add",
+          ],
+          [
+            "  " +
+              String(13).padStart(4) +
+              "   function loadUser(id: string) {",
+            "",
+          ],
+          [
+            "  " + String(14).padStart(4) + "     return db.users.find(id);",
+            "",
+          ],
           ["  " + String(15).padStart(4) + "   }", ""],
         ],
       },
@@ -849,8 +891,7 @@ const SCENARIOS: Scenario[] = [
           agent_path: "perms",
           tool: "run_shell_command",
           tool_call_id: "p-1",
-          result:
-            "-rw------- credentials.json\n-rw-r--r-- .env",
+          result: "-rw------- credentials.json\n-rw-r--r-- .env",
           is_error: false,
         },
         {
@@ -875,7 +916,7 @@ const SCENARIOS: Scenario[] = [
           tool: "read_file",
           tool_call_id: "d-1",
           result:
-            "[project]\ndependencies = [\n  \"agno~=2.4.0\",\n  \"httpx~=0.28.1\",\n  \"pydantic~=2.10.0\",\n  ...\n]",
+            '[project]\ndependencies = [\n  "agno~=2.4.0",\n  "httpx~=0.28.1",\n  "pydantic~=2.10.0",\n  ...\n]',
           is_error: false,
         },
         {
@@ -962,7 +1003,7 @@ const SCENARIOS: Scenario[] = [
         },
         details:
           "This command will delete files. Confirm so the agent can proceed.",
-        agent_path: "main",
+        agent_path: ["main"],
       },
     ],
   },
@@ -1001,7 +1042,7 @@ const SCENARIOS: Scenario[] = [
           cwd: "/Users/you/ai_coding/example-project",
         },
         details: "Delete the build output directory before a fresh compile.",
-        agent_path: "main",
+        agent_path: ["main"],
       },
       {
         type: "hitl_request",
@@ -1014,7 +1055,7 @@ const SCENARIOS: Scenario[] = [
           new_string: "replicas: 4",
         },
         details: "Bump staging replicas from 2 → 4 in config/staging.yaml.",
-        agent_path: "main",
+        agent_path: ["main"],
       },
       {
         type: "hitl_request",
@@ -1031,7 +1072,7 @@ const SCENARIOS: Scenario[] = [
         },
         details:
           "Push deploy.yaml to the staging cluster via the kubernetes MCP server.",
-        agent_path: "main",
+        agent_path: ["main"],
       },
     ],
   },
@@ -1097,8 +1138,7 @@ const SCENARIOS: Scenario[] = [
         {
           type: "content_preview",
           agent_path: "auditor",
-          text:
-            "Rate limit is set in two places. Drafting up the finding now — double counting on /auth/refresh.",
+          text: "Rate limit is set in two places. Drafting up the finding now — double counting on /auth/refresh.",
         },
         {
           type: "tool_started",
@@ -1110,8 +1150,7 @@ const SCENARIOS: Scenario[] = [
         {
           type: "content_preview",
           agent_path: "tester",
-          text:
-            "Inventory of existing tests done. Need to add: token rotation, refresh failure, concurrent refresh race.",
+          text: "Inventory of existing tests done. Need to add: token rotation, refresh failure, concurrent refresh race.",
         },
         {
           type: "tool_started",
@@ -1142,7 +1181,7 @@ const SCENARIOS: Scenario[] = [
         },
         details:
           "Refactor specialist wants to swap RateLimitMiddleware for SmartRateLimit at the FastAPI app-init site.",
-        agent_path: "refactor",
+        agent_path: ["refactor"],
       },
     ],
   },
@@ -1225,16 +1264,16 @@ const SCENARIOS: Scenario[] = [
           "",
           "# Walk every TS file and report its line count.",
           "for f in src/**/*.ts; do",
-          "  if [[ -f \"$f\" ]]; then",
-          "    lines=$(wc -l < \"$f\")",
-          "    echo \"$lines $f\"",
+          '  if [[ -f "$f" ]]; then',
+          '    lines=$(wc -l < "$f")',
+          '    echo "$lines $f"',
           "  fi",
           "done | sort -rn | head -20",
           "```",
           "",
           "## Fenced ``console`` — terminal session",
           "",
-          "Lines starting with ``$`` render as prompts; everything after is treated as output. Use this when you want to show \"type this command, expect this output.\"",
+          'Lines starting with ``$`` render as prompts; everything after is treated as output. Use this when you want to show "type this command, expect this output."',
           "",
           "```console",
           "$ npm install",
@@ -1286,7 +1325,7 @@ const SCENARIOS: Scenario[] = [
           "from typing import Optional",
           "import uvicorn",
           "",
-          "app = FastAPI(title=\"My API\", version=\"1.0.0\")",
+          'app = FastAPI(title="My API", version="1.0.0")',
           "",
           "# --- Models ---",
           "",
@@ -1310,25 +1349,25 @@ const SCENARIOS: Scenario[] = [
           "",
           "def get_current_user():",
           "    # Replace with actual auth logic",
-          "    return {\"user_id\": 1, \"username\": \"demo\"}",
+          '    return {"user_id": 1, "username": "demo"}',
           "",
           "# --- Routes ---",
           "",
-          "@app.get(\"/\")",
+          '@app.get("/")',
           "async def root():",
-          "    return {\"message\": \"Hello, World!\"}",
+          '    return {"message": "Hello, World!"}',
           "",
-          "@app.get(\"/items\", response_model=list[ItemResponse])",
+          '@app.get("/items", response_model=list[ItemResponse])',
           "async def list_items():",
           "    return list(items_db.values())",
           "",
-          "@app.get(\"/items/{item_id}\", response_model=ItemResponse)",
+          '@app.get("/items/{item_id}", response_model=ItemResponse)',
           "async def get_item(item_id: int):",
           "    if item_id not in items_db:",
-          "        raise HTTPException(status_code=404, detail=\"Item not found\")",
+          '        raise HTTPException(status_code=404, detail="Item not found")',
           "    return items_db[item_id]",
           "",
-          "@app.post(\"/items\", response_model=ItemResponse, status_code=201)",
+          '@app.post("/items", response_model=ItemResponse, status_code=201)',
           "async def create_item(item: Item, user: dict = Depends(get_current_user)):",
           "    global next_id",
           "    new_item = ItemResponse(id=next_id, name=item.name, price=item.price)",
@@ -1336,8 +1375,8 @@ const SCENARIOS: Scenario[] = [
           "    next_id += 1",
           "    return new_item",
           "",
-          "if __name__ == \"__main__\":",
-          "    uvicorn.run(app, host=\"0.0.0.0\", port=8000)",
+          'if __name__ == "__main__":',
+          '    uvicorn.run(app, host="0.0.0.0", port=8000)',
           "```",
           "",
           "## Mermaid diagrams",
@@ -1425,20 +1464,20 @@ const SCENARIOS: Scenario[] = [
           "```mermaid",
           "pie showData",
           "  title Tokens billed per turn (avg)",
-          "  \"System prompt\" : 4200",
-          "  \"Tool definitions\" : 5800",
-          "  \"Conversation history\" : 6100",
-          "  \"This turn user msg\" : 240",
-          "  \"Visible assistant out\" : 1850",
+          '  "System prompt" : 4200',
+          '  "Tool definitions" : 5800',
+          '  "Conversation history" : 6100',
+          '  "This turn user msg" : 240',
+          '  "Visible assistant out" : 1850',
           "```",
           "",
           "### XY chart — request latency",
           "",
           "```mermaid",
           "xychart-beta",
-          "  title \"WS round-trip ms (last 7 days)\"",
+          '  title "WS round-trip ms (last 7 days)"',
           "  x-axis [Mon, Tue, Wed, Thu, Fri, Sat, Sun]",
-          "  y-axis \"ms\" 0 --> 600",
+          '  y-axis "ms" 0 --> 600',
           "  bar [220, 310, 280, 410, 380, 240, 260]",
           "  line [220, 310, 280, 410, 380, 240, 260]",
           "```",
@@ -1606,13 +1645,17 @@ function scenarioHitl(scenario: Scenario): HITLRequest[] | null {
 /** The demo's rows say what the app would do instead of doing it. */
 const DEMO_HANDLERS: ChatItemHandlers = {
   user: {
-    edit: (_, newText) => alert(`(demo) Would edit user message to:\n\n${newText}`),
+    edit: (_, newText) =>
+      alert(`(demo) Would edit user message to:\n\n${newText}`),
     delete: () => alert("(demo) Would delete user message + truncate"),
   },
   team: {
-    stopTeam: () => alert("(demo) Would cancel the whole team run via client.cancel()"),
+    stopTeam: () =>
+      alert("(demo) Would cancel the whole team run via client.cancel()"),
     stopAgent: (runId) =>
-      alert(`(demo) Would cancel sub-agent run_id=${runId} via cancel_agent_run RPC`),
+      alert(
+        `(demo) Would cancel sub-agent run_id=${runId} via cancel_agent_run RPC`,
+      ),
     retryAgent: (name, task) =>
       alert(
         `(demo) Would send follow-up user message:\n\n` +
@@ -1640,10 +1683,9 @@ export function OrchestrateDemo() {
       <header className="demo-head">
         <h1>igni UI sandbox</h1>
         <p>
-          Mock ChatItems rendered through the real components. Pick a
-          scenario below; tweak{" "}
-          <code>clients/web/src/dev/OrchestrateDemo.tsx</code> to add
-          more.
+          Mock ChatItems rendered through the real components. Pick a scenario
+          below; tweak <code>clients/web/src/dev/OrchestrateDemo.tsx</code> to
+          add more.
         </p>
         <nav className="demo-nav">
           {SCENARIOS.map((s) => (
@@ -1668,11 +1710,7 @@ export function OrchestrateDemo() {
         <h2 className="sr-only">Conversation</h2>
         <div className="col">
           {items.map((item) => (
-            <ChatItemView
-              key={item.id}
-              item={item}
-              handlers={DEMO_HANDLERS}
-            />
+            <ChatItemView key={item.id} item={item} handlers={DEMO_HANDLERS} />
           ))}
           {hitl && (
             <div className="composer-hitl">

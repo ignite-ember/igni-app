@@ -1,5 +1,6 @@
 import { useState } from "react";
-import type { HITLDecision, HITLRequest } from "../protocol/messages";
+import type { HITLDecision } from "../protocol/clientMessages";
+import type { HITLRequest } from "../protocol/messages";
 import { HitlArgsView } from "./HitlArgsView";
 
 /** Tools that mutate files — the set ``acceptEdits`` mode auto-allows.
@@ -79,7 +80,10 @@ export function HitlDialog({
     return -1;
   };
 
-  const decide = (action: HITLDecision["action"], choice: HITLDecision["choice"]) => {
+  const decide = (
+    action: HITLDecision["action"],
+    choice: HITLDecision["choice"],
+  ) => {
     const next = [
       ...decisions,
       { requirement_id: req.requirement_id, action, choice },
@@ -128,13 +132,11 @@ export function HitlDialog({
     const rest = requirements
       .slice(index + 1)
       .filter((r) => EDIT_TOOL_NAMES.has(r.tool_name))
-      .map(
-        (r): HITLDecision => ({
-          requirement_id: r.requirement_id,
-          action: "confirm",
-          choice: "once",
-        }),
-      );
+      .map((r): HITLDecision => ({
+        requirement_id: r.requirement_id,
+        action: "confirm",
+        choice: "once",
+      }));
     const next = [...decisions, head, ...rest];
     onAcceptEditsThisRun?.();
     const nextIdx = nextUndecided(index, next);
@@ -256,7 +258,6 @@ export function HitlDialog({
 }
 
 /** "igni → safety check" from the path the BE sends; "" when there is none. */
-function agentPath(path: string[] | string | undefined): string {
-  if (!path) return "";
-  return Array.isArray(path) ? path.filter(Boolean).join(" → ") : path;
+function agentPath(path: string[]): string {
+  return path.filter(Boolean).join(" → ");
 }

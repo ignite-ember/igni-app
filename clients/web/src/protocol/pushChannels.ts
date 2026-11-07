@@ -2,7 +2,7 @@
  * The ``push_notification`` channels this client acts on, as a tagged
  * union.
  *
- * The backend sends ``{channel, payload}`` with an untyped payload.
+ * The backend sends ``{channel, payload}`` with an unread payload.
  * {@link parsePushChannel} reads each channel's payload once, through
  * {@link WirePayload}, so the router that acts on them never casts.
  * A channel this client does not know, or a payload missing what its
@@ -14,9 +14,20 @@ import {
   visualizationDeltaFromPayload,
   type VisualizationDeltaEvent,
 } from "../chat/visualizationStream";
-import { emptyWindowState, type WindowChange, type WindowField } from "../clientState";
-import type { PushNotification } from "./messages";
-import { parseOrchestrateEvent, type OrchestrateEventEnvelope } from "./orchestrateEvents";
+import {
+  emptyWindowState,
+  type WindowChange,
+  type WindowField,
+} from "../clientState";
+import {
+  PERMISSION_MODE_NAMES,
+  type PermissionModeName,
+  type PushNotification,
+} from "./messages";
+import {
+  parseOrchestrateEvent,
+  type OrchestrateEventEnvelope,
+} from "./orchestrateEvents";
 import { WirePayload } from "./wirePayload";
 import { parseWorkflowEvent, type WorkflowEvent } from "./workflowEvents";
 
@@ -51,8 +62,16 @@ export interface FileEdited {
 }
 
 export type OrchestratePush =
-  | { channel: "orchestrate_event"; delta: VisualizationDeltaEvent; envelope?: undefined }
-  | { channel: "orchestrate_event"; envelope: OrchestrateEventEnvelope; delta?: undefined };
+  | {
+      channel: "orchestrate_event";
+      delta: VisualizationDeltaEvent;
+      envelope?: undefined;
+    }
+  | {
+      channel: "orchestrate_event";
+      envelope: OrchestrateEventEnvelope;
+      delta?: undefined;
+    };
 
 export interface WorkflowPush {
   channel: "workflow_event";
@@ -70,7 +89,7 @@ export interface SessionNamed {
 
 export interface PermissionModeChanged {
   channel: "permission_mode_changed";
-  mode: string;
+  mode: PermissionModeName;
   /** ``agent`` when the agent entered the mode itself. */
   source: string;
   reason: string;
@@ -138,19 +157,23 @@ export type PushChannelEvent =
 export type PushChannel = PushChannelEvent["channel"];
 
 /** The event a channel carries (one event type may serve two channels). */
-export type PushChannelEventOf<K extends PushChannel> = PushChannelEvent extends infer E
-  ? E extends { channel: infer C }
-    ? K extends C
-      ? E
+export type PushChannelEventOf<K extends PushChannel> =
+  PushChannelEvent extends infer E
+    ? E extends { channel: infer C }
+      ? K extends C
+        ? E
+        : never
       : never
-    : never
-  : never;
+    : never;
 
 const PLAN_DECISIONS = ["approved", "dismissed"] as const;
 const WINDOW_FIELDS = Object.keys(emptyWindowState()) as WindowField[];
 
 type Parsers = {
-  [K in PushChannel]: (payload: WirePayload, raw: unknown) => PushChannelEventOf<K> | null;
+  [K in PushChannel]: (
+    payload: WirePayload,
+    raw: unknown,
+  ) => PushChannelEventOf<K> | null;
 };
 
 const PARSERS: Parsers = {
@@ -162,7 +185,11 @@ const PARSERS: Parsers = {
   }),
   scheduler_started: (p) => schedulerEvent("scheduler_started", p),
   scheduler_completed: (p) => schedulerEvent("scheduler_completed", p),
-  open_external: (p) => ({ channel: "open_external", window: p.string("window"), url: p.text("url") }),
+  open_external: (p) => ({
+    channel: "open_external",
+    window: p.string("window"),
+    url: p.text("url"),
+  }),
   window_model_changed: (p) => {
     const field = WINDOW_FIELDS.find((f) => f === p.value("field"));
     const rev = p.optionalNumber("rev");
@@ -201,7 +228,7 @@ const PARSERS: Parsers = {
   session_named: () => ({ channel: "session_named" }),
   permission_mode_changed: (p) => ({
     channel: "permission_mode_changed",
-    mode: p.text("mode", "default"),
+    mode: p.oneOf("mode", PERMISSION_MODE_NAMES, "default"),
     source: p.text("source"),
     reason: p.text("reason").trim(),
   }),
@@ -225,18 +252,28 @@ const PARSERS: Parsers = {
   plan_decided: (p) => {
     const runId = p.text("run_id");
     const decision = PLAN_DECISIONS.find((d) => d === p.value("decision"));
-    return runId && decision ? { channel: "plan_decided", runId, decision } : null;
+    return runId && decision
+      ? { channel: "plan_decided", runId, decision }
+      : null;
   },
   todos_updated: (p) => ({ channel: "todos_updated", todos: p.value("todos") }),
   host_signal: (p) => {
     const extensionId = p.optionalString("extension_id");
     const signal = p.optionalString("signal");
     if (extensionId === undefined || signal === undefined) return null;
-    return { channel: "host_signal", extensionId, signal, value: p.value("value") };
+    return {
+      channel: "host_signal",
+      extensionId,
+      signal,
+      value: p.value("value"),
+    };
   },
 };
 
-function schedulerEvent(channel: SchedulerEvent["channel"], p: WirePayload): SchedulerEvent {
+function schedulerEvent(
+  channel: SchedulerEvent["channel"],
+  p: WirePayload,
+): SchedulerEvent {
   return {
     channel,
     description: p.text("description").trim(),
@@ -251,8 +288,13 @@ function isPushChannel(channel: string): channel is PushChannel {
 
 /** The typed event a push carries, or ``null`` for a channel this
  *  client does not act on or a payload its channel cannot use. */
-export function parsePushChannel(m: Pick<PushNotification, "channel" | "payload">): PushChannelEvent | null {
+export function parsePushChannel(
+  m: Pick<PushNotification, "channel" | "payload">,
+): PushChannelEvent | null {
   if (!isPushChannel(m.channel)) return null;
-  const parse = PARSERS[m.channel] as (payload: WirePayload, raw: unknown) => PushChannelEvent | null;
+  const parse = PARSERS[m.channel] as (
+    payload: WirePayload,
+    raw: unknown,
+  ) => PushChannelEvent | null;
   return parse(new WirePayload(m.payload), m.payload);
 }

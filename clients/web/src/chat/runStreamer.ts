@@ -7,7 +7,8 @@
  */
 
 import type { IgniClient } from "../protocol/client";
-import type { HITLDecision, ServerMessage } from "../protocol/messages";
+import type { HITLDecision } from "../protocol/clientMessages";
+import type { ServerMessage } from "../protocol/messages";
 import { PendingLoopIteration } from "../protocol/rpcResults";
 import type { Notifier } from "../notifications/notifier";
 import type { RunPhase } from "./runPhase";
@@ -88,9 +89,16 @@ export class RunStreamer {
    *  supersedes the stale interrupted row), routed as of ``generation``. */
   async retry(text: string, generation = this.generation()): Promise<void> {
     try {
-      await this.deps.client.runMessage(text, this.guard(generation), undefined, { force: true });
+      await this.deps.client.runMessage(
+        text,
+        this.guard(generation),
+        undefined,
+        { force: true },
+      );
     } catch (e) {
-      this.deps.view.error(`Couldn't retry: ${e instanceof Error ? e.message : String(e)}`);
+      this.deps.view.error(
+        `Couldn't retry: ${e instanceof Error ? e.message : String(e)}`,
+      );
     }
   }
 
@@ -104,7 +112,8 @@ export class RunStreamer {
     const { run, shell, notifier } = this.deps;
     try {
       await plan.start(this.guard(this.generation()));
-      if (plan.settlesFrom.includes(run.runPhaseRef.current)) run.setRunPhase("done");
+      if (plan.settlesFrom.includes(run.runPhaseRef.current))
+        run.setRunPhase("done");
     } catch (e) {
       plan.onError(e);
     } finally {

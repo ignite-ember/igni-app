@@ -4,7 +4,10 @@ import { FirstRunSetup } from "./FirstRunSetup";
 
 /** What the empty chat offers, as the command each card runs. */
 const WELCOME_CAPS: readonly { command: string; desc: string }[] = [
-  { command: "/agents", desc: "Dispatch to a specialist — architect, debugger, …" },
+  {
+    command: "/agents",
+    desc: "Dispatch to a specialist — architect, debugger, …",
+  },
   { command: "/skills", desc: "Workflows like /commit and /pr" },
   { command: "/workflows", desc: "Run a CC-style multi-phase workflow" },
   { command: "/schedule", desc: "Background tasks that report back" },
@@ -40,10 +43,16 @@ export function WelcomeScreen({
           </div>
           <h1>{groupName}</h1>
           <p>Your AI coding agent, in this project.</p>
-          {status && status.model_configured === false ? <FirstRunSetup onLogin={onLogin} /> : null}
+          {status && !status.model_configured ? (
+            <FirstRunSetup onLogin={onLogin} />
+          ) : null}
           <div className="welcome-caps">
             {WELCOME_CAPS.map(({ command, desc }) => (
-              <div key={command} className="welcome-cap" onClick={() => onCommand(command)}>
+              <div
+                key={command}
+                className="welcome-cap"
+                onClick={() => onCommand(command)}
+              >
                 <code>{command}</code>
                 <span>{desc}</span>
               </div>
