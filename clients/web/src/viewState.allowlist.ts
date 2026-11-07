@@ -345,7 +345,7 @@ export const VIEW_STATE: Record<string, Partial<Record<Category, string[]>>> = {
     measure: ["theme"],
   },
   "extensions/useExtensionTraffic.ts": {
-    data: ["signals"],
+    data: ["queues"],
   },
   "notifications/model.ts": {
     data: ["counts"],

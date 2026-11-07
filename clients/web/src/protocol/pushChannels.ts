@@ -108,6 +108,15 @@ export interface TodosUpdated {
   todos: unknown;
 }
 
+/** A host-model signal an extension's page subscribed to, already
+ *  filtered by the backend to the extensions entitled to hear it. */
+export interface HostSignal {
+  channel: "host_signal";
+  extensionId: string;
+  signal: string;
+  value: unknown;
+}
+
 export type PushChannelEvent =
   | BackgroundProcessDone
   | SchedulerEvent
@@ -123,7 +132,8 @@ export type PushChannelEvent =
   | HttpRetrySucceeded
   | PlanSubmitted
   | PlanDecided
-  | TodosUpdated;
+  | TodosUpdated
+  | HostSignal;
 
 export type PushChannel = PushChannelEvent["channel"];
 
@@ -218,6 +228,12 @@ const PARSERS: Parsers = {
     return runId && decision ? { channel: "plan_decided", runId, decision } : null;
   },
   todos_updated: (p) => ({ channel: "todos_updated", todos: p.value("todos") }),
+  host_signal: (p) => {
+    const extensionId = p.optionalString("extension_id");
+    const signal = p.optionalString("signal");
+    if (extensionId === undefined || signal === undefined) return null;
+    return { channel: "host_signal", extensionId, signal, value: p.value("value") };
+  },
 };
 
 function schedulerEvent(channel: SchedulerEvent["channel"], p: WirePayload): SchedulerEvent {

@@ -76,6 +76,8 @@ export class PushChannelRouter {
     plan_submitted: (ev) => this.onPlanSubmitted(ev),
     plan_decided: (ev) => this.onPlanDecided(ev),
     todos_updated: (ev) => this.onTodosUpdated(ev),
+    // Addressed to extensions' frames, which hear it through useExtensionTraffic.
+    host_signal: () => {},
   };
 
   constructor(private readonly deps: PushChannelRouterDeps) {}

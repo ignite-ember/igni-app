@@ -154,4 +154,21 @@ describe("parsePushChannel", () => {
   it("reads todos_updated", () => {
     expect(parse("todos_updated", { todos: [1] })).toEqual({ channel: "todos_updated", todos: [1] });
   });
+
+  it("reads host_signal, and refuses one with no extension or signal", () => {
+    expect(
+      parse("host_signal", {
+        extension_id: "acme.one",
+        signal: "chat.run_started",
+        value: { run_id: "r1" },
+      }),
+    ).toEqual({
+      channel: "host_signal",
+      extensionId: "acme.one",
+      signal: "chat.run_started",
+      value: { run_id: "r1" },
+    });
+    expect(parse("host_signal", { signal: "chat.run_started" })).toBeNull();
+    expect(parse("host_signal", { extension_id: "acme.one", signal: 3 })).toBeNull();
+  });
 });
