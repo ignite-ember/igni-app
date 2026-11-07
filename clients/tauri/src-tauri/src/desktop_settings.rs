@@ -14,7 +14,7 @@
 //!
 //! The group policy layer is the pack the backend cached exactly as igni
 //! server signed it (`group-policy/pack.jws`), and it counts only if its
-//! signature, issuer, subject and version verify (`group_pack.rs`). The
+//! signature, issuer, subject and version verify (`group_pack/`). The
 //! unsigned `group_settings.json` this used to read is gone: a file anyone
 //! who can write the directory can edit is not the organisation's policy.
 //!
@@ -26,6 +26,8 @@
 //! so a typo cannot make an ordinary install stop updating.
 
 use std::path::PathBuf;
+
+use crate::group_pack::{self, Jwks, PackState, Trust};
 
 /// The environment variable that turns air-gapped mode on.
 pub(crate) const AIR_GAPPED_ENV: &str = "IGNI_AIR_GAPPED";
@@ -126,23 +128,21 @@ fn verified_group_layer(home: &std::path::Path, managed: Option<&str>, user: Opt
     let Some(compact) = read("pack.jws") else {
         return DesktopSettings::default();
     };
-    let jwks = read("jwks.json").and_then(|t| serde_json::from_str(&t).ok()).unwrap_or(serde_json::Value::Null);
+    let jwks = read("jwks.json").map(|t| Jwks::from_text(&t)).unwrap_or_default();
     let api_url = managed
         .and_then(|t| top_level_string(t, "api_url"))
         .or_else(|| user.and_then(|t| top_level_string(t, "api_url")));
-    let env_pins = crate::group_pack::pins_from_env(std::env::var(crate::group_pack::TRUSTED_KEYS_ENV).ok().as_deref());
-    let trust = crate::group_pack::Trust {
+    let env_pins = group_pack::pins_from_env(std::env::var(group_pack::TRUSTED_KEYS_ENV).ok().as_deref());
+    let trust = Trust {
         api_url,
         subject: std::fs::read_to_string(home.join(".igni/credentials.json"))
             .ok()
-            .and_then(|t| crate::group_pack::subject_from_credentials(&t)),
-        pins: if env_pins.is_empty() { managed.map(crate::group_pack::pins_from_managed).unwrap_or_default() } else { env_pins },
-        min_version: read("pack_state.json")
-            .and_then(|t| serde_json::from_str::<serde_json::Value>(&t).ok())
-            .and_then(|v| v.get("version").and_then(serde_json::Value::as_i64)),
+            .and_then(|t| group_pack::subject_from_credentials(&t)),
+        pins: if env_pins.is_empty() { managed.map(group_pack::pins_from_managed).unwrap_or_default() } else { env_pins },
+        min_version: read("pack_state.json").and_then(|t| PackState::min_version(&t)),
     };
-    match crate::group_pack::verify(&compact, &jwks, &trust) {
-        Ok(policy) => DesktopSettings::from_json(&crate::group_pack::settings_json(&policy)),
+    match group_pack::verify(&compact, &jwks, &trust) {
+        Ok(policy) => DesktopSettings::from_json(&policy.settings_json()),
         Err(why) => {
             eprintln!("igni: group policy pack ignored ({why})");
             DesktopSettings::default()

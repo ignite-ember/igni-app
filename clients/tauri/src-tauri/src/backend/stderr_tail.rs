@@ -58,7 +58,12 @@ impl StderrTail {
 
     #[cfg(test)]
     fn kept(&self) -> Vec<String> {
-        self.lines.lock().unwrap().iter().cloned().collect()
+        self.lines
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .iter()
+            .cloned()
+            .collect()
     }
 }
 

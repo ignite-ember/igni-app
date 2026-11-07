@@ -112,6 +112,7 @@ impl MenuAction {
     }
 
     /// Devtools exist only in debug builds.
+    #[cfg_attr(not(debug_assertions), allow(unused_variables))]
     fn toggle_devtools(app: &AppHandle) {
         #[cfg(debug_assertions)]
         if let Some(window) = WindowManager::focused(app) {
@@ -121,8 +122,6 @@ impl MenuAction {
                 window.open_devtools();
             }
         }
-        #[cfg(not(debug_assertions))]
-        let _ = app;
     }
 }
 
