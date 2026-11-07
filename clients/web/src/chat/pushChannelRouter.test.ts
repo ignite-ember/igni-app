@@ -7,12 +7,8 @@ import type { ChatItem } from "./chatItem";
 import { ChatItemFactory } from "./chatItemFactory";
 import { ChatItemIds } from "./chatItemIds";
 import { ChatTranscript } from "./chatTranscript";
-import {
-  HTTP_RETRY_ATTEMPT_EVENT,
-  HTTP_RETRY_SUCCEEDED_EVENT,
-  PROGRESS_LINE_CHARS,
-  PushChannelRouter,
-} from "./pushChannelRouter";
+import { HttpRetryAttemptEvent, HttpRetrySucceededEvent } from "./httpRetryEvents";
+import { PROGRESS_LINE_CHARS, PushChannelRouter } from "./pushChannelRouter";
 
 function harness(initial: ChatItem[] = [], status: StatusUpdate | null = null) {
   const chatItems = new ChatItemFactory(new ChatItemIds());
@@ -137,9 +133,9 @@ describe("PushChannelRouter", () => {
     route("http_retry_attempt", { attempt: 1, delay_seconds: 2, url: "u" });
     route("http_retry_succeeded");
     const [attempt, succeeded] = deps.events.dispatchEvent.mock.calls.map((c) => c[0]);
-    expect(attempt.type).toBe(HTTP_RETRY_ATTEMPT_EVENT);
-    expect((attempt as CustomEvent).detail).toEqual({ attempt: 1, delay_seconds: 2, url: "u" });
-    expect(succeeded.type).toBe(HTTP_RETRY_SUCCEEDED_EVENT);
+    expect(attempt).toBeInstanceOf(HttpRetryAttemptEvent);
+    expect(attempt).toMatchObject({ attempt: 1, delaySeconds: 2, url: "u" });
+    expect(succeeded).toBeInstanceOf(HttpRetrySucceededEvent);
   });
 
   it("appends a submitted plan, then flips it when decided", () => {

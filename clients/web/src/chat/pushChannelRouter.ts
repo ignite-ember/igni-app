@@ -35,15 +35,12 @@ import type {
 import type { ChatItem } from "./chatItem";
 import type { ChatItemFactory } from "./chatItemFactory";
 import type { ChatTranscript } from "./chatTranscript";
+import { HttpRetryAttemptEvent, HttpRetrySucceededEvent } from "./httpRetryEvents";
 import { PlanTaskList } from "./planTasks";
 import { applyVisualizationDelta } from "./visualizationStream";
 
 /** How much of a legacy progress line lands in the card. */
 export const PROGRESS_LINE_CHARS = 120;
-
-/** The window events the retry banner listens for. */
-export const HTTP_RETRY_ATTEMPT_EVENT = "ember:http_retry_attempt";
-export const HTTP_RETRY_SUCCEEDED_EVENT = "ember:http_retry_succeeded";
 
 export interface PushChannelRouterDeps {
   windowModel: Pick<WindowModel, "clientId" | "applyPush">;
@@ -156,15 +153,11 @@ export class PushChannelRouter {
   }
 
   private onHttpRetryAttempt(ev: HttpRetryAttempt): void {
-    this.deps.events.dispatchEvent(
-      new CustomEvent(HTTP_RETRY_ATTEMPT_EVENT, {
-        detail: { attempt: ev.attempt, delay_seconds: ev.delaySeconds, url: ev.url },
-      }),
-    );
+    this.deps.events.dispatchEvent(new HttpRetryAttemptEvent(ev));
   }
 
   private onHttpRetrySucceeded(): void {
-    this.deps.events.dispatchEvent(new Event(HTTP_RETRY_SUCCEEDED_EVENT));
+    this.deps.events.dispatchEvent(new HttpRetrySucceededEvent());
   }
 
   /** The agent's ``exit_plan_mode``: a plan card with Approve / Refine. */
