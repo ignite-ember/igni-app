@@ -91,3 +91,29 @@ describe("UserMessageText.stripThinkBlocks", () => {
     expect(UserMessageText.stripThinkBlocks("Partial.\n<think>still")).toBe("Partial.");
   });
 });
+
+describe("UserMessageText#mode", () => {
+  it("reads a leading slash as a command and a leading $ as shell", () => {
+    expect(new UserMessageText("/plan on").mode()).toBe("command");
+    expect(new UserMessageText("$ ls -la").mode()).toBe("shell");
+    expect(new UserMessageText("hello").mode()).toBe("chat");
+  });
+
+  it("classifies after the leading wrappers", () => {
+    const raw =
+      "<system-context>Now: 14:42</system-context>\n" +
+      "<attached-files>\na.py\n</attached-files>\n" +
+      "/compact";
+    expect(new UserMessageText(raw).mode()).toBe("command");
+  });
+
+  it("does not trim, so indented text is chat", () => {
+    expect(new UserMessageText("  /foo").mode()).toBe("chat");
+    expect(new UserMessageText("\n$ ls").mode()).toBe("chat");
+  });
+
+  it("only strips a wrapper at the very start", () => {
+    // ``visible()`` strips wrappers anywhere; the classifier does not.
+    expect(new UserMessageText("x<system-context>c</system-context>/foo").mode()).toBe("chat");
+  });
+});

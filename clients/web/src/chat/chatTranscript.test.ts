@@ -164,7 +164,7 @@ describe("ChatTranscript#markRunPersisted", () => {
 //
 // Stamps ``interrupted: reason`` on the trailing assistant bubble
 // so the Retry / Discard / Edit-prompt banner renders (see
-// ``InterruptedBanner`` in ``ChatItems.tsx``). Called from the
+// ``chatItems/InterruptedBanner.tsx``). Called from the
 // cancel + error paths in App.tsx.
 
 describe("ChatTranscript#markInterrupted", () => {

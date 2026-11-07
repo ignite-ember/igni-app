@@ -8,7 +8,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
 
-import { ChatItemView } from "../components/ChatItems";
+import { ChatItemView } from "../components/chatItems/ChatItemView";
 import { ChatItemFactory } from "../chat/chatItemFactory";
 import { ChatItemIds } from "../chat/chatItemIds";
 import { HistoryTurnMapper } from "../chat/historyTurnMapper";

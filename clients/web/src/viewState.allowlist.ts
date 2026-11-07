@@ -82,7 +82,7 @@ export const BECAUSE: Record<string, Record<string, string>> = {
   "App.tsx": {
     scrollEl: "The scroller element, for the indicator to measure — where it is scrolled is ui.scroll.",
   },
-  "components/ChatItems.tsx": {
+  "components/chatItems/useMessageEditor.ts": {
     draft: "The text of a sent message being edited in place, before it is resent.",
   },
   "components/Composer.tsx": {
@@ -105,12 +105,37 @@ export const VIEW_STATE: Record<string, Partial<Record<Category, string[]>>> = {
   "chat/followOutput.ts": {
     measure: ["agreed"],
   },
-  "components/ChatItems.tsx": {
+  "components/CopyButton.tsx": {
     animation: ["copied"],
-    disclosure: ["collapsed", "open", "open", "open", "open", "expanded", "open"],
+  },
+  "components/markdown/CodeBlock.tsx": {
+    disclosure: ["collapsed"],
     measure: ["overflowing"],
-    menu: ["retryOpen", "confirmingDelete"],
-    field: ["retryDraft", "editing", "draft"],
+  },
+  "components/chatItems/UserCodePill.tsx": {
+    disclosure: ["open"],
+  },
+  "components/chatItems/OrchestrateLog.tsx": {
+    disclosure: ["open"],
+  },
+  "components/chatItems/OrchestrateAgentRow.tsx": {
+    disclosure: ["open"],
+  },
+  "components/chatItems/useRetryDraft.ts": {
+    menu: ["retryOpen"],
+    field: ["retryDraft"],
+  },
+  "components/chatItems/ToolCardView.tsx": {
+    disclosure: ["open"],
+  },
+  "components/chatItems/TranscriptCards.tsx": {
+    disclosure: ["expanded", "open"],
+  },
+  "components/chatItems/UserMessage.tsx": {
+    menu: ["confirmingDelete"],
+  },
+  "components/chatItems/useMessageEditor.ts": {
+    field: ["editing", "draft"],
   },
   "components/ChatSearchBar.tsx": {
     field: ["query"],

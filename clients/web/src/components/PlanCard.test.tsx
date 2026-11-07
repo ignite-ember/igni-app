@@ -19,7 +19,7 @@ import type { PlanItem } from "../chat/chatItem";
 import { ChatItemFactory } from "../chat/chatItemFactory";
 import { ChatItemIds } from "../chat/chatItemIds";
 import type { PlanTask } from "../chat/planTasks";
-import { PlanCard } from "./ChatItems";
+import { PlanCard } from "./chatItems/PlanCard";
 
 afterEach(() => {
   cleanup();

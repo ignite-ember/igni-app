@@ -9,7 +9,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
 
-import { ChatItemView } from "../components/ChatItems";
+import { ChatItemView } from "../components/chatItems/ChatItemView";
 import { ExtensionNamesContext } from "../extensions/extensionNames";
 import { parseHistoryTurn } from "../protocol/historyTurns";
 import type { ChatItem } from "./chatItem";

@@ -29,7 +29,7 @@
  */
 
 import { useCallback, useState } from "react";
-import { AssistantMessage } from "../components/ChatItems";
+import { AssistantMessage } from "../components/chatItems/AssistantMessage";
 import type { ChatItem } from "../chat/chatItem";
 import type { AssistantInterrupted } from "../chat/chatItem";
 
@@ -182,9 +182,11 @@ function App() {
             <div className="demo-page-panel-body">
               <AssistantMessage
                 item={assistantItem(1, s.partial, s.reason)}
-                onRetry={s.reason ? onRetry : undefined}
-                onDiscard={s.reason ? onDiscard : undefined}
-                onEditPrompt={s.reason ? onEditPrompt(s.key, s.partial) : undefined}
+                handlers={
+                  s.reason
+                    ? { retry: onRetry, discard: onDiscard, editPrompt: onEditPrompt(s.key, s.partial) }
+                    : undefined
+                }
               />
               {s.errorDetail && (
                 <p className="demo-page-error-detail">

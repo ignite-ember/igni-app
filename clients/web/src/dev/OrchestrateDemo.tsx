@@ -26,7 +26,8 @@ import type { ChatItem, OrchestrateItem } from "../chat/chatItem";
 import { ChatItemIds } from "../chat/chatItemIds";
 import { OrchestrateAgentTree } from "../chat/orchestrateAgentTree";
 import type { OrchestrateEvent } from "../protocol/orchestrateEvents";
-import { ChatItemView } from "../components/ChatItems";
+import { ChatItemView } from "../components/chatItems/ChatItemView";
+import type { ChatItemHandlers } from "../components/chatItems/handlers";
 import { HitlDialog } from "../components/HitlDialog";
 import type { DiffRow, HITLRequest } from "../protocol/messages";
 
@@ -1602,6 +1603,24 @@ function scenarioHitl(scenario: Scenario): HITLRequest[] | null {
     : null;
 }
 
+/** The demo's rows say what the app would do instead of doing it. */
+const DEMO_HANDLERS: ChatItemHandlers = {
+  user: {
+    edit: (_, newText) => alert(`(demo) Would edit user message to:\n\n${newText}`),
+    delete: () => alert("(demo) Would delete user message + truncate"),
+  },
+  team: {
+    stopTeam: () => alert("(demo) Would cancel the whole team run via client.cancel()"),
+    stopAgent: (runId) =>
+      alert(`(demo) Would cancel sub-agent run_id=${runId} via cancel_agent_run RPC`),
+    retryAgent: (name, task) =>
+      alert(
+        `(demo) Would send follow-up user message:\n\n` +
+          `Retry the ${name} sub-agent with this prompt:\n\n${task}`,
+      ),
+  },
+};
+
 export function OrchestrateDemo() {
   const [scenarioId, setScenarioId] = useState(SCENARIOS[0].id);
   const scenario = useMemo(
@@ -1652,22 +1671,7 @@ export function OrchestrateDemo() {
             <ChatItemView
               key={item.id}
               item={item}
-              onEditUser={(_, newText) =>
-                alert(`(demo) Would edit user message to:\n\n${newText}`)
-              }
-              onDeleteUser={() => alert("(demo) Would delete user message + truncate")}
-              onStopTeam={() =>
-                alert("(demo) Would cancel the whole team run via client.cancel()")
-              }
-              onStopAgent={(runId) =>
-                alert(`(demo) Would cancel sub-agent run_id=${runId} via cancel_agent_run RPC`)
-              }
-              onRetryAgent={(name, task) =>
-                alert(
-                  `(demo) Would send follow-up user message:\n\n` +
-                    `Retry the ${name} sub-agent with this prompt:\n\n${task}`,
-                )
-              }
+              handlers={DEMO_HANDLERS}
             />
           ))}
           {hitl && (

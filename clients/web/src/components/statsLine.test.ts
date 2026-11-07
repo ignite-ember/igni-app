@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { StatsItem } from "../chat/chatItem";
-import { formatStats } from "./statsLine";
+import { formatStats, formatTokenCount } from "./statsLine";
 
 function stats(overrides: Partial<StatsItem> = {}): StatsItem {
   return {
@@ -34,5 +34,14 @@ describe("formatStats", () => {
     expect(formatStats(stats({ inputTokens: 1000, visibleOutTokens: 1, duration: 0 }))).toBe(
       "1.0k in · 1 out",
     );
+  });
+});
+
+describe("formatTokenCount", () => {
+  it("compacts thousands to one decimal and leaves smaller counts alone", () => {
+    expect(formatTokenCount(230)).toBe("230");
+    expect(formatTokenCount(999)).toBe("999");
+    expect(formatTokenCount(1234)).toBe("1.2k");
+    expect(formatTokenCount(30000)).toBe("30.0k");
   });
 });

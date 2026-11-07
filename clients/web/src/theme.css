@@ -1965,7 +1965,7 @@ button {
 /* Long code blocks start collapsed: clip the <pre> at a fixed
    height, fade the bottom into the surface so the cut looks
    intentional, and reveal a "Show more" pill under it. The
-   ``COLLAPSED_MAX_PX`` constant in ChatItems.tsx must stay in sync
+   ``COLLAPSED_MAX_PX`` constant in components/markdown/CodeBlock.tsx must stay in sync
    with the px height set here so the JS overflow check and the
    visual clip agree.
 
@@ -2069,7 +2069,7 @@ button {
   padding: 0;
 }
 
-/* highlight.js GitHub-Dark-Dimmed (imported in ChatItems.tsx) paints
+/* highlight.js GitHub-Dark-Dimmed (imported in components/markdown/PlainMarkdown.tsx) paints
    tokens in pastel reds/blues/purples tuned for a #22272e bg. On the
    light surface (`--bg-inset` = #f1efe9) those same hues read as
    washed-out neon and tokens lose contrast. Remap to GitHub Light's
@@ -2277,6 +2277,9 @@ button {
 }
 
 .thinking-toggle {
+  display: flex;
+  align-items: center;
+  gap: 5px;
   color: var(--fg-faint);
   font-size: var(--text-sm);
   cursor: pointer;
@@ -2314,6 +2317,10 @@ button {
 .shell-output .prompt-line {
   color: var(--accent-orange-text, #fb9c5a);
   font-weight: 600;
+}
+
+.shell-output .shell-exit-code {
+  color: var(--danger);
 }
 
 /* ── Tool cards ─────────────────────────────────────────────────── */

@@ -61,7 +61,8 @@ import {
 } from "./clientState";
 import { useExtensionTraffic } from "./extensions/useExtensionTraffic";
 import { Virtuoso, type VirtuosoHandle } from "react-virtuoso";
-import { ChatItemView } from "./components/ChatItems";
+import { ChatItemView } from "./components/chatItems/ChatItemView";
+import type { ChatItemHandlers } from "./components/chatItems/handlers";
 import { ChatSearchBar } from "./components/ChatSearchBar";
 import { Composer, type SlashCommand } from "./components/Composer";
 import { GroupIndicator } from "./components/GroupIndicator";
@@ -2093,7 +2094,8 @@ export default function App() {
 
   // ── Banner actions on interrupted assistant bubbles ───────────
   //
-  // Driven by ``AssistantMessage`` via the three callbacks below.
+  // Driven by ``AssistantMessage`` via the three callbacks below,
+  // which reach it as ``chatItemHandlers.interrupted``.
   // All three start from the same place: find the user message that
   // triggered the interrupted run, trim everything from it onward
   // (FE-local — the BE has the explicit interrupted record but no
@@ -2201,10 +2203,11 @@ export default function App() {
     [items, truncateAndTrim, seedComposer],
   );
 
-  // Stable per-item callbacks. The `items.map` below passes these to
-  // every ChatItemView; if they were inline arrows, React.memo's
-  // shallow compare would always miss and every item would re-render
-  // on every App state change (status, processing, stream events).
+  // Stable per-item callbacks. ``chatItemHandlers`` below groups them
+  // into the one object every ChatItemView gets; if they were inline
+  // arrows, React.memo's shallow compare would always miss and every
+  // item would re-render on every App state change (status,
+  // processing, stream events).
   // STOP button for the team card. Same rules as the Esc keybinding
   // above — set phase locally first so the spinner clears
   // immediately, then send the WS cancel.
@@ -2342,6 +2345,37 @@ export default function App() {
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [items],
+  );
+  // One object for every transcript row, rebuilt only when a callback
+  // changes, so ChatItemView's memo keeps hitting while tokens stream.
+  const chatItemHandlers = useMemo<ChatItemHandlers>(
+    () => ({
+      user: { edit: onEditUser, delete: onDeleteUser },
+      team: { stopTeam: onStopTeam, stopAgent: onStopAgent, retryAgent: onRetryAgent },
+      plan: { approve: onApprovePlan, reject: onRejectPlan },
+      interrupted: {
+        retry: onRetryInterrupted,
+        discard: onDiscardInterrupted,
+        editPrompt: onEditPromptFromAssistant,
+      },
+      workflow: { rerun: onRerunWorkflow, cancel: onCancelWorkflow },
+      visualization: { dispatchAction: onDispatchVisualizationAction },
+    }),
+    [
+      onEditUser,
+      onDeleteUser,
+      onStopTeam,
+      onStopAgent,
+      onRetryAgent,
+      onApprovePlan,
+      onRejectPlan,
+      onRetryInterrupted,
+      onDiscardInterrupted,
+      onEditPromptFromAssistant,
+      onRerunWorkflow,
+      onCancelWorkflow,
+      onDispatchVisualizationAction,
+    ],
   );
   // ── Slash command routing ─────────────────────────────────────────
   // `echo=false` is the UI-affordance path (menu/button clicks): the
@@ -3318,21 +3352,7 @@ export default function App() {
                           ? findAssistantTextForStats(items, idx)
                           : undefined
                       }
-                      onEditUser={onEditUser}
-                      onDeleteUser={onDeleteUser}
-                      onStopTeam={onStopTeam}
-                      onStopAgent={onStopAgent}
-                      onRetryAgent={onRetryAgent}
-                      onApprovePlan={onApprovePlan}
-                      onRejectPlan={onRejectPlan}
-                      onDispatchVisualizationAction={
-                        onDispatchVisualizationAction
-                      }
-                      onRerunWorkflow={onRerunWorkflow}
-                      onCancelWorkflow={onCancelWorkflow}
-                      onRetryInterrupted={onRetryInterrupted}
-                      onDiscardInterrupted={onDiscardInterrupted}
-                      onEditPromptFromAssistant={onEditPromptFromAssistant}
+                      handlers={chatItemHandlers}
                     />
                   </div>
                 );

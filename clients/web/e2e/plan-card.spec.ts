@@ -203,7 +203,7 @@ test.describe("PlanCard ←→ BE contract", () => {
       "Plan approved",
     );
     // And the buttons are gone (mutual exclusion at the render
-    // layer — see ChatItems.tsx::PlanCard).
+    // layer — see ``chatItems/PlanCard``).
     await expect(
       page.locator(".plan-card-btn.plan-card-btn--approve"),
     ).toHaveCount(0);

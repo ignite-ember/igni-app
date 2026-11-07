@@ -6,7 +6,7 @@
  * object: ``orchestrate_agent_stream.py`` emits the accumulated JSON
  * as ``visualization_delta`` events on the ``orchestrate_event`` push
  * channel, and ``chat/visualizationStream.ts`` partial-parses each
- * delta into a ``visualization`` chat item, which ChatItems renders
+ * delta into a ``visualization`` chat item, which ``VisualizationCard`` renders
  * by mounting this component. (There was once a one-shot
  * ``channel="visualization"`` push; it had no producer left and the
  * branch handling it has been removed.)

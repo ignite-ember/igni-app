@@ -82,7 +82,7 @@ test.describe("orchestrate scenarios", () => {
     await gotoDemo(page);
     await selectScenario(page, "Broadcast — one specialist errored");
     // The agent's status feeds a ``status-<status>`` class on both
-    // the dot and the label (see ChatItems.tsx:506-508). We don't
+    // the dot and the label (see ``OrchestrateAgentRow``). We don't
     // pin to a count because the scenario evolves over time; just
     // confirm the surface exists.
     await expect(page.locator(".orch-agent-status.status-error").first()).toBeVisible();
@@ -208,7 +208,7 @@ test.describe("layout robustness", () => {
     await gotoDemo(page);
     await selectScenario(page, "One agent, 30 tool calls (scroll test)");
     // The agent is in ``running`` state, so its card auto-expands
-    // on mount (ChatItems.tsx:469 initialises ``open`` to true for
+    // on mount (``OrchestrateAgentRow`` initialises ``open`` to true for
     // running/paused agents). Don't click the head — that would
     // COLLAPSE it.
     const body = page.locator(".orch-agent-body").first();

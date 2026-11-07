@@ -18,9 +18,15 @@ export interface LoopIteration {
   body: string;
 }
 
+/** How a user bubble is styled: a slash command, a ``$`` shell line, or chat. */
+export type UserMessageMode = "command" | "shell" | "chat";
+
 export class UserMessageText {
   private static readonly SYSTEM_CONTEXT = /<system-context>[\s\S]*?<\/system-context>\s*/g;
   private static readonly ATTACHED_FILES = /<attached-files>[\s\S]*?<\/attached-files>\s*/g;
+  /** Only a wrapper at the very start counts when classifying. */
+  private static readonly LEADING_SYSTEM_CONTEXT = /^<system-context>[\s\S]*?<\/system-context>\s*/;
+  private static readonly LEADING_ATTACHED_FILES = /^<attached-files>[\s\S]*?<\/attached-files>\s*/;
   /** The backend's ``ExtensionMessage.wrap``. */
   private static readonly EXTENSION_MESSAGE =
     /^<extension-message from="([^"]+)">\n?([\s\S]*?)\n?<\/extension-message>$/;
@@ -48,6 +54,17 @@ export class UserMessageText {
       .replace(UserMessageText.SYSTEM_CONTEXT, "")
       .replace(UserMessageText.ATTACHED_FILES, "")
       .trim();
+  }
+
+  /** Classified on the text after the leading wrappers, untrimmed, so
+   *  ``"  /foo"`` is chat, not a command. */
+  mode(): UserMessageMode {
+    const typed = this.raw
+      .replace(UserMessageText.LEADING_SYSTEM_CONTEXT, "")
+      .replace(UserMessageText.LEADING_ATTACHED_FILES, "");
+    if (typed.startsWith("/")) return "command";
+    if (typed.startsWith("$")) return "shell";
+    return "chat";
   }
 
   isLoopIteration(): boolean {

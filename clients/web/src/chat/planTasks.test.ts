@@ -217,3 +217,24 @@ describe("PlanTaskList#mergeTodos", () => {
     expect(list.mergeTodos([{ content: "" }]).tasks).toBe(planTasks);
   });
 });
+
+describe("PlanTaskList.labelOf", () => {
+  const task = (status: PlanTask["status"], activeForm: string): PlanTask => ({
+    content: "Run tests",
+    status,
+    activeForm,
+  });
+
+  it("shows the gerund while the task is in progress", () => {
+    expect(PlanTaskList.labelOf(task("in_progress", "Running tests"))).toBe("Running tests");
+  });
+
+  it("falls back to the imperative when there is no gerund", () => {
+    expect(PlanTaskList.labelOf(task("in_progress", ""))).toBe("Run tests");
+  });
+
+  it("shows the imperative once the task is not in progress", () => {
+    expect(PlanTaskList.labelOf(task("pending", "Running tests"))).toBe("Run tests");
+    expect(PlanTaskList.labelOf(task("completed", "Running tests"))).toBe("Run tests");
+  });
+});

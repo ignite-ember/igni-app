@@ -14,7 +14,7 @@
  */
 
 import { useState } from "react";
-import { ChatItemView } from "../components/ChatItems";
+import { ChatItemView } from "../components/chatItems/ChatItemView";
 import { CtxMeter, PlanBadge, SessionChip } from "../components/StatusBits";
 import type { PlanItem } from "../chat/chatItem";
 import { ChatItemFactory } from "../chat/chatItemFactory";
@@ -200,8 +200,7 @@ export function PlanModeDemo() {
           </p>
           <ChatItemView
             item={liveCard}
-            onApprovePlan={onApprove}
-            onRejectPlan={onReject}
+            handlers={{ plan: { approve: onApprove, reject: onReject } }}
           />
         </section>
 

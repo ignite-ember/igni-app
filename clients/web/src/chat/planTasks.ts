@@ -32,6 +32,12 @@ export class PlanTaskList {
     };
   }
 
+  /** What a task's row says: its gerund while it is in progress, when
+   *  it has one, and its imperative otherwise. */
+  static labelOf(task: PlanTask): string {
+    return task.status === "in_progress" && task.activeForm ? task.activeForm : task.content;
+  }
+
   /** Every task that parses; anything that is not a list is empty. */
   static parse(raw: unknown): PlanTaskList {
     if (!Array.isArray(raw)) return new PlanTaskList([]);

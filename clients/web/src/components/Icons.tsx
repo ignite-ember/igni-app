@@ -232,3 +232,120 @@ export function ChevronIcon({ size = 10, down = false }: IconProps & { down?: bo
     </svg>
   );
 }
+
+/* The icons below came out of the old chat-item renderer with their
+ * artwork unchanged, so the visual baselines hold. ``CopiedCheckIcon``,
+ * ``StopSquareIcon`` and ``EditPenIcon`` duplicate ``CheckIcon``,
+ * ``StopIcon`` and ``PencilIcon`` at other sizes and strokes; folding
+ * them together changes pixels and waits for a snapshot update. */
+
+/** Two stacked sheets: "copy to clipboard". */
+export function CopyIcon() {
+  return (
+    <svg
+      width="12"
+      height="12"
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <rect x="4" y="4" width="8.5" height="9.5" rx="1.5" />
+      <path d="M3 11.5V3a1 1 0 0 1 1-1h7.5" />
+    </svg>
+  );
+}
+
+/** The tick a copy button shows once the text is on the clipboard. */
+export function CopiedCheckIcon() {
+  return (
+    <svg
+      width="12"
+      height="12"
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M3.5 8.5l3 3 6-7" />
+    </svg>
+  );
+}
+
+/** ``< >``: a pasted code snippet. */
+export function CodeBracketIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+      <path
+        d="M5.5 4L2.5 8L5.5 12M10.5 4L13.5 8L10.5 12"
+        stroke="currentColor"
+        strokeWidth="1.4"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        fill="none"
+      />
+    </svg>
+  );
+}
+
+/** Circular arrow: "retry". */
+export function RetryIcon() {
+  return (
+    <svg
+      width="11"
+      height="11"
+      viewBox="0 0 16 16"
+      aria-hidden="true"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      style={{ display: "inline-block", verticalAlign: "middle" }}
+    >
+      <path d="M2.5 8a5.5 5.5 0 1 0 1.6-3.9" />
+      <path d="M2.2 2.5v3h3" />
+    </svg>
+  );
+}
+
+/** Filled square: "stop", on the team and agent Stop buttons. */
+export function StopSquareIcon() {
+  return (
+    <svg
+      width="10"
+      height="10"
+      viewBox="0 0 10 10"
+      aria-hidden="true"
+      style={{ display: "inline-block", verticalAlign: "middle" }}
+    >
+      <rect x="1.5" y="1.5" width="7" height="7" rx="1" fill="currentColor" />
+    </svg>
+  );
+}
+
+/** Pen: "edit this message". */
+export function EditPenIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor"
+      strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M11.4 2.6l2 2L5.5 12.5l-3 0.5 0.5-3z" />
+    </svg>
+  );
+}
+
+/** Bin: "delete". */
+export function TrashIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor"
+      strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M3 4.5h10M6 4.5V3a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v1.5M4.5 4.5l.7 8.4a1 1 0 0 0 1 .9h3.6a1 1 0 0 0 1-.9l.7-8.4M7 7.5v4M9 7.5v4" />
+    </svg>
+  );
+}

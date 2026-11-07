@@ -9,7 +9,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { cleanup, render } from "@testing-library/react";
 
-import { ChatItemView } from "../components/ChatItems";
+import { ChatItemView } from "../components/chatItems/ChatItemView";
 import type { ChatItem } from "../chat/chatItem";
 import { ChatItemFactory } from "../chat/chatItemFactory";
 import { ChatItemIds } from "../chat/chatItemIds";

@@ -5,7 +5,8 @@
 
 import type { StatsItem } from "../chat/chatItem";
 
-function compact(n: number): string {
+/** ``1234`` reads ``1.2k``; under a thousand, the number. */
+export function formatTokenCount(n: number): string {
   return n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n);
 }
 
@@ -15,9 +16,9 @@ function duration(seconds: number): string {
 }
 
 export function formatStats(stats: StatsItem): string {
-  const parts = [`${compact(stats.inputTokens)} in`];
-  if (stats.visibleThinkTokens > 0) parts.push(`${compact(stats.visibleThinkTokens)} think`);
-  parts.push(`${compact(stats.visibleOutTokens)} out`);
+  const parts = [`${formatTokenCount(stats.inputTokens)} in`];
+  if (stats.visibleThinkTokens > 0) parts.push(`${formatTokenCount(stats.visibleThinkTokens)} think`);
+  parts.push(`${formatTokenCount(stats.visibleOutTokens)} out`);
   const took = duration(stats.duration);
   if (took) parts.push(took);
   return parts.join(" · ");

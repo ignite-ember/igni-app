@@ -289,7 +289,7 @@ function makePill(path: string): HTMLSpanElement {
   span.setAttribute("contenteditable", "false");
   span.title = path;
   const name = path.split("/").pop() || path;
-  // Same look as the .file-pill in ChatItems — icon + name. Render
+  // Same look as the .file-pill in a user bubble — icon + name. Render
   // the icon via the same React-rendered SVG would mean mounting a
   // React tree per pill; we inline a simpler glyph here to keep the
   // editor cheap.

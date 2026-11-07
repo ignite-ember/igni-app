@@ -26,7 +26,7 @@ import type { ChatItem } from "../chat/chatItem";
 import { ChatItemFactory } from "../chat/chatItemFactory";
 import { ChatItemIds } from "../chat/chatItemIds";
 import { applyVisualizationDelta } from "../chat/visualizationStream";
-import { ChatItemView } from "../components/ChatItems";
+import { ChatItemView } from "../components/chatItems/ChatItemView";
 import { countOf } from "../lib/plural";
 
 // Simple error boundary so a bad partial spec doesn't blank the
