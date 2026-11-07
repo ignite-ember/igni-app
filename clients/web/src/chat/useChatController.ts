@@ -45,6 +45,9 @@ export interface ChatControllerDeps {
   shell: ShellPort;
 }
 
+/** The approval form's decisions, as the run resumes with them. */
+type HitlAnswers = Parameters<RunStreamer["resume"]>[0];
+
 export interface ChatController {
   streamer: RunStreamer;
   commands: SlashCommandRouter;
@@ -52,6 +55,8 @@ export interface ChatController {
   mirror: MirrorEventRouter;
   submitter: MessageSubmitter;
   handlers: ChatItemHandlers;
+  /** The approval form's answer: the requests close, the run resumes. */
+  resolveHitl: (decisions: HitlAnswers) => void;
 }
 
 function wireChatController(deps: ChatControllerDeps): ChatController {
@@ -97,7 +102,11 @@ function wireChatController(deps: ChatControllerDeps): ChatController {
     workflow: { rerun: items.rerunWorkflow, cancel: items.cancelWorkflow },
     visualization: { dispatchAction: items.dispatchVisualizationAction },
   };
-  return { streamer, commands, sessions, mirror, submitter, handlers };
+  const resolveHitl = (decisions: HitlAnswers): void => {
+    hitl.clear();
+    void streamer.resume(decisions);
+  };
+  return { streamer, commands, sessions, mirror, submitter, handlers, resolveHitl };
 }
 
 /** Every member of ``deps`` must keep its identity for the window's

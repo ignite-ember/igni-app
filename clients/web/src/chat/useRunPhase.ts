@@ -31,6 +31,11 @@ export interface RunControls {
   /** Set by the HITL dialog's "accept edits for this run": the end of
    *  the run's stream turns acceptEdits back off. */
   readonly autoAcceptForRunRef: MutableRefObject<boolean>;
+  /** The HITL dialog's "accept edits for this run". ``streaming_done``
+   *  turns it back off, so the gate does not quietly outlive this task;
+   *  the flip itself rides on the HITL decision
+   *  (``HITLDecision.set_permission_mode``). */
+  readonly acceptEditsForThisRun: () => void;
 }
 
 export interface RunPhaseState {
@@ -70,7 +75,17 @@ export function useRunPhase(client: IgniClient): RunPhaseState {
   }, []);
   const processing = isProcessing(runPhase);
   const controls = useMemo<RunControls>(
-    () => ({ runPhaseRef, setRunPhase, cancel, viewGenRef, bumpViewGen, autoAcceptForRunRef }),
+    () => ({
+      runPhaseRef,
+      setRunPhase,
+      cancel,
+      viewGenRef,
+      bumpViewGen,
+      autoAcceptForRunRef,
+      acceptEditsForThisRun: () => {
+        autoAcceptForRunRef.current = true;
+      },
+    }),
     [setRunPhase, cancel, bumpViewGen],
   );
   return useMemo(

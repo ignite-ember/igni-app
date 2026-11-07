@@ -8,12 +8,13 @@
  * and an extension see) — so they are only ever set here.
  */
 
-import { SIDEBAR_BREAKPOINT_PX, type WindowModel } from "../clientState";
+import type { WindowModel } from "../clientState";
 import type { IgniClient } from "../protocol/client";
 import { AttachSessionResult, SessionIdReply } from "../protocol/rpcResults";
 import type { Arrival } from "./arrival";
 import type { HistoryLoader } from "./historyLoader";
 import { planSessionBinding, type SessionBindingPlan } from "./sessionBinding";
+import { SidebarLayout } from "./sidebarLayout";
 import type { ShellPort } from "./shellPort";
 import type { TranscriptView } from "./transcriptView";
 
@@ -60,7 +61,7 @@ export class SessionSwitcher {
     } catch (e) {
       view.error(String(e));
     }
-    if (window.innerWidth <= SIDEBAR_BREAKPOINT_PX) {
+    if (!SidebarLayout.opensAt(window.innerWidth)) {
       windowModel.write("sidebar", { ...windowModel.get("sidebar"), open: false });
     }
   }
@@ -163,7 +164,7 @@ export class SessionSwitcher {
     if (windowModel.unset().includes("sidebar")) {
       windowModel.write("sidebar", {
         ...windowModel.get("sidebar"),
-        open: window.innerWidth > SIDEBAR_BREAKPOINT_PX,
+        open: SidebarLayout.opensAt(window.innerWidth),
       });
     }
     if (arrival) {

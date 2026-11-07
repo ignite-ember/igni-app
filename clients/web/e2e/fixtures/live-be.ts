@@ -140,7 +140,7 @@ async function writeProjectFiles(projectDir: string): Promise<void> {
 /**
  * A credentials file the backend will read as "signed in".
  *
- * ``App.tsx`` derives ``signedIn`` from ``status.cloud_email``, and
+ * ``chat/useShellStatus.ts`` derives the sign-in from ``status.cloud_email``, and
  * without one it renders ``SignInWall`` over the entire app. That is
  * correct — artifacts are a cloud service and there is no standalone
  * mode — but it means a spawned backend with no credentials serves

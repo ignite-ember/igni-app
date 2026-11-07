@@ -17,7 +17,7 @@ export interface HostBindingsDeps {
   client: Pick<IgniClient, "close">;
   windowModel: WindowModel;
   view: TranscriptView;
-  updateCheck: Pick<UpdateCheck, "checkRef">;
+  updateCheck: Pick<UpdateCheck, "checkNow">;
   arrival: Arrival | null;
   signedIn: boolean;
   projectDir: string;
@@ -39,12 +39,12 @@ export function useHostBindings(deps: HostBindingsDeps): void {
   }, [windowModel]);
 
   // The desktop shell's native menu items.
-  const { checkRef } = updateCheck;
+  const { checkNow } = updateCheck;
   useEffect(
     () =>
       host.onMenu((id) => {
         if (id === "new_chat") view.reset(); // the same effect as ``/clear``
-        else if (id === "check_update") void checkRef.current(false); // answers either way
+        else if (id === "check_update") void checkNow(false); // answers either way
         else if (id === "restart_backend") {
           // The shell restarts the backend; drop the dead socket so the
           // client reconnects rather than sitting on it.
@@ -55,7 +55,7 @@ export function useHostBindings(deps: HostBindingsDeps): void {
           }
         }
       }),
-    [client, view, checkRef],
+    [client, view, checkNow],
   );
 
   // The desktop window's title follows the folder and the org.

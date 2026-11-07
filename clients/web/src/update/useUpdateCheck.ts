@@ -18,8 +18,9 @@ export interface UpdateCheck {
   /** Check now. ``silent`` says nothing when there is no update; the
    *  menu's explicit check passes ``false`` so a click always answers. */
   check: (silent?: boolean) => Promise<void>;
-  /** The latest {@link check}, for a listener mounted once. */
-  checkRef: { readonly current: (silent?: boolean) => Promise<void> };
+  /** The latest {@link check}, under one identity for the window's
+   *  life: for a listener mounted once. */
+  checkNow: (silent?: boolean) => Promise<void>;
 }
 
 export function useUpdateCheck(client: IgniClient, windowModel: WindowModel): UpdateCheck {
@@ -65,5 +66,6 @@ export function useUpdateCheck(client: IgniClient, windowModel: WindowModel): Up
   useEffect(() => {
     checkRef.current = check;
   }, [check]);
-  return { pendingUpdate, showUpdate, check, checkRef };
+  const checkNow = useCallback((silent?: boolean) => checkRef.current(silent), []);
+  return { pendingUpdate, showUpdate, check, checkNow };
 }

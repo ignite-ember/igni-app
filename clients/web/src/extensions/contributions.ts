@@ -21,6 +21,7 @@
  */
 
 import { PageRegistry, type PageKind } from "../chat/pageStack";
+import { unreadFor, type NotificationCounts } from "../notifications/model";
 
 /** A link in the left sidebar. */
 export interface SidebarLink {
@@ -145,6 +146,14 @@ export class Contributions {
   /** The sidebar, igni's own links first. */
   sidebar(): SidebarLink[] {
     return [...this.baseSidebar, ...flatten(this.extraSidebar)];
+  }
+
+  /** Each sidebar entry's unread count: the floor's count for the
+   *  extension that contributed the page behind it. */
+  sidebarBadges(counts: NotificationCounts): Record<string, number> {
+    return Object.fromEntries(
+      this.sidebar().map((link) => [link.kind, unreadFor(counts, this.pages.ownerOf(link.kind))]),
+    );
   }
 
   /** The tools menu, igni's own entries first. */

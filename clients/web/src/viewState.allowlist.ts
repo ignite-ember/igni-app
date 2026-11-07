@@ -92,12 +92,12 @@ export const BECAUSE: Record<string, Record<string, string>> = {
 
 /** Every view state, by file and category. */
 export const VIEW_STATE: Record<string, Partial<Record<Category, string[]>>> = {
-  "App.tsx": {
-    data: ["status", "sessions"],
-  },
   "chat/useCommands.ts": {
     data: ["skills", "backendCommands"],
     menu: ["modelMenuSignal"],
+  },
+  "chat/useShellStatus.ts": {
+    data: ["status", "sessions"],
   },
   "chat/useHitl.ts": {
     data: ["pending"],
