@@ -1,18 +1,18 @@
 import { useMemo, useState } from "react";
 import type { IgniClient } from "../../protocol/client";
+import type { PanelLevels } from "../PageShell";
 import { Drawer } from "./Drawer";
-import { InstalledPlugins } from "./plugins/installedPlugin";
-import { InstalledTab } from "./plugins/InstalledTab";
-import { MarketplacesPage } from "./plugins/MarketplacesPage";
-import { MarketplaceTab } from "./plugins/MarketplaceTab";
-import { PluginAction } from "./plugins/pluginAction";
-import { PluginDetailPage } from "./plugins/PluginDetailPage";
 import { CatalogToolbar, PluginsTabs } from "./plugins/PluginsChrome";
 import { PluginsApi } from "./plugins/pluginsApi";
-import { PluginSelection } from "./plugins/pluginSelection";
+import { PluginsPage, type PluginsPageContext } from "./plugins/pluginsPages";
 import { PluginsView } from "./plugins/pluginsView";
 import { usePluginContents } from "./plugins/usePluginContents";
 import { usePlugins } from "./plugins/usePlugins";
+
+export interface PluginsPanelProps {
+  client: IgniClient;
+  onClose: () => void;
+}
 
 /**
  * Plugins panel: the marketplace catalog and the installed plugins as
@@ -20,7 +20,7 @@ import { usePlugins } from "./plugins/usePlugins";
  * management beside them. This composes the pieces in `plugins/`; it
  * holds only where the panel is and what is being typed.
  */
-export function PluginsPanel({ client, onClose }: { client: IgniClient; onClose: () => void }) {
+export function PluginsPanel({ client, onClose }: PluginsPanelProps) {
   const api = useMemo(() => new PluginsApi(client), [client]);
   const plugins = usePlugins(api);
   const [view, setView] = useState(() => PluginsView.initial());
@@ -28,30 +28,44 @@ export function PluginsPanel({ client, onClose }: { client: IgniClient; onClose:
   const [marketUrl, setMarketUrl] = useState("");
   const [query, setQuery] = useState("");
 
-  const resolved = view.selection?.resolve(plugins.installed) ?? null;
-  const contents = usePluginContents(api, resolved);
-  const { installed, catalog, isRunning } = plugins;
-  const back = () => setView((v) => v.back());
+  const screen = view.screen(plugins.installed);
+  const contents = usePluginContents(api, screen.page === "detail" ? screen.resolved : null);
+  const levels = useMemo<PanelLevels>(
+    () => ({
+      labels: view.crumbs,
+      onTruncate: (i) => setView((v) => v.truncate(i)),
+    }),
+    [view],
+  );
 
-  const levels = { labels: view.leaf ? [view.leaf] : [], onTruncate: back };
+  const ctx: PluginsPageContext = {
+    plugins,
+    contents,
+    fields: {
+      installRef: { value: installRef, set: setInstallRef },
+      marketUrl: { value: marketUrl, set: setMarketUrl },
+      query: { value: query, set: setQuery },
+    },
+    go: setView,
+  };
 
   const headerExtras = view.showsTabs ? (
     <PluginsTabs
       tab={view.tab}
-      catalogCount={catalog?.pluginCount ?? 0}
-      installedCount={installed?.count ?? 0}
+      catalogCount={plugins.catalog?.pluginCount ?? 0}
+      installedCount={plugins.installed?.count ?? 0}
       onSelect={(tab) => setView((v) => v.withTab(tab))}
     />
   ) : null;
 
   const toolbar =
-    view.showsCatalogToolbar && catalog !== null ? (
+    view.showsCatalogToolbar && plugins.catalog !== null ? (
       <CatalogToolbar
-        pluginCount={catalog.pluginCount}
-        marketCount={catalog.marketCount}
+        pluginCount={plugins.catalog.pluginCount}
+        marketCount={plugins.catalog.marketCount}
         query={query}
         onQueryChange={setQuery}
-        refreshing={isRunning(PluginAction.refresh())}
+        refreshing={plugins.refreshing}
         onRefresh={plugins.refreshMarketplaces}
         onManage={() => setView((v) => v.manageMarkets())}
       />
@@ -66,51 +80,9 @@ export function PluginsPanel({ client, onClose }: { client: IgniClient; onClose:
       toolbar={toolbar}
     >
       {plugins.error && (
-        <div className="msg-error" style={{ marginBottom: 10 }}>
-          {`Error: ${plugins.error}`}
-        </div>
+        <div className="msg-error msg-error--banner">{`Error: ${plugins.error.reason}`}</div>
       )}
-
-      {resolved ? (
-        <PluginDetailPage
-          resolved={resolved}
-          contents={contents}
-          isRunning={isRunning}
-          onInstall={(p) => plugins.install(p.source, PluginAction.plugin(p.name))}
-          onToggle={plugins.toggle}
-          onRemove={(p) => plugins.remove(p, back)}
-        />
-      ) : view.isMarkets ? (
-        <MarketplacesPage
-          catalog={catalog}
-          marketUrl={marketUrl}
-          onMarketUrlChange={setMarketUrl}
-          isRunning={isRunning}
-          onAddMarketplace={(url) => plugins.addMarketplace(url, () => setMarketUrl(""))}
-          onRemoveMarketplace={plugins.removeMarketplace}
-          onRefresh={plugins.refreshMarketplaces}
-        />
-      ) : view.tab === "installed" ? (
-        <InstalledTab
-          installed={installed}
-          installRef={installRef}
-          onInstallRefChange={setInstallRef}
-          installing={isRunning(PluginAction.installRef())}
-          onInstall={(ref) =>
-            plugins.install(ref, PluginAction.installRef(), () => setInstallRef(""))
-          }
-          onOpen={(p) => setView((v) => v.open(PluginSelection.installed(p)))}
-        />
-      ) : (
-        <MarketplaceTab
-          catalog={catalog}
-          entries={catalog?.filter(query) ?? []}
-          installed={installed ?? InstalledPlugins.EMPTY}
-          isRunning={isRunning}
-          onInstall={(p) => plugins.install(p.source, PluginAction.plugin(p.name))}
-          onOpen={(entry) => setView((v) => v.open(PluginSelection.fromCatalog(entry)))}
-        />
-      )}
+      <PluginsPage screen={screen} ctx={ctx} />
     </Drawer>
   );
 }

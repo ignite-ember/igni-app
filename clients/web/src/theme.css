@@ -2301,6 +2301,11 @@ button {
   white-space: pre-wrap;
 }
 
+/* An error standing above a panel's body, spaced from what follows. */
+.msg-error--banner {
+  margin-bottom: 10px;
+}
+
 .shell-output {
   font-family: var(--font-mono);
   font-size: var(--text-sm);

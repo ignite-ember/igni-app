@@ -1,9 +1,18 @@
 /** Where the plugins panel is: a list tab, a plugin's page, or the
  *  marketplace management page. */
 
-import type { PluginSelection } from "./pluginSelection";
+import type { InstalledPlugins } from "./installedPlugin";
+import type { PluginSelection, ResolvedPlugin } from "./pluginSelection";
 
 export type Tab = "installed" | "marketplace";
+
+/** The screen the panel shows: a plugin's page carries the plugin as it
+ *  reads once merged with what is installed; a list shows one tab. */
+export type PluginsScreen =
+  | { page: "detail"; resolved: ResolvedPlugin }
+  | { page: "markets" }
+  | { page: "installed" }
+  | { page: "catalog" };
 
 type Page =
   | { page: "list" }
@@ -45,12 +54,26 @@ export class PluginsView {
     return new PluginsView(this.tab, LIST);
   }
 
+  /**
+   * Move to the crumb at ``index``. The panel is one level deep, so a
+   * negative index (the list, or above it) goes back and any other index
+   * is the leaf itself, already showing. That holds only at this depth:
+   * a deeper panel must map each index to its own level.
+   */
+  truncate(index: number): PluginsView {
+    return index < 0 ? this.back() : this;
+  }
+
   get selection(): PluginSelection | null {
     return this.at.page === "detail" ? this.at.selection : null;
   }
 
-  get isMarkets(): boolean {
-    return this.at.page === "markets";
+  /** Which screen shows, given what is installed. */
+  screen(installed: InstalledPlugins | null): PluginsScreen {
+    const at = this.at;
+    if (at.page === "detail") return { page: "detail", resolved: at.selection.resolve(installed) };
+    if (at.page === "markets") return { page: "markets" };
+    return { page: this.tab === "installed" ? "installed" : "catalog" };
   }
 
   /** The tabs show on the list only; below it the page trail leads back. */
@@ -67,6 +90,11 @@ export class PluginsView {
     if (this.at.page === "detail") return this.at.selection.name || "Plugin";
     if (this.at.page === "markets") return "Marketplaces";
     return null;
+  }
+
+  /** The trail below the list: empty on the list itself. */
+  get crumbs(): string[] {
+    return this.leaf === null ? [] : [this.leaf];
   }
 
   get title(): string {
