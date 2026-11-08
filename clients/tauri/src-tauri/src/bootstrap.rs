@@ -52,7 +52,9 @@ impl<'a> Bootstrap<'a> {
     }
 
     /// Run on a background thread so the loading window stays responsive.
-    /// A failure is shown by `loading.html`'s own error handler.
+    /// A failure is sent to `loading.html`'s error handler and then written
+    /// over the page, so it shows even when the page had not subscribed
+    /// yet (an event emitted before its listener is lost).
     pub fn spawn_in_background(app: &AppHandle, launch: LaunchArgs) {
         let app = app.clone();
         std::thread::spawn(move || {
@@ -60,11 +62,24 @@ impl<'a> Bootstrap<'a> {
                 let message = e.to_string();
                 if let Some(main) = app.get_webview_window(WindowLabel::MAIN) {
                     ShellEvent::BootstrapError(message.clone()).emit_to(&main);
+                    main.eval(failure_script(&message))
+                        .log_on_error("showing the bootstrap failure");
                 }
                 eprintln!("igni bootstrap failed: {message}");
             }
         });
     }
+}
+
+/// The script that replaces the loading page with the failure. The message
+/// is set as text, never markup: it can quote the backend's stderr.
+fn failure_script(message: &str) -> String {
+    let text = serde_json::Value::from(format!("Bootstrap failed: {message}"));
+    format!(
+        "(function () {{ const node = document.createElement('div'); \
+         node.className = 'igni-loading-error'; node.textContent = {text}; \
+         document.body.replaceChildren(node); }})();"
+    )
 }
 
 /// Wipe the managed runtime and bootstrap again. Wired to File ›
@@ -79,4 +94,25 @@ pub(crate) fn reinstall_backend(app: AppHandle) -> Result<(), ShellError> {
     let launch = app.state::<LaunchArgs>().inner().clone();
     Bootstrap::spawn_in_background(&app, launch);
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_failure_replaces_the_page_with_the_message() {
+        let script = failure_script("backend exited before signalling ready: boom");
+        assert!(script.contains("document.body.replaceChildren(node)"));
+        assert!(script.contains("node.className = 'igni-loading-error'"));
+        assert!(script.contains("\"Bootstrap failed: backend exited before signalling ready: boom\""));
+    }
+
+    #[test]
+    fn the_message_is_text_not_markup() {
+        // A quote cannot close the literal, and markup is never parsed.
+        let script = failure_script("bad <img src=x onerror=alert(1)> \"quoted\" 'single'");
+        assert!(!script.contains("innerHTML"));
+        assert!(script.contains("node.textContent = \"Bootstrap failed: bad <img src=x onerror=alert(1)> \\\"quoted\\\" 'single'\""));
+    }
 }
