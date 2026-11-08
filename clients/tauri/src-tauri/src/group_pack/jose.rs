@@ -6,6 +6,7 @@ use serde::de::{DeserializeOwned, IgnoredAny};
 use serde::{Deserialize, Deserializer};
 
 use super::error::{PackError, SegmentError};
+use super::lenient;
 
 /// The JWS `typ` igni server puts on a pack.
 pub(crate) const PACK_TYPE: &str = "igni-group-policy+jwt";
@@ -27,8 +28,13 @@ pub(crate) struct JwsHeader {
     /// Whether `crit` is there at all, whatever it holds.
     #[serde(default, deserialize_with = "present")]
     crit: bool,
+    // A non-string `typ` or `alg` is refused below as absent; a non-string
+    // `kid` names no key, so every key is tried.
+    #[serde(default, deserialize_with = "lenient::field")]
     typ: Option<String>,
+    #[serde(default, deserialize_with = "lenient::field")]
     alg: Option<String>,
+    #[serde(default, deserialize_with = "lenient::field")]
     kid: Option<String>,
 }
 
@@ -52,12 +58,17 @@ impl JwsHeader {
     }
 }
 
-/// One key of a JWKS. Only RSA keys are ever used.
+/// One key of a JWKS. Only RSA keys are ever used; a field of another
+/// type reads as absent.
 #[derive(Debug, Default, Clone, Deserialize)]
 pub(crate) struct Jwk {
+    #[serde(default, deserialize_with = "lenient::field")]
     pub kty: Option<String>,
+    #[serde(default, deserialize_with = "lenient::field")]
     pub kid: Option<String>,
+    #[serde(default, deserialize_with = "lenient::field")]
     pub n: Option<String>,
+    #[serde(default, deserialize_with = "lenient::field")]
     pub e: Option<String>,
 }
 
@@ -87,10 +98,11 @@ impl Jwk {
     }
 }
 
-/// The key set cached beside the pack.
+/// The key set cached beside the pack. A key that is not an object is
+/// skipped, never the whole set.
 #[derive(Debug, Default, Clone, Deserialize)]
 pub(crate) struct Jwks {
-    #[serde(default)]
+    #[serde(default, deserialize_with = "lenient::list")]
     pub keys: Vec<Jwk>,
 }
 

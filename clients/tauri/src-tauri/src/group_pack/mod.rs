@@ -27,6 +27,7 @@
 
 mod error;
 mod jose;
+mod lenient;
 mod local_state;
 mod pins;
 mod policy;
@@ -169,7 +170,11 @@ mod tests {
     }
 
     fn sign(pair: &RsaKeyPair, kid: &str, claims: &Value) -> String {
-        let head = URL_SAFE_NO_PAD.encode(serde_json::json!({"alg": "RS256", "kid": kid, "typ": PACK_TYPE}).to_string());
+        sign_with_header(pair, &serde_json::json!({"alg": "RS256", "kid": kid, "typ": PACK_TYPE}), claims)
+    }
+
+    fn sign_with_header(pair: &RsaKeyPair, header: &Value, claims: &Value) -> String {
+        let head = URL_SAFE_NO_PAD.encode(header.to_string());
         let body = URL_SAFE_NO_PAD.encode(claims.to_string());
         let input = format!("{head}.{body}");
         let mut signature = vec![0; pair.public().modulus_len()];
@@ -218,6 +223,53 @@ mod tests {
         let settings = crate::desktop_settings::DesktopSettings::from_json(&policy.settings_json());
         assert_eq!(settings.air_gapped, Some(true));
         assert_eq!(settings.update_endpoint.as_deref(), Some("https://m.internal/l.json"));
+    }
+
+    #[test]
+    fn an_odd_key_in_the_cached_set_does_not_cost_the_others() {
+        // The cached JWKS is read key by key: a stray entry, or a key with a
+        // field of the wrong type, is skipped rather than emptying the set.
+        let pair = key();
+        let genuine = jwks(&pair);
+        let kid = kid_of(&genuine);
+        let text = serde_json::json!({"keys": [
+            "not a key",
+            {"kty": 7, "kid": "x"},
+            {"kty": "RSA", "kid": 12, "n": "AQAB", "e": "AQAB"},
+            {"kty": "RSA", "kid": kid, "n": genuine.keys[0].n, "e": genuine.keys[0].e},
+        ]})
+        .to_string();
+        let keys = Jwks::from_text(&text);
+        assert_eq!(keys.keys.len(), 3, "only the non-object entry is dropped");
+        let compact = sign(&pair, &kid, &claims("p1", "https://igni.example.invalid", 5));
+        assert!(verify(&compact, &keys, &trust()).is_ok());
+    }
+
+    #[test]
+    fn a_key_set_that_is_not_a_list_holds_no_keys() {
+        assert!(Jwks::from_text("{\"keys\": {\"kty\": \"RSA\"}}").keys.is_empty());
+        assert!(Jwks::from_text("not json").keys.is_empty());
+    }
+
+    #[test]
+    fn a_non_string_kid_in_the_header_tries_every_key() {
+        let pair = key();
+        let keys = jwks(&pair);
+        let header = serde_json::json!({"alg": "RS256", "kid": 42, "typ": PACK_TYPE});
+        let compact = sign_with_header(&pair, &header, &claims("p1", "https://igni.example.invalid", 5));
+        assert!(verify(&compact, &keys, &trust()).is_ok());
+    }
+
+    #[test]
+    fn a_non_string_typ_or_alg_is_refused_as_absent() {
+        let pair = key();
+        let keys = jwks(&pair);
+        let kid = kid_of(&keys);
+        let body = claims("p1", "https://igni.example.invalid", 5);
+        let odd_typ = serde_json::json!({"alg": "RS256", "kid": kid, "typ": 1});
+        let odd_alg = serde_json::json!({"alg": ["RS256"], "kid": kid, "typ": PACK_TYPE});
+        assert_eq!(verify(&sign_with_header(&pair, &odd_typ, &body), &keys, &trust()).unwrap_err(), PackError::NotAPack);
+        assert_eq!(verify(&sign_with_header(&pair, &odd_alg, &body), &keys, &trust()).unwrap_err(), PackError::NotRs256);
     }
 
     #[test]

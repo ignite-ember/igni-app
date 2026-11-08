@@ -1,13 +1,14 @@
 //! The policy a pack carries, and the settings it contributes.
 
-use serde::de::{DeserializeOwned, Deserializer};
 use serde::Deserialize;
 use serde_json::{Map, Value};
+
+use super::lenient;
 
 /// The backend's `GroupPolicyPack`, as much of it as the shell reads.
 #[derive(Debug, Default, Clone, Deserialize)]
 pub(crate) struct GroupPolicy {
-    #[serde(default, deserialize_with = "lenient_entries")]
+    #[serde(default, deserialize_with = "lenient::list")]
     pub entries: Vec<PolicyEntry>,
 }
 
@@ -15,28 +16,14 @@ pub(crate) struct GroupPolicy {
 /// type counts as absent, so one odd entry never costs the rest of the pack.
 #[derive(Debug, Default, Clone, Deserialize)]
 pub(crate) struct PolicyEntry {
-    #[serde(default, deserialize_with = "lenient")]
+    #[serde(default, deserialize_with = "lenient::field")]
     pub kind: Option<String>,
-    #[serde(default, deserialize_with = "lenient")]
+    #[serde(default, deserialize_with = "lenient::field")]
     pub content_type: Option<String>,
-    #[serde(default, deserialize_with = "lenient")]
+    #[serde(default, deserialize_with = "lenient::field")]
     pub enabled: Option<bool>,
-    #[serde(default, deserialize_with = "lenient")]
+    #[serde(default, deserialize_with = "lenient::field")]
     pub content: Option<String>,
-}
-
-/// The value as a `T`, or `None` when it is some other type.
-fn lenient<'de, D: Deserializer<'de>, T: DeserializeOwned>(d: D) -> Result<Option<T>, D::Error> {
-    Ok(serde_json::from_value(Value::deserialize(d)?).ok())
-}
-
-/// The entries that are objects; anything but an array is no entries.
-fn lenient_entries<'de, D: Deserializer<'de>>(d: D) -> Result<Vec<PolicyEntry>, D::Error> {
-    let entries = match Value::deserialize(d)? {
-        Value::Array(items) => items,
-        _ => Vec::new(),
-    };
-    Ok(entries.into_iter().filter_map(|item| serde_json::from_value(item).ok()).collect())
 }
 
 impl PolicyEntry {
