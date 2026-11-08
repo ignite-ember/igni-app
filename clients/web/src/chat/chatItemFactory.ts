@@ -59,9 +59,10 @@ export class ChatItemFactory {
     return { kind: "thinking", id: this.ids.next(), text };
   }
 
-  /** The inline marker for a sub-agent run with no orchestrate card. */
+  /** The inline marker for a sub-agent run with no orchestrate card:
+   *  ``→ researcher``. */
   agent(name: string): AgentItem {
-    return { kind: "agent", id: this.ids.next(), text: name };
+    return { kind: "agent", id: this.ids.next(), text: `→ ${name}` };
   }
 
   info(text: string): InfoItem {
@@ -92,10 +93,10 @@ export class ChatItemFactory {
   }
 
   /** A ``/loop`` iteration card; a prompt without the wrapper still
-   *  shows, as an info line. */
+   *  shows, as an info line marked with the card's ``↻``. */
   loop(wrapped: string): ChatItem {
     const parsed = new UserMessageText(wrapped).loopIteration();
-    if (!parsed) return this.info(`loop: ${wrapped}`);
+    if (!parsed) return this.info(`↻ loop: ${wrapped}`);
     return { kind: "loop", id: this.ids.next(), ...parsed, raw: wrapped };
   }
 

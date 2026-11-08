@@ -263,11 +263,11 @@ describe("ChatTranscript#applyServerMessage", () => {
     expect(play([toolCompleted], items)).toBe(items);
   });
 
-  it("marks a sub-agent run with its bare name", () => {
+  it("marks a sub-agent run with an arrow and its name", () => {
     const items = play([
       { type: "run_started", agent_name: "researcher", run_id: "s1", parent_run_id: "r1", model: "m" },
     ]);
-    expect(items).toMatchObject([{ kind: "agent", text: "researcher" }]);
+    expect(items).toMatchObject([{ kind: "agent", text: "→ researcher" }]);
   });
 
   it("drops the sub-agent marker while a streaming orchestrate card is last", () => {
@@ -339,7 +339,7 @@ describe("run stats line", () => {
 
   it("renders one roll-up line with duration on run_completed", () => {
     const items = play([reply(240), runCompleted(27400, 240, 12.4)]);
-    expect(statsText(lastStats(items))).toBe("27.4k in · 240 out · 12.4s");
+    expect(statsText(lastStats(items))).toBe("✦ 27.4k in · 240 out · 12.4s");
   });
 
   it("formats minute-scale durations and skips zero duration", () => {
@@ -348,7 +348,7 @@ describe("run stats line", () => {
     ).toContain("1m 15s");
     expect(
       statsText(lastStats(play([reply(1), runCompleted(1000, 1, 0)]))),
-    ).toBe("1.0k in · 1 out");
+    ).toBe("✦ 1.0k in · 1 out");
   });
 
   it("ignores sub-agent run_completed events", () => {
@@ -364,19 +364,19 @@ describe("run stats line", () => {
     // reply. Agno billed it as 330 output total (280 reasoning) — we
     // don't read those for display; we count what we rendered.
     const items = play([think(280), reply(50), runCompleted(22000, 330, 16, "", 280)]);
-    expect(statsText(lastStats(items))).toBe("22.0k in · 280 think · 50 out · 16.0s");
+    expect(statsText(lastStats(items))).toBe("✦ 22.0k in · 280 think · 50 out · 16.0s");
   });
 
   it("correctStats replaces input with count_context_tokens", () => {
     const items = play([think(280), reply(50), runCompleted(22000, 330, 16, "", 280)]);
     const fixed = transcript(items).correctStats("r1", 13900).items;
     expect(statsText(lastStats(fixed))).toBe(
-      "13.9k in · 280 think · 50 out · 16.0s",
+      "✦ 13.9k in · 280 think · 50 out · 16.0s",
     );
     // Other stats items (different runId) shouldn't move.
     const otherRun = transcript(items).correctStats("r2", 9999).items;
     expect(statsText(lastStats(otherRun))).toBe(
-      "22.0k in · 280 think · 50 out · 16.0s",
+      "✦ 22.0k in · 280 think · 50 out · 16.0s",
     );
   });
 

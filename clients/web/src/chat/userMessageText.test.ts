@@ -54,7 +54,7 @@ describe("UserMessageText#loopIteration", () => {
       expect(ok.body).toBe("the ask");
     }
     const bad = factory.loop("not a loop wrapper");
-    expect(bad).toMatchObject({ kind: "info", text: "loop: not a loop wrapper" });
+    expect(bad).toMatchObject({ kind: "info", text: "↻ loop: not a loop wrapper" });
   });
 });
 

@@ -19,20 +19,20 @@ function stats(overrides: Partial<StatsItem> = {}): StatsItem {
 }
 
 describe("formatStats", () => {
-  it("reads input, output and duration, with no glyph", () => {
-    expect(formatStats(stats())).toBe("27.4k in · 240 out · 12.4s");
+  it("reads input, output and duration, after the stats mark", () => {
+    expect(formatStats(stats())).toBe("✦ 27.4k in · 240 out · 12.4s");
   });
 
   it("adds a think segment only when the turn rendered thinking", () => {
     expect(formatStats(stats({ visibleThinkTokens: 280, visibleOutTokens: 50 }))).toBe(
-      "27.4k in · 280 think · 50 out · 12.4s",
+      "✦ 27.4k in · 280 think · 50 out · 12.4s",
     );
   });
 
   it("formats minutes, and skips a zero duration", () => {
     expect(formatStats(stats({ duration: 75 }))).toContain("1m 15s");
     expect(formatStats(stats({ inputTokens: 1000, visibleOutTokens: 1, duration: 0 }))).toBe(
-      "1.0k in · 1 out",
+      "✦ 1.0k in · 1 out",
     );
   });
 });

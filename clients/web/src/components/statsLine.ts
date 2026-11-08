@@ -1,6 +1,7 @@
 /**
- * The text of a run's stats line. ``think`` and ``out`` are estimated
- * from the rendered text; the billed totals go in the tooltip.
+ * The text of a run's stats line, led by its ``✦`` mark. ``think`` and
+ * ``out`` are estimated from the rendered text; the billed totals go in
+ * the tooltip.
  */
 
 import type { StatsItem } from "../chat/chatItem";
@@ -16,7 +17,7 @@ function duration(seconds: number): string {
 }
 
 export function formatStats(stats: StatsItem): string {
-  const parts = [`${formatTokenCount(stats.inputTokens)} in`];
+  const parts = [`✦ ${formatTokenCount(stats.inputTokens)} in`];
   if (stats.visibleThinkTokens > 0) parts.push(`${formatTokenCount(stats.visibleThinkTokens)} think`);
   parts.push(`${formatTokenCount(stats.visibleOutTokens)} out`);
   const took = duration(stats.duration);
