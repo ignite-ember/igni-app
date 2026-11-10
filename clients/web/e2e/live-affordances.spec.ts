@@ -43,8 +43,8 @@ const OUT = "shots/affordances";
 test.describe.configure({ mode: "serial", timeout: 120_000 });
 test.beforeAll(() => mkdirSync(OUT, { recursive: true }));
 
-/** Where each command puts its answer. Taken from `App.tsx`'s
- *  `runCommand` switch, the same source `live-slash.spec.ts` uses.
+/** Where each command puts its answer. Taken from
+ *  `chat/slashCommandRouter.ts`, the same source `live-slash.spec.ts` uses.
  *
  *  ``page`` rather than ``drawer``: `Drawer` returns a `PageShell` when a
  *  `PageContext` is present and emits no `.drawer` element at all, so the
@@ -70,7 +70,7 @@ const LANDS: Record<string, Lands> = {
   "/workflows": "transcript",
 };
 
-/** The header tools menu, in `App.tsx`'s `TOOLS_MENU` order. */
+/** The header tools menu, in `extensions/baseNavigation.ts`'s order. */
 const TOOLS = [
   "MCP servers",
   "Agents",
@@ -146,7 +146,7 @@ async function shot(page: Page, name: string) {
   await page.screenshot({ path: `${OUT}/${name}.png` });
 }
 
-/** Assert the command's answer arrived where `App.tsx` sends it. */
+/** Assert the command's answer arrived where `chat/slashCommandRouter.ts` sends it. */
 async function landed(page: Page, command: string) {
   const where = LANDS[command];
   const surface = page.locator(".page").first();
@@ -182,7 +182,7 @@ async function landed(page: Page, command: string) {
 }
 
 test.describe("header tools menu", () => {
-  test("it offers exactly the entries App.tsx defines", async ({
+  test("it offers exactly the entries the app defines", async ({
     page,
     liveBe,
   }) => {

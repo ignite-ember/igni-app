@@ -359,6 +359,30 @@ describe("WindowModel — a view's write", () => {
   });
 });
 
+describe("WindowModel — the panel over the chat", () => {
+  it("opens, toggles and closes one panel at a time", async () => {
+    const backend = new FakeBackend();
+    const model = new WindowModel(backend.client(), "w-1");
+    await model.hydrate();
+    model.openPanel("login");
+    expect(model.get("panel")).toEqual({ kind: "login" });
+    model.togglePanel("notifications");
+    expect(model.get("panel")).toEqual({ kind: "notifications" });
+    model.togglePanel("notifications");
+    expect(model.get("panel")).toBeNull();
+    model.togglePanel("search");
+    model.closePanel();
+    expect(model.get("panel")).toBeNull();
+    expect(backend.writes().map((w) => w.args.value)).toEqual([
+      { kind: "login" },
+      { kind: "notifications" },
+      null,
+      { kind: "search" },
+      null,
+    ]);
+  });
+});
+
 describe("WindowModel — conflicts resolve by the backend's order", () => {
   it("an extension's change the window has not written over shows at once", async () => {
     const backend = new FakeBackend();

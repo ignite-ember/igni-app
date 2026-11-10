@@ -1,17 +1,9 @@
 // @vitest-environment jsdom
 /**
- * The watcher must be able to correct itself.
- *
- * The panel learns about exits from the ``process_exited`` push. If the
- * backend that would have sent it is killed, that push never arrives —
- * and the seed RPC could not fix it either, because it skipped any pid
- * the panel already held (``if (!next.has(p.pid))``). A window left
- * open across a BE restart therefore showed dead processes as running,
- * ticking their elapsed time, offering a Kill button for something that
- * had exited minutes earlier.
- *
- * The backend is authoritative about process state. These tests pin
- * that the panel takes its answer.
+ * The backend is authoritative about process state. A window left open
+ * across a backend restart never gets the ``process_exited`` push for
+ * the processes that died with it, so the seed list must be able to
+ * correct rows the panel already holds.
  */
 
 import { afterEach, describe, expect, it, vi } from "vitest";

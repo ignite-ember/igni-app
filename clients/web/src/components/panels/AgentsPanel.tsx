@@ -124,7 +124,7 @@ export function AgentsPanel({
   return (
     <Drawer
       // The selected agent is a level on the page's trail, not a
-      // second trail in the title. See the note in WatcherPanel.
+      // second trail in the title.
       levels={{
         // An agent without a name is a malformed definition rather than
         // an impossible one; label it so the trail still moves.

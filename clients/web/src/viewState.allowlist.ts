@@ -79,15 +79,11 @@ export const MODEL_NAMES =
 
 /** Why a state named like the model's is not the model's, by file. */
 export const BECAUSE: Record<string, Record<string, string>> = {
-  "App.tsx": {
+  "chat/useTranscriptScroll.ts": {
     scrollEl: "The scroller element, for the indicator to measure — where it is scrolled is ui.scroll.",
   },
-  "components/ChatItems.tsx": {
+  "components/chatItems/useMessageEditor.ts": {
     draft: "The text of a sent message being edited in place, before it is resent.",
-  },
-  "components/Composer.tsx": {
-    attachments: "Uploads in flight, as placeholders; a landed file joins the draft as @path.",
-    draft: "What was typed before ArrowUp started recalling history, to come back to.",
   },
   "components/panels/ExtensionsPanel.tsx": {
     draft: "An extension's settings as edited, before they are saved.",
@@ -96,21 +92,75 @@ export const BECAUSE: Record<string, Record<string, string>> = {
 
 /** Every view state, by file and category. */
 export const VIEW_STATE: Record<string, Partial<Record<Category, string[]>>> = {
-  "App.tsx": {
-    data: ["conn", "sessionBound", "items", "runPhase", "status", "hitl", "extensions", "pendingUpdate", "sessions", "skills", "backendCommands", "cloudName", "historyIndexToItemIndex"],
-    menu: ["modelMenuSignal", "accountMenu"],
-    measure: ["scrollEl"],
-    animation: ["pulsingItemId"],
+  "chat/useCommands.ts": {
+    data: ["skills", "backendCommands"],
+    menu: ["modelMenuSignal"],
+  },
+  "chat/useShellStatus.ts": {
+    data: ["status", "sessions"],
+  },
+  "chat/useHitl.ts": {
+    data: ["pending"],
+  },
+  "chat/useSessionBinding.ts": {
+    data: ["conn", "sessionBound"],
+  },
+  "chat/useTranscriptState.ts": {
+    data: ["items", "historyIndexToItemIndex"],
   },
   "chat/followOutput.ts": {
     measure: ["agreed"],
   },
-  "components/ChatItems.tsx": {
+  "chat/useChatSearch.ts": {
+    animation: ["pulsingItemId"],
+  },
+  "chat/useRunPhase.ts": {
+    data: ["runPhase"],
+  },
+  "chat/useTranscriptScroll.ts": {
+    measure: ["scrollEl"],
+  },
+  "components/AccountMenu.tsx": {
+    menu: ["accountMenu"],
+    data: ["cloudName"],
+  },
+  "extensions/useExtensions.ts": {
+    data: ["extensions"],
+  },
+  "update/useUpdateCheck.ts": {
+    data: ["pendingUpdate"],
+  },
+  "components/CopyButton.tsx": {
     animation: ["copied"],
-    disclosure: ["collapsed", "open", "open", "open", "open", "expanded", "open"],
+  },
+  "components/markdown/CodeBlock.tsx": {
+    disclosure: ["collapsed"],
     measure: ["overflowing"],
-    menu: ["retryOpen", "confirmingDelete"],
-    field: ["retryDraft", "editing", "draft"],
+  },
+  "components/chatItems/UserCodePill.tsx": {
+    disclosure: ["open"],
+  },
+  "components/chatItems/OrchestrateLog.tsx": {
+    disclosure: ["open"],
+  },
+  "components/chatItems/OrchestrateAgentRow.tsx": {
+    disclosure: ["open"],
+  },
+  "components/chatItems/useRetryDraft.ts": {
+    menu: ["retryOpen"],
+    field: ["retryDraft"],
+  },
+  "components/chatItems/ToolCardView.tsx": {
+    disclosure: ["open"],
+  },
+  "components/chatItems/TranscriptCards.tsx": {
+    disclosure: ["expanded", "open"],
+  },
+  "components/chatItems/UserMessage.tsx": {
+    menu: ["confirmingDelete"],
+  },
+  "components/chatItems/useMessageEditor.ts": {
+    field: ["editing", "draft"],
   },
   "components/ChatSearchBar.tsx": {
     field: ["query"],
@@ -118,12 +168,18 @@ export const VIEW_STATE: Record<string, Partial<Record<Category, string[]>>> = {
     page: ["activeIdx"],
     pending: ["pending"],
   },
-  "components/Composer.tsx": {
-    pending: ["attachments"],
+  "components/composer/useAttachments.ts": {
+    pending: ["uploads"],
     hover: ["dragHot"],
-    menu: ["menu", "toolsOpen", "modelMenu", "modeMenu"],
+  },
+  "components/composer/useCompletionMenu.ts": {
+    menu: ["menu"],
+  },
+  "components/composer/useComposerController.ts": {
     data: ["history"],
-    field: ["histIdx", "draft"],
+  },
+  "components/composer/useComposerPopup.ts": {
+    menu: ["popup"],
   },
   "components/FPSCounter.tsx": {
     measure: ["fps"],
@@ -151,8 +207,13 @@ export const VIEW_STATE: Record<string, Partial<Record<Category, string[]>>> = {
   "components/HostDialog.tsx": {
     field: ["value"],
   },
-  "components/JsonRenderView.tsx": {
-    disclosure: ["idx", "open", "active", "open", "open"],
+  "components/jsonRender/components/layout.tsx": {
+    disclosure: ["idx", "open", "active", "open"],
+  },
+  "components/jsonRender/components/actions.tsx": {
+    disclosure: ["open"],
+  },
+  "components/jsonRender/components/inputs.tsx": {
     field: ["checked", "val"],
   },
   "components/NotificationsPanel.tsx": {
@@ -187,9 +248,6 @@ export const VIEW_STATE: Record<string, Partial<Record<Category, string[]>>> = {
   },
   "components/WorkspaceTrustDialog.tsx": {
     pending: ["busy", "error"],
-  },
-  "components/WatcherIndicator.tsx": {
-    data: ["pids"],
   },
   "components/WorkflowRun.tsx": {
     disclosure: ["collapsed"],
@@ -232,18 +290,27 @@ export const VIEW_STATE: Record<string, Partial<Record<Category, string[]>>> = {
   "components/panels/LoopPanel.tsx": {
     data: ["status"],
   },
-  "components/panels/McpPanel.tsx": {
+  "components/panels/mcp/McpRows.tsx": {
     disclosure: ["expanded"],
     measure: ["overflowing"],
+  },
+  "components/panels/mcp/McpServerEntry.tsx": {
     menu: ["open"],
+  },
+  "components/panels/mcp/useMcpServers.ts": {
     data: ["servers"],
-    pending: ["busy"],
+    pending: ["busy", "loadError", "actionError"],
   },
   "components/panels/PluginsPanel.tsx": {
-    data: ["plugins", "markets", "contents"],
-    page: ["tab", "selected", "view"],
+    page: ["view"],
     field: ["installRef", "marketUrl", "query"],
-    pending: ["busy", "error", "loading"],
+  },
+  "components/panels/plugins/usePlugins.ts": {
+    data: ["installed", "catalog"],
+    pending: ["pending", "error"],
+  },
+  "components/panels/plugins/usePluginContents.ts": {
+    data: ["contents"],
   },
   "components/panels/SchedulePanel.tsx": {
     menu: ["open"],
@@ -255,9 +322,21 @@ export const VIEW_STATE: Record<string, Partial<Record<Category, string[]>>> = {
     data: ["skills"],
   },
   "components/panels/WatcherPanel.tsx": {
-    data: ["rows", "logsByPid"],
-    page: ["selectedPid", "filter", "autoScroll"],
+    page: ["filter"],
+  },
+  "components/panels/watcher/useNow.ts": {
     animation: ["now"],
+  },
+  "components/panels/watcher/useProcessTable.ts": {
+    data: ["table"],
+    pending: ["loadError"],
+  },
+  "components/panels/watcher/useWatcher.ts": {
+    page: ["selectedPid"],
+    pending: ["actionError"],
+  },
+  "components/panels/watcher/WatcherTail.tsx": {
+    page: ["autoScroll"],
   },
   "extensions/ExtensionIndicator.tsx": {
     data: ["state"],
@@ -266,7 +345,7 @@ export const VIEW_STATE: Record<string, Partial<Record<Category, string[]>>> = {
     measure: ["theme"],
   },
   "extensions/useExtensionTraffic.ts": {
-    data: ["signals"],
+    data: ["queues"],
   },
   "notifications/model.ts": {
     data: ["counts"],

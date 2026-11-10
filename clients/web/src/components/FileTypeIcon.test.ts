@@ -38,7 +38,7 @@ describe("kindFor", () => {
 
   it("uses the last dot for multi-dot filenames", () => {
     // ``foo.test.ts`` → ts (code), not test. Mirrors how
-    // ``guessLang`` does it in ChatItems — same convention.
+    // ``guessLang`` does it in markdown/hljsLanguage — same convention.
     expect(kindFor("component.test.tsx")).toBe("code");
     expect(kindFor("backup.tar.gz")).toBe("archive");
   });

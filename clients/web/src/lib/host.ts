@@ -7,7 +7,7 @@
  * Host detection is by feature, not user-agent:
  *
  *   • Tauri          → injects `window.__TAURI__` and (when our
- *                       desktop client wires the bridge) `__EMBER_HOST__.openFile`
+ *                       desktop client wires the bridge) `__IGNI_HOST__.openFile`
  *   • Plain browser  → no native open available — fall back to the
  *                       in-app preview modal (driven by an onPreview
  *                       callback the caller supplies).
@@ -61,13 +61,42 @@ export interface NotifyPayload {
   data?: Record<string, unknown>;
 }
 
+/** The slice of Tauri's global API (`withGlobalTauri`) igni calls. */
+interface TauriGlobal {
+  core?: { invoke?: (cmd: string, args?: Record<string, unknown>) => Promise<unknown> };
+  window?: {
+    getCurrentWindow?: () => {
+      label?: string;
+      startDragging?: () => Promise<void> | void;
+    };
+  };
+}
+
 declare global {
   interface Window {
-    __TAURI__?: unknown;
-    __TAURI_INTERNALS__?: unknown;
-    __EMBER_HOST__?: NativeBridge;
+    __TAURI__?: TauriGlobal;
+    __TAURI_INTERNALS__?: { metadata?: { currentWindow?: { label?: string } } };
+    __IGNI_HOST__?: NativeBridge;
   }
 }
+
+/** The native menu items the desktop shell routes to the web UI. */
+export const HOST_MENU_IDS = ["new_chat", "check_update", "restart_backend"] as const;
+export type HostMenuId = (typeof HOST_MENU_IDS)[number];
+
+/** The `igni-host` CustomEvent's detail: `{type, payload}`. */
+interface HostMenuEvent {
+  type?: string;
+  payload?: { id?: unknown };
+}
+
+/** The window event the desktop shell dispatches its menu items on. */
+const HOST_EVENT = "igni-host";
+const HOST_MENU_TYPE = "igni:menu";
+
+/** Header descendants that keep their own click rather than dragging. */
+const DRAG_EXEMPT =
+  "button, input, textarea, a, .chip, .file-pill, .file-pill-wrap";
 
 function detectHost(): HostKind {
   if (typeof window === "undefined") return "web";
@@ -94,10 +123,7 @@ function detectHost(): HostKind {
  */
 function detectViewKey(): string {
   if (typeof window === "undefined") return "";
-  const w = window as unknown as {
-    __TAURI__?: { window?: { getCurrentWindow?: () => { label?: string } } };
-    __TAURI_INTERNALS__?: { metadata?: { currentWindow?: { label?: string } } };
-  };
+  const w = window;
   try {
     const label = w.__TAURI__?.window?.getCurrentWindow?.()?.label;
     if (label) return label;
@@ -183,7 +209,7 @@ export class Host {
   async openExternal(url: string): Promise<boolean> {
     if (!isOpenableLink(url)) return false;
     try {
-      const bridge = window.__EMBER_HOST__;
+      const bridge = window.__IGNI_HOST__;
       if (this.kind === "tauri" && bridge?.openUrl) {
         await Promise.resolve(bridge.openUrl(url));
         return true;
@@ -204,21 +230,20 @@ export class Host {
    * plain web (the caller should fall back to its in-app toast).
    *
    * Wiring per host:
-   *   • ``__EMBER_HOST__.notify`` when the shell injected one
+   *   • ``__IGNI_HOST__.notify`` when the shell injected one
    *   • Tauri          → ``plugin:notification|notify`` (mac/Windows banner)
    */
   async notify(payload: NotifyPayload): Promise<boolean> {
     if (!payload?.title && !payload?.body) return false;
     try {
-      const bridge = window.__EMBER_HOST__;
+      const bridge = window.__IGNI_HOST__;
       if (bridge?.notify) {
         await Promise.resolve(bridge.notify(payload));
         return true;
       }
       switch (this.kind) {
         case "tauri": {
-          const tauri = (window as unknown as { __TAURI__?: { core?: { invoke?: Function } } })
-            .__TAURI__;
+          const tauri = window.__TAURI__;
           if (tauri?.core?.invoke) {
             await tauri.core.invoke("plugin:notification|notify", {
               options: { title: payload.title, body: payload.body || "" },
@@ -236,21 +261,91 @@ export class Host {
     return false;
   }
 
+  /**
+   * Stamp the host-aware CSS hooks (`data-host`, `data-platform`) on
+   * the document. The Tauri shell sets them at page load, but does not
+   * re-run that script when the loading view navigates to the app, so
+   * the app re-stamps on mount. Idempotent.
+   */
+  stampPlatform(html: HTMLElement, platform: string = navigator.platform || ""): void {
+    if (!window.__TAURI__) return;
+    html.dataset.host = "tauri";
+    const p = platform.toLowerCase();
+    html.dataset.platform = /mac/.test(p) ? "mac" : /win/.test(p) ? "win" : "linux";
+  }
+
+  /** Be told of the desktop shell's native menu items. */
+  onMenu(handler: (id: HostMenuId) => void): () => void {
+    const listener = (e: Event) => {
+      const detail = (e as CustomEvent<HostMenuEvent | null>).detail;
+      if (detail?.type !== HOST_MENU_TYPE) return;
+      const id = HOST_MENU_IDS.find((known) => known === String(detail.payload?.id ?? ""));
+      if (id) handler(id);
+    };
+    window.addEventListener(HOST_EVENT, listener);
+    return () => window.removeEventListener(HOST_EVENT, listener);
+  }
+
+  /** The desktop window's title, Finder-style: the project folder's
+   *  name, then the org after a middle dot. Nothing outside Tauri. */
+  setAppTitle(projectDir: string, org: string): void {
+    const setTitle = window.__IGNI_HOST__?.setAppTitle;
+    if (typeof setTitle !== "function") return;
+    const folder = projectDir ? projectDir.split("/").filter(Boolean).pop() || projectDir : "";
+    try {
+      setTitle(folder, org);
+    } catch {
+      /* shell unavailable: the title stays what the window was built with */
+    }
+  }
+
+  /**
+   * Make `el` drag the desktop window. A native listener calling
+   * `startDragging` directly, because neither `data-tauri-drag-region`
+   * nor `-webkit-app-region` is hit-tested reliably on an absolutely
+   * positioned, near-transparent header. Interactive children keep
+   * their clicks. Returns the unbind; a no-op outside Tauri.
+   */
+  bindDragRegion(el: HTMLElement): () => void {
+    const tauriWindow = window.__TAURI__?.window;
+    if (!tauriWindow?.getCurrentWindow) return () => {};
+    const onDown = (e: MouseEvent) => {
+      if (e.button !== 0) return;
+      const target = e.target as HTMLElement | null;
+      if (!target || target.closest(DRAG_EXEMPT)) return;
+      e.preventDefault();
+      try {
+        void tauriWindow.getCurrentWindow?.().startDragging?.();
+      } catch (err) {
+        console.warn("[igni] startDragging failed", err);
+      }
+    };
+    el.addEventListener("mousedown", onDown);
+    return () => el.removeEventListener("mousedown", onDown);
+  }
+
+  /** The desktop shell's update check, or `null` when this host has
+   *  none and the backend should be asked instead. The answer is
+   *  untyped; `UpdateInfo.parse` reads it. */
+  checkUpdate(): Promise<unknown> | null {
+    const invoke = window.__TAURI__?.core?.invoke;
+    return invoke ? invoke("igni_check_update") : null;
+  }
+
   async openFile(path: string): Promise<boolean> {
     if (!path) return false;
     for (const fn of this.openListeners) fn(path);
     try {
       switch (this.kind) {
         case "tauri": {
-          const bridge = window.__EMBER_HOST__;
+          const bridge = window.__IGNI_HOST__;
           if (bridge?.openFile) {
             await Promise.resolve(bridge.openFile(path));
             return true;
           }
           // Tauri injects __TAURI__ but our desktop client may not yet
-          // have wired __EMBER_HOST__. Try the standard shell plugin.
-          const tauri = (window as unknown as { __TAURI__?: { core?: { invoke?: Function } } })
-            .__TAURI__;
+          // have wired __IGNI_HOST__. Try the standard shell plugin.
+          const tauri = window.__TAURI__;
           if (tauri?.core?.invoke) {
             await tauri.core.invoke("plugin:shell|open", { path });
             return true;

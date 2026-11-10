@@ -232,3 +232,169 @@ export function ChevronIcon({ size = 10, down = false }: IconProps & { down?: bo
     </svg>
   );
 }
+
+/* The icons below came out of the old chat-item renderer with their
+ * artwork unchanged, so the visual baselines hold. ``CopiedCheckIcon``,
+ * ``StopSquareIcon`` and ``EditPenIcon`` duplicate ``CheckIcon``,
+ * ``StopIcon`` and ``PencilIcon`` at other sizes and strokes; folding
+ * them together changes pixels and waits for a snapshot update. */
+
+/** Two stacked sheets: "copy to clipboard". */
+export function CopyIcon() {
+  return (
+    <svg
+      width="12"
+      height="12"
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <rect x="4" y="4" width="8.5" height="9.5" rx="1.5" />
+      <path d="M3 11.5V3a1 1 0 0 1 1-1h7.5" />
+    </svg>
+  );
+}
+
+/** The tick a copy button shows once the text is on the clipboard. */
+export function CopiedCheckIcon() {
+  return (
+    <svg
+      width="12"
+      height="12"
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M3.5 8.5l3 3 6-7" />
+    </svg>
+  );
+}
+
+/** ``< >``: a pasted code snippet. */
+export function CodeBracketIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+      <path
+        d="M5.5 4L2.5 8L5.5 12M10.5 4L13.5 8L10.5 12"
+        stroke="currentColor"
+        strokeWidth="1.4"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        fill="none"
+      />
+    </svg>
+  );
+}
+
+/** Circular arrow: "retry". */
+export function RetryIcon() {
+  return (
+    <svg
+      width="11"
+      height="11"
+      viewBox="0 0 16 16"
+      aria-hidden="true"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      style={{ display: "inline-block", verticalAlign: "middle" }}
+    >
+      <path d="M2.5 8a5.5 5.5 0 1 0 1.6-3.9" />
+      <path d="M2.2 2.5v3h3" />
+    </svg>
+  );
+}
+
+/** Filled square: "stop", on the team and agent Stop buttons. */
+export function StopSquareIcon() {
+  return (
+    <svg
+      width="10"
+      height="10"
+      viewBox="0 0 10 10"
+      aria-hidden="true"
+      style={{ display: "inline-block", verticalAlign: "middle" }}
+    >
+      <rect x="1.5" y="1.5" width="7" height="7" rx="1" fill="currentColor" />
+    </svg>
+  );
+}
+
+/** Pen: "edit this message". */
+export function EditPenIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor"
+      strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M11.4 2.6l2 2L5.5 12.5l-3 0.5 0.5-3z" />
+    </svg>
+  );
+}
+
+/** Bin: "delete". */
+export function TrashIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor"
+      strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M3 4.5h10M6 4.5V3a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v1.5M4.5 4.5l.7 8.4a1 1 0 0 0 1 .9h3.6a1 1 0 0 0 1-.9l.7-8.4M7 7.5v4M9 7.5v4" />
+    </svg>
+  );
+}
+
+/** Cog: "settings", "manage". */
+export function GearIcon() {
+  return (
+    <svg viewBox="0 0 16 16" width="13" height="13" fill="none" aria-hidden="true">
+      <path
+        d="M8 5.6a2.4 2.4 0 1 0 0 4.8 2.4 2.4 0 0 0 0-4.8z"
+        stroke="currentColor"
+        strokeWidth="1.2"
+      />
+      <path
+        d="M13.5 8a5.6 5.6 0 0 0-.09-1.01l1.36-1.06-1.4-2.42-1.6.65a5.6 5.6 0 0 0-1.75-1.01L9.7.5h-2.8l-.32 1.65a5.6 5.6 0 0 0-1.75 1.01l-1.6-.65-1.4 2.42L3.19 6.99A5.6 5.6 0 0 0 3.1 8c0 .34.03.68.09 1.01L1.83 10.07l1.4 2.42 1.6-.65a5.6 5.6 0 0 0 1.75 1.01l.32 1.65h2.8l.32-1.65a5.6 5.6 0 0 0 1.75-1.01l1.6.65 1.4-2.42-1.36-1.06c.06-.33.09-.67.09-1.01z"
+        stroke="currentColor"
+        strokeWidth="1.1"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+/** Artwork the json-render catalog's ``Icon`` (and the icon slots on
+ *  ``Button``) can name. The visualizer agent picks the name, so an
+ *  unknown one falls back to ``info``. The ``triangle*`` and ``dot``
+ *  glyphs mark a ``Metric`` delta's direction. */
+const NAMED_ICON_PATHS: Record<string, string> = {
+  check: "M4 8l3 3 5-6",
+  x: "M4 4l8 8M12 4l-8 8",
+  info: "M8 5v3M8 11h.01M2 8a6 6 0 1 0 12 0 6 6 0 0 0-12 0",
+  warning: "M8 3l6 10H2L8 3zM8 7v3M8 11h.01",
+  chevron: "M4 6l4 4 4-4",
+  chevronUp: "M4 10l4-4 4 4",
+  chevronRight: "M6 4l4 4-4 4",
+  star: "M8 2l1.8 3.7 4 .6-2.9 2.9.7 4L8 11.3l-3.6 1.9.7-4L2.2 6.3l4-.6z",
+  plus: "M8 3v10M3 8h10",
+  minus: "M3 8h10",
+  arrowUp: "M8 3l4 4H10v6H6V7H4z",
+  arrowDown: "M8 13l-4-4h2V3h4v6h2z",
+  triangleUp: "M8 4l5 8H3z",
+  triangleDown: "M8 12L3 4h10z",
+  dot: "M6.5 8a1.5 1.5 0 1 0 3 0 1.5 1.5 0 0 0-3 0",
+};
+
+export function NamedIcon({ name, size = 14 }: IconProps & { name: string }) {
+  return (
+    <Svg size={size}>
+      <path d={NAMED_ICON_PATHS[name] ?? NAMED_ICON_PATHS.info} />
+    </Svg>
+  );
+}

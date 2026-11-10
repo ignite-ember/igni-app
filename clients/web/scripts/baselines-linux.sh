@@ -72,11 +72,26 @@ fi
 # stated: image, version, architecture.
 # The repository root, not just this client: vite.config.ts aliases
 # `@ignite-ember/ui-react`, `@ignite-ember/test-utils` and the bridge to
-# `../../packages/*`, so a copy of clients/web alone fails every screen
+# igni-sdk's source, so a copy of clients/web alone fails every screen
 # with "Failed to resolve import @ignite-ember/ui-react" before a single
 # pixel is compared. node_modules is left behind (it is darwin-built
 # here, and `npm ci` makes the container's own).
 REPO_DIR="$(cd "$CLIENT_DIR/../.." && pwd)"
+#
+# igni-sdk, side by side with this repository — the layout CI checks
+# out (three actions/checkout steps, ``igni-app`` and ``igni-sdk`` in
+# one workspace) and the layout vite.config.ts resolves: the SDKs live
+# at ``../../../igni-sdk`` from the client directory. After the split
+# the SDKs are not in this repository at all, so the copy has to bring
+# igni-sdk along, or the aliases point at nothing and every screen
+# fails before a pixel is compared. ``IGNI_SDK_DIR`` names the
+# checkout, the same variable vite.config.ts reads.
+SDK_DIR="${IGNI_SDK_DIR:-$(cd "$REPO_DIR/.." && pwd)/igni-sdk}"
+if [[ ! -d "$SDK_DIR/packages/ui-react/src" ]]; then
+  echo "igni-sdk not found at $SDK_DIR" >&2
+  echo "Clone ignite-ember/igni-sdk beside this repository, or set IGNI_SDK_DIR." >&2
+  exit 2
+fi
 #
 # One worker and every timeout x6 (T18). On an arm64 Mac the amd64
 # container runs under emulation, several times slower than CI's
@@ -86,15 +101,21 @@ REPO_DIR="$(cd "$CLIENT_DIR/../.." && pwd)"
 # timeouts in playwright.config.ts, and CI leaves it at 1.
 docker run --rm --platform linux/amd64 \
   -v "$REPO_DIR":/src:ro \
+  -v "$SDK_DIR":/sdk:ro \
   ${MOUNT_OUT[@]+"${MOUNT_OUT[@]}"} \
   -e CI= \
   -e IGNI_E2E_TIMEOUT_FACTOR=6 \
   "$IMAGE" \
   bash -euc "
-    mkdir -p /work/clients
+    # CI's layout: igni-app and igni-sdk side by side, the web client
+    # inside igni-app. The SDK's packages/ and clients/ui/ are the
+    # ones the aliases name.
+    mkdir -p /work/igni-app /work/igni-sdk
     tar -C /src --exclude=node_modules --exclude=test-results --exclude=dist \
-      -cf - clients/web clients/ui packages | tar -C /work -xf -
-    cd /work/clients/web
+      -cf - clients/web | tar -C /work/igni-app -xf -
+    tar -C /sdk --exclude=node_modules --exclude=test-results --exclude=dist \
+      --exclude=.git -cf - . | tar -C /work/igni-sdk -xf -
+    cd /work/igni-app/clients/web
     npm ci --no-audit --no-fund > /dev/null
     # No backend needed: every screen is a ?demo= route driven from
     # canned events in src/dev/.

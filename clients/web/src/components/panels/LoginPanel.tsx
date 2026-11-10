@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import type { IgniClient } from "../../protocol/client";
+import { WirePayload } from "../../protocol/wirePayload";
 
 /**
  * Browser-callback login. Progress streams in as push notifications:
@@ -17,13 +18,14 @@ export function LoginPanel({
   useEffect(() => {
     const off = client.onEvent((m) => {
       if (m.type !== "push_notification") return;
+      const p = new WirePayload(m.payload);
       if (m.channel === "login_status") {
-        setStatusText(String(m.payload.text ?? ""));
+        setStatusText(p.text("text"));
       } else if (m.channel === "login_result") {
-        onDone(Boolean(m.payload.success), String(m.payload.result ?? ""));
+        onDone(p.flag("success"), p.text("result"));
       }
     });
-    client.login().catch((e) => onDone(false, String(e)));
+    client.calls.login().catch((e) => onDone(false, String(e)));
     return off;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

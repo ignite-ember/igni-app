@@ -33,7 +33,7 @@ function req(id: string): HITLRequest {
     friendly_name: "Edit",
     tool_args: {},
     details: "",
-    agent_path: "",
+    agent_path: [],
   };
 }
 
@@ -49,7 +49,10 @@ describe("handleEsc", () => {
   });
 
   it("rejects all pending HITL + cancels the run when a dialog is open", () => {
-    const ctx: EscContext = { ...baseCtx, hitl: [req("r1"), req("r2"), req("r3")] };
+    const ctx: EscContext = {
+      ...baseCtx,
+      hitl: [req("r1"), req("r2"), req("r3")],
+    };
     const action = handleEsc({ key: "Escape" }, ctx);
     expect(action.preventDefault).toBe(true);
     expect(action.decision).toEqual({ kind: "reject_hitl_and_cancel" });

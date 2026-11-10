@@ -8,7 +8,13 @@
  */
 
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 
 import { WorkspaceTrustDialog } from "./WorkspaceTrustDialog";
 import {
@@ -30,7 +36,9 @@ const asking: WorkspaceTrustStatus = {
 afterEach(cleanup);
 
 function rpcStub(result: unknown = asking) {
-  return vi.fn(async (_method: string, _args?: unknown) => result) as unknown as (
+  return vi.fn(
+    async (_method: string, _args?: unknown) => result,
+  ) as unknown as (
     method: string,
     args?: Record<string, unknown>,
   ) => Promise<never>;
@@ -38,7 +46,13 @@ function rpcStub(result: unknown = asking) {
 
 describe("WorkspaceTrustDialog", () => {
   it("shows the folder and its git remote", () => {
-    render(<WorkspaceTrustDialog client={{ rpc: rpcStub() }} status={asking} onClose={() => {}} />);
+    render(
+      <WorkspaceTrustDialog
+        client={{ rpc: rpcStub() }}
+        status={asking}
+        onClose={() => {}}
+      />,
+    );
     expect(screen.getByText("Trust this folder?")).toBeTruthy();
     expect(screen.getByText("/work/app")).toBeTruthy();
     expect(screen.getByText("github.com/acme/app")).toBeTruthy();
@@ -51,7 +65,13 @@ describe("WorkspaceTrustDialog", () => {
   ])("%s answers %s", async (label, decision) => {
     const rpc = rpcStub();
     const onClose = vi.fn();
-    render(<WorkspaceTrustDialog client={{ rpc }} status={asking} onClose={onClose} />);
+    render(
+      <WorkspaceTrustDialog
+        client={{ rpc }}
+        status={asking}
+        onClose={onClose}
+      />,
+    );
     fireEvent.click(screen.getByRole("button", { name: label }));
     await waitFor(() => expect(onClose).toHaveBeenCalled());
     expect(rpc).toHaveBeenCalledWith("set_workspace_trust", { decision });
@@ -62,9 +82,16 @@ describe("WorkspaceTrustDialog", () => {
       ...asking,
       state: "untrusted" as const,
       can_trust: false,
-      reason: "Your organisation only allows folders from approved git remotes.",
+      reason:
+        "Your organisation only allows folders from approved git remotes.",
     };
-    render(<WorkspaceTrustDialog client={{ rpc: rpcStub() }} status={refused} onClose={() => {}} />);
+    render(
+      <WorkspaceTrustDialog
+        client={{ rpc: rpcStub() }}
+        status={refused}
+        onClose={() => {}}
+      />,
+    );
     expect(screen.getByText(refused.reason)).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Trust" })).toBeNull();
     expect(screen.getByRole("button", { name: "OK" })).toBeTruthy();
@@ -73,19 +100,44 @@ describe("WorkspaceTrustDialog", () => {
   it("keeps the dialog open and says why when the answer fails", async () => {
     const rpc = vi.fn(async () => {
       throw new Error("refused by policy");
-    }) as unknown as (method: string, args?: Record<string, unknown>) => Promise<never>;
+    }) as unknown as (
+      method: string,
+      args?: Record<string, unknown>,
+    ) => Promise<never>;
     const onClose = vi.fn();
-    render(<WorkspaceTrustDialog client={{ rpc }} status={asking} onClose={onClose} />);
+    render(
+      <WorkspaceTrustDialog
+        client={{ rpc }}
+        status={asking}
+        onClose={onClose}
+      />,
+    );
     fireEvent.click(screen.getByRole("button", { name: "Trust" }));
-    await waitFor(() => expect(screen.getByText("refused by policy")).toBeTruthy());
+    await waitFor(() =>
+      expect(screen.getByText("refused by policy")).toBeTruthy(),
+    );
     expect(onClose).not.toHaveBeenCalled();
   });
 });
 
 describe("workspace trust push", () => {
   it("reads the status off its channel and nothing else", () => {
-    expect(trustFromPush({ channel: "workspace_trust_required", payload: asking })).toEqual(asking);
-    expect(trustFromPush({ channel: "notifications_changed", payload: asking })).toBeNull();
-    expect(isTrustStatus({ state: "maybe", can_trust: true, path: "/x" })).toBe(false);
+    expect(
+      trustFromPush({
+        type: "push_notification",
+        channel: "workspace_trust_required",
+        payload: asking,
+      }),
+    ).toEqual(asking);
+    expect(
+      trustFromPush({
+        type: "push_notification",
+        channel: "notifications_changed",
+        payload: asking,
+      }),
+    ).toBeNull();
+    expect(isTrustStatus({ state: "maybe", can_trust: true, path: "/x" })).toBe(
+      false,
+    );
   });
 });

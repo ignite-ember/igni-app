@@ -1,7 +1,5 @@
 import { FileTypeIcon } from "./FileTypeIcon";
 
-/* eslint-disable @typescript-eslint/no-explicit-any */
-
 /** Render tool arguments as labeled, syntax-aware rows instead of a
  *  raw JSON dump. Common shapes get bespoke treatment:
  *
@@ -11,29 +9,40 @@ import { FileTypeIcon } from "./FileTypeIcon";
  *  - contents / content / body / text → fenced code block
  *  - anything else                  → mono code (string) or JSON (objects)
  */
-export function HitlArgsView({ args }: { args: Record<string, any> | undefined }) {
-  if (!args || typeof args !== "object" || !Object.keys(args).length) return null;
+export function HitlArgsView({
+  args,
+}: {
+  args: Record<string, unknown> | undefined;
+}) {
+  if (!args || typeof args !== "object" || !Object.keys(args).length)
+    return null;
   const entries = Object.entries(args);
 
   // Special-case: Edit-style (old_string + new_string) → render as
   // an inline diff strip below the file path.
   const isEdit =
-    typeof args.old_string === "string" &&
-    typeof args.new_string === "string";
+    typeof args.old_string === "string" && typeof args.new_string === "string";
 
   return (
     <div className="hitl-args">
       {entries
-        .filter(([k]) => !(isEdit && (k === "old_string" || k === "new_string")))
+        .filter(
+          ([k]) => !(isEdit && (k === "old_string" || k === "new_string")),
+        )
         .map(([key, raw]) => (
           <Row key={key} k={key} v={raw} />
         ))}
-      {isEdit && <DiffPair oldStr={String(args.old_string)} newStr={String(args.new_string)} />}
+      {isEdit && (
+        <DiffPair
+          oldStr={String(args.old_string)}
+          newStr={String(args.new_string)}
+        />
+      )}
     </div>
   );
 }
 
-function Row({ k, v }: { k: string; v: any }) {
+function Row({ k, v }: { k: string; v: unknown }) {
   const label = k.replace(/_/g, " ");
   return (
     <div className="hitl-arg-row">
@@ -45,10 +54,11 @@ function Row({ k, v }: { k: string; v: any }) {
   );
 }
 
-function Value({ k, v }: { k: string; v: any }) {
+function Value({ k, v }: { k: string; v: unknown }) {
   if (v === null || v === undefined)
     return <span className="hitl-arg-null">—</span>;
-  if (typeof v === "boolean") return <span className="hitl-arg-bool">{String(v)}</span>;
+  if (typeof v === "boolean")
+    return <span className="hitl-arg-bool">{String(v)}</span>;
   if (typeof v === "number") return <span className="hitl-arg-num">{v}</span>;
   if (typeof v === "string") return <StringValue k={k} v={v} />;
   if (Array.isArray(v))
@@ -82,7 +92,9 @@ function StringValue({ k, v }: { k: string; v: string }) {
   if (/^(command|cmd)$/i.test(k)) {
     return <pre className="hitl-shell">{v}</pre>;
   }
-  if (/^(contents?|body|text|code|prompt|instructions?|input|query)$/i.test(k)) {
+  if (
+    /^(contents?|body|text|code|prompt|instructions?|input|query)$/i.test(k)
+  ) {
     return <pre className="hitl-arg-pre">{v}</pre>;
   }
   if (v.length < 80 && !v.includes("\n")) {

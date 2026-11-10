@@ -14,8 +14,8 @@
 
 import type { Spec } from "@json-render/core";
 import { parse as parsePartialJson, Allow } from "partial-json";
-import type { ChatItem } from "./model";
-import { visualizationItem } from "./model";
+import type { ChatItem, VisualizationItem } from "./chatItem";
+import type { ChatItemFactory } from "./chatItemFactory";
 
 export interface VisualizationDeltaEvent {
   spec_id: string;
@@ -132,11 +132,13 @@ export function parsePartialSpec(json: string): Spec | null {
 /** Fold one visualization_delta into the current items list.
  *  Returns the new items list — same reference if nothing changed
  *  (e.g. an early delta that can't yet be partial-parsed). Callers
- *  can shallow-compare and skip re-render.
+ *  can shallow-compare and skip re-render. A new card takes its id
+ *  from ``factory``, which must be the one the list's other items came from.
  */
 export function applyVisualizationDelta(
   items: ChatItem[],
   event: VisualizationDeltaEvent,
+  factory: ChatItemFactory,
 ): ChatItem[] {
   if (!event.spec_id || typeof event.json !== "string") return items;
   const spec = parsePartialSpec(event.json);
@@ -145,20 +147,21 @@ export function applyVisualizationDelta(
   const idx = items.findIndex(
     (it) => it.kind === "visualization" && it.specId === event.spec_id,
   );
-  if (idx >= 0) {
-    const existing = items[idx] as Extract<ChatItem, { kind: "visualization" }>;
+  const existing = items[idx];
+  if (existing?.kind === "visualization") {
     const next = items.slice();
-    next[idx] = { ...existing, spec, title: event.title || existing.title };
+    const updated: VisualizationItem = { ...existing, spec, title: event.title || existing.title };
+    next[idx] = updated;
     return next;
   }
   return [
     ...items,
-    visualizationItem(
+    factory.visualization({
       spec,
-      event.title ?? "",
-      event.source ?? "visualizer",
-      event.spec_id,
-      event.source,
-    ),
+      title: event.title ?? "",
+      sourceAgent: event.source ?? "visualizer",
+      specId: event.spec_id,
+      fromExtension: event.source,
+    }),
   ];
 }

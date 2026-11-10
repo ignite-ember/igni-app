@@ -14,11 +14,16 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { ExtensionCaller } from "./client";
+import { ExtensionCaller } from "./extensionCaller";
 import type { IgniClient } from "./client";
-import { fe } from "./messages";
+import { fe } from "./clientMessages";
 
-type RpcArgs = [string, Record<string, unknown>, number | undefined, string | undefined];
+type RpcArgs = [
+  string,
+  Record<string, unknown>,
+  number | undefined,
+  string | undefined,
+];
 
 /** An `IgniClient` reduced to the one method `ExtensionCaller` uses. */
 function stubClient(): { client: IgniClient; calls: RpcArgs[] } {
@@ -47,7 +52,12 @@ describe("the rpc_request envelope", () => {
   });
 
   it("carries the caller when there is one", () => {
-    const message = fe.rpcRequest("ext.acme.scanner.list", {}, "rpc-2", "acme.scanner");
+    const message = fe.rpcRequest(
+      "ext.acme.scanner.list",
+      {},
+      "rpc-2",
+      "acme.scanner",
+    );
     expect(message).toMatchObject({
       type: "rpc_request",
       method: "ext.acme.scanner.list",
@@ -69,13 +79,19 @@ describe("ExtensionCaller", () => {
 
   it("passes method and args through untouched", () => {
     const { client, calls } = stubClient();
-    void new ExtensionCaller(client, "acme.scanner").rpc("ext.acme.scanner.accept", {
+    void new ExtensionCaller(client, "acme.scanner").rpc(
+      "ext.acme.scanner.accept",
+      {
+        id: "v1",
+        justification: "known and accepted",
+      },
+    );
+
+    expect(calls[0][0]).toBe("ext.acme.scanner.accept");
+    expect(calls[0][1]).toEqual({
       id: "v1",
       justification: "known and accepted",
     });
-
-    expect(calls[0][0]).toBe("ext.acme.scanner.accept");
-    expect(calls[0][1]).toEqual({ id: "v1", justification: "known and accepted" });
   });
 
   it("exposes the id it was built with", () => {
@@ -83,12 +99,16 @@ describe("ExtensionCaller", () => {
     // origin, and reading it back off the caller is one fewer place
     // for the two to disagree.
     const { client } = stubClient();
-    expect(new ExtensionCaller(client, "acme.scanner").extensionId).toBe("acme.scanner");
+    expect(new ExtensionCaller(client, "acme.scanner").extensionId).toBe(
+      "acme.scanner",
+    );
   });
 
   it("still defaults the timeout when none is given", () => {
     const { client, calls } = stubClient();
-    void new ExtensionCaller(client, "acme.scanner").rpc("ext.acme.scanner.list");
+    void new ExtensionCaller(client, "acme.scanner").rpc(
+      "ext.acme.scanner.list",
+    );
     expect(typeof calls[0][2]).toBe("number");
     expect(calls[0][2]).toBeGreaterThan(0);
   });

@@ -26,7 +26,7 @@ document.documentElement.dataset.host = host.kind;
 //                          chat-scroll e2e tests drive
 //   ?demo=workflow       — workflow live-progress card sandbox
 //                          (replays a canned event tape through
-//                          reduceWorkflowEvent + <WorkflowRun/>)
+//                          ChatTranscript.applyWorkflowEvent + <WorkflowRun/>)
 //   ?demo=interrupted    — interrupted-assistant banner states
 //                          (cancelled / errored / abandoned /
 //                          control) with click + keyboard event

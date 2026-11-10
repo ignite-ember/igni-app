@@ -557,12 +557,19 @@ returns >3 hits, the flag has no owner.
 ### AP4: `if/elif` chain over event types >5 branches
 
 `orchestrate.py`'s `_handle` dispatches on event type with 8+ branches.
-`ChatItems.tsx` dispatches on `item.kind` with 15+ branches. These
-are dispatch tables written by hand.
+That is a dispatch table written by hand. The web client used to have
+a second example, `ChatItems.tsx`, which switched on `item.kind` with
+15+ branches; that file is gone, split into one component per item kind
+under `clients/web/src/components/chatItems/`.
 
 **Fix:** dictionary dispatch (`{EventType: handler_fn}`) or per-type
 class. Adding a new event type = new handler, not editing a giant
-switch.
+switch. In TypeScript, copy `CHAT_ITEM_RENDERERS` in
+`clients/web/src/components/chatItems/ChatItemView.tsx`: its type is the
+mapped type `{[K in ChatItem["kind"]]: ComponentType<ItemRendererProps<K>>}`,
+so a new kind does not compile until it has a renderer. For React
+components the table of function components is the fix; do not wrap
+them in a class layer.
 
 ### AP5: `**kwargs` in function signatures
 
@@ -587,9 +594,10 @@ should become a TODO to remove.
 
 If more than a third of a file is comments explaining quirks, the
 code is quirky. Comments should explain *why*, not *what*.
-`ChatItems.tsx` has hundreds of lines of "on the live path this
-handler…" comments. Real fix: name functions after the case they
-handle.
+Real fix: name functions after the case they handle. The old
+`ChatItems.tsx`, with hundreds of lines of "on the live path this
+handler…" comments, was resolved that way: it is now one small
+component per item kind under `clients/web/src/components/chatItems/`.
 
 ---
 

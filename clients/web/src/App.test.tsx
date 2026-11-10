@@ -3,9 +3,9 @@
  * The whole app, mounted against the fixture backend the Playwright suite
  * uses (`e2e/fixtures/backend.ts`), over a real loopback WebSocket.
  *
- * `App.tsx` is ~4000 lines with its state in one component, so there is
- * no seam smaller than "the app and a backend" to test it through. The
- * E2E suite drives it in a browser; this drives the same flows in jsdom,
+ * The run, command and session controllers in `chat/` have unit tests of
+ * their own; this checks they are wired together as the window uses them.
+ * The E2E suite drives it in a browser; this drives the same flows in jsdom,
  * which is quick enough to run on every `vitest run` and is what makes
  * its coverage visible to the unit-coverage floor. What is not here —
  * layout, scrolling, visual baselines, multiple windows — stays in E2E.
@@ -505,6 +505,25 @@ describe("while a run is going", () => {
       fireEvent.keyDown(window, { key: "Escape" });
     });
     await waitFor(() => expect(received("cancel")).toHaveLength(1));
+  });
+
+  // The composer's Stop is the same transition as Esc: the reply it cut
+  // off is stamped interrupted, so its Retry / Discard / Edit banner shows.
+  it.each([
+    ["Escape", () => fireEvent.keyDown(window, { key: "Escape" })],
+    ["the composer's Stop", () => fireEvent.click(screen.getByTitle("Stop (Esc)"))],
+  ])("%s marks the cut-off reply interrupted", async (_how, stop) => {
+    const editor = await boot();
+    typeAndSend(editor, "long job");
+    const runId = await sentRun("long job");
+    push({ type: "run_started", id: runId, run_id: runId, parent_run_id: null, agent_name: "igni", model: "test-model" });
+    push({ type: "content_delta", id: runId, text: "Halfway there", is_thinking: false });
+    expect(await screen.findByText("Halfway there")).toBeTruthy();
+    act(() => {
+      stop();
+    });
+    await waitFor(() => expect(received("cancel")).toHaveLength(1));
+    expect(await screen.findByText("Run cancelled")).toBeTruthy();
   });
 });
 

@@ -1,5 +1,6 @@
 import { memo, useCallback, useEffect, useRef, useState } from "react";
-import type { ChatSearchMatch, IgniClient } from "../protocol/client";
+import type { ChatSearchMatch } from "../protocol/backendCallResults";
+import type { IgniClient } from "../protocol/client";
 
 /** Find-in-conversation bar. Search runs on the BE against the Agno
  *  SQLite session (so a 10k-turn dialogue doesn't jank the JS thread),
@@ -16,7 +17,7 @@ export interface ChatSearchBarProps {
   client: IgniClient;
   sessionId: string;
   /** Maps a BE ``history_index`` to the FE item index (or -1 if the
-   *  history turn was filtered out by ``restoredItem``). */
+   *  history turn was filtered out by ``HistoryTurnMapper``). */
   historyIndexToItemIndex: number[];
   /** Total items currently in the chat — used as the upper bound for
    *  index translation when search runs while live items have been
@@ -133,7 +134,7 @@ export function cleanSnippetText(s: string): string {
   return s
     // Drop the entire ``<system-context>…</system-context>`` and
     // ``<attached-files>…</attached-files>`` BLOCKS, contents
-    // included — mirrors what ``restoredItem`` strips so the
+    // included — mirrors what ``HistoryTurnMapper`` strips so the
     // search-result snippet matches what the user sees in the
     // chat (no leaked "Current datetime: …" prefix).
     .replace(/<system-context>[\s\S]*?<\/system-context>\s*/g, "")
@@ -206,7 +207,7 @@ export const ChatSearchBar = memo(function ChatSearchBar({
     const seq = ++seqRef.current;
     const t = window.setTimeout(async () => {
       try {
-        const res = await client.searchChat(sessionId, trimmed, LIMIT);
+        const res = await client.calls.searchChat(sessionId, trimmed, LIMIT);
         if (seq !== seqRef.current) return; // stale
         setMatches(res);
         setActiveIdx(0);
@@ -225,7 +226,7 @@ export const ChatSearchBar = memo(function ChatSearchBar({
       const m = matches[i];
       if (!m) return;
       const itemIndex = translateIndex(
-        m.history_index,
+        m.historyIndex,
         historyIndexToItemIndex,
         liveItemCount,
       );
@@ -340,7 +341,7 @@ export const ChatSearchBar = memo(function ChatSearchBar({
         <ul className="chat-search-results">
           {matches.map((m, i) => {
             const itemIndex = translateIndex(
-              m.history_index,
+              m.historyIndex,
               historyIndexToItemIndex,
               liveItemCount,
             );
@@ -348,12 +349,12 @@ export const ChatSearchBar = memo(function ChatSearchBar({
             // Render the matched substring as the user typed it; clean
             // only the surrounding context so wrapper tags / pill
             // placeholders / markdown markers don't leak into the row.
-            const before = cleanSnippetText(m.snippet.slice(0, m.match_start));
-            const hit = m.snippet.slice(m.match_start, m.match_end);
-            const after = cleanSnippetText(m.snippet.slice(m.match_end));
+            const before = cleanSnippetText(m.snippet.slice(0, m.matchStart));
+            const hit = m.snippet.slice(m.matchStart, m.matchEnd);
+            const after = cleanSnippetText(m.snippet.slice(m.matchEnd));
             return (
               <li
-                key={`${m.history_index}-${i}`}
+                key={`${m.historyIndex}-${i}`}
                 className={`chat-search-result${i === activeIdx ? " active" : ""}${unreachable ? " unreachable" : ""}`}
                 onClick={() => !unreachable && jump(i, true)}
                 title={unreachable ? "This match isn't reachable in the current view" : undefined}
@@ -366,12 +367,12 @@ export const ChatSearchBar = memo(function ChatSearchBar({
                   <mark>{hit}</mark>
                   {after}
                 </span>
-                {m.created_at > 0 && (
+                {m.createdAt > 0 && (
                   <span
                     className="chat-search-time"
-                    title={new Date(m.created_at * 1000).toLocaleString()}
+                    title={new Date(m.createdAt * 1000).toLocaleString()}
                   >
-                    {formatTurnTime(m.created_at)}
+                    {formatTurnTime(m.createdAt)}
                   </span>
                 )}
               </li>

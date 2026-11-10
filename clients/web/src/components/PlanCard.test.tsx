@@ -15,26 +15,22 @@
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { planItem, type ChatItem, type PlanTask } from "../chat/model";
-import { PlanCard } from "./ChatItems";
+import type { PlanItem } from "../chat/chatItem";
+import { ChatItemFactory } from "../chat/chatItemFactory";
+import { ChatItemIds } from "../chat/chatItemIds";
+import type { PlanTask } from "../chat/planTasks";
+import { PlanCard } from "./chatItems/PlanCard";
 
 afterEach(() => {
   cleanup();
 });
 
-type PlanChatItem = Extract<ChatItem, { kind: "plan" }>;
-
 function makeItem(
   plan: string,
   tasks: PlanTask[] = [],
-  state: "pending" | "approved" | "dismissed" = "pending",
-): PlanChatItem {
-  const item = planItem(plan, tasks);
-  // ``planItem``'s return type is the ChatItem union; narrow it
-  // here so the JSX type check passes. The factory always returns
-  // a plan-kind item.
-  if (item.kind !== "plan") throw new Error("planItem broke");
-  return state === "pending" ? item : { ...item, state };
+  state: PlanItem["state"] = "pending",
+): PlanItem {
+  return new ChatItemFactory(new ChatItemIds()).plan({ plan, tasks, state });
 }
 
 describe("PlanCard — pending state", () => {

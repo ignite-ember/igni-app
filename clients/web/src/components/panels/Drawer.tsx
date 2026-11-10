@@ -15,9 +15,9 @@ import { PageContext, PageShell, type PanelLevels } from "../PageShell";
  * the presentation.
  *
  * Doing it here rather than editing nine components is what kept the
- * conversion honest: `PluginsPanel` is a thousand lines, and a
- * mechanical edit repeated nine times across bodies that all differ
- * slightly is how a wrapper swap turns into a rewrite.
+ * conversion honest: a mechanical edit repeated nine times across
+ * bodies that all differ slightly is how a wrapper swap turns into a
+ * rewrite.
  */
 export function Drawer({
   title,

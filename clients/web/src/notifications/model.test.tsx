@@ -38,7 +38,10 @@ function backend(initial: NotificationCounts) {
 
 describe("the counts", () => {
   it("are asked for once when connected", async () => {
-    const { client, rpc } = backend({ unread: 3, by_source: { "igni.artifacts": 3 } });
+    const { client, rpc } = backend({
+      unread: 3,
+      by_source: { "igni.artifacts": 3 },
+    });
 
     const { result } = renderHook(() => useNotificationCounts(client, true));
 
@@ -68,15 +71,23 @@ describe("the counts", () => {
         payload: { counts: { unread: 2, by_source: { "acme.scanner": 2 } } },
       }),
     );
-    act(() => push({ type: "push_notification", channel: "host_signal", payload: {} }));
+    act(() =>
+      push({ type: "push_notification", channel: "host_signal", payload: {} }),
+    );
 
-    expect(result.current[0]).toEqual({ unread: 2, by_source: { "acme.scanner": 2 } });
+    expect(result.current[0]).toEqual({
+      unread: 2,
+      by_source: { "acme.scanner": 2 },
+    });
     expect(rpc).toHaveBeenCalledTimes(1);
   });
 });
 
 describe("reading them", () => {
-  const counts = { unread: 5, by_source: { "igni.artifacts": 4, "acme.scanner": 1 } };
+  const counts = {
+    unread: 5,
+    by_source: { "igni.artifacts": 4, "acme.scanner": 1 },
+  };
 
   it("gives each extension its own share", () => {
     expect(unreadFor(counts, "igni.artifacts")).toBe(4);
@@ -87,8 +98,20 @@ describe("reading them", () => {
   });
 
   it("refuses a push that is not counts", () => {
-    expect(countsFromPush({ channel: "notifications_changed", payload: { counts: { unread: "3" } } })).toBeNull();
-    expect(countsFromPush({ channel: "artifact_waiting", payload: { waiting: 3 } })).toBeNull();
+    expect(
+      countsFromPush({
+        type: "push_notification",
+        channel: "notifications_changed",
+        payload: { counts: { unread: "3" } },
+      }),
+    ).toBeNull();
+    expect(
+      countsFromPush({
+        type: "push_notification",
+        channel: "artifact_waiting",
+        payload: { waiting: 3 },
+      }),
+    ).toBeNull();
   });
 
   it("caps what a badge draws", () => {

@@ -4,7 +4,7 @@
  * Reachable at ``?demo=workflow`` (see main.tsx). Feeds the same
  * event tape the BE's workflow runner emits on the
  * ``workflow_event`` push channel into the real
- * ``reduceWorkflowEvent`` reducer, then renders the result via
+ * ``ChatTranscript.applyWorkflowEvent`` reducer, then renders the result via
  * the real :class:`WorkflowRun` component. So this page is a
  * fully client-side sandbox — no BE, no Node bridge, no
  * refactor-to-standards.mjs — that proves the FULL rendering
@@ -18,18 +18,17 @@
  *      ``<WorkflowRun />``.
  *
  * If this page shows a phase tree unfolding progressively and
- * landing on a clean ``✓ completed`` final state, the client
+ * landing on a clean ``completed`` final state, the client
  * rendering path is correct. Any real-app failure past that
  * point is a transport/BE/integration bug.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import {
-  reduceWorkflowEvent,
-  workflowItem,
-  type ChatItem,
-  type WorkflowEvent,
-} from "../chat/model";
+import type { ChatItem } from "../chat/chatItem";
+import { ChatItemFactory } from "../chat/chatItemFactory";
+import { ChatItemIds } from "../chat/chatItemIds";
+import { ChatTranscript } from "../chat/chatTranscript";
+import { parseWorkflowEvent, type WorkflowEvent } from "../protocol/workflowEvents";
 import { WorkflowRun } from "../components/WorkflowRun";
 import { countOf } from "../lib/plural";
 
@@ -49,7 +48,19 @@ function ts(seq: number): number {
   return START_MS + seq * 50;
 }
 
-const EVENTS: WorkflowEvent[] = [
+/** The tape as the client receives it: raw wire objects, parsed at the
+ *  boundary the way App parses a ``workflow_event`` push. */
+function parseTape(raw: unknown[]): WorkflowEvent[] {
+  return raw.flatMap((r) => parseWorkflowEvent(r) ?? []);
+}
+
+const chatItems = new ChatItemFactory(new ChatItemIds());
+
+function fold(items: ChatItem[], ev: WorkflowEvent): ChatItem[] {
+  return new ChatTranscript(items, chatItems).applyWorkflowEvent(ev).items;
+}
+
+const EVENTS: WorkflowEvent[] = parseTape([
   {
     workflow_run_id: RUN_ID, name: "refactor-to-standards",
     ts: ts(0), seq: 0, type: "workflow_started",
@@ -271,13 +282,13 @@ const EVENTS: WorkflowEvent[] = [
       },
     },
   },
-];
+]);
 
 // ── Failed-run tape (the same workflow, but with one failed
 //    reviewer + a failed phase + a run-level error). Same shape
 //    as EVENTS so the same reducer + component render the whole
 //    failure UX (banner, per-phase rollup, Rerun/Cancel buttons).
-const FAILED_TAPE: WorkflowEvent[] = [
+const FAILED_TAPE: WorkflowEvent[] = parseTape([
   {
     workflow_run_id: RUN_ID, name: "refactor-to-standards",
     ts: ts(0), seq: 0, type: "workflow_started",
@@ -399,7 +410,7 @@ const FAILED_TAPE: WorkflowEvent[] = [
       },
     },
   },
-];
+]);
 
 // ── Replay loop ──────────────────────────────────────────────────
 
@@ -440,12 +451,12 @@ export function WorkflowDemo() {
       lastTapeRef.current = tape;
       // Optimistic card so the user sees something before the first
       // event lands.
-      setItems([workflowItem("refactor-to-standards", RUN_ID)]);
+      setItems([chatItems.workflow("refactor-to-standards", RUN_ID)]);
       let pos = 0;
       timerRef.current = window.setInterval(() => {
         pos = Math.min(tape.length, pos + 1);
         setCursor(pos);
-        setItems((prev) => reduceWorkflowEvent(prev, tape[pos - 1]));
+        setItems((prev) => fold(prev, tape[pos - 1]));
         if (pos >= tape.length) {
           stop();
           setStatus("done");
@@ -459,9 +470,9 @@ export function WorkflowDemo() {
     (tape: WorkflowEvent[] = EVENTS) => {
       reset();
       lastTapeRef.current = tape;
-      let next: ChatItem[] = [workflowItem("refactor-to-standards", RUN_ID)];
+      let next: ChatItem[] = [chatItems.workflow("refactor-to-standards", RUN_ID)];
       for (const ev of tape) {
-        next = reduceWorkflowEvent(next, ev);
+        next = fold(next, ev);
       }
       setItems(next);
       setCursor(tape.length);
@@ -487,7 +498,7 @@ export function WorkflowDemo() {
           <code>workflow_event</code> channel (a canned version of{" "}
           what <code>refactor-to-standards.mjs</code> emits when the
           BE's Node bridge runs it). Feeds each event into{" "}
-          <code>reduceWorkflowEvent</code>, renders the resulting
+          <code>ChatTranscript.applyWorkflowEvent</code>, renders the resulting
           <code>WorkflowRunState</code> via the same{" "}
           <code>&lt;WorkflowRun /&gt;</code> component the chat uses.
         </p>

@@ -140,7 +140,7 @@ async function writeProjectFiles(projectDir: string): Promise<void> {
 /**
  * A credentials file the backend will read as "signed in".
  *
- * ``App.tsx`` derives ``signedIn`` from ``status.cloud_email``, and
+ * ``chat/useShellStatus.ts`` derives the sign-in from ``status.cloud_email``, and
  * without one it renders ``SignInWall`` over the entire app. That is
  * correct — artifacts are a cloud service and there is no standalone
  * mode — but it means a spawned backend with no credentials serves
@@ -221,7 +221,7 @@ async function trustedHome(projectDir: string): Promise<string> {
     VENV_PYTHON,
     [
       "-c",
-      "import sys; from ember_code.core.workspace_trust.service import WorkspaceTrust; " +
+      "import sys; from igni_core.core.workspace_trust.service import WorkspaceTrust; " +
         "WorkspaceTrust().trust(sys.argv[1])",
       projectDir,
     ],
@@ -432,7 +432,7 @@ export const test = base.extend<{
       VENV_PYTHON,
       [
         "-m",
-        "ember_code.backend",
+        "igni_core.backend",
         "--ws-port",
         "0",
         "--project-dir",

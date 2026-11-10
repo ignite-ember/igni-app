@@ -25,7 +25,7 @@ test("orphan process surfaces after BE restart", async ({ page, liveWsUrl }) => 
 
   // Open the watcher panel via the slash command. The real BE
   // handles ``/watcher`` → ``CommandAction.WATCHER`` which
-  // App.tsx routes to ``setPanel({kind:"watcher"})``.
+  // ``chat/slashCommandRouter.ts`` opens as the watcher page.
   await runSlashCommand(page, "/watcher", page.locator(".page"));
 
   // The seeded orphan should render exactly one row.

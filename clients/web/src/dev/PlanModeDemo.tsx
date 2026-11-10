@@ -14,20 +14,25 @@
  */
 
 import { useState } from "react";
-import { ChatItemView } from "../components/ChatItems";
+import { ChatItemView } from "../components/chatItems/ChatItemView";
 import { CtxMeter, PlanBadge, SessionChip } from "../components/StatusBits";
-import { planItem, type ChatItem, type PlanTask } from "../chat/model";
+import type { PlanItem } from "../chat/chatItem";
+import { ChatItemFactory } from "../chat/chatItemFactory";
+import { ChatItemIds } from "../chat/chatItemIds";
+import type { PlanTask } from "../chat/planTasks";
+
+const chatItems = new ChatItemFactory(new ChatItemIds());
 
 const SAMPLE_PLAN_MARKDOWN = `## JWT Auth Refactor — Implementation Plan
 
 ### Phase 1 — Backend: JWT Core
-1. **\`src/ember_code/core/auth/jwt_.py\`** *(new)* — add \`generate_access_token\`, \`verify_token\`, \`generate_refresh_token\`, \`TokenPayload\` dataclass.
-2. **\`src/ember_code/core/auth/blacklist.py\`** *(new)* — file-backed revocation set with \`revoke_token\` / \`is_revoked\`.
-3. **\`src/ember_code/core/auth/credentials.py\`** *(extend)* — replace static helpers with an \`AuthStore\` class that also tracks \`refresh_token\`.
+1. **\`src/igni_core/core/auth/jwt_.py\`** *(new)* — add \`generate_access_token\`, \`verify_token\`, \`generate_refresh_token\`, \`TokenPayload\` dataclass.
+2. **\`src/igni_core/core/auth/blacklist.py\`** *(new)* — file-backed revocation set with \`revoke_token\` / \`is_revoked\`.
+3. **\`src/igni_core/core/auth/credentials.py\`** *(extend)* — replace static helpers with an \`AuthStore\` class that also tracks \`refresh_token\`.
 
 ### Phase 2 — Middleware
-4. **\`src/ember_code/backend/auth_middleware.py\`** *(new)* — \`AuthMiddleware\` wraps the request handler; extracts \`Authorization: Bearer\`, validates, attaches claims to context.
-5. **\`src/ember_code/transport/websocket.py\`** *(update)* — call the middleware on connect; reject the handshake on failure.
+4. **\`src/igni_core/backend/auth_middleware.py\`** *(new)* — \`AuthMiddleware\` wraps the request handler; extracts \`Authorization: Bearer\`, validates, attaches claims to context.
+5. **\`src/igni_core/transport/websocket.py\`** *(update)* — call the middleware on connect; reject the handshake on failure.
 
 ### Phase 3 — Frontend
 6. **\`clients/web/src/lib/authStore.ts\`** *(new)* — module-level token state (no \`localStorage\` — XSS safe).
@@ -55,10 +60,8 @@ const SAMPLE_TASKS: PlanTask[] = [
 function makePlan(
   state: CardState,
   tasks: PlanTask[] = SAMPLE_TASKS,
-): Extract<ChatItem, { kind: "plan" }> {
-  const base = planItem(SAMPLE_PLAN_MARKDOWN, tasks);
-  if (base.kind !== "plan") throw new Error("planItem produced wrong kind");
-  return { ...base, state };
+): PlanItem {
+  return chatItems.plan({ plan: SAMPLE_PLAN_MARKDOWN, tasks, state });
 }
 
 /** Mid-execution snapshot — first task done, second in flight,
@@ -197,8 +200,7 @@ export function PlanModeDemo() {
           </p>
           <ChatItemView
             item={liveCard}
-            onApprovePlan={onApprove}
-            onRejectPlan={onReject}
+            handlers={{ plan: { approve: onApprove, reject: onReject } }}
           />
         </section>
 

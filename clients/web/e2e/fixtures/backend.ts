@@ -50,7 +50,7 @@ export interface FixtureBackend {
   clientCount(): number;
   /**
    * The window models this backend keeps, as the real one does
-   * (``ember_code.extensions.host.windows``): every ``window_model``
+   * (``igni_core.extensions.host.windows``): every ``window_model``
    * request is answered from them and each change is pushed back as
    * ``window_model_changed`` with its revision and the writer's token.
    */
@@ -99,13 +99,14 @@ export interface StartOptions {
 
 /**
  * Default handlers for the RPCs the web client fires at boot
- * (see ``App.tsx`` around line 257-475 and the typing-effects).
+ * (see ``chat/sessionSwitcher.ts``, ``chat/sessionStartup.ts`` and
+ * ``chat/statusSource.ts``).
  * Tests can override any of these via ``onRpc``.
  */
 /**
  * A status the app will actually render behind.
  *
- * ``App.tsx`` reads ``signedIn`` straight off ``cloud_email``, and an
+ * ``chat/useShellStatus.ts`` reads the sign-in off ``cloud_email``, and an
  * empty one puts ``SignInWall`` in front of the whole app — artifacts
  * are a cloud service and there is no standalone mode, so that is
  * correct behaviour. A test that builds its own status literal and

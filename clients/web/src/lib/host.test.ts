@@ -1,6 +1,6 @@
 /**
  * Tests for the host-capability layer: Tauri (``__TAURI__`` and the
- * ``__EMBER_HOST__`` bridge it injects) and the plain browser.
+ * ``__IGNI_HOST__`` bridge it injects) and the plain browser.
  *
  * Vitest's default env is "node" in this project (no jsdom). We
  * stub the bits of ``window`` that ``host.ts`` actually touches.
@@ -11,7 +11,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 interface WindowLike {
   __TAURI__?: unknown;
   __TAURI_INTERNALS__?: unknown;
-  __EMBER_HOST__?: {
+  __IGNI_HOST__?: {
     openFile?: (p: string) => unknown;
     notify?: (payload: { title: string; body?: string }) => unknown;
     openUrl?: (url: string) => unknown;
@@ -98,12 +98,12 @@ describe("Host.notify", () => {
     expect(await host.notify({ title: "Task done" })).toBe(false);
   });
 
-  it("dispatches via __EMBER_HOST__.notify when bridge is wired", async () => {
+  it("dispatches via __IGNI_HOST__.notify when bridge is wired", async () => {
     // The bridge takes precedence over the per-host branch
     // — host-injected APIs tend to support richer notifications than the generic
     // plugin paths.
     const bridgeNotify = vi.fn().mockResolvedValue(undefined);
-    win.__EMBER_HOST__ = { notify: bridgeNotify };
+    win.__IGNI_HOST__ = { notify: bridgeNotify };
     const host = new HostMod.Host();
     const result = await host.notify({ title: "T", body: "B" });
     expect(result).toBe(true);
@@ -152,7 +152,7 @@ describe("Host.notify", () => {
     // console.warn — must not propagate. Otherwise a buggy
     // bridge would crash the FE caller.
     const bridgeNotify = vi.fn().mockRejectedValue(new Error("boom"));
-    win.__EMBER_HOST__ = { notify: bridgeNotify };
+    win.__IGNI_HOST__ = { notify: bridgeNotify };
     const consoleWarn = vi.spyOn(console, "warn").mockImplementation(() => {});
     const host = new HostMod.Host();
     expect(await host.notify({ title: "T" })).toBe(false);
@@ -186,7 +186,7 @@ describe("Host.openExternal", () => {
   it("Tauri: hands the link to the opener bridge", async () => {
     const openUrl = vi.fn().mockResolvedValue(undefined);
     win.__TAURI__ = {};
-    win.__EMBER_HOST__ = { openUrl };
+    win.__IGNI_HOST__ = { openUrl };
     const host = new HostMod.Host();
     expect(await host.openExternal("https://example.com/x")).toBe(true);
     expect(openUrl).toHaveBeenCalledWith("https://example.com/x");
@@ -204,7 +204,7 @@ describe("Host.openExternal", () => {
     const openUrl = vi.fn();
     const open = vi.fn();
     win.__TAURI__ = {};
-    win.__EMBER_HOST__ = { openUrl };
+    win.__IGNI_HOST__ = { openUrl };
     win.open = open;
     const host = new HostMod.Host();
     expect(await host.openExternal("http://example.com/")).toBe(false);
@@ -221,13 +221,13 @@ describe("Host.openFile", () => {
     expect(await host.openFile("")).toBe(false);
   });
 
-  it("Tauri: uses __EMBER_HOST__.openFile when wired", async () => {
+  it("Tauri: uses __IGNI_HOST__.openFile when wired", async () => {
     // Bridge first — Tauri shells inject a richer
-    // ``__EMBER_HOST__.openFile`` that knows about the
+    // ``__IGNI_HOST__.openFile`` that knows about the
     // user's project root.
     const bridgeOpen = vi.fn().mockResolvedValue(undefined);
     win.__TAURI__ = {};
-    win.__EMBER_HOST__ = { openFile: bridgeOpen };
+    win.__IGNI_HOST__ = { openFile: bridgeOpen };
     const host = new HostMod.Host();
     expect(host.kind).toBe("tauri");
     const result = await host.openFile("/abs/file.py");
@@ -236,7 +236,7 @@ describe("Host.openFile", () => {
   });
 
   it("Tauri: falls back to plugin:shell|open when no bridge", async () => {
-    // ``__TAURI__`` is set but ``__EMBER_HOST__`` isn't yet
+    // ``__TAURI__`` is set but ``__IGNI_HOST__`` isn't yet
     // (early in app boot, before the shim lands). The
     // standard shell plugin handles it.
     const invoke = vi.fn().mockResolvedValue(undefined);
@@ -276,7 +276,7 @@ describe("Host.openFile", () => {
 
   it("Tauri with a partial shim falls back to the fallback (not crash)", async () => {
     // Defensive — Tauri injected ``__TAURI__`` but neither
-    // ``__EMBER_HOST__.openFile`` nor ``core.invoke`` is
+    // ``__IGNI_HOST__.openFile`` nor ``core.invoke`` is
     // available. The host should NOT crash; it falls through
     // to the fallback if registered, else returns false.
     win.__TAURI__ = {}; // no core.invoke, no bridge
@@ -294,7 +294,7 @@ describe("Host.openFile", () => {
     // bridge shouldn't propagate the throw to the FE caller.
     // The console.warn is the only side effect.
     win.__TAURI__ = {};
-    win.__EMBER_HOST__ = {
+    win.__IGNI_HOST__ = {
       openFile: () => {
         throw new Error("bridge crashed");
       },
@@ -392,5 +392,110 @@ describe("Host.viewKey", () => {
     expect(host.viewKey).toBe("w-5");
     delete win.__TAURI__;
     expect(host.viewKey).toBe("w-5");
+  });
+});
+
+// ── Desktop-shell glue the app used to reach for itself ─────────
+
+describe("Host.stampPlatform", () => {
+  it("stamps the host and platform under Tauri", () => {
+    win.__TAURI__ = {};
+    const html = { dataset: {} as Record<string, string> };
+    new HostMod.Host().stampPlatform(html as unknown as HTMLElement, "MacIntel");
+    expect(html.dataset).toEqual({ host: "tauri", platform: "mac" });
+    new HostMod.Host().stampPlatform(html as unknown as HTMLElement, "Win32");
+    expect(html.dataset.platform).toBe("win");
+    new HostMod.Host().stampPlatform(html as unknown as HTMLElement, "Linux x86_64");
+    expect(html.dataset.platform).toBe("linux");
+  });
+
+  it("leaves a plain browser alone", () => {
+    const html = { dataset: {} as Record<string, string> };
+    new HostMod.Host().stampPlatform(html as unknown as HTMLElement, "MacIntel");
+    expect(html.dataset).toEqual({});
+  });
+});
+
+describe("Host.onMenu", () => {
+  it("hands known menu ids to the handler and ignores the rest", () => {
+    const listeners: ((e: unknown) => void)[] = [];
+    win.addEventListener = (_type, fn) => listeners.push(fn as (e: unknown) => void);
+    win.removeEventListener = (_type, fn) => listeners.splice(listeners.indexOf(fn as never), 1);
+    const seen: string[] = [];
+    const off = new HostMod.Host().onMenu((id) => seen.push(id));
+    const fire = (detail: unknown) => listeners.forEach((l) => l({ detail }));
+    fire({ type: "igni:menu", payload: { id: "new_chat" } });
+    fire({ type: "igni:menu", payload: { id: "unknown" } });
+    fire({ type: "other", payload: { id: "check_update" } });
+    fire(null);
+    expect(seen).toEqual(["new_chat"]);
+    off();
+    expect(listeners).toHaveLength(0);
+  });
+});
+
+describe("Host.setAppTitle", () => {
+  it("sends the folder name and the org to the shell", () => {
+    const setAppTitle = vi.fn();
+    (win.__IGNI_HOST__ as Record<string, unknown> | undefined) = { setAppTitle };
+    new HostMod.Host().setAppTitle("/Users/me/proj/", "acme");
+    expect(setAppTitle).toHaveBeenCalledWith("proj", "acme");
+    new HostMod.Host().setAppTitle("", "");
+    expect(setAppTitle).toHaveBeenLastCalledWith("", "");
+  });
+
+  it("does nothing without a shell", () => {
+    expect(() => new HostMod.Host().setAppTitle("/a", "b")).not.toThrow();
+  });
+});
+
+describe("Host.bindDragRegion", () => {
+  function element() {
+    const handlers: ((e: unknown) => void)[] = [];
+    return {
+      handlers,
+      el: {
+        addEventListener: (_t: string, fn: (e: unknown) => void) => handlers.push(fn),
+        removeEventListener: (_t: string, fn: (e: unknown) => void) =>
+          handlers.splice(handlers.indexOf(fn), 1),
+      },
+    };
+  }
+
+  it("starts a window drag on a primary press outside interactive children", () => {
+    const startDragging = vi.fn();
+    win.__TAURI__ = { window: { getCurrentWindow: () => ({ startDragging }) } };
+    const { el, handlers } = element();
+    const off = new HostMod.Host().bindDragRegion(el as unknown as HTMLElement);
+    const press = (button: number, interactive: boolean) => {
+      const e = { button, target: { closest: () => (interactive ? {} : null) }, preventDefault: vi.fn() };
+      handlers.forEach((h) => h(e));
+      return e;
+    };
+    expect(press(0, false).preventDefault).toHaveBeenCalled();
+    press(0, true);
+    press(2, false);
+    expect(startDragging).toHaveBeenCalledOnce();
+    off();
+    expect(handlers).toHaveLength(0);
+  });
+
+  it("binds nothing outside Tauri", () => {
+    const { el, handlers } = element();
+    new HostMod.Host().bindDragRegion(el as unknown as HTMLElement)();
+    expect(handlers).toHaveLength(0);
+  });
+});
+
+describe("Host.checkUpdate", () => {
+  it("asks the desktop shell when it can", async () => {
+    const invoke = vi.fn(async () => ({ available: false }));
+    win.__TAURI__ = { core: { invoke } };
+    await expect(new HostMod.Host().checkUpdate()).resolves.toEqual({ available: false });
+    expect(invoke).toHaveBeenCalledWith("igni_check_update");
+  });
+
+  it("says there is no shell to ask otherwise", () => {
+    expect(new HostMod.Host().checkUpdate()).toBeNull();
   });
 });

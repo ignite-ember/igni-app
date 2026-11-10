@@ -21,7 +21,7 @@
  * the user hits Discard).
  */
 
-import type { ChatItem } from "./model";
+import type { ChatItem } from "./chatItem";
 
 export interface ContinuedPrompt {
   /** The text to send to the agent (potentially augmented with

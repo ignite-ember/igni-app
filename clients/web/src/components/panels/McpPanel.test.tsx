@@ -4,12 +4,19 @@
  * connected, what it offers, and which of its tools the agent may see.
  *
  * Pinned: the page connects configured servers before listing them, a
+ * failed read says so rather than claiming there are no servers, a
  * policy-blocked server cannot be connected from here, hiding a tool
  * reacts at once and is undone by a re-read when the backend refuses,
- * and a failed connect leaves the page usable rather than throwing.
+ * and a failed connect is reported and leaves the page usable.
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 
 import { McpPanel } from "./McpPanel";
 
@@ -26,17 +33,36 @@ const GITHUB = {
   tool_descriptions: { github__create_issue: "Open an issue in a repository." },
   tools_disabled: ["search"],
   resources: [
-    { uri: "repo://acme/web", name: "acme/web", description: "The web repo", mime_type: "text/plain" },
+    {
+      uri: "repo://acme/web",
+      name: "acme/web",
+      description: "The web repo",
+      mime_type: "text/plain",
+    },
     { uri: "repo://acme/bare", name: "", description: "", mime_type: "" },
   ],
   prompts: [
-    { name: "triage", description: "Triage an issue", arguments: ["issue", "label"] },
+    {
+      name: "triage",
+      description: "Triage an issue",
+      arguments: ["issue", "label"],
+    },
     { name: "plain", description: "", arguments: [] },
   ],
 };
 
-const DOWN = { name: "jira", connected: false, transport: "sse", error: "401 Unauthorized" };
-const BLOCKED = { name: "pastebin", connected: false, transport: "http", policy_blocked: true };
+const DOWN = {
+  name: "jira",
+  connected: false,
+  transport: "sse",
+  error: "401 Unauthorized",
+};
+const BLOCKED = {
+  name: "pastebin",
+  connected: false,
+  transport: "http",
+  policy_blocked: true,
+};
 const BARE = { connected: false };
 
 interface Opts {
@@ -73,22 +99,40 @@ describe("the server list", () => {
   it("connects configured servers before asking what they offer", async () => {
     const { methods } = panelWith();
     await screen.findByText(/github/);
-    expect(methods.slice(0, 2)).toEqual(["ensure_mcp", "get_mcp_server_details"]);
+    expect(methods.slice(0, 2)).toEqual([
+      "ensure_mcp",
+      "get_mcp_server_details",
+    ]);
   });
 
-  it("says when no server is configured, including after a failed read", async () => {
+  it("says when no server is configured", async () => {
     panelWith({ details: [] });
     expect(await screen.findByText("No MCP servers configured.")).toBeTruthy();
-    cleanup();
-    vi.spyOn(console, "error").mockImplementation(() => {});
+  });
+
+  it("says the list could not be read, rather than that it is empty", async () => {
     panelWith({ details: new Error("backend gone") });
-    expect(await screen.findByText("No MCP servers configured.")).toBeTruthy();
+    expect(
+      await screen.findByText("Could not read the MCP servers: backend gone"),
+    ).toBeTruthy();
+    expect(screen.queryByText("No MCP servers configured.")).toBeNull();
+  });
+
+  it("reads lists the backend sent malformed as empty", async () => {
+    panelWith({
+      details: [
+        { name: "odd", connected: true, tool_names: "nope", resources: null },
+      ],
+    });
+    expect(await screen.findByText("0 tools — click to expand")).toBeTruthy();
   });
 
   it("summarises a connected server and explains one that is not", async () => {
     panelWith({ details: [GITHUB, DOWN, BLOCKED, BARE] });
     expect(
-      await screen.findByText("2 tools · 2 resources · 2 prompts — click to expand"),
+      await screen.findByText(
+        "2 tools · 2 resources · 2 prompts — click to expand",
+      ),
     ).toBeTruthy();
     expect(screen.getByText("401 Unauthorized")).toBeTruthy();
     expect(screen.getByText("blocked by policy")).toBeTruthy();
@@ -98,9 +142,10 @@ describe("the server list", () => {
   it("does not let a policy-blocked server be connected", async () => {
     panelWith({ details: [BLOCKED] });
     await screen.findByText("blocked by policy");
-    expect((screen.getByRole("button", { name: "Connect" }) as HTMLButtonElement).disabled).toBe(
-      true,
-    );
+    expect(
+      (screen.getByRole("button", { name: "Connect" }) as HTMLButtonElement)
+        .disabled,
+    ).toBe(true);
   });
 
   it("hands the composer a setup prompt rather than a form", async () => {
@@ -119,7 +164,9 @@ describe("connecting and disconnecting", () => {
     fireEvent.click(screen.getByRole("button", { name: "Disconnect" }));
     expect(mcpToggle).toHaveBeenCalledWith("github", false);
     await waitFor(() =>
-      expect(methods.filter((m) => m === "get_mcp_server_details")).toHaveLength(2),
+      expect(
+        methods.filter((m) => m === "get_mcp_server_details"),
+      ).toHaveLength(2),
     );
   });
 
@@ -135,8 +182,7 @@ describe("connecting and disconnecting", () => {
     expect(await screen.findByRole("button", { name: "Connect" })).toBeTruthy();
   });
 
-  it("stays usable when a connect fails", async () => {
-    const err = vi.spyOn(console, "error").mockImplementation(() => {});
+  it("reports a failed connect and stays usable", async () => {
     const { methods } = panelWith({
       details: [DOWN],
       toggle: async () => {
@@ -145,10 +191,14 @@ describe("connecting and disconnecting", () => {
     });
     fireEvent.click(await screen.findByRole("button", { name: "Connect" }));
     await waitFor(() =>
-      expect(methods.filter((m) => m === "get_mcp_server_details")).toHaveLength(2),
+      expect(
+        methods.filter((m) => m === "get_mcp_server_details"),
+      ).toHaveLength(2),
     );
     expect(screen.getByRole("button", { name: "Connect" })).toBeTruthy();
-    expect(err).toHaveBeenCalled();
+    expect(
+      screen.getByText("Could not connect jira: request timed out"),
+    ).toBeTruthy();
   });
 });
 
@@ -168,10 +218,22 @@ describe("what a server offers", () => {
     expect(screen.getByText("Triage an issue")).toBeTruthy();
   });
 
+  it("opens from a button that says whether it is open", async () => {
+    panelWith();
+    await screen.findByText(/click to expand/);
+    const head = document.querySelector(
+      "button.mcp-server-head",
+    ) as HTMLButtonElement;
+    expect(head.getAttribute("aria-expanded")).toBe("false");
+    fireEvent.click(head);
+    expect(head.getAttribute("aria-expanded")).toBe("true");
+  });
+
   it("does not expand a server with nothing to show", async () => {
     panelWith({ details: [DOWN] });
     fireEvent.click(await screen.findByText("401 Unauthorized"));
     expect(document.querySelector(".mcp-server-body")).toBeNull();
+    expect(document.querySelector("button.mcp-server-head")).toBeNull();
   });
 
   it("hides a tool from the agent at once and tells the backend", async () => {
@@ -200,7 +262,6 @@ describe("what a server offers", () => {
   });
 
   it("re-reads the truth when the backend refuses a tool change", async () => {
-    vi.spyOn(console, "error").mockImplementation(() => {});
     const { methods } = panelWith({
       setTool: async () => {
         throw new Error("refused");
@@ -209,8 +270,11 @@ describe("what a server offers", () => {
     fireEvent.click(await screen.findByText(/click to expand/));
     fireEvent.click(screen.getByTitle("Enable for agent"));
     await waitFor(() =>
-      expect(methods.filter((m) => m === "get_mcp_server_details")).toHaveLength(2),
+      expect(
+        methods.filter((m) => m === "get_mcp_server_details"),
+      ).toHaveLength(2),
     );
+    expect(screen.getByText("Could not change search: refused")).toBeTruthy();
   });
 
   it("offers Show more only for a description that overflows", async () => {

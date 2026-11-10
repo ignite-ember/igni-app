@@ -6,7 +6,7 @@
 //! gracefully shut it down and verify the parent-PID watchdog
 //! takes the BE down with it.
 //!
-//! Why this test exists: the unit tests in ``lib.rs``/``runtime.rs``
+//! Why this test exists: the unit tests in ``backend/*``/``runtime/``
 //! cover pure helpers but never instantiate the Tauri runtime.
 //! The Playwright suites exercise the shared web bundle against a
 //! browser, not against Tauri's WKWebView + IPC bridge. This test
@@ -54,7 +54,7 @@ fn igni_core() -> PathBuf {
 }
 
 /// Find child PIDs of ``parent_pid`` whose command line mentions
-/// ``ember_code.backend``. Uses ``ps`` so we don't take any deps.
+/// ``igni_core.backend``. Uses ``ps`` so we don't take any deps.
 fn find_be_descendant(parent_pid: u32) -> Option<u32> {
     // ``-A`` lists every process; ``-o pid=,ppid=,command=`` strips
     // the header so each line is "pid ppid command...".
@@ -86,7 +86,7 @@ fn find_be_descendant(parent_pid: u32) -> Option<u32> {
                 continue;
             }
             let rest = parts.collect::<Vec<_>>().join(" ");
-            if rest.contains("ember_code.backend") {
+            if rest.contains("igni_core.backend") {
                 return Some(pid);
             }
             seen.push(pid);
@@ -139,10 +139,7 @@ fn sigterm(pid: u32) {
 }
 
 /// Wait up to ``timeout`` for ``pred`` to return ``Some(_)``.
-fn poll_until<T, F: FnMut() -> Option<T>>(
-    timeout: Duration,
-    mut pred: F,
-) -> Option<T> {
+fn poll_until<T, F: FnMut() -> Option<T>>(timeout: Duration, mut pred: F) -> Option<T> {
     let deadline = Instant::now() + timeout;
     while Instant::now() < deadline {
         if let Some(v) = pred() {
@@ -224,8 +221,7 @@ fn tauri_binary_boots_be_and_watchdog_cleans_up_on_exit() {
     // real on-disk state. The dir MUST exist before the BE boots —
     // it's where ``state.db`` (sessions, prefs, …) lives and the BE
     // fails-to-ready if the path doesn't resolve to a directory.
-    let project_dir = std::env::temp_dir()
-        .join(format!("ember-tauri-smoke-{}", std::process::id()));
+    let project_dir = std::env::temp_dir().join(format!("igni-tauri-smoke-{}", std::process::id()));
     std::fs::create_dir_all(&project_dir).expect("create temp project dir");
 
     // Spawn the shell with the project venv as the BE python so
@@ -234,7 +230,7 @@ fn tauri_binary_boots_be_and_watchdog_cleans_up_on_exit() {
     let mut child: Child = Command::new(&binary)
         .env("IGNI_DEV_BACKEND", &venv_python)
         // The dev override is gated on an explicit acknowledgement,
-        // added after this test was written: `runtime.rs` ignores
+        // added after this test was written: `runtime/dev_override.rs` ignores
         // `IGNI_DEV_BACKEND` unless `IGNITE_EMBER_DEV` is `1` or
         // `true`, so an ambient variable in a shell profile cannot
         // silently redirect a real user to a stale interpreter.
@@ -264,22 +260,20 @@ fn tauri_binary_boots_be_and_watchdog_cleans_up_on_exit() {
     let guard = Killer(&mut child, tauri_pid);
 
     // ── Phase A: BE child appears in process tree ──
-    let be_pid = poll_until(Duration::from_secs(30), || {
-        find_be_descendant(tauri_pid)
-    })
-    .unwrap_or_else(|| {
-        // Two causes, and the test cannot tell them apart from here, so
-        // it names both rather than accusing the app. It accused the app
-        // for as long as it went unrun: the real cause was this test not
-        // acknowledging dev mode, and "startup is broken" is what
-        // somebody would have spent the afternoon on.
-        panic!(
-            "Tauri (pid={tauri_pid}) never spawned an ember_code.backend child \
+    let be_pid = poll_until(Duration::from_secs(30), || find_be_descendant(tauri_pid))
+        .unwrap_or_else(|| {
+            // Two causes, and the test cannot tell them apart from here, so
+            // it names both rather than accusing the app. It accused the app
+            // for as long as it went unrun: the real cause was this test not
+            // acknowledging dev mode, and "startup is broken" is what
+            // somebody would have spent the afternoon on.
+            panic!(
+                "Tauri (pid={tauri_pid}) never spawned an igni_core.backend child \
              within 30s. Either startup is broken, or the dev-backend override \
              was declined and the shell is bootstrapping a managed venv over the \
              network — check stderr for the IGNITE_EMBER_DEV notice."
-        )
-    });
+            )
+        });
 
     // ── Phase B: BE binds a loopback port ──
     //
@@ -288,8 +282,8 @@ fn tauri_binary_boots_be_and_watchdog_cleans_up_on_exit() {
     // before it binds), so the first run in months failed here with
     // "transport never started" while the shell was fine. A CI runner is
     // slower still. The bound is for a hang, not a speed check.
-    let port = poll_until(Duration::from_secs(60), || listening_port(be_pid))
-        .unwrap_or_else(|| {
+    let port =
+        poll_until(Duration::from_secs(60), || listening_port(be_pid)).unwrap_or_else(|| {
             panic!(
                 "BE (pid={be_pid}) is alive but never bound a loopback TCP \
                  port within 60s — transport never started"

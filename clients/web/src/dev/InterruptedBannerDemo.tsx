@@ -29,9 +29,9 @@
  */
 
 import { useCallback, useState } from "react";
-import { AssistantMessage } from "../components/ChatItems";
-import type { ChatItem } from "../chat/model";
-import type { AssistantInterrupted } from "../chat/model";
+import { AssistantMessage } from "../components/chatItems/AssistantMessage";
+import type { ChatItem } from "../chat/chatItem";
+import type { AssistantInterrupted } from "../chat/chatItem";
 
 interface LogEntry {
   ts: number;
@@ -72,8 +72,8 @@ const SCENARIOS: Scenario[] = [
     key: "cancelled",
     title: "User hit Esc mid-stream",
     subtitle:
-      "Banner reason: cancelled. Left-border accent: ember-orange. " +
-      "FE-side stamp via markAssistantInterrupted('cancelled'); " +
+      "Banner reason: cancelled. Left-border accent: igni-orange. " +
+      "FE-side stamp via markInterrupted('cancelled'); " +
       "BE-side stamp via run_controller.cancel_run.",
     reason: "cancelled",
     partial: PARTIAL_1,
@@ -82,7 +82,7 @@ const SCENARIOS: Scenario[] = [
     key: "errored",
     title: "Agent raised mid-run",
     subtitle:
-      "Banner reason: errored. Left-border accent: ember-red. The " +
+      "Banner reason: errored. Left-border accent: igni-red. The " +
       "error string is shown inline so the user can tell apart " +
       '"I stopped it" from "it crashed".',
     reason: "errored",
@@ -182,9 +182,11 @@ function App() {
             <div className="demo-page-panel-body">
               <AssistantMessage
                 item={assistantItem(1, s.partial, s.reason)}
-                onRetry={s.reason ? onRetry : undefined}
-                onDiscard={s.reason ? onDiscard : undefined}
-                onEditPrompt={s.reason ? onEditPrompt(s.key, s.partial) : undefined}
+                handlers={
+                  s.reason
+                    ? { retry: onRetry, discard: onDiscard, editPrompt: onEditPrompt(s.key, s.partial) }
+                    : undefined
+                }
               />
               {s.errorDetail && (
                 <p className="demo-page-error-detail">

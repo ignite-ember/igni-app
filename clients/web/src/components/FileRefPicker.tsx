@@ -26,7 +26,7 @@ export function FileRefPicker({
   useEffect(() => {
     const my = ++seq.current;
     client
-      .completeFiles(query, 30)
+      .calls.completeFiles(query, 30)
       .then(({ matches }) => {
         if (my !== seq.current) return;
         setResults(matches);

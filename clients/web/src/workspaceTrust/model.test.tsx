@@ -25,7 +25,9 @@ import {
 
 afterEach(cleanup);
 
-function status(over: Partial<WorkspaceTrustStatus> = {}): WorkspaceTrustStatus {
+function status(
+  over: Partial<WorkspaceTrustStatus> = {},
+): WorkspaceTrustStatus {
   return {
     state: "ask",
     can_trust: true,
@@ -52,14 +54,19 @@ function rig(answer: unknown | Error = status()) {
   };
   const windowModel = { openDialog: vi.fn(), answerDialog: vi.fn() };
   const push = (payload: unknown, channel = TRUST_CHANNEL) => {
-    for (const fn of listeners) fn({ type: "push_notification", channel, payload });
+    for (const fn of listeners)
+      fn({ type: "push_notification", channel, payload });
   };
   return { client, windowModel, push, listeners };
 }
 
 function mount(
   r: ReturnType<typeof rig>,
-  props: { connected?: boolean; projectDir?: string; dialog?: Dialog | null } = {},
+  props: {
+    connected?: boolean;
+    projectDir?: string;
+    dialog?: Dialog | null;
+  } = {},
 ) {
   return renderHook(
     (p: { connected: boolean; projectDir: string; dialog: Dialog | null }) =>
@@ -96,16 +103,35 @@ describe("reading a status", () => {
   });
 
   it("takes a status only from its own channel", () => {
-    expect(trustFromPush({ channel: TRUST_CHANNEL, payload: status() })).toEqual(status());
-    expect(trustFromPush({ channel: "other", payload: status() })).toBeNull();
-    expect(trustFromPush({ channel: TRUST_CHANNEL, payload: { state: "ask" } })).toBeNull();
-    expect(trustFromPush(null)).toBeNull();
+    expect(
+      trustFromPush({
+        type: "push_notification",
+        channel: TRUST_CHANNEL,
+        payload: status(),
+      }),
+    ).toEqual(status());
+    expect(
+      trustFromPush({
+        type: "push_notification",
+        channel: "other",
+        payload: status(),
+      }),
+    ).toBeNull();
+    expect(
+      trustFromPush({
+        type: "push_notification",
+        channel: TRUST_CHANNEL,
+        payload: { state: "ask" },
+      }),
+    ).toBeNull();
   });
 
   it("knows the trust dialog for a folder", () => {
     expect(isTrustDialogFor(trustDialog(), "/work/app")).toBe(true);
     expect(isTrustDialogFor(trustDialog(), "/work/other")).toBe(false);
-    expect(isTrustDialogFor({ id: "x", spec: { kind: "update" } }, "/work/app")).toBe(false);
+    expect(
+      isTrustDialogFor({ id: "x", spec: { kind: "update" } }, "/work/app"),
+    ).toBe(false);
     expect(isTrustDialogFor(null, "/work/app")).toBe(false);
   });
 });
@@ -121,7 +147,9 @@ describe("the dialog", () => {
   it("opens when the folder's state is ask", async () => {
     const r = rig();
     mount(r);
-    await waitFor(() => expect(r.windowModel.openDialog).toHaveBeenCalledOnce());
+    await waitFor(() =>
+      expect(r.windowModel.openDialog).toHaveBeenCalledOnce(),
+    );
     expect(r.client.rpc).toHaveBeenCalledWith("get_workspace_trust");
     expect(r.windowModel.openDialog.mock.calls[0][0]).toMatchObject({
       kind: TRUST_DIALOG_KIND,
@@ -149,7 +177,9 @@ describe("the dialog", () => {
   it("closes the open dialog once someone has answered for its folder", async () => {
     const r = rig(status({ state: "trusted" }));
     mount(r, { dialog: trustDialog() });
-    await waitFor(() => expect(r.windowModel.answerDialog).toHaveBeenCalledWith("d1", null));
+    await waitFor(() =>
+      expect(r.windowModel.answerDialog).toHaveBeenCalledWith("d1", null),
+    );
   });
 
   it("leaves a dialog for another folder alone", async () => {
@@ -160,10 +190,16 @@ describe("the dialog", () => {
   });
 
   it("explains a policy refusal once per folder, not on every reconnect", async () => {
-    const refused = status({ state: "untrusted", can_trust: false, reason: "Policy forbids it." });
+    const refused = status({
+      state: "untrusted",
+      can_trust: false,
+      reason: "Policy forbids it.",
+    });
     const r = rig(refused);
     const view = mount(r);
-    await waitFor(() => expect(r.windowModel.openDialog).toHaveBeenCalledOnce());
+    await waitFor(() =>
+      expect(r.windowModel.openDialog).toHaveBeenCalledOnce(),
+    );
     view.rerender({ connected: false, projectDir: "/work/app", dialog: null });
     view.rerender({ connected: true, projectDir: "/work/app", dialog: null });
     await waitFor(() => expect(r.client.rpc).toHaveBeenCalledTimes(2));
@@ -200,7 +236,9 @@ describe("the dialog", () => {
   it("stops listening when unmounted, and ignores an answer that arrives after", async () => {
     let resolve: (v: unknown) => void = () => {};
     const r = rig();
-    r.client.rpc.mockImplementation(() => new Promise((res) => (resolve = res)));
+    r.client.rpc.mockImplementation(
+      () => new Promise((res) => (resolve = res)),
+    );
     const view = mount(r);
     expect(r.listeners.size).toBe(1);
     view.unmount();

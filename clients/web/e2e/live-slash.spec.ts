@@ -60,7 +60,7 @@ test.beforeAll(() => mkdirSync(OUT, { recursive: true }));
  * had done nothing at all. Seven tests that could not fail, in a file
  * whose whole purpose was to prove the commands work.
  *
- * `where` is taken from `App.tsx`'s `runCommand` switch, not guessed:
+ * `where` is taken from `chat/slashCommandRouter.ts`, not guessed:
  * `help`/`agents`/`skills`/`mcp` call `setPanel`, which renders inside
  * `Drawer`'s `aside.drawer`; `sessions` calls `setSidebarOpen(true)`;
  * `model` opens the composer's `.model-menu`; `/ctx` has no case at
@@ -156,7 +156,7 @@ const ANSWERS: { cmd: string; shows: RegExp }[] = [
   // Not in `BUILTIN_COMMANDS`, so not in the picker — but the backend
   // registers it and typing it works.
   { cmd: "/eject", shows: /Usage: \/eject/ },
-  // A client-side intercept in `App.tsx`, not a backend command at
+  // A client-side intercept in `chat/slashCommandRouter.ts`, not a backend command at
   // all. It lists `.igni/workflows/` (and `~/.igni/workflows/`).
   { cmd: "/workflows", shows: /workflow/i },
 ];

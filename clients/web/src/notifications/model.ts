@@ -11,6 +11,8 @@
 import { useEffect, useState } from "react";
 
 import type { IgniClient } from "../protocol/client";
+import type { ServerMessage } from "../protocol/messages";
+import { WirePayload } from "../protocol/wirePayload";
 
 /** Where opening one goes: one of its extension's pages. */
 export interface NotificationTarget {
@@ -78,10 +80,16 @@ export function badgeText(n: number): string {
 }
 
 /** The counts `notifications_changed` carries, or `null` for anything else. */
-export function countsFromPush(message: unknown): NotificationCounts | null {
-  const push = message as { channel?: unknown; payload?: { counts?: unknown } };
-  if (push?.channel !== COUNTS_CHANNEL) return null;
-  return isCounts(push.payload?.counts) ? push.payload.counts : null;
+export function countsFromPush(
+  message: ServerMessage,
+): NotificationCounts | null {
+  if (
+    message.type !== "push_notification" ||
+    message.channel !== COUNTS_CHANNEL
+  )
+    return null;
+  const counts = new WirePayload(message.payload).value("counts");
+  return isCounts(counts) ? counts : null;
 }
 
 /**

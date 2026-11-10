@@ -6,7 +6,7 @@
  * what is selected, the composer, toasts, the dialog, where the
  * transcript is scrolled, whether the window has focus, and which
  * session it shows are fields of a model the backend keeps per window
- * (`ember_code.extensions.host.windows`). igni's own views are the
+ * (`igni_core.extensions.host.windows`). igni's own views are the
  * first client of that model: they read it through {@link useWindowField}
  * and change it through {@link WindowModel.write} — the same path an
  * extension's `host.ui` takes on the backend, so every change is a
@@ -117,11 +117,19 @@ export function ensureClientId(viewKey = ""): string {
 
 // ── The model's shape (the host schema's `ui` types) ─────────────
 
+/** What igni itself opens over the chat: pick a folder and go, get
+ *  through sign-in, glance at what is waiting, find in the conversation. */
+export type PanelKind = "notifications" | "search" | "login" | "dir-picker";
+
 /** `Panel`: what is open over the chat. One at a time. */
 export interface Panel {
-  kind: "notifications" | "search" | "login" | "dir-picker" | string;
+  kind: PanelKind | string;
   params?: Record<string, unknown> | null;
 }
+
+/** At or below this window width the sidebar starts closed, and picking
+ *  a session closes it. */
+export const SIDEBAR_BREAKPOINT_PX = 700;
 
 export interface Sidebar {
   open: boolean;
@@ -448,6 +456,21 @@ export class WindowModel {
     entry.send = send;
     if (options.debounce) entry.timer = setTimeout(send, this.debounceMs);
     else send();
+  }
+
+  /** Open `kind` over the chat, replacing whatever was open. */
+  openPanel(kind: PanelKind): void {
+    this.write("panel", { kind });
+  }
+
+  closePanel(): void {
+    this.write("panel", null);
+  }
+
+  /** Open `kind`, or close it when it is what is open. */
+  togglePanel(kind: PanelKind): void {
+    if (this.get("panel")?.kind === kind) this.closePanel();
+    else this.openPanel(kind);
   }
 
   private sendNow(field: WindowField): void {

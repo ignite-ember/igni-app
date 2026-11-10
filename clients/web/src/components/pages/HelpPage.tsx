@@ -1,5 +1,5 @@
 import { Drawer } from "../panels/Drawer";
-import { BUILTIN_COMMANDS, type SlashCommand } from "../Composer";
+import { BUILTIN_COMMANDS, type SlashCommand } from "../../chat/slashCommands";
 
 /**
  * Every command, grouped.

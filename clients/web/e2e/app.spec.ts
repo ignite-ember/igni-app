@@ -3,7 +3,7 @@
  *
  * Each test runs against a fresh ``FixtureBackend`` that speaks the
  * actual WS wire format. This catches bugs in ``protocol/client.ts``,
- * ``chat/model.ts``, ``App.tsx``'s push-event router, and the
+ * ``chat/chatTranscript.ts``, ``chat/pushChannelRouter.ts``, and the
  * connection-state machine — none of which the demo suite exercises.
  *
  * The fixture deliberately implements the BARE MINIMUM the FE needs
@@ -561,7 +561,7 @@ test.describe("session bootstrap", () => {
     appUrl,
   }) => {
     // Pre-populate the BE with a couple of "previous" messages.
-    // The FE calls ``get_chat_history`` (App.tsx:334) right after
+    // The FE calls ``get_chat_history`` (``chat/sessionSwitcher.ts``) right after
     // resolving the session id; shape is {role, content, run_id}.
     backend.onRpc("get_chat_history", () => [
       { role: "user", content: "what's 2+2?", run_id: "r-1" },
@@ -585,7 +585,7 @@ test.describe("session bootstrap", () => {
     await page.goto(appUrl);
 
     // The composer becomes interactive once the session id is set
-    // (App.tsx awaits ``get_session_id`` before letting the user
+    // (``chat/useSessionBinding.ts`` awaits ``get_session_id`` before letting the user
     // type). If it never resolves we hang at "Connecting…".
     await expect(page.locator(".composer-editable")).toHaveAttribute(
       "data-placeholder",

@@ -28,8 +28,8 @@
 import { describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach } from "vitest";
-import { ChatItemView } from "./ChatItems";
-import type { ChatItem } from "../chat/model";
+import { ChatItemView } from "./chatItems/ChatItemView";
+import type { ChatItem } from "../chat/chatItem";
 
 afterEach(() => cleanup());
 
@@ -84,12 +84,12 @@ describe("AssistantMessage banner — visible on interrupted runs", () => {
 });
 
 describe("AssistantMessage banner — click handlers", () => {
-  it("Retry click fires onRetryInterrupted with the assistant item id", () => {
+  it("Retry click fires interrupted.retry with the assistant item id", () => {
     const onRetry = vi.fn();
     render(
       <ChatItemView
         item={assistant(42, "cancelled")}
-        onRetryInterrupted={onRetry}
+        handlers={{ interrupted: { retry: onRetry } }}
       />,
     );
     // Anchor on the primary action's class so the test isn't
@@ -99,24 +99,24 @@ describe("AssistantMessage banner — click handlers", () => {
     expect(onRetry).toHaveBeenCalledWith(42);
   });
 
-  it("Discard click fires onDiscardInterrupted with the assistant item id", () => {
+  it("Discard click fires interrupted.discard with the assistant item id", () => {
     const onDiscard = vi.fn();
     render(
       <ChatItemView
         item={assistant(7, "errored")}
-        onDiscardInterrupted={onDiscard}
+        handlers={{ interrupted: { discard: onDiscard } }}
       />,
     );
     fireEvent.click(screen.getByRole("button", { name: /discard the partial response/i }));
     expect(onDiscard).toHaveBeenCalledWith(7);
   });
 
-  it("Edit-prompt click fires onEditPromptFromAssistant with the assistant item id", () => {
+  it("Edit-prompt click fires interrupted.editPrompt with the assistant item id", () => {
     const onEditPrompt = vi.fn();
     render(
       <ChatItemView
         item={assistant(99, "abandoned")}
-        onEditPromptFromAssistant={onEditPrompt}
+        handlers={{ interrupted: { editPrompt: onEditPrompt } }}
       />,
     );
     fireEvent.click(screen.getByRole("button", { name: /edit prompt for retry/i }));
@@ -153,7 +153,7 @@ describe("AssistantMessage banner — keyboard shortcuts", () => {
     render(
       <ChatItemView
         item={assistant(1, "cancelled")}
-        onRetryInterrupted={onRetry}
+        handlers={{ interrupted: { retry: onRetry } }}
       />,
     );
     const banner = screen.getByRole("status") as HTMLElement;
@@ -167,7 +167,7 @@ describe("AssistantMessage banner — keyboard shortcuts", () => {
     render(
       <ChatItemView
         item={assistant(1, "cancelled")}
-        onDiscardInterrupted={onDiscard}
+        handlers={{ interrupted: { discard: onDiscard } }}
       />,
     );
     const banner = screen.getByRole("status") as HTMLElement;
@@ -181,7 +181,7 @@ describe("AssistantMessage banner — keyboard shortcuts", () => {
     render(
       <ChatItemView
         item={assistant(1, "cancelled")}
-        onDiscardInterrupted={onDiscard}
+        handlers={{ interrupted: { discard: onDiscard } }}
       />,
     );
     const banner = screen.getByRole("status") as HTMLElement;
@@ -195,7 +195,7 @@ describe("AssistantMessage banner — keyboard shortcuts", () => {
     render(
       <ChatItemView
         item={assistant(1, "cancelled")}
-        onEditPromptFromAssistant={onEditPrompt}
+        handlers={{ interrupted: { editPrompt: onEditPrompt } }}
       />,
     );
     const banner = screen.getByRole("status") as HTMLElement;
@@ -214,9 +214,7 @@ describe("AssistantMessage banner — keyboard shortcuts", () => {
     render(
       <ChatItemView
         item={assistant(1, "cancelled")}
-        onRetryInterrupted={onRetry}
-        onDiscardInterrupted={onDiscard}
-        onEditPromptFromAssistant={onEditPrompt}
+        handlers={{ interrupted: { retry: onRetry, discard: onDiscard, editPrompt: onEditPrompt } }}
       />,
     );
     const banner = screen.getByRole("status") as HTMLElement;

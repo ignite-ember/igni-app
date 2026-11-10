@@ -37,7 +37,7 @@ function req(overrides: Partial<HITLRequest> = {}): HITLRequest {
     friendly_name: "Run shell",
     tool_args: { command: "ls" },
     details: "",
-    agent_path: "",
+    agent_path: [],
     ...overrides,
   };
 }
@@ -79,20 +79,19 @@ describe("HitlDialog — single requirement", () => {
     // specialists running can't tell who triggered the prompt.
     render(
       <HitlDialog
-        requirements={[req({ agent_path: "main > planner > test-runner" })]}
+        requirements={[req({ agent_path: ["main", "planner", "test-runner"] })]}
         onResolve={() => undefined}
       />,
     );
     // The path is labelled — bare, it read as a stray word under the
     // heading (F136) — so match the element that holds it.
-    expect(screen.getByText("main > planner > test-runner")).toBeTruthy();
+    expect(screen.getByText("main → planner → test-runner")).toBeTruthy();
     expect(screen.getByText(/Requested by/)).toBeTruthy();
   });
 
   it("joins the path the backend sends as a list", () => {
-    // The BE sends ``agent_path`` as a list; rendered raw, React ran
-    // the names together — the Bypass safety check read as
-    // "Requested by ignisafety check".
+    // Rendered raw, React ran the names together — the Bypass safety
+    // check read as "Requested by ignisafety check".
     render(
       <HitlDialog
         requirements={[req({ agent_path: ["igni", "safety check"] })]}
@@ -103,7 +102,12 @@ describe("HitlDialog — single requirement", () => {
   });
 
   it("shows no requester line for an empty path", () => {
-    render(<HitlDialog requirements={[req({ agent_path: [] })]} onResolve={() => undefined} />);
+    render(
+      <HitlDialog
+        requirements={[req({ agent_path: [] })]}
+        onResolve={() => undefined}
+      />,
+    );
     expect(screen.queryByText(/Requested by/)).toBeNull();
   });
 
@@ -114,10 +118,17 @@ describe("HitlDialog — single requirement", () => {
         onResolve={() => undefined}
       />,
     );
-    expect(screen.getByRole("status").textContent).toMatch(/Working out what this call would do/);
+    expect(screen.getByRole("status").textContent).toMatch(
+      /Working out what this call would do/,
+    );
     rerender(
       <HitlDialog
-        requirements={[req({ details: "Overwrites main on origin.", details_pending: false })]}
+        requirements={[
+          req({
+            details: "Overwrites main on origin.",
+            details_pending: false,
+          }),
+        ]}
         onResolve={() => undefined}
       />,
     );
@@ -212,7 +223,13 @@ describe("HitlDialog — acceptEdits shortcut", () => {
     // the friendly catalog name (``Edit``) appear in the wild —
     // the BE may send either depending on tool source. Both
     // must trigger the shortcut.
-    for (const toolName of ["Edit", "Write", "NotebookEdit", "save_file", "create_file"]) {
+    for (const toolName of [
+      "Edit",
+      "Write",
+      "NotebookEdit",
+      "save_file",
+      "create_file",
+    ]) {
       cleanup();
       render(
         <HitlDialog
@@ -235,7 +252,9 @@ describe("HitlDialog — acceptEdits shortcut", () => {
     // — acceptEdits doesn't auto-approve shell calls.
     render(
       <HitlDialog
-        requirements={[req({ tool_name: "run_shell_command", friendly_name: "Bash" })]}
+        requirements={[
+          req({ tool_name: "run_shell_command", friendly_name: "Bash" }),
+        ]}
         onResolve={() => undefined}
         currentMode="default"
         onAcceptEditsThisRun={() => undefined}
@@ -347,7 +366,11 @@ describe("HitlDialog — acceptEdits shortcut", () => {
     // shortcut. The first decision must survive, the rest auto-confirm.
     const onResolve = vi.fn();
     const batch = [
-      req({ requirement_id: "r1", tool_name: "run_shell_command", friendly_name: "Bash" }),
+      req({
+        requirement_id: "r1",
+        tool_name: "run_shell_command",
+        friendly_name: "Bash",
+      }),
       req({ requirement_id: "r2", tool_name: "edit_file" }),
       req({ requirement_id: "r3", tool_name: "edit_file" }),
     ];
@@ -391,14 +414,22 @@ describe("HitlDialog — acceptEdits shortcut", () => {
     // were never on screen, under a button labelled "edits".
     const onResolve = vi.fn();
     const batch = [
-      req({ requirement_id: "r1", tool_name: "edit_file", friendly_name: "Edit" }),
+      req({
+        requirement_id: "r1",
+        tool_name: "edit_file",
+        friendly_name: "Edit",
+      }),
       req({
         requirement_id: "r2",
         tool_name: "run_shell_command",
         friendly_name: "Bash",
         tool_args: { command: "rm -rf build" },
       }),
-      req({ requirement_id: "r3", tool_name: "edit_file", friendly_name: "Edit" }),
+      req({
+        requirement_id: "r3",
+        tool_name: "edit_file",
+        friendly_name: "Edit",
+      }),
     ];
     render(
       <HitlDialog
@@ -426,9 +457,17 @@ describe("HitlDialog — acceptEdits shortcut", () => {
     }>;
     // Exactly one decision per requirement — the tail auto-confirm
     // must not double-submit r3 when the cursor walks past it.
-    expect(decided.map((d) => d.requirement_id).sort()).toEqual(["r1", "r2", "r3"]);
-    expect(decided.find((d) => d.requirement_id === "r2")?.action).toBe("reject");
-    expect(decided.find((d) => d.requirement_id === "r3")?.action).toBe("confirm");
+    expect(decided.map((d) => d.requirement_id).sort()).toEqual([
+      "r1",
+      "r2",
+      "r3",
+    ]);
+    expect(decided.find((d) => d.requirement_id === "r2")?.action).toBe(
+      "reject",
+    );
+    expect(decided.find((d) => d.requirement_id === "r3")?.action).toBe(
+      "confirm",
+    );
   });
 
   it("steps to the next unanswered non-edit req instead of resolving", () => {
@@ -436,9 +475,21 @@ describe("HitlDialog — acceptEdits shortcut", () => {
     // BOTH, one after the other, before it submits anything.
     const onResolve = vi.fn();
     const batch = [
-      req({ requirement_id: "r1", tool_name: "edit_file", friendly_name: "Edit" }),
-      req({ requirement_id: "r2", tool_name: "run_shell_command", friendly_name: "Bash A" }),
-      req({ requirement_id: "r3", tool_name: "run_shell_command", friendly_name: "Bash B" }),
+      req({
+        requirement_id: "r1",
+        tool_name: "edit_file",
+        friendly_name: "Edit",
+      }),
+      req({
+        requirement_id: "r2",
+        tool_name: "run_shell_command",
+        friendly_name: "Bash A",
+      }),
+      req({
+        requirement_id: "r3",
+        tool_name: "run_shell_command",
+        friendly_name: "Bash B",
+      }),
     ];
     render(
       <HitlDialog

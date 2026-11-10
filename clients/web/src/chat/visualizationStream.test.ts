@@ -11,12 +11,23 @@
  * - Real token-by-token stream shapes converge to the expected Spec
  */
 
-import { describe, expect, it } from "vitest";
-import type { ChatItem } from "./model";
+import { beforeEach, describe, expect, it } from "vitest";
+import type { ChatItem } from "./chatItem";
+import { ChatItemFactory } from "./chatItemFactory";
+import { ChatItemIds } from "./chatItemIds";
 import {
   applyVisualizationDelta,
   parsePartialSpec,
+  type VisualizationDeltaEvent,
 } from "./visualizationStream";
+
+let factory: ChatItemFactory;
+beforeEach(() => {
+  factory = new ChatItemFactory(new ChatItemIds());
+});
+
+const fold = (items: ChatItem[], event: VisualizationDeltaEvent): ChatItem[] =>
+  applyVisualizationDelta(items, event, factory);
 
 // ── parsePartialSpec ────────────────────────────────────────────────
 
@@ -105,7 +116,7 @@ describe("parsePartialSpec", () => {
 describe("applyVisualizationDelta — reducer", () => {
   it("returns same items ref when the delta can't yet parse", () => {
     const items: ChatItem[] = [];
-    const result = applyVisualizationDelta(items, {
+    const result = fold(items, {
       spec_id: "run-1",
       json: "{",
     });
@@ -114,7 +125,7 @@ describe("applyVisualizationDelta — reducer", () => {
 
   it("creates a new visualization card on first parseable delta", () => {
     const items: ChatItem[] = [];
-    const result = applyVisualizationDelta(items, {
+    const result = fold(items, {
       spec_id: "run-1",
       json: '{"root":"r","elements":{"r":{"type":"Text","props":{"text":"x"}}}}',
     });
@@ -128,14 +139,14 @@ describe("applyVisualizationDelta — reducer", () => {
 
   it("updates the same card on subsequent deltas with same spec_id", () => {
     let items: ChatItem[] = [];
-    items = applyVisualizationDelta(items, {
+    items = fold(items, {
       spec_id: "run-1",
       json: '{"root":"r","elements":{"r":{"type":"Card"',
     });
     const originalId = (
       items[0] as Extract<ChatItem, { kind: "visualization" }>
     ).id;
-    items = applyVisualizationDelta(items, {
+    items = fold(items, {
       spec_id: "run-1",
       json: '{"root":"r","elements":{"r":{"type":"Card","props":{"title":"Hi"}}}}',
     });
@@ -154,11 +165,11 @@ describe("applyVisualizationDelta — reducer", () => {
 
   it("keeps distinct cards for distinct spec_ids", () => {
     let items: ChatItem[] = [];
-    items = applyVisualizationDelta(items, {
+    items = fold(items, {
       spec_id: "run-1",
       json: '{"root":"r","elements":{"r":{"type":"Text","props":{"text":"x"}}}}',
     });
-    items = applyVisualizationDelta(items, {
+    items = fold(items, {
       spec_id: "run-2",
       json: '{"root":"r","elements":{"r":{"type":"Text","props":{"text":"x"}}}}',
     });
@@ -175,7 +186,7 @@ describe("applyVisualizationDelta — reducer", () => {
 
   it("returns same ref when spec_id is empty", () => {
     const items: ChatItem[] = [];
-    const result = applyVisualizationDelta(items, {
+    const result = fold(items, {
       spec_id: "",
       json: '{"root":"r","elements":{"r":{"type":"Text","props":{"text":"x"}}}}',
     });
@@ -196,13 +207,13 @@ describe("token-by-token stream converges to the target spec", () => {
     let cursor = 0;
     while (cursor < target.length) {
       cursor = Math.min(target.length, cursor + 12); // ~12 chars per delta
-      items = applyVisualizationDelta(items, {
+      items = fold(items, {
         spec_id: "run-a",
         json: target.slice(0, cursor),
       });
     }
     // Final delta:
-    items = applyVisualizationDelta(items, {
+    items = fold(items, {
       spec_id: "run-a",
       json: target,
       final: true,
@@ -223,7 +234,7 @@ describe("token-by-token stream converges to the target spec", () => {
     // not turn spec into null).
     let sawFirstCard = false;
     for (let n = 1; n <= target.length; n++) {
-      items = applyVisualizationDelta(items, {
+      items = fold(items, {
         spec_id: "run-a",
         json: target.slice(0, n),
       });

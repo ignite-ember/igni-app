@@ -219,6 +219,26 @@ describe("JsonRenderView", () => {
     expect(call[1]).toMatchObject({ migration_id: "0042" });
   });
 
+  it("redraws a chart when a stream delta grows its data", () => {
+    const at = (n: number): Spec => ({
+      root: "chart",
+      elements: {
+        chart: { type: "LineGraph", props: { data: AAPL_2023.slice(0, n) }, children: [] },
+      },
+    });
+    const { container, rerender } = render(<JsonRenderView spec={at(3)} />);
+    expect(container.querySelectorAll(".jr-linechart-dot").length).toBe(3);
+    rerender(<JsonRenderView spec={at(7)} />);
+    expect(container.querySelectorAll(".jr-linechart-dot").length).toBe(7);
+  });
+
+  it("marks a Metric delta's direction with an SVG glyph, not a text character", () => {
+    const { container } = render(<JsonRenderView spec={KPI_SPEC} />);
+    const delta = container.querySelector(".jr-metric-up");
+    expect(delta?.querySelector("svg")).toBeTruthy();
+    expect(delta?.textContent).not.toMatch(/[▲▼•]/);
+  });
+
   it("falls through to an 'Unknown component' placeholder for missing types", () => {
     const spec: Spec = {
       root: "root",

@@ -47,6 +47,20 @@ function sources(dir: string): string[] {
   return out;
 }
 
+/** Every file the scan reads, relative to `src/`. */
+function scanned(): string[] {
+  return sources(SRC).map((full) => path.relative(SRC, full).split(path.sep).join("/"));
+}
+
+/** The shell and the parts of its layout it hands whole to a component. */
+const SHELL_FILES = [
+  "App.tsx",
+  "components/SignedOutApp.tsx",
+  "components/AppSidebar.tsx",
+  "components/ConversationFrame.tsx",
+  "components/AppComposer.tsx",
+];
+
 /** Every `useState` / `useReducer` call under `src/`. */
 function viewStates(): Found[] {
   return sources(SRC).flatMap((full) =>
@@ -106,7 +120,9 @@ describe("no view holds UI state outside the window's model", () => {
 
   it("finds the views' state at all (the scan is not silently empty)", () => {
     expect(found.length).toBeGreaterThan(100);
-    expect(found.some((f) => f.file === "App.tsx")).toBe(true);
+    // The shell is scanned even though it holds no state of its own.
+    expect(scanned()).toContain("App.tsx");
+    expect(found.some((f) => f.file === "chat/useShellStatus.ts")).toBe(true);
   });
 
   it("every useState and useReducer is listed, with a reason, and nothing more is", () => {
@@ -164,7 +180,8 @@ describe("no view holds UI state outside the window's model", () => {
     // page stack, the panel, the sidebar, the preview, the selection,
     // the composer, toasts, the dialog, the scroll, focus and the
     // session are bound, not held.
-    const shell = found.filter((f) => f.file === "App.tsx").map((f) => f.name);
+    // The layout that moved out of it is held to the same rule.
+    const shell = found.filter((f) => SHELL_FILES.includes(f.file)).map((f) => f.name);
     for (const field of [
       "pages",
       "panel",

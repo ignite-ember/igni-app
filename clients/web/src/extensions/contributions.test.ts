@@ -212,3 +212,18 @@ describe("a saved stack that names a page nobody has", () => {
     ]);
   });
 });
+
+describe("sidebar badges", () => {
+  it("gives each entry its extension's unread count, and igni's own none", () => {
+    const c = fresh();
+    c.install("acme.scanner", {
+      pages: [{ kind: "acme.scan", label: "Scanner", sidebar: true }],
+    });
+
+    expect(c.sidebarBadges({ unread: 3, by_source: { "acme.scanner": 3 } })).toEqual({
+      plugins: 0,
+      mcp: 0,
+      "acme.scan": 3,
+    });
+  });
+});

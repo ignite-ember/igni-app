@@ -17,6 +17,7 @@ import { useEffect, useRef } from "react";
 
 import type { Dialog, WindowModel } from "../clientState";
 import type { IgniClient } from "../protocol/client";
+import type { ServerMessage } from "../protocol/messages";
 
 export const TRUST_CHANNEL = "workspace_trust_required";
 export const TRUST_DIALOG_KIND = "workspace_trust";
@@ -47,10 +48,12 @@ export function isTrustStatus(value: unknown): value is WorkspaceTrustStatus {
 }
 
 /** The status `workspace_trust_required` carries, or `null` for anything else. */
-export function trustFromPush(message: unknown): WorkspaceTrustStatus | null {
-  const push = message as { channel?: unknown; payload?: unknown };
-  if (push?.channel !== TRUST_CHANNEL) return null;
-  return isTrustStatus(push.payload) ? push.payload : null;
+export function trustFromPush(
+  message: ServerMessage,
+): WorkspaceTrustStatus | null {
+  if (message.type !== "push_notification" || message.channel !== TRUST_CHANNEL)
+    return null;
+  return isTrustStatus(message.payload) ? message.payload : null;
 }
 
 /** Whether the open dialog is the trust dialog for `path`. */
@@ -84,7 +87,9 @@ export function useWorkspaceTrust(
     const apply = (status: WorkspaceTrustStatus) => {
       const open = dialogRef.current;
       const refused =
-        status.state === "untrusted" && !status.can_trust && !explained.current.has(status.path);
+        status.state === "untrusted" &&
+        !status.can_trust &&
+        !explained.current.has(status.path);
       if (status.state === "ask" || refused) {
         if (refused) explained.current.add(status.path);
         if (open?.spec.kind !== TRUST_DIALOG_KIND) {

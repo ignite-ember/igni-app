@@ -129,7 +129,7 @@ export function HooksPanel({
         ) : null
       }
     >
-      {error && <div className="msg-error" style={{ marginBottom: 10 }}>{error}</div>}
+      {error && <div className="msg-error msg-error--banner">{error}</div>}
       {groups === null ? (
         <HooksSkeleton />
       ) : groups.length === 0 ? (
