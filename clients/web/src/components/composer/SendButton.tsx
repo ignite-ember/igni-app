@@ -1,3 +1,4 @@
+import type { PermissionModeName } from "../../protocol/messages";
 import { ArrowUpIcon, ChevronIcon } from "../Icons";
 import { PopupBackdrop } from "./popups";
 import { PERMISSION_MODES, permissionModeOption, type PermissionMode } from "./permissionModes";
@@ -21,24 +22,29 @@ export function SendButton({
   canSend: boolean;
   onSubmit: () => void;
   /** The backend's current mode, as the wire reports it. */
-  permissionMode?: string;
+  permissionMode?: PermissionModeName;
   onPickMode?: (mode: PermissionMode) => void;
   menuOpen: boolean;
   onToggleMenu: () => void;
   onCloseMenu: () => void;
 }) {
-  const current = permissionModeOption(permissionMode);
+  const reported = permissionModeOption(permissionMode);
+  // A mode this client does not know is shown as unknown, not read as
+  // the default — the session may well be running in something else.
+  const current = reported?.value ?? "unknown";
+  const label = reported?.label ?? "Mode";
+  const desc = reported?.desc ?? "The backend reports a permission mode this client does not know.";
   return (
-    <div className="send-split" data-mode={current.value}>
+    <div className="send-split" data-mode={current}>
       <button
         type="button"
         className="send-split-mode"
-        title={`Mode: ${current.desc}`}
+        title={`Mode: ${desc}`}
         onClick={onToggleMenu}
         aria-haspopup="menu"
         aria-expanded={menuOpen}
       >
-        <span className="send-split-mode-label">{current.label}</span>
+        <span className="send-split-mode-label">{label}</span>
         <ChevronIcon size={9} down={!menuOpen} />
       </button>
       <button
@@ -58,10 +64,10 @@ export function SendButton({
               <div
                 key={m.value}
                 role="menuitem"
-                className={`popup-item ${m.value === current.value ? "active" : ""}`}
+                className={`popup-item ${m.value === current ? "active" : ""}`}
                 onClick={() => {
                   onCloseMenu();
-                  if (m.value !== current.value) onPickMode?.(m.value);
+                  if (m.value !== current) onPickMode?.(m.value);
                 }}
               >
                 <span className="cmd">{m.label}</span>

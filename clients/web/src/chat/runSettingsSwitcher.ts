@@ -6,7 +6,7 @@
  * result and shown in the transcript in the words it has always used.
  */
 
-import { modeSwitchCommand, type PermissionMode } from "../components/composer/permissionModes";
+import { modeSwitch, type PermissionMode } from "../components/composer/permissionModes";
 import type { IgniClient } from "../protocol/client";
 import { failureReason, type Failure } from "../protocol/composerWire";
 import type { ServerMessage } from "../protocol/messages";
@@ -39,12 +39,22 @@ export class RunSettingsSwitcher {
    * Flip the backend through its slash command. ``current`` is the mode
    * the status reports as the pick is made; picking it again does
    * nothing. The ``permission_mode_changed`` push moves the badge.
+   *
+   * A mode the backend cannot leave from where it is — ``dontAsk`` has
+   * no command — is said so rather than dropped: the pick would
+   * otherwise look like it did nothing.
    */
   pickMode = (current: string | undefined, next: PermissionMode): void => {
     const { client, view } = this.deps;
-    const cmd = modeSwitchCommand(current ?? "default", next);
-    if (!cmd) return;
-    void settle(() => client.handleCommand(cmd), failureReason).then((outcome) => {
+    const request = modeSwitch(current, next);
+    if (request.kind === "unchanged") return;
+    if (request.kind === "unreachable") {
+      view.info(
+        `The backend runs in ${request.from}; igni has no command to leave that mode.`,
+      );
+      return;
+    }
+    void settle(() => client.handleCommand(request.command), failureReason).then((outcome) => {
       if (!outcome.ok) view.error(`Mode switch failed: ${outcome.reason}`);
     });
   };

@@ -4089,6 +4089,20 @@ button {
   background: linear-gradient(135deg, #ef4444 0%, #991b1b 100%);
 }
 
+.send-split[data-mode="dontAsk"] {
+  /* Deny-by-default: the strictest mode there is, and not one the
+     composer can pick. Slate, so it reads as "closed" rather than as
+     another shade of the permissive end of the scale. */
+  background: linear-gradient(135deg, #475569 0%, #dc2626 100%);
+}
+
+.send-split[data-mode="unknown"] {
+  /* The backend named a mode this client does not know. Neutral grey:
+     the button says it does not know rather than borrowing another
+     mode's colour. */
+  background: linear-gradient(135deg, #64748b 0%, #b91c1c 100%);
+}
+
 /* The divider between the two halves needs to be invisible
    over the seamless gradient. Drop the hard border line and
    use a faint inset shadow instead — the eye reads it as a

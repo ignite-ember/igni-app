@@ -1,5 +1,6 @@
 import { isProcessing, type RunPhase } from "../../chat/runPhase";
 import type { ComposerMode } from "../../clientState";
+import type { PermissionModeName } from "../../protocol/messages";
 import { ChevronIcon, StopIcon } from "../Icons";
 import type { ModeUi } from "./modeUi";
 import type { PermissionMode } from "./permissionModes";
@@ -35,7 +36,7 @@ export function ComposerBar({
   /** The backend's mode as the wire reports it; {@link SendButton} reads
    *  it with `permissionModeOption`, which also covers a mode it does not
    *  know. */
-  permissionMode?: string;
+  permissionMode?: PermissionModeName;
   onPickMode?: (mode: PermissionMode) => void;
 }) {
   const { popup } = popups;

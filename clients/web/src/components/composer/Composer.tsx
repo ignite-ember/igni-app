@@ -3,6 +3,7 @@ import { useRef, type ReactNode, type Ref } from "react";
 import type { RunPhase } from "../../chat/runPhase";
 import type { WindowModel } from "../../clientState";
 import type { IgniClient } from "../../protocol/client";
+import type { PermissionModeName } from "../../protocol/messages";
 import { EditableInput, type EditableInputHandle } from "../EditableInput";
 import { ComposerBar } from "./ComposerBar";
 import type { ComposerActions, ComposerCatalog, ComposerHandle } from "./composerContract";
@@ -31,9 +32,9 @@ export interface ComposerProps {
    *  approval form rises out of the input panel instead of floating. */
   hitlSlot?: ReactNode;
   /** The backend's `PermissionEvaluator.mode`, as the wire reports it;
-   *  pre-selects the send button's mode. Kept a wire string: the button
-   *  parses it, falling back for a mode this client does not know. */
-  permissionMode?: string;
+   *  pre-selects the send button's mode. Typed by the wire contract, so
+   *  the button reads a mode and not a bare string. */
+  permissionMode?: PermissionModeName;
   /** The product's name in the placeholder — a group can rebrand it.
    *  See `lib/theme.ts`. */
   brandName?: string;
