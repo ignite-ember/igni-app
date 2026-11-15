@@ -4,7 +4,7 @@ import type { BasePageKind, PageRegistry, PageRoute } from "../chat/pageStack";
 import type { SlashCommand } from "../chat/slashCommands";
 import type { ExtensionPageProps, ExtensionSummary } from "../extensions/ExtensionPage";
 import { ExtensionPageHost } from "../extensions/ExtensionPageHost";
-import { routeForNavigate } from "../extensions/extensionPageRoutes";
+import { routeForNavigate, routeWithLocation } from "../extensions/extensionPageRoutes";
 import type { IgniClient } from "../protocol/client";
 import { ContextPage } from "./pages/ContextPage";
 import { HelpPage } from "./pages/HelpPage";
@@ -98,7 +98,7 @@ export function AppPages({
   theme: string;
   signals: Record<string, ExtensionPageProps["signals"]>;
   /** Write the window's route: where an extension page's `navigate`
-   *  lands. */
+   *  and `setLocation` land. */
   onRoute: (route: PageRoute[]) => void;
 }) {
   return (
@@ -123,6 +123,10 @@ export function AppPages({
         onClose={services.close}
         onNavigate={(to) => {
           const route = routeForNavigate(to, registry, services.extensions);
+          if (route) onRoute(route);
+        }}
+        onLocation={(state) => {
+          const route = routeWithLocation(trail, state);
           if (route) onRoute(route);
         }}
       />

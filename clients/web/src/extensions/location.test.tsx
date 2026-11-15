@@ -236,6 +236,35 @@ describe("location from the frame", () => {
     expect(onNavigate).not.toHaveBeenCalled();
   });
 
+  it("is not echoed back as params once the host folds it into them", async () => {
+    // The host keeps the location in the page's params (the window's
+    // route), which re-renders the frame with them. The frame said where
+    // it is; posting that back would fire its onParams for nothing.
+    const onLocation = vi.fn();
+    const props = {
+      extensionId: "acme.scanner",
+      origin: "http://127.0.0.1:41234",
+      allow: ["ext.acme.scanner.*"],
+      onCall: () => Promise.resolve(null),
+      onLocation,
+    };
+    const { frame, posted, rerender } = mountFrame(props);
+    frame?.dispatchEvent(new Event("load"));
+    const sent = posted[0] as { nonce: string };
+
+    window.dispatchEvent(
+      new MessageEvent("message", {
+        data: { igni: BRIDGE_VERSION, kind: "location", nonce: sent.nonce, state: { tab: "columns" } },
+        origin: "http://127.0.0.1:41234",
+        source: frame?.contentWindow,
+      }),
+    );
+    rerender(<ExtensionFrame {...props} params={{ tab: "columns" }} />);
+    await new Promise((r) => setTimeout(r, 0));
+
+    expect((posted as Posted[]).filter((m) => m.kind === "params")).toEqual([]);
+  });
+
   it("is dropped when the nonce is wrong, like every other guest message", () => {
     const onLocation = vi.fn();
     const { frame } = mountFrame({ onLocation });

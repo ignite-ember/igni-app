@@ -25,6 +25,7 @@ export function ExtensionPageHost({
   signals,
   onClose,
   onNavigate,
+  onLocation,
 }: {
   extension: ExtensionSummary;
   page: PageRoute;
@@ -36,6 +37,9 @@ export function ExtensionPageHost({
   onClose: () => void;
   /** The page's `bridge.navigate(to)`; the app decides whether to go. */
   onNavigate?: (to: string) => void;
+  /** The page's `bridge.setLocation(state)`, for the app to fold into
+   *  the window's route so the next `hello` replays it. */
+  onLocation?: (state: Record<string, string>) => void;
 }) {
   const caller = client.asExtension(extension.id);
   const onHost: NonNullable<ExtensionPageProps["onHost"]> = async (request) =>
@@ -61,6 +65,7 @@ export function ExtensionPageHost({
         onServiceToken={onServiceToken}
         onClose={onClose}
         onNavigate={onNavigate}
+        onLocation={onLocation}
         onCall={(method, args) => caller.rpc(method, args)}
       />
     </Drawer>

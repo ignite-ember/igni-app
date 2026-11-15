@@ -1,10 +1,10 @@
 // @vitest-environment jsdom
 /**
- * An extension page's `navigate` reaches the window.
+ * An extension page's `navigate` and `setLocation` reach the window.
  *
- * The frame delivered the message and the app mounted the page without
- * the callback that answers it, so `bridge.navigate('plugins')` did
- * nothing (R405).
+ * The frame delivered both messages and the app mounted the page without
+ * the callbacks that answer them, so `bridge.navigate('plugins')` did
+ * nothing and a `setLocation` was never kept or replayed (R405, R410).
  * Driven through `AppPages`, the one place the page is mounted, the way
  * a frame would: a `message` event carrying the nonce from `hello`.
  */
@@ -15,7 +15,13 @@ import { BRIDGE_VERSION } from "@ignite-ember/extension-bridge/protocol";
 import { PageRegistry, type PageRoute } from "../chat/pageStack";
 import { AppPages, type PageServices } from "../components/AppPages";
 import type { ExtensionSummary } from "./ExtensionPage";
-import { pageLabel, routeForNavigate } from "./extensionPageRoutes";
+import {
+  LOCATION_LIMITS,
+  keptLocation,
+  pageLabel,
+  routeForNavigate,
+  routeWithLocation,
+} from "./extensionPageRoutes";
 
 afterEach(cleanup);
 
@@ -97,6 +103,20 @@ describe("bridge.navigate from an extension page", () => {
   });
 });
 
+describe("bridge.setLocation from an extension page", () => {
+  it("folds the location into the top page's params, keeping the trail", () => {
+    const below: PageRoute = { kind: "extensions", label: "Extensions" };
+    const { onRoute, send } = mountPage(NOTES_PAGE, [below, NOTES_PAGE]);
+    send({ kind: "location", state: { version: "2.3.1" } });
+    expect(onRoute).toHaveBeenCalledWith([below, { ...NOTES_PAGE, params: { version: "2.3.1" } }]);
+  });
+
+  it("is replayed in the next hello once the route carries it", () => {
+    const { hello } = mountPage({ ...NOTES_PAGE, params: { version: "2.3.1" } });
+    expect(hello.params).toEqual({ version: "2.3.1" });
+  });
+});
+
 describe("the route rules", () => {
   it("labels igni's pages by their own names, an extension's by its label", () => {
     expect(pageLabel("mcp", [])).toBe("MCP servers");
@@ -106,5 +126,20 @@ describe("the route rules", () => {
 
   it("declines an empty target", () => {
     expect(routeForNavigate("", new PageRegistry(), [])).toBeNull();
+  });
+
+  it("has nowhere to fold a location with no page on top", () => {
+    expect(routeWithLocation([], { a: "b" })).toBeNull();
+  });
+
+  it("keeps string values only, and caps what it keeps", () => {
+    const big: Record<string, unknown> = { n: 3, long: "x".repeat(LOCATION_LIMITS.valueLength + 1) };
+    big["k".repeat(LOCATION_LIMITS.keyLength + 1)] = "v";
+    for (let i = 0; i < LOCATION_LIMITS.keys + 5; i++) big[`k${i}`] = String(i);
+    const kept = keptLocation(big);
+    expect(Object.keys(kept)).toHaveLength(LOCATION_LIMITS.keys);
+    expect(kept.n).toBeUndefined();
+    expect(kept.long).toBeUndefined();
+    expect(kept.k0).toBe("0");
   });
 });

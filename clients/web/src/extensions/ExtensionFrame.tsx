@@ -356,6 +356,9 @@ export function ExtensionFrame({
         return;
       }
       if (message.kind === "location") {
+        // The frame already knows where it is: when the host folds this
+        // into the params it hands back, that is not news to post.
+        if (located) delivered.current = { ...message.state };
         located?.(message.state);
         return;
       }
