@@ -207,6 +207,41 @@ describe("the dialog", () => {
     expect(r.windowModel.openDialog).toHaveBeenCalledOnce();
   });
 
+  it("leaves the policy explanation open when the same refusal is read again", async () => {
+    // A window's first load reads the status, opens the explanation, then
+    // reads it again as the folder arrives. The second read is the same
+    // refusal, and it closed the dialog 30 ms after it opened (R680).
+    const refused = status({
+      state: "untrusted",
+      can_trust: false,
+      reason: "Policy forbids it.",
+    });
+    const r = rig(refused);
+    const view = mount(r, { projectDir: "" });
+    await waitFor(() => expect(r.windowModel.openDialog).toHaveBeenCalledOnce());
+    const explanation: Dialog = {
+      id: "d1",
+      spec: { kind: TRUST_DIALOG_KIND, ...refused },
+    };
+    view.rerender({ connected: true, projectDir: "/work/app", dialog: explanation });
+    await waitFor(() => expect(r.client.rpc).toHaveBeenCalledTimes(2));
+    r.push(refused);
+    await Promise.resolve();
+    expect(r.windowModel.answerDialog).not.toHaveBeenCalled();
+  });
+
+  it("closes the policy explanation once the folder is trusted after all", async () => {
+    const r = rig(new Error("unknown method"));
+    mount(r, {
+      dialog: {
+        id: "d1",
+        spec: { kind: TRUST_DIALOG_KIND, ...status({ state: "untrusted", can_trust: false }) },
+      },
+    });
+    r.push(status({ state: "trusted" }));
+    expect(r.windowModel.answerDialog).toHaveBeenCalledWith("d1", null);
+  });
+
   it("does not open for a folder someone chose not to trust", async () => {
     const r = rig(status({ state: "untrusted", can_trust: true }));
     mount(r);

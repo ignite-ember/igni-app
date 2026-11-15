@@ -96,7 +96,16 @@ export function useWorkspaceTrust(
           windowModel.openDialog({ kind: TRUST_DIALOG_KIND, ...status });
         }
       } else if (open && isTrustDialogFor(open, status.path)) {
-        windowModel.answerDialog(open.id, null);
+        // The explanation of a policy refusal stays until the person
+        // dismisses it. The same refusal read again — a window's first
+        // load reads the status twice, once more as its folder arrives —
+        // is not an answer, and closing on it took the dialog down
+        // within milliseconds of opening it.
+        const stillRefused =
+          status.state === "untrusted" &&
+          !status.can_trust &&
+          open.spec.state === "untrusted";
+        if (!stillRefused) windowModel.answerDialog(open.id, null);
       }
     };
 
