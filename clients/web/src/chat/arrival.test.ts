@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import { Arrivals } from "./arrival";
+import { Arrivals, MAX_PLACE_SEARCH } from "./arrival";
+import { LOCATION_LIMITS } from "./pageStack";
 
 describe("a link that opens a page", () => {
   it("names the page and hands it the rest as params", () => {
@@ -15,6 +16,32 @@ describe("a link that opens a page", () => {
       page: "acme.notes",
       params: { note: "n2" },
     });
+  });
+
+  it("is no arrival for a page kind no page could have", () => {
+    expect(Arrivals.fromSearch("?open=%3Cimg%20src%3Dx%20onerror%3Dalert(1)%3E")).toBeNull();
+    expect(Arrivals.fromSearch("?open=javascript%3Aalert(1)")).toBeNull();
+    expect(Arrivals.fromSearch(`?open=${"a".repeat(129)}`)).toBeNull();
+    expect(Arrivals.fromSearch(`?open=${"a".repeat(128)}`)?.page).toHaveLength(128);
+  });
+
+  it("keeps only the location a page could have set", () => {
+    const long = "x".repeat(LOCATION_LIMITS.valueLength + 1);
+    const many = Array.from({ length: LOCATION_LIMITS.keys + 4 }, (_, i) => `k${i}=${i}`).join("&");
+    const arrival = Arrivals.fromSearch(`?open=acme.notes&long=${long}&${"k".repeat(65)}=v&${many}`);
+    expect(arrival?.params.long).toBeUndefined();
+    expect(Object.keys(arrival?.params ?? {})).toHaveLength(LOCATION_LIMITS.keys);
+    expect(Arrivals.fromSearch("?open=acme.notes&__proto__=x&toString=y")?.params).toEqual({ toString: "y" });
+  });
+
+  it("keeps a param's first value", () => {
+    expect(Arrivals.fromSearch("?open=acme.notes&note=a&note=b")?.params).toEqual({ note: "a" });
+  });
+
+  it("opens its page alone, named by its kind until the label is known", () => {
+    expect(Arrivals.route({ page: "acme.notes", params: { note: "a" } })).toEqual([
+      { kind: "acme.notes", label: "acme.notes", params: { note: "a" } },
+    ]);
   });
 
   it("is no arrival without `open`", () => {
@@ -48,9 +75,34 @@ describe("the address bar shows where the window is", () => {
     expect(Arrivals.fromSearch(search)).toEqual({ page: "acme.notes", params: { version: "2.3.1" } });
   });
 
-  it("leaves nothing for the chat or a page without params", () => {
+  it("leaves nothing for the chat", () => {
     expect(Arrivals.placeSearch("?dir=%2Fsrc&open=acme.notes&version=2.3.1", null)).toBe("?dir=%2Fsrc");
-    expect(Arrivals.placeSearch("?open=plugins", { kind: "plugins", label: "Plugins" })).toBe("");
+  });
+
+  it("names a page that has no location yet, so the link still opens it", () => {
+    expect(Arrivals.placeSearch("?dir=%2Fsrc", { kind: "acme.notes", label: "Release notes" })).toBe(
+      "?dir=%2Fsrc&open=acme.notes",
+    );
+  });
+
+  it("keeps the desktop shell's own parameters", () => {
+    const search = Arrivals.placeSearch("?ws=ws%3A%2F%2Fx&host=tauri", notes);
+    expect(new URLSearchParams(search).get("host")).toBe("tauri");
+    expect(Arrivals.placeSearch(search, null)).toBe("?ws=ws%3A%2F%2Fx&host=tauri");
+  });
+
+  it("names the page without its location when the address would be too long", () => {
+    const params: Record<string, string> = {};
+    for (let i = 0; i < LOCATION_LIMITS.keys; i++) params[`k${i}`] = "é".repeat(LOCATION_LIMITS.valueLength);
+    const search = Arrivals.placeSearch("?dir=%2Fsrc", { ...notes, params });
+    expect(search).toBe("?dir=%2Fsrc&open=acme.notes");
+    const fits = Arrivals.placeSearch("", { ...notes, params: { k: "x".repeat(LOCATION_LIMITS.valueLength) } });
+    expect(fits.length).toBeLessThanOrEqual(MAX_PLACE_SEARCH);
+    expect(Arrivals.fromSearch(fits)?.params.k).toHaveLength(LOCATION_LIMITS.valueLength);
+  });
+
+  it("writes no page whose kind no link could name", () => {
+    expect(Arrivals.placeSearch("?dir=%2Fsrc", { ...notes, kind: "<script>" })).toBe("?dir=%2Fsrc");
   });
 
   it("does not write a param igni would read as its own", () => {

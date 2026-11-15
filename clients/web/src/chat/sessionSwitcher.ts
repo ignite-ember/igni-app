@@ -11,7 +11,7 @@
 import type { WindowModel } from "../clientState";
 import type { IgniClient } from "../protocol/client";
 import { AttachSessionResult, SessionIdReply } from "../protocol/rpcResults";
-import type { Arrival } from "./arrival";
+import { Arrivals, type Arrival } from "./arrival";
 import type { HistoryLoader } from "./historyLoader";
 import { planSessionBinding, type SessionBindingPlan } from "./sessionBinding";
 import { SidebarLayout } from "./sidebarLayout";
@@ -168,7 +168,7 @@ export class SessionSwitcher {
       });
     }
     if (arrival) {
-      windowModel.write("route", [{ kind: arrival.page, label: arrival.page, params: arrival.params }]);
+      windowModel.write("route", Arrivals.route(arrival));
     }
     windowModel.write("focused", document.hasFocus());
   }

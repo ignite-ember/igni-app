@@ -59,4 +59,49 @@ describe("the address bar", () => {
     renderHook(() => useHostBindings(deps(null, false)));
     expect(window.location.search).toBe("?open=acme.notes&version=2.3.1");
   });
+
+  it("names a page without a location, so the address still opens it", () => {
+    window.history.replaceState(null, "", "/?ws=ws%3A%2F%2Fx");
+    renderHook(() => useHostBindings(deps({ kind: "acme.notes", label: "Release notes" })));
+    expect(Arrivals.fromSearch(window.location.search)).toEqual({ page: "acme.notes", params: {} });
+  });
+});
+
+describe("going back to an older address", () => {
+  function popTo(url: string) {
+    window.history.replaceState(null, "", url);
+    window.dispatchEvent(new PopStateEvent("popstate"));
+  }
+
+  it("goes where that address says, or to the chat", () => {
+    window.history.replaceState(null, "", "/?ws=ws%3A%2F%2Fx");
+    const d = deps(notes("2.3.1"));
+    renderHook(() => useHostBindings(d));
+
+    popTo("/?ws=ws%3A%2F%2Fx&open=acme.notes&version=2.2.0");
+    expect(d.windowModel.write).toHaveBeenLastCalledWith("route", [
+      { kind: "acme.notes", label: "acme.notes", params: { version: "2.2.0" } },
+    ]);
+
+    popTo("/?ws=ws%3A%2F%2Fx");
+    expect(d.windowModel.write).toHaveBeenLastCalledWith("route", []);
+  });
+
+  it("is no move when the address is where the window already is", () => {
+    window.history.replaceState(null, "", "/?ws=ws%3A%2F%2Fx");
+    const d = deps(notes("2.3.1"));
+    renderHook(() => useHostBindings(d));
+    // The window wrote its place; a fragment change pops the same address.
+    window.dispatchEvent(new PopStateEvent("popstate"));
+    expect(d.windowModel.write).not.toHaveBeenCalledWith("route", expect.anything());
+  });
+
+  it("stops listening when the window goes", () => {
+    window.history.replaceState(null, "", "/?ws=ws%3A%2F%2Fx");
+    const d = deps(null);
+    const { unmount } = renderHook(() => useHostBindings(d));
+    unmount();
+    popTo("/?open=acme.notes&version=2.2.0");
+    expect(d.windowModel.write).not.toHaveBeenCalledWith("route", expect.anything());
+  });
 });

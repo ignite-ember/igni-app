@@ -4,7 +4,7 @@
  * selection, focus, and the address bar.
  */
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 
 import { Arrivals } from "../chat/arrival";
 import type { PageRoute } from "../chat/pageStack";
@@ -66,17 +66,37 @@ export function useHostBindings(deps: HostBindingsDeps): void {
   }, [projectDir, org]);
 
   // The address bar shows where the window is: a followed link gives way
-  // to the place, and a page's location (setLocation) is folded in, so a
-  // reload or the same link opened elsewhere comes back to it (R459).
-  // After sign-in, because before it the link is still where this window
-  // is going. ``dir`` stays: it says which folder this window belongs to.
+  // to the place, the page on top and its location (setLocation), so a
+  // reload, a bookmark or the same link opened elsewhere comes back to it
+  // (R459). After sign-in, because before it the link is still where this
+  // window is going. ``dir`` stays: it says which folder this window
+  // belongs to. Replaced, not pushed (see ``chat/arrival.ts``).
   useEffect(() => {
     if (!signedIn) return;
     const url = new URL(window.location.href);
     const search = Arrivals.placeSearch(url.search, page);
     if (search === url.search) return;
-    window.history.replaceState(null, "", `${url.pathname}${search}${url.hash}`);
+    window.history.replaceState(window.history.state, "", `${url.pathname}${search}${url.hash}`);
   }, [page, signedIn]);
+
+  // An older address the browser goes back or forward to is a link like
+  // any other: the window goes where it says, or to the chat. A fragment
+  // change fires it too, on the address the window already wrote, and
+  // that is no move: the trail below the page stays.
+  const pageRef = useRef(page);
+  useEffect(() => {
+    pageRef.current = page;
+  }, [page]);
+  useEffect(() => {
+    const onPopState = () => {
+      const here = Arrivals.placeSearch(window.location.search, pageRef.current);
+      if (here === window.location.search) return;
+      const arrival = Arrivals.fromSearch(window.location.search);
+      windowModel.write("route", arrival ? Arrivals.route(arrival) : []);
+    };
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+  }, [windowModel]);
 
   // Text selected in the transcript is ``ui.selection.text``, told when
   // the gesture that made it ends rather than at every step of a drag.

@@ -14,13 +14,12 @@
  * next `hello`.
  */
 
-import { BASE_PAGE_KINDS, type PageRoute } from "../chat/pageStack";
+import { BASE_PAGE_KINDS, keptLocation, type PageRoute } from "../chat/pageStack";
+
+// The caps live with the route, since a followed link is held to them too.
+export { LOCATION_LIMITS, keptLocation } from "../chat/pageStack";
 import { PAGE_FOR_ACTION } from "../chat/slashCommandRouter";
 import type { ExtensionSummary } from "./ExtensionPage";
-
-/** How much of a location the host keeps. It ends up in the window's
- *  saved route, and the frame is the untrusted party. */
-export const LOCATION_LIMITS = { keys: 16, keyLength: 64, valueLength: 512 } as const;
 
 /** The breadcrumb label for a page kind: igni's own name for its pages,
  *  an extension's label for its own, or the kind itself. */
@@ -49,21 +48,6 @@ export function routeForNavigate(
   const isPage = known.has(to) || (BASE_PAGE_KINDS as readonly string[]).includes(to);
   if (!isPage) return null;
   return [{ kind: to, label: pageLabel(to, extensions) }];
-}
-
-/** The location the host keeps: string values only, capped. */
-export function keptLocation(state: Record<string, unknown>): Record<string, string> {
-  const kept: Record<string, string> = {};
-  let count = 0;
-  for (const [key, value] of Object.entries(state)) {
-    if (count >= LOCATION_LIMITS.keys) break;
-    if (typeof value !== "string") continue;
-    if (!key || key.length > LOCATION_LIMITS.keyLength) continue;
-    if (value.length > LOCATION_LIMITS.valueLength) continue;
-    kept[key] = value;
-    count++;
-  }
-  return kept;
 }
 
 /**

@@ -260,3 +260,23 @@ export function restore(
     return [];
   }
 }
+
+/** How much of a page's location the host keeps. It ends up in the
+ *  window's saved route and in its address, and both the frame that
+ *  reports it and the link that carries it are untrusted. */
+export const LOCATION_LIMITS = { keys: 16, keyLength: 64, valueLength: 512 } as const;
+
+/** The location the host keeps: string values only, capped. */
+export function keptLocation(state: Record<string, unknown>): Record<string, string> {
+  const kept: Record<string, string> = {};
+  let count = 0;
+  for (const [key, value] of Object.entries(state)) {
+    if (count >= LOCATION_LIMITS.keys) break;
+    if (typeof value !== "string") continue;
+    if (!key || key.length > LOCATION_LIMITS.keyLength || key === "__proto__") continue;
+    if (value.length > LOCATION_LIMITS.valueLength) continue;
+    kept[key] = value;
+    count++;
+  }
+  return kept;
+}
