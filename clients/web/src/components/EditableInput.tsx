@@ -48,10 +48,28 @@ interface Props {
    *  Composer's pill registry). Without one, or for an id it does not
    *  know, a pill reads "code". */
   codePillLabel?: CodePillLabeler;
+  /** The list this editor drives while a completion menu is open, and
+   *  the option highlighted in it. Focus stays here while the arrows
+   *  move the highlight, so these are how a screen reader hears which
+   *  option that is. */
+  controls?: string;
+  activeDescendant?: string;
 }
 
 export const EditableInput = forwardRef<EditableInputHandle, Props>(function EditableInput(
-  { value, disabled, placeholder, className, ariaLabel, onValueChange, onKeyDown, onPaste, codePillLabel },
+  {
+    value,
+    disabled,
+    placeholder,
+    className,
+    ariaLabel,
+    onValueChange,
+    onKeyDown,
+    onPaste,
+    codePillLabel,
+    controls,
+    activeDescendant,
+  },
   ref,
 ) {
   const elRef = useRef<HTMLDivElement>(null);
@@ -137,6 +155,8 @@ export const EditableInput = forwardRef<EditableInputHandle, Props>(function Edi
       role="textbox"
       aria-multiline="true"
       aria-label={ariaLabel ?? "Message"}
+      aria-controls={controls}
+      aria-activedescendant={activeDescendant}
       data-placeholder={placeholder}
       spellCheck
       suppressContentEditableWarning

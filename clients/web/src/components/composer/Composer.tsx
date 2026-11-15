@@ -8,7 +8,7 @@ import { EditableInput, type EditableInputHandle } from "../EditableInput";
 import { ComposerBar } from "./ComposerBar";
 import type { ComposerActions, ComposerCatalog, ComposerHandle } from "./composerContract";
 import { DISCONNECTED_PLACEHOLDER, MODE_UI } from "./modeUi";
-import { ComposerPopupLayer } from "./popups";
+import { COMPLETION_LIST_ID, ComposerPopupLayer, completionOptionId } from "./popups";
 import { UploadChips } from "./UploadChips";
 import { useComposerController } from "./useComposerController";
 import { useComposerPopup, type ModelMenuRequest } from "./useComposerPopup";
@@ -98,6 +98,10 @@ export function Composer({
           onValueChange={(value, caret) => controller.changeValue(value, caret)}
           onKeyDown={(e) => keymap.handle(e)}
           onPaste={(e) => paste.handle(e)}
+          controls={completion.menu ? COMPLETION_LIST_ID : undefined}
+          activeDescendant={
+            completion.menu?.entries.length ? completionOptionId(completion.menu.active) : undefined
+          }
         />
         <ComposerBar
           ui={ui}

@@ -308,6 +308,41 @@ describe("@ file completion", () => {
     expect(items).toEqual(["src/app.ts", "src/api.ts"]);
   });
 
+  it("the highlighted row stays in view and is the editor's active descendant", async () => {
+    // Focus stays in the editor while the arrows move the highlight, so
+    // the menu must scroll to it and the editor must name it: past the
+    // eighth row the highlight went below the menu's visible area, and
+    // a screen reader heard nothing of the selection (R683).
+    const scrolled: Element[] = [];
+    const proto = Element.prototype as { scrollIntoView?: unknown };
+    const original = proto.scrollIntoView;
+    proto.scrollIntoView = function (this: Element) {
+      scrolled.push(this);
+    };
+    try {
+      const files = Array.from({ length: 12 }, (_, i) => `src/f${i}.ts`);
+      const { editor, container } = mount({}, withFiles(files));
+      typeInto(editor, "look at @src/f");
+      await flush();
+
+      const list = container.querySelector('[role="listbox"]')!;
+      expect(list).not.toBeNull();
+      expect(editor.getAttribute("aria-controls")).toBe(list.id);
+
+      for (let i = 0; i < 9; i++) press(editor, "ArrowDown");
+      await nextFrame();
+
+      const active = container.querySelector(".popup-item.active")!;
+      expect(active.querySelector(".cmd")!.textContent).toBe("src/f9.ts");
+      expect(active.getAttribute("role")).toBe("option");
+      expect(active.getAttribute("aria-selected")).toBe("true");
+      expect(editor.getAttribute("aria-activedescendant")).toBe(active.id);
+      expect(scrolled.at(-1)).toBe(active);
+    } finally {
+      proto.scrollIntoView = original;
+    }
+  });
+
   it("an @ inside a word is not a mention", async () => {
     const stub = withFiles(["x.ts"]);
     const { editor, container } = mount({}, stub);
