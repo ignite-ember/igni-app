@@ -82,6 +82,22 @@ export function isIndicatorState(value: unknown): value is IndicatorState {
   );
 }
 
+/**
+ * The page RPC the host calls for an indicator's `source`.
+ *
+ * `source` is the extension's own tool, and the host calls it in the
+ * extension's namespace, `ext.<id>.<tool>`. A manifest that wrote it
+ * the way `permissions.tools` names tools, already namespaced
+ * (`<id>.<tool>`), used to become `ext.<id>.<id>.<tool>`, which the
+ * backend refuses as a reach outside the extension's namespace, and
+ * the chip never appeared (R292). Both spellings name the same tool.
+ */
+export function indicatorMethod(extensionId: string, source: string): string {
+  const own = `${extensionId}.`;
+  const tool = source.startsWith(own) ? source.slice(own.length) : source;
+  return `ext.${extensionId}.${tool}`;
+}
+
 export function ExtensionIndicator({
   extensionId,
   indicator,
@@ -101,7 +117,7 @@ export function ExtensionIndicator({
     const tick = async () => {
       try {
         const answer = await call.current(
-          `ext.${extensionId}.${indicator.source}`,
+          indicatorMethod(extensionId, indicator.source),
           {},
         );
         // Checked rather than cast. A chip that renders whatever
