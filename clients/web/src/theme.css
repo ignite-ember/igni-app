@@ -1501,6 +1501,17 @@ button {
   background: var(--bg-surface);
   cursor: pointer;
   transition: border-color 0.12s ease, background 0.12s ease, transform 0.12s ease;
+  /* A <button>: drawn as the card it was as a <div>. */
+  margin: 0;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  appearance: none;
+}
+
+.welcome-cap:focus-visible {
+  outline: 2px solid var(--accent-orange-text, #fb9c5a);
+  outline-offset: 2px;
 }
 
 .welcome-cap:hover {
