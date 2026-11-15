@@ -59,10 +59,15 @@ export class BackendCalls {
     }
   }
 
-  /** Where in the repository a pasted snippet appears. */
+  /**
+   * Where in the repository a pasted snippet appears. igni-core's
+   * `SearchCodeArgs` names the snippet `query` and refuses any other key,
+   * so a call that sent `{ snippet }` failed every time and no code pill
+   * was ever made.
+   */
   async searchCode(snippet: string): Promise<CodeSearchResult> {
     try {
-      const res = SearchCodeResponse.parse(await this.transport.rpc("search_code", { snippet }));
+      const res = SearchCodeResponse.parse(await this.transport.rpc("search_code", { query: snippet }));
       return { ok: true, matches: res.matches };
     } catch (e) {
       return { ok: false, reason: failureReason(e) };

@@ -661,7 +661,7 @@ describe("pasting code", () => {
     await nextFrame();
 
     expect(notPrevented).toBe(false);
-    expect(stub.rpc).toHaveBeenCalledWith("search_code", { snippet: SNIPPET });
+    expect(stub.rpc).toHaveBeenCalledWith("search_code", { query: SNIPPET });
     expect(windowModel.get("composer").text).toMatch(/@code:c\S+/);
     expect(windowModel.get("composer").text).not.toContain("print('hi')");
     const pill = editor.querySelector("[data-pill-code]") as HTMLElement;
