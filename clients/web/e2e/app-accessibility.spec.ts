@@ -11,6 +11,11 @@
  * where the failures were. The light theme's `--fg-faint` was worse
  * (2.57:1 against 3.08), and the token fix covers both — a per-theme
  * sweep is `IGNI_E2E_A11Y_BOTH=1`.
+ *
+ * These are the `?demo=` sandboxes, which mount pieces of the chat
+ * without the window around them. The window itself — the shell, the
+ * composer, the slash menu, the notifications drawer — is
+ * `app-shell-accessibility.spec.ts`, in both themes (R683).
  */
 
 import { test, expect } from '@playwright/test'

@@ -4276,6 +4276,13 @@ button {
   text-overflow: ellipsis;
 }
 
+/* On the highlighted row's raised background --fg-faint falls under
+   4.5:1 in the dark theme (axe: color-contrast). R683. */
+.popup-item.active .desc,
+.popup-item:hover .desc {
+  color: var(--fg-muted);
+}
+
 /* ── Buttons / dialogs / drawers ────────────────────────────────── */
 
 /* A badge's whole job is to say which kind of thing this is, so a
@@ -5129,6 +5136,12 @@ button {
 
 .notify-empty {
   margin: 20px 4px;
+}
+
+/* The drawer's raised surface is lighter than the chat's, and --danger
+   on it falls under 4.5:1 in the dark theme (axe: color-contrast). R683. */
+.notify-panel .msg-error {
+  color: var(--danger-text, var(--danger));
 }
 
 .notify-rows {

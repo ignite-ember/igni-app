@@ -160,7 +160,9 @@ export default function App() {
         onPickSession={actions.pickSession}
       />
 
-      <div className={`main${page ? " main--paged" : ""}`}>
+      {/* The window's one <main>: without it nothing on the page was in a
+          landmark but the sidebar (axe: landmark-one-main, region). R683. */}
+      <main className={`main${page ? " main--paged" : ""}`}>
         <AppHeader
           conn={conn}
           groupName={groupName}
@@ -249,7 +251,7 @@ export default function App() {
           onShowUpdate={updateCheck.showUpdate}
           onOpen={navigator.openPage}
         />
-      </div>
+      </main>
 
       <AppOverlays
         client={client}

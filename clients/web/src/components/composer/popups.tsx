@@ -89,6 +89,9 @@ export function CompletionMenuView({
   return (
     <div
       className="popup-menu"
+      // The menu scrolls; focusable, so a keyboard can reach and scroll
+      // it too (axe: scrollable-region-focusable). R683.
+      tabIndex={0}
       onScroll={(e) => {
         if (menu.kind !== "mention") return;
         const el = e.currentTarget;

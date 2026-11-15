@@ -41,6 +41,9 @@ interface Props {
   onValueChange: (next: string, caret: number) => void;
   onKeyDown?: (e: React.KeyboardEvent<HTMLDivElement>) => void;
   onPaste?: (e: React.ClipboardEvent<HTMLDivElement>) => void;
+  /** The editor's accessible name. A contenteditable has no <label>,
+   *  and a textbox without a name is announced as just "edit text". */
+  ariaLabel?: string;
   /** Labels for `@code:<id>` pills, from whoever inserted them (the
    *  Composer's pill registry). Without one, or for an id it does not
    *  know, a pill reads "code". */
@@ -48,7 +51,7 @@ interface Props {
 }
 
 export const EditableInput = forwardRef<EditableInputHandle, Props>(function EditableInput(
-  { value, disabled, placeholder, className, onValueChange, onKeyDown, onPaste, codePillLabel },
+  { value, disabled, placeholder, className, ariaLabel, onValueChange, onKeyDown, onPaste, codePillLabel },
   ref,
 ) {
   const elRef = useRef<HTMLDivElement>(null);
@@ -133,6 +136,7 @@ export const EditableInput = forwardRef<EditableInputHandle, Props>(function Edi
       contentEditable={!disabled}
       role="textbox"
       aria-multiline="true"
+      aria-label={ariaLabel ?? "Message"}
       data-placeholder={placeholder}
       spellCheck
       suppressContentEditableWarning
