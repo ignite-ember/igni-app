@@ -44,7 +44,7 @@ export function WelcomeScreen({
           <h1>{groupName}</h1>
           <p>Your AI coding agent, in this project.</p>
           {status && !status.model_configured ? (
-            <FirstRunSetup onLogin={onLogin} />
+            <FirstRunSetup onLogin={onLogin} signedInAs={status.cloud_email ?? ""} />
           ) : null}
           <div className="welcome-caps">
             {WELCOME_CAPS.map(({ command, desc }) => (
