@@ -172,6 +172,38 @@ describe("when the domain publishes nothing", () => {
     });
   });
 
+  it("sends a sign-in page address when the deployment has its own", async () => {
+    // A split-port deployment (igni-server's local one: API :7777,
+    // portal :3000) has a portal igni cannot derive from the API
+    // address. Without a way to give it, the browser was sent to the
+    // API's /cli-auth, a 404, and the dialog waited forever (R219).
+    const { client, calls } = backend({
+      discover_server: { reason: "nothing published" },
+      set_server: { api_url: "http://localhost:7777" },
+    });
+
+    render(<SignInWall client={client} onSignIn={() => {}} />);
+    await typeEmail("sam@acme.example");
+    await waitFor(() => screen.getByLabelText("igni server address"));
+
+    fireEvent.change(screen.getByLabelText("igni server address"), {
+      target: { value: "http://localhost:7777" },
+    });
+    fireEvent.change(screen.getByLabelText("igni sign-in page address"), {
+      target: { value: " http://localhost:3000 " },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /connect/i }));
+
+    await waitFor(() => expect(screen.getByText("localhost:7777")).toBeTruthy());
+    expect(calls.at(-1)).toEqual({
+      method: "set_server",
+      args: {
+        api_url: "http://localhost:7777",
+        portal_url: "http://localhost:3000",
+      },
+    });
+  });
+
   it("lets somebody go back and try another address", async () => {
     const { client } = backend({ discover_server: { reason: "nothing" } });
 

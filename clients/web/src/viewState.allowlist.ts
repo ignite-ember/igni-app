@@ -230,7 +230,7 @@ export const VIEW_STATE: Record<string, Partial<Record<Category, string[]>>> = {
   },
   "components/SignInWall.tsx": {
     page: ["step"],
-    field: ["email", "server"],
+    field: ["email", "server", "portal"],
     data: ["found"],
     pending: ["busy", "failed"],
   },

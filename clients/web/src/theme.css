@@ -9949,6 +9949,23 @@ button.mcp-server-head:focus-visible {
   font-size: var(--text-lg);
 }
 
+/* The portal address, for a deployment that serves its sign-in page
+   apart from its API. Quiet until opened. */
+.wall-more {
+  text-align: left;
+  font-size: var(--text-sm);
+  color: var(--fg-muted);
+}
+
+.wall-more > summary {
+  cursor: pointer;
+  padding: var(--space-2) 0;
+}
+
+.wall-more > .wall-input {
+  margin-top: var(--space-3);
+}
+
 /* Quieter than the action above it, and still a real control: this
    is the way back out of a wrong guess. */
 .wall-back {
