@@ -8,10 +8,21 @@
  * handed to that page as its launch params, the same params a
  * notification's target carries.
  *
- * A link is an arrival, not a place: the window reads it once and then
- * takes it out of the address bar (see `App`), so a reload does not
- * keep returning to it.
+ * A link is an arrival, not a place: the window reads it once, and the
+ * address bar then shows where the window is rather than where it came
+ * from (`placeSearch`).
+ *
+ * Where it is, in the address bar, is a page that carries params — the
+ * location an extension page reports with `setLocation`, or the params a
+ * link opened it with. The extension bridge promises that the host folds
+ * that location into its own URL, so a reload or a shared link comes
+ * back to the same place; kept only in the window's saved route, a link
+ * opened anywhere else showed the chat (R459). A page without params,
+ * and the chat, leave nothing there: the same link form, read the same
+ * way, so the address is a link to the place.
  */
+
+import type { PageRoute } from "./pageStack";
 
 /** Query parameters igni reads for itself; never a page's. */
 const IGNI_PARAMS = new Set([
@@ -52,6 +63,23 @@ export const Arrivals = {
       if (IGNI_PARAMS.has(key) && key !== "open") kept.append(key, value);
     }
     const rest = kept.toString();
+    return rest ? `?${rest}` : "";
+  },
+
+  /**
+   * The query string for the place `page` is: any arrival taken out, and
+   * the page put back as `open=<kind>` with its params when it has any.
+   * A param named like one of igni's own is not written, since read back
+   * it would be igni's, not the page's.
+   */
+  placeSearch(search: string, page: PageRoute | null): string {
+    const query = new URLSearchParams(Arrivals.withoutArrival(search));
+    const params = Object.entries(page?.params ?? {}).filter(([key]) => !IGNI_PARAMS.has(key));
+    if (page && params.length > 0) {
+      query.set("open", page.kind);
+      for (const [key, value] of params) query.append(key, value);
+    }
+    const rest = query.toString();
     return rest ? `?${rest}` : "";
   },
 };

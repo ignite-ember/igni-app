@@ -30,3 +30,31 @@ describe("a link that opens a page", () => {
     expect(Arrivals.withoutArrival("?dir=%2Fsrc")).toBe("?dir=%2Fsrc");
   });
 });
+
+describe("the address bar shows where the window is", () => {
+  // The bridge promises the host folds a page's setLocation into its own
+  // URL. Kept only in the window's saved route, the address never
+  // changed, and the same link opened elsewhere showed the chat (R459).
+  const notes = { kind: "acme.notes", label: "Release notes", params: { version: "2.3.1" } };
+
+  it("writes a page's location as a link back to it, keeping igni's own", () => {
+    const search = Arrivals.placeSearch("?ws=ws%3A%2F%2Fx", notes);
+    expect(Arrivals.fromSearch(search)).toEqual({ page: "acme.notes", params: { version: "2.3.1" } });
+    expect(new URLSearchParams(search).get("ws")).toBe("ws://x");
+  });
+
+  it("replaces the link the window arrived by", () => {
+    const search = Arrivals.placeSearch("?open=acme.notes&version=2.4.0", notes);
+    expect(Arrivals.fromSearch(search)).toEqual({ page: "acme.notes", params: { version: "2.3.1" } });
+  });
+
+  it("leaves nothing for the chat or a page without params", () => {
+    expect(Arrivals.placeSearch("?dir=%2Fsrc&open=acme.notes&version=2.3.1", null)).toBe("?dir=%2Fsrc");
+    expect(Arrivals.placeSearch("?open=plugins", { kind: "plugins", label: "Plugins" })).toBe("");
+  });
+
+  it("does not write a param igni would read as its own", () => {
+    const search = Arrivals.placeSearch("", { ...notes, params: { version: "2.3.1", ws: "evil" } });
+    expect(new URLSearchParams(search).get("ws")).toBeNull();
+  });
+});

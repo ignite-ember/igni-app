@@ -6,7 +6,8 @@
 
 import { useEffect } from "react";
 
-import { Arrivals, type Arrival } from "../chat/arrival";
+import { Arrivals } from "../chat/arrival";
+import type { PageRoute } from "../chat/pageStack";
 import type { TranscriptView } from "../chat/transcriptView";
 import type { WindowModel } from "../clientState";
 import type { IgniClient } from "../protocol/client";
@@ -18,14 +19,15 @@ export interface HostBindingsDeps {
   windowModel: WindowModel;
   view: TranscriptView;
   updateCheck: Pick<UpdateCheck, "checkNow">;
-  arrival: Arrival | null;
+  /** The page on top, whose place the address bar shows. */
+  page: PageRoute | null;
   signedIn: boolean;
   projectDir: string;
   org: string;
 }
 
 export function useHostBindings(deps: HostBindingsDeps): void {
-  const { client, windowModel, view, updateCheck, arrival, signedIn, projectDir, org } = deps;
+  const { client, windowModel, view, updateCheck, page, signedIn, projectDir, org } = deps;
 
   useEffect(() => host.stampPlatform(document.documentElement), []);
 
@@ -63,14 +65,18 @@ export function useHostBindings(deps: HostBindingsDeps): void {
     host.setAppTitle(projectDir, org);
   }, [projectDir, org]);
 
-  // A followed link leaves the address bar once read — after sign-in,
-  // because before it the link is still where this window is going.
-  // ``dir`` stays: it says which folder this window belongs to.
+  // The address bar shows where the window is: a followed link gives way
+  // to the place, and a page's location (setLocation) is folded in, so a
+  // reload or the same link opened elsewhere comes back to it (R459).
+  // After sign-in, because before it the link is still where this window
+  // is going. ``dir`` stays: it says which folder this window belongs to.
   useEffect(() => {
-    if (!arrival || !signedIn) return;
+    if (!signedIn) return;
     const url = new URL(window.location.href);
-    window.history.replaceState(null, "", `${url.pathname}${Arrivals.withoutArrival(url.search)}${url.hash}`);
-  }, [arrival, signedIn]);
+    const search = Arrivals.placeSearch(url.search, page);
+    if (search === url.search) return;
+    window.history.replaceState(null, "", `${url.pathname}${search}${url.hash}`);
+  }, [page, signedIn]);
 
   // Text selected in the transcript is ``ui.selection.text``, told when
   // the gesture that made it ends rather than at every step of a drag.

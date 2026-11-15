@@ -87,16 +87,6 @@ export default function App() {
   const connected = conn === "connected";
   const composerReady = connected && sessionBound;
 
-  useHostBindings({
-    client,
-    windowModel,
-    view,
-    updateCheck,
-    arrival: opening.arrival,
-    signedIn: auth === "signed-in",
-    projectDir,
-    org: status?.cloud_org || "",
-  });
   const { groupName, groupMark } = useGroupBranding(status?.theme);
 
   // The floor's notifications per extension; the backend pushes
@@ -114,6 +104,17 @@ export default function App() {
   useStatusPoll(refreshStatus, connected);
 
   const { pages, page } = useVisiblePages(route, contributions.pages);
+
+  useHostBindings({
+    client,
+    windowModel,
+    view,
+    updateCheck,
+    page,
+    signedIn: auth === "signed-in",
+    projectDir,
+    org: status?.cloud_org || "",
+  });
 
   // Where the transcript is scrolled (``ui.scroll``), and finding in it.
   const scroll = useTranscriptScroll(windowModel, items);
