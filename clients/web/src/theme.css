@@ -4649,6 +4649,12 @@ button {
   animation: fade-in 0.16s ease;
 }
 
+/* A dialog opened from the sign-in wall (.wall, z-index 60) goes above
+   it; at the shared overlay's 50 it was drawn behind the wall. */
+.overlay--over-wall {
+  z-index: 70;
+}
+
 @keyframes fade-in {
   from {
     opacity: 0;

@@ -8,8 +8,11 @@ export function LoginDialog({
   onClose,
   onSignedIn,
   onFailed,
+  overWall,
 }: {
   client: IgniClient;
+  /** Opened from the sign-in wall, so drawn above it. */
+  overWall?: boolean;
   onClose: () => void;
   onSignedIn: (who: string) => void;
   onFailed: (detail: string) => void;
@@ -17,6 +20,7 @@ export function LoginDialog({
   return (
     <LoginPanel
       client={client}
+      overWall={overWall}
       onDone={(ok, detail) => {
         onClose();
         if (ok) onSignedIn(detail);
