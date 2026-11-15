@@ -139,6 +139,18 @@ export function cleanSnippetText(s: string): string {
     // chat (no leaked "Current datetime: …" prefix).
     .replace(/<system-context>[\s\S]*?<\/system-context>\s*/g, "")
     .replace(/<attached-files>[\s\S]*?<\/attached-files>\s*/g, "")
+    // The backend cuts the snippet a fixed width either side of the
+    // match, so a block's opening tag can fall before the window (the
+    // half starts "…<date> CET</system-context>") or its closing tag
+    // after it. Whatever survived the whole-block pass above is such a
+    // cut block: drop it up to its closing tag, or from its opening one.
+    .replace(/^[\s\S]*?<\/(?:system-context|attached-files)>\s*/, "")
+    .replace(/<(?:system-context|attached-files)>[\s\S]*$/, "")
+    // A tool result is stored inside the wrapper igni puts around tool
+    // output for the model; the chat shows only what is inside it. The
+    // underscores go first, before the markdown pass reads them as
+    // italics.
+    .replace(/<\/?untrusted_tool_output(?: nonce=[0-9a-f]+)?>/g, "")
     .replace(/<\/?think>/g, "")
     .replace(/<\/?loop-iteration[^>]*>/g, "")
     // Collapse [code-paste …] … [/code-paste] blocks (multi-line)
@@ -156,6 +168,14 @@ export function cleanSnippetText(s: string): string {
     .replace(/^#+\s+/gm, "")
     // Squash newlines + runs of whitespace down to single spaces.
     .replace(/\s+/g, " ");
+}
+
+/** Who a result row says wrote the message: the person is "you" and
+ *  the assistant is igni (it read "ember", the product's old name). */
+export function snippetRoleLabel(role: string): string {
+  if (role === "user") return "you";
+  if (role === "assistant") return "igni";
+  return role;
 }
 
 /** Translate a BE history_index to a FE item index. Falls back to
@@ -360,7 +380,7 @@ export const ChatSearchBar = memo(function ChatSearchBar({
                 title={unreachable ? "This match isn't reachable in the current view" : undefined}
               >
                 <span className={`chat-search-role chat-search-role-${m.role}`}>
-                  {m.role === "user" ? "you" : m.role === "assistant" ? "ember" : m.role}
+                  {snippetRoleLabel(m.role)}
                 </span>
                 <span className="chat-search-snippet">
                   {before}

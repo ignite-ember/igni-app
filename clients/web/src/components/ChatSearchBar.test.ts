@@ -14,6 +14,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   cleanSnippetText,
   formatTurnTime,
+  snippetRoleLabel,
   translateIndex,
 } from "./ChatSearchBar";
 
@@ -160,6 +161,42 @@ describe("cleanSnippetText", () => {
     expect(cleanSnippetText("plain English sentence.")).toBe(
       "plain English sentence.",
     );
+  });
+
+  // The backend cuts a snippet 80 characters either side of the match
+  // and marks the cut with "…", so a wrapper's opening tag is often
+  // outside the window. Seen in the web client (R661).
+  it("drops a <system-context> block whose opening tag the snippet cut off", () => {
+    expect(
+      cleanSnippetText("…11-15 11:11 CET</system-context>\nReply with exactly "),
+    ).toBe("Reply with exactly ");
+  });
+
+  it("drops a <system-context> block whose closing tag the snippet cut off", () => {
+    expect(cleanSnippetText(" and more.\n<system-context>\nCurrent datetime: 2026…")).toBe(
+      " and more. ",
+    );
+  });
+
+  it("drops an <attached-files> block cut at either end", () => {
+    expect(cleanSnippetText("…b.py</attached-files>\nlook at this")).toBe("look at this");
+    expect(cleanSnippetText("look at this <attached-files>\na.py…")).toBe("look at this ");
+  });
+
+  it("unwraps a tool result's <untrusted_tool_output> wrapper, nonce and all", () => {
+    expect(
+      cleanSnippetText(
+        "<untrusted_tool_output nonce=e85af172>\ndef add(a, b):\n    return a + b\n</untrusted_tool_output nonce=e85af172>",
+      ),
+    ).toBe(" def add(a, b): return a + b ");
+  });
+});
+
+describe("snippetRoleLabel", () => {
+  it("labels the assistant igni, the person you, and passes others through", () => {
+    expect(snippetRoleLabel("assistant")).toBe("igni");
+    expect(snippetRoleLabel("user")).toBe("you");
+    expect(snippetRoleLabel("tool")).toBe("tool");
   });
 });
 
