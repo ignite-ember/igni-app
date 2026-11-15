@@ -139,6 +139,21 @@ describe("the head", () => {
     expect(document.querySelector(".page-title")?.textContent).toBe("Plugins");
   });
 
+  it("is the window's level-one heading", () => {
+    // The conversation behind a page is hidden, and with it the chat's
+    // <h1>: a page titled with an <h2> left the window with no <h1>
+    // for assistive technology (axe page-has-heading-one, R683).
+    setup();
+    expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Plugins");
+  });
+
+  it("keeps a level-one heading, out of sight, when the body carries the title", () => {
+    setup({ titleInBody: true });
+    const h1 = screen.getByRole("heading", { level: 1 });
+    expect(h1.textContent).toBe("Plugins");
+    expect(h1.classList.contains("sr-only")).toBe(true);
+  });
+
   it("draws no title when the body carries its own", () => {
     // A document page opens with the document's name. Saying it again
     // in the bar above put it on screen twice, four lines apart.

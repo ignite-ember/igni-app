@@ -194,9 +194,15 @@ export function PageShell({
           you are, so the bar is not carrying that on its own. With
           the title gone and no actions left, it holds nothing, and a
           rule across an empty row is just a rule. */}
+      {/* The page's title is the window's level-one heading while the
+          page is open: the conversation behind it, which holds the
+          chat's own <h1>, is hidden (``.main--paged``), so with an <h2>
+          here assistive technology found no <h1> at all (R683). A body
+          that carries its own title still gets one, out of sight. */}
+      {titleInBody && <h1 className="sr-only">{title ?? leaf}</h1>}
       {(!titleInBody || headerExtras) && (
         <div className="page-head">
-          {titleInBody ? null : <h2 className="page-title">{title ?? leaf}</h2>}
+          {titleInBody ? null : <h1 className="page-title">{title ?? leaf}</h1>}
           {headerExtras ? (
             <div className="page-head-extras">{headerExtras}</div>
           ) : (
