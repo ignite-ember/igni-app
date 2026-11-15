@@ -1,7 +1,7 @@
 /**
  * Real end-to-end verification of thinking/std separation.
  *
- * Boots the actual Python BE (MiniMax-M2.7 default — a model that
+ * Boots the actual Python BE (configured with MiniMax-M2.7 — a model that
  * streams reasoning inline as <think>…</think>), drives the real FE
  * (Vite dev server on 5179) through several conversational turns,
  * and asserts:
@@ -70,9 +70,8 @@ async function bootBE() {
   const projectDir = await fs.mkdtemp(path.join(os.tmpdir(), "igni-think-"));
   await fs.mkdir(path.join(projectDir, ".igni"), { recursive: true });
   // Force a working MiniMax-M2.7 registry entry (key from
-  // IGNI_E2E_MINIMAX_KEY) as the default. M2.7 is the project's real
-  // model and emits inline-<think> reasoning — exactly the path under
-  // test.
+  // IGNI_E2E_MINIMAX_KEY) as the default. M2.7 is a third-party model
+  // that emits inline-<think> reasoning — exactly the path under test.
   const cfgBody = `models:
   default: MiniMax-M2.7
   registry:
