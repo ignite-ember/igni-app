@@ -1,0 +1,21 @@
+{
+  "about": "igni:// links and what each opens. Read by the web client's arrival tests (Arrivals.fromDeepLink) and the desktop shell's deep_link tests (DeepLink::accepts), so the two sides cannot drift. `shell` is whether the shell takes the link and brings its window forward; `arrival` is the page the window opens, null for the chat.",
+  "cases": [
+    { "url": "igni://open?open=acme.notes&version=2.3.1", "shell": true, "arrival": { "page": "acme.notes", "params": { "version": "2.3.1" } } },
+    { "url": "igni://open/?open=plugins", "shell": true, "arrival": { "page": "plugins", "params": {} } },
+    { "url": "IGNI://open?open=igni.artifacts&id=a%20b", "shell": true, "arrival": { "page": "igni.artifacts", "params": { "id": "a b" } } },
+    { "url": "igni://open?open=acme.notes&ws=ws%3A%2F%2Fevil&host=web&version=1", "shell": true, "arrival": { "page": "acme.notes", "params": { "version": "1" } } },
+    { "url": "igni://open?open=acme.notes&doc=1#ignored", "shell": true, "arrival": { "page": "acme.notes", "params": { "doc": "1" } } },
+    { "url": "igni://open?open=..%2Fetc", "shell": true, "arrival": null },
+    { "url": "igni://open?open=%3Cscript%3E", "shell": true, "arrival": null },
+    { "url": "igni://open", "shell": true, "arrival": null },
+    { "url": "igni://open?version=2", "shell": true, "arrival": null },
+    { "url": "igni://elsewhere?open=acme.notes", "shell": false, "arrival": null },
+    { "url": "https://igni.example/?open=acme.notes", "shell": false, "arrival": null },
+    { "url": "igni:open?open=acme.notes", "shell": false, "arrival": null },
+    { "url": "https://open?open=acme.notes", "shell": false, "arrival": null },
+    { "url": "xigni://open?open=acme.notes", "shell": false, "arrival": null },
+    { "url": "file:///etc/passwd", "shell": false, "arrival": null }
+  ],
+  "tooLong": { "prefix": "igni://open?open=acme.notes&doc=", "fill": "a", "length": 2100, "shell": false, "arrival": null }
+}

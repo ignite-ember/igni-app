@@ -105,3 +105,54 @@ describe("going back to an older address", () => {
     expect(d.windowModel.write).not.toHaveBeenCalledWith("route", expect.anything());
   });
 });
+
+describe("an igni:// link the desktop shell was handed", () => {
+  function shellHolding(links: (string | null)[]) {
+    const invoke = vi.fn(async (cmd: string) => (cmd === "igni_take_open_link" ? (links.shift() ?? null) : null));
+    (window as { __TAURI__?: unknown }).__TAURI__ = { core: { invoke } };
+    return invoke;
+  }
+  afterEach(() => {
+    delete (window as { __TAURI__?: unknown }).__TAURI__;
+  });
+
+  it("opens the page it names, at its location, once signed in", async () => {
+    const invoke = shellHolding(["igni://open?open=acme.notes&version=2.3.1"]);
+    const d = deps(null);
+    renderHook(() => useHostBindings(d));
+    await vi.waitFor(() =>
+      expect(d.windowModel.write).toHaveBeenCalledWith("route", [
+        { kind: "acme.notes", label: "acme.notes", params: { version: "2.3.1" } },
+      ]),
+    );
+    expect(invoke).toHaveBeenCalledWith("igni_take_open_link");
+  });
+
+  it("opens the chat for a link to no page igni could have", async () => {
+    shellHolding(["igni://open?open=..%2Fetc"]);
+    const d = deps(null);
+    renderHook(() => useHostBindings(d));
+    await vi.waitFor(() => expect(d.windowModel.write).toHaveBeenCalledWith("route", []));
+  });
+
+  it("takes a link followed while running when the shell says one is waiting", async () => {
+    shellHolding([null, "igni://open?open=plugins"]);
+    const d = deps(null);
+    renderHook(() => useHostBindings(d));
+    await Promise.resolve();
+    expect(d.windowModel.write).not.toHaveBeenCalledWith("route", expect.anything());
+    window.dispatchEvent(new CustomEvent("igni-host", { detail: { type: "igni:open-link" } }));
+    await vi.waitFor(() =>
+      expect(d.windowModel.write).toHaveBeenCalledWith("route", [
+        { kind: "plugins", label: "plugins", params: {} },
+      ]),
+    );
+  });
+
+  it("waits for sign-in", async () => {
+    const invoke = shellHolding(["igni://open?open=plugins"]);
+    renderHook(() => useHostBindings(deps(null, false)));
+    await Promise.resolve();
+    expect(invoke).not.toHaveBeenCalled();
+  });
+});

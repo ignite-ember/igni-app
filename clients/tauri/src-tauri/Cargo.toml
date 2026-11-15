@@ -20,6 +20,12 @@ tauri-plugin-notification = "2"
 # bundle if a newer version is available. See ``run()`` for the
 # plumbing and ``release.yml`` for the publishing side.
 tauri-plugin-updater = "2"
+# ``igni://open?open=<page>&…`` links (``src/deep_link.rs``): the scheme
+# is registered by the bundle from ``plugins.deep-link`` in
+# tauri.conf.json, and on Windows and Linux, where a followed link starts
+# a second process, single-instance hands it to the running app.
+tauri-plugin-deep-link = "2"
+tauri-plugin-single-instance = { version = "2", features = ["deep-link"] }
 serde_json = "1"
 serde = { version = "1", features = ["derive"] }
 # Verifying the organisation's signed group pack (``src/group_pack/``):

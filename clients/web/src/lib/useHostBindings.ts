@@ -79,6 +79,27 @@ export function useHostBindings(deps: HostBindingsDeps): void {
     window.history.replaceState(window.history.state, "", `${url.pathname}${search}${url.hash}`);
   }, [page, signedIn]);
 
+  // An ``igni://open?…`` link the desktop shell was handed: at launch,
+  // or while running (the shell brings the window forward and says so).
+  // Read with a web link's rules, so an unknown page opens the chat.
+  // After sign-in, like a web link.
+  useEffect(() => {
+    if (!signedIn) return;
+    let alive = true;
+    const take = async () => {
+      const link = await host.takeOpenLink();
+      if (!alive || link === null) return;
+      const arrival = Arrivals.fromDeepLink(link);
+      windowModel.write("route", arrival ? Arrivals.route(arrival) : []);
+    };
+    void take();
+    const off = host.onOpenLink(() => void take());
+    return () => {
+      alive = false;
+      off();
+    };
+  }, [signedIn, windowModel]);
+
   // An older address the browser goes back or forward to is a link like
   // any other: the window goes where it says, or to the chat. A fragment
   // change fires it too, on the address the window already wrote, and

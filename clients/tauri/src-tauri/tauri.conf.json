@@ -27,6 +27,13 @@
     },
     "macos-fps": {
       "enabled": true
+    },
+    "deep-link": {
+      "desktop": {
+        "schemes": [
+          "igni"
+        ]
+      }
     }
   },
   "bundle": {

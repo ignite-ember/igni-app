@@ -115,6 +115,13 @@ if (window.__TAURI__ && window.__TAURI__.event) {
       detail: { type: 'igni:menu', payload: { id } }
     }));
   });
+  // An igni:// link is waiting for this window (deep_link.rs); the web
+  // UI takes it with ``igni_take_open_link``.
+  window.__TAURI__.event.listen('igni-open-link', () => {
+    window.dispatchEvent(new CustomEvent('igni-host', {
+      detail: { type: 'igni:open-link' }
+    }));
+  });
   // Mirror native fullscreen state into a ``data-fullscreen`` attr
   // on ``<html>`` so CSS can collapse the header gutter when the
   // OS hides our traffic-light cluster behind the slide-down panel.

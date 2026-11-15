@@ -28,10 +28,14 @@
  * Nothing from a link reaches the DOM but as text, or the frame but as
  * the strings of its params.
  *
- * The desktop app has no deep link: it registers no URL scheme and loads
- * the bundle at its own `index.html?ws=…&host=tauri`, so the address it
- * keeps survives a reload of that window, but there is nothing to copy
- * from it or to open it with. The link to share is the web client's.
+ * The desktop app's link is the same query behind its own URL scheme:
+ * `igni://open?open=<kind>&<params>` (`fromDeepLink`). The shell
+ * registers `igni` with the OS, brings its window forward when one is
+ * followed, and hands the URL to the window, which reads it here with
+ * exactly the rules a web link is read with. The shell only checks the
+ * scheme and the length; what the link may open is decided here, once,
+ * for both. `deepLinks.cases.json` is the table both sides are tested
+ * against.
  */
 
 import { keptLocation, type PageRoute } from "./pageStack";
@@ -57,6 +61,10 @@ const PAGE_KIND = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
  *  page beats one some hop truncates into nonsense. */
 export const MAX_PLACE_SEARCH = 2048;
 
+/** The desktop app's link: `igni://open`, then the same query a web link
+ *  has. The scheme is case-insensitive, as URL schemes are. */
+const DEEP_LINK = /^igni:\/\/open\/?(\?[^#]*)?(#.*)?$/i;
+
 export interface Arrival {
   page: string;
   params: Record<string, string>;
@@ -78,6 +86,20 @@ export const Arrivals = {
     const page = query.get("open")?.trim() ?? "";
     if (!PAGE_KIND.test(page)) return null;
     return { page, params: pageParams(query) };
+  },
+
+  /**
+   * The page an `igni://open?…` link asks for, read as `fromSearch` reads
+   * a web link's query, or `null` for none: a link that is not igni's, or
+   * names no page igni could have, or is longer than any address igni
+   * writes (`MAX_PLACE_SEARCH`). A `null` opens the chat.
+   */
+  fromDeepLink(url: string): Arrival | null {
+    const match = DEEP_LINK.exec(url.trim());
+    if (!match) return null;
+    const search = match[1] ?? "";
+    if (search.length > MAX_PLACE_SEARCH) return null;
+    return Arrivals.fromSearch(search);
   },
 
   /** The route an arrival opens: its page alone, named by its kind until

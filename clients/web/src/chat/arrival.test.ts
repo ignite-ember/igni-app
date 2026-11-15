@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import table from "./deepLinks.cases.json";
 import { Arrivals, MAX_PLACE_SEARCH } from "./arrival";
 import { LOCATION_LIMITS } from "./pageStack";
 
@@ -108,5 +109,29 @@ describe("the address bar shows where the window is", () => {
   it("does not write a param igni would read as its own", () => {
     const search = Arrivals.placeSearch("", { ...notes, params: { version: "2.3.1", ws: "evil" } });
     expect(new URLSearchParams(search).get("ws")).toBeNull();
+  });
+});
+
+describe("Arrivals.fromDeepLink: the desktop app's igni:// links", () => {
+  // The same table the desktop shell's deep_link tests read, so what
+  // the shell takes and what the window opens cannot drift apart.
+  it.each(table.cases)("$url", ({ url, arrival }) => {
+    expect(Arrivals.fromDeepLink(url)).toEqual(arrival);
+  });
+
+  it("opens the chat for a link longer than any address igni writes", () => {
+    const { prefix, fill, length } = table.tooLong;
+    const url = prefix + fill.repeat(length);
+    expect(Arrivals.fromDeepLink(url)).toBeNull();
+    // Inside the cap the same link opens its page.
+    expect(Arrivals.fromDeepLink(prefix + fill.repeat(10))).toEqual({
+      page: "acme.notes",
+      params: { doc: fill.repeat(10) },
+    });
+  });
+
+  it("reads the query exactly as a web link's", () => {
+    const query = "?open=acme.notes&version=2.3.1&dir=%2Ftmp";
+    expect(Arrivals.fromDeepLink(`igni://open${query}`)).toEqual(Arrivals.fromSearch(query));
   });
 });

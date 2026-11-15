@@ -137,3 +137,19 @@ fn the_compiled_default_is_still_the_vendor_host() {
         "the updater has no pubkey, so a mirror could serve any build it liked"
     );
 }
+
+#[test]
+fn the_bundle_registers_the_igni_url_scheme() {
+    // `igni://open?open=<page>&...` links (src/deep_link.rs). The bundler
+    // turns this into CFBundleURLTypes on macOS, the installer's registry
+    // entry on Windows and x-scheme-handler/igni in the Linux .desktop
+    // file; without it the OS has nothing to hand a link to.
+    let conf = json("tauri.conf.json");
+    let schemes: Vec<&str> = conf["plugins"]["deep-link"]["desktop"]["schemes"]
+        .as_array()
+        .expect("plugins.deep-link.desktop.schemes[] missing")
+        .iter()
+        .filter_map(|s| s.as_str())
+        .collect();
+    assert_eq!(schemes, vec!["igni"]);
+}

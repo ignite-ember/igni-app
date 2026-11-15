@@ -4,6 +4,7 @@
 
 mod backend;
 mod bootstrap;
+mod deep_link;
 mod desktop_settings;
 mod diagnostics;
 mod discovery;
@@ -24,12 +25,23 @@ use tauri::{Manager, RunEvent};
 
 use backend::BackendSupervisor;
 use bootstrap::Bootstrap;
+use deep_link::DeepLinks;
 use launch_args::LaunchArgs;
 use menu::{AppMenu, MenuAction};
 use windows::{WindowLabel, WindowManager, WindowSpec, WindowTitle};
 
 pub fn run() {
+    // First: on Windows and Linux a followed igni:// link starts a second
+    // process; this hands its URL to the running app (the `deep-link`
+    // feature routes it to `on_open_url` below) and ends the second one.
     let builder = tauri::Builder::default()
+        .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
+            if let Some(window) = WindowManager::focused(app) {
+                let _ = window.unminimize();
+                let _ = window.set_focus();
+            }
+        }))
+        .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_notification::init())
@@ -46,6 +58,7 @@ pub fn run() {
             windows::fullscreen::igni_is_fullscreen,
             updater::igni_check_update,
             updater::igni_install_update,
+            deep_link::igni_take_open_link,
         ])
         .setup(|app| {
             let handle = app.handle();
@@ -55,6 +68,32 @@ pub fn run() {
             app.manage(BackendSupervisor::default());
             app.manage(WindowManager::default());
             app.manage(launch.clone());
+            app.manage(DeepLinks::default());
+
+            // igni:// links (`deep_link.rs`): the one the app was launched
+            // with is held for the window to take once the app has
+            // loaded; one followed later brings the window forward.
+            {
+                #[cfg(any(windows, target_os = "linux"))]
+                use crate::error::LogOnError;
+                use tauri_plugin_deep_link::DeepLinkExt;
+                // An AppImage, or a build run from the tree, has no
+                // installer to register the scheme.
+                #[cfg(any(windows, target_os = "linux"))]
+                handle
+                    .deep_link()
+                    .register_all()
+                    .log_on_error("registering igni://");
+                if let Ok(Some(urls)) = handle.deep_link().get_current() {
+                    app.state::<DeepLinks>()
+                        .hold(urls.into_iter().map(|u| u.to_string()));
+                }
+                let links = handle.clone();
+                handle.deep_link().on_open_url(move |event| {
+                    let urls = event.urls().into_iter().map(|u| u.to_string()).collect();
+                    DeepLinks::deliver(&links, urls);
+                });
+            }
 
             // The loading view opens at once, so launch shows a window
             // rather than a bouncing dock icon while the runtime installs.

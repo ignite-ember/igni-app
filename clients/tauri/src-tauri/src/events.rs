@@ -20,6 +20,9 @@ pub(crate) enum ShellEvent {
     /// macOS watcher sends it.
     #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
     Fullscreen(bool),
+    /// An `igni://` link is waiting; the window takes it with
+    /// `igni_take_open_link` (see `deep_link.rs`).
+    OpenLink,
 }
 
 impl ShellEvent {
@@ -30,6 +33,7 @@ impl ShellEvent {
             ShellEvent::BootstrapError(_) => "igni-bootstrap-error",
             ShellEvent::Menu(_) => "igni-menu",
             ShellEvent::Fullscreen(_) => "igni-fullscreen",
+            ShellEvent::OpenLink => "igni-open-link",
         }
     }
 
@@ -40,6 +44,7 @@ impl ShellEvent {
             | ShellEvent::BootstrapError(text)
             | ShellEvent::Menu(text) => window.emit(self.name(), text),
             ShellEvent::Fullscreen(on) => window.emit(self.name(), on),
+            ShellEvent::OpenLink => window.emit(self.name(), ()),
         };
         result.log_on_error(&format!("emitting {}", self.name()));
     }
@@ -61,5 +66,6 @@ mod tests {
         );
         assert_eq!(ShellEvent::Menu(String::new()).name(), "igni-menu");
         assert_eq!(ShellEvent::Fullscreen(false).name(), "igni-fullscreen");
+        assert_eq!(ShellEvent::OpenLink.name(), "igni-open-link");
     }
 }
