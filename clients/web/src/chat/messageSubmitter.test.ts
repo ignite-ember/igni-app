@@ -74,3 +74,14 @@ describe("MessageSubmitter", () => {
     expect((s.t.items[1] as AssistantItem).interrupted).toBeUndefined();
   });
 });
+
+describe("MessageSubmitter: past a crash (R652)", () => {
+  it("drops the restored prompts' banner and sends the message as typed", async () => {
+    const s = setup();
+    const banner: AssistantItem = { ...s.t.chatItems.assistant(""), interrupted: "abandoned", restored: true };
+    s.t.items = [{ ...s.t.chatItems.user("draw a lighthouse"), restored: true }, banner];
+    await s.submitter.submit("something else");
+    expect(s.t.items.some((it) => it.id === banner.id)).toBe(false);
+    expect(s.streamer.send).toHaveBeenCalledWith("something else");
+  });
+});

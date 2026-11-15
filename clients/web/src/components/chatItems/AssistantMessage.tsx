@@ -7,11 +7,14 @@ import { ChatMarkdown } from "../markdown/ChatMarkdown";
 import type { InterruptedHandlers } from "./handlers";
 import { InterruptedBanner, type InterruptedActions } from "./InterruptedBanner";
 
-function bannerActions(itemId: number, handlers: InterruptedHandlers): InterruptedActions {
-  const bind = (handler?: (id: number) => void) => (handler ? () => handler(itemId) : undefined);
+function bannerActions(item: AssistantItem, handlers: InterruptedHandlers): InterruptedActions {
+  const bind = (handler?: (id: number) => void) => (handler ? () => handler(item.id) : undefined);
   return {
     retry: bind(handlers.retry),
-    discard: bind(handlers.discard),
+    // Prompts restored after a crash are pending rows, which the
+    // backend has no call to discard: a Discard here would come back
+    // with the next load.
+    discard: item.restored ? undefined : bind(handlers.discard),
     editPrompt: bind(handlers.editPrompt),
   };
 }
@@ -30,7 +33,7 @@ export const AssistantMessage = memo(function AssistantMessage({
         <ChatMarkdown text={item.text} />
       </div>
       {item.interrupted && (
-        <InterruptedBanner reason={item.interrupted} actions={bannerActions(item.id, handlers ?? {})} />
+        <InterruptedBanner reason={item.interrupted} actions={bannerActions(item, handlers ?? {})} />
       )}
     </div>
   );

@@ -45,6 +45,10 @@ export interface UserItem {
   streamingEndedAt?: number;
   /** The BE has persisted the run, so ``truncate_history`` knows it. */
   persisted?: boolean;
+  /** A prompt a crash cut off before its run persisted, restored from
+   *  ``get_pending_messages``. It has no run of its own; Retry re-sends
+   *  it with ``force``, which supersedes the backend's pending row. */
+  restored?: boolean;
 }
 
 export interface AssistantItem {
@@ -53,6 +57,10 @@ export interface AssistantItem {
   text: string;
   /** Set when the turn did not complete normally. */
   interrupted?: AssistantInterrupted;
+  /** The banner under prompts restored after a crash: the backend has
+   *  no way to discard a pending row on its own, so it offers Retry
+   *  and Edit prompt, not Discard. */
+  restored?: boolean;
 }
 
 export interface ThinkingItem {

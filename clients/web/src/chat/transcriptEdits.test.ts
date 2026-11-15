@@ -144,3 +144,32 @@ describe("TranscriptEdits: the interrupted banner", () => {
     expect(s.shell.seedComposer).toHaveBeenCalledWith("fix the bug");
   });
 });
+
+describe("TranscriptEdits: prompts restored after a crash (R652)", () => {
+  function restored(t: ArrayTranscript) {
+    const before = t.chatItems.info("earlier");
+    const prompt: UserItem = { ...t.chatItems.user("draw a lighthouse"), restored: true };
+    const note = t.chatItems.info("1 message above was interrupted");
+    const banner: AssistantItem = { ...t.chatItems.assistant(""), interrupted: "abandoned", restored: true };
+    t.items = [before, prompt, note, banner];
+    return { before, prompt, banner };
+  }
+
+  it("Retry trims the restored prompt and re-sends it with force, no run needed", async () => {
+    const s = setup();
+    const { before, banner } = restored(s.t);
+    await s.edits.retryInterrupted(banner.id);
+    expect(s.client.rpc).not.toHaveBeenCalled();
+    expect(s.t.items[0]).toEqual(before);
+    expect(s.t.items.at(-1)).toMatchObject({ kind: "user", text: "draw a lighthouse" });
+    expect(s.streamer.retry).toHaveBeenCalledWith("draw a lighthouse", 3);
+  });
+
+  it("Edit prompt puts the restored prompt back in the composer", async () => {
+    const s = setup();
+    const { before, banner } = restored(s.t);
+    await s.edits.editPrompt(banner.id);
+    expect(s.t.items).toEqual([before]);
+    expect(s.shell.seedComposer).toHaveBeenCalledWith("draw a lighthouse");
+  });
+});

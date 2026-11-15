@@ -60,6 +60,11 @@ export class MessageSubmitter {
       view.info(QUEUED_NOTE);
       return;
     }
+    // A new message is the person going on past a crash: the
+    // restored prompts' banner has done its job.
+    if (view.current().items.some((it) => it.kind === "assistant" && it.restored)) {
+      view.edit((items) => items.filter((it) => !(it.kind === "assistant" && it.restored)));
+    }
     const continued = buildContinuedPrompt(view.current().items, text);
     if (continued.clearIndex >= 0) {
       // The consumed partial is not prepended twice.

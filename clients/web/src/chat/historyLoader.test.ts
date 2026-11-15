@@ -43,9 +43,18 @@ describe("HistoryLoader", () => {
       get_chat_history: new Error("no session"),
       get_pending_messages: [{ content: "one" }, { content: "two" }],
     }).load("s1");
-    expect(load.items.map((i) => i.kind)).toEqual(["user", "user", "info"]);
+    expect(load.items.map((i) => i.kind)).toEqual(["user", "user", "info", "assistant"]);
     expect(load.items[2]).toMatchObject({ text: expect.stringMatching(/^2 messages above were interrupted/) });
     expect(load.historyMap).toEqual([]);
+  });
+
+  it("ends a crash's restored prompts with the recovery banner (R652)", async () => {
+    const load = await loader({
+      get_chat_history: [],
+      get_pending_messages: [{ content: "draw a lighthouse" }],
+    }).load("s1");
+    expect(load.items[0]).toMatchObject({ kind: "user", text: "draw a lighthouse", restored: true });
+    expect(load.items.at(-1)).toMatchObject({ kind: "assistant", interrupted: "abandoned", restored: true });
   });
 
   it("is empty when the backend has nothing, or fails", async () => {

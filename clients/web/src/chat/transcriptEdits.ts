@@ -42,7 +42,7 @@ export class TranscriptEdits {
 
   readonly retryInterrupted = async (assistantItemId: number): Promise<void> => {
     const prompt = this.promptOf(assistantItemId);
-    if (!prompt?.runId) return;
+    if (!prompt || (!prompt.runId && !prompt.restored)) return;
     const { view, streamer } = this.deps;
     // Snapshot before the trim, so the new run's events still route to
     // the live list.
@@ -96,7 +96,9 @@ export class TranscriptEdits {
    *  backend refused, and nothing was trimmed. */
   private async truncateFrom(target: UserItem): Promise<boolean> {
     const sessionId = this.deps.windowModel.get("session");
-    if (!target.runId || !sessionId) return false;
+    // A prompt restored after a crash has no run: it is trimmed here
+    // only, and the forced re-send supersedes the backend's row.
+    if (!sessionId || (!target.runId && !target.restored)) return false;
     const { view, client, shell } = this.deps;
     // A run cancelled or errored before it persisted is not in the
     // session: the RPC could only fail.

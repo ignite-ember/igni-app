@@ -74,14 +74,16 @@ export class HistoryLoader {
 
   /** Messages stored before a run that never finished. They hold the
    *  post-processed prompt, so they go through the mapper to show only
-   *  what was typed. */
+   *  what was typed. They end with the recovery banner a live
+   *  interruption gets, so a crash leaves the person a way to go on
+   *  (R652), not only a line saying so. */
   private addPending(load: HistoryLoad, pending: unknown): void {
     if (!Array.isArray(pending) || pending.length === 0) return;
     for (const row of pending) {
       const item = this.mapper.map(
         parseHistoryTurn({ role: "user", content: new WirePayload(row).value("content") }),
       );
-      if (item) load.items.push(item);
+      if (item) load.items.push(item.kind === "user" ? { ...item, restored: true } : item);
     }
     load.items.push(
       this.factory.info(
@@ -90,5 +92,6 @@ export class HistoryLoader {
         } interrupted before completion — the agent knows and can pick up where it left off.`,
       ),
     );
+    load.items.push({ ...this.factory.assistant(""), interrupted: "abandoned", restored: true });
   }
 }

@@ -41,7 +41,9 @@ export function buildContinuedPrompt(
   let idx = -1;
   for (let i = items.length - 1; i >= 0; i--) {
     const it = items[i];
-    if (it.kind === "assistant" && it.interrupted) {
+    // The banner under prompts restored after a crash has no partial
+    // reply: there is nothing to continue from.
+    if (it.kind === "assistant" && it.interrupted && !it.restored) {
       partial = it.text;
       idx = i;
       break;
