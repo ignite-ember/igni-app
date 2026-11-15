@@ -21,6 +21,10 @@ export function LoginDialog({
     <LoginPanel
       client={client}
       overWall={overWall}
+      // A cancel only closes the dialog: the person knows they
+      // cancelled, and a "Login failed: cancelled" line would outlive
+      // the sign-in that follows it.
+      onCancel={onClose}
       onDone={(ok, detail) => {
         onClose();
         if (ok) onSignedIn(detail);

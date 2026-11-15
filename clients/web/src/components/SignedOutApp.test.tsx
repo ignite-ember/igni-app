@@ -12,7 +12,7 @@ import { readFileSync } from "node:fs";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { cleanup, render } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { SignedOutApp } from "./SignedOutApp";
@@ -34,12 +34,12 @@ function zIndexOf(selector: string): number {
   return Number(z![1]);
 }
 
-function client() {
+function client(cancelLogin = vi.fn()) {
   return {
     rpc: vi.fn(async () => ({})),
     onEvent: () => () => {},
     calls: { login: vi.fn(() => new Promise(() => {})) },
-    cancelLogin: vi.fn(),
+    cancelLogin,
   } as never;
 }
 
@@ -59,5 +59,30 @@ describe("the sign-in dialog over the wall", () => {
     expect(overlay).not.toBeNull();
     expect(overlay!.classList.contains("overlay--over-wall")).toBe(true);
     expect(zIndexOf(".overlay--over-wall")).toBeGreaterThan(zIndexOf(".wall"));
+  });
+});
+
+describe("cancelling the sign-in", () => {
+  // A cancel is the person's own choice, not a failure. Reported as
+  // "Login failed: cancelled" it stayed in the conversation after the
+  // sign-in that followed succeeded (R219).
+  it("closes the dialog and reports no failure", () => {
+    const cancelLogin = vi.fn();
+    const onClosePanel = vi.fn();
+    const onFailed = vi.fn();
+    render(
+      <SignedOutApp
+        client={client(cancelLogin)}
+        panel={{ kind: "login", params: {} } as never}
+        onSignIn={vi.fn()}
+        onClosePanel={onClosePanel}
+        onSignedIn={vi.fn()}
+        onFailed={onFailed}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(cancelLogin).toHaveBeenCalledTimes(1);
+    expect(onClosePanel).toHaveBeenCalledTimes(1);
+    expect(onFailed).not.toHaveBeenCalled();
   });
 });
