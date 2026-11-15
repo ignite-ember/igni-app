@@ -220,6 +220,7 @@ export default function App() {
             theme={frameTheme}
             signals={extensionTraffic.signals}
             services={pageServices}
+            onRoute={navigator.navigate}
           />
         )}
 
