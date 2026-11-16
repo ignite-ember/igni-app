@@ -278,10 +278,40 @@ function backends(needle) {
 
 let linkEnv = process.env;
 
+/**
+ * Follow an igni:// link the way the OS does. On Linux, xdg-open is tried
+ * first; on a runner with no desktop environment it can fail to run the
+ * handler it found, so the handler the scheme is registered to (the
+ * `.desktop` file `xdg-mime` names) is then run as its Exec line says,
+ * with the link as its argument — what the desktop would do.
+ */
 function openLink(url) {
-  if (WIN) execFileSync("cmd", ["/c", "start", "", url]);
-  else if (process.platform === "darwin") execFileSync("open", [url]);
-  else execFileSync("xdg-open", [url], { env: linkEnv });
+  if (WIN) return execFileSync("cmd", ["/c", "start", "", url]);
+  if (process.platform === "darwin") return execFileSync("open", [url]);
+  const handler = execFileSync("xdg-mime", ["query", "default", "x-scheme-handler/igni"], { env: linkEnv })
+    .toString()
+    .trim();
+  console.log(`  x-scheme-handler/igni -> ${handler || "(none)"}`);
+  if (!handler) throw new Error("no handler is registered for igni:// (xdg-mime query default)");
+  try {
+    execFileSync("xdg-open", [url], { env: linkEnv, stdio: "pipe" });
+    console.log("  opened with xdg-open");
+    return;
+  } catch (err) {
+    console.log(`  xdg-open failed (${String(err.stderr || err.message).trim()}); running the handler's Exec line`);
+  }
+  const dirs = [
+    path.join(linkEnv.XDG_DATA_HOME || path.join(os.homedir(), ".local/share"), "applications"),
+    "/usr/local/share/applications",
+    "/usr/share/applications",
+  ];
+  const file = dirs.map((d) => path.join(d, handler)).find((f) => fs.existsSync(f));
+  if (!file) throw new Error(`the handler ${handler} is in none of ${dirs.join(", ")}`);
+  const exec = fs.readFileSync(file, "utf8").match(/^Exec=(.*)$/m)?.[1];
+  if (!exec) throw new Error(`${file} has no Exec line`);
+  const argv = exec.replace(/"/g, "").split(/\s+/).map((a) => (/^%[uUfF]$/.test(a) ? url : a)).filter((a) => !/^%/.test(a));
+  console.log(`  ${file}: ${argv.join(" ")}`);
+  spawn(argv[0], argv.slice(1), { env: linkEnv, detached: true, stdio: "ignore" }).unref();
 }
 
 // ── suites ─────────────────────────────────────────────────────────────

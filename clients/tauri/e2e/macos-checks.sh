@@ -59,10 +59,13 @@ PROJECT="$ROOT/project"
 mkdir -p "$HOME/.igni" "$PROJECT"
 echo "# macOS e2e project" > "$PROJECT/README.md"
 MODEL_PORT_FILE="$ROOT/model.port"
-"$PYTHON" "$(dirname "$0")/../../../scripts/e2e/scripted_model.py" --port 0 --port-file "$MODEL_PORT_FILE" \
+# The system python3: the model server is standard library only, and the
+# venv's interpreter is slow to come up the first time on a fresh macOS
+# runner (it sat silent for 20 s here once).
+python3 "$(dirname "$0")/../../../scripts/e2e/scripted_model.py" --port 0 --port-file "$MODEL_PORT_FILE" \
   > "$OUT/scripted-model.out" 2>&1 &
 MODEL_PID=$!
-for _ in $(seq 1 100); do [ -s "$MODEL_PORT_FILE" ] && break; sleep 0.2; done
+for _ in $(seq 1 300); do [ -s "$MODEL_PORT_FILE" ] && break; sleep 0.2; done
 [ -s "$MODEL_PORT_FILE" ] || { cat "$OUT/scripted-model.out"; echo "the scripted model did not start" >&2; exit 1; }
 MODEL_PORT=$(cat "$MODEL_PORT_FILE")
 cat > "$HOME/.igni/config.yaml" <<YAML
