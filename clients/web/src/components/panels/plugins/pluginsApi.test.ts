@@ -46,6 +46,19 @@ describe("PluginsApi", () => {
     expect(rpc.mock.calls[0]).toEqual(["add_marketplace", { url: "good" }]);
   });
 
+  it("reads install_plugin's refusal text as a Failure, and only its success as success", async () => {
+    const { api } = apiWith((_m, args) =>
+      args.ref === "@m/ok"
+        ? { type: "info", text: "Installed plugin 'ok' v1.0.1. Active now" }
+        : { type: "info", text: "git error: git failed (exit 128) URL rejected" },
+    );
+    expect(await api.install("@m/ok")).toEqual({ ok: true });
+    expect(await api.install("https://x [plugins/y]")).toEqual({
+      ok: false,
+      reason: "git error: git failed (exit 128) URL rejected",
+    });
+  });
+
   it("previews a catalog source with no subdir", async () => {
     const { api, rpc } = apiWith(() => ({ root_path: "/r", readme: "# hi", agents: [{ name: "a" }] }));
     const r = await api.preview("https://x/plugins.git [lint]", "stable");

@@ -34,6 +34,14 @@ import type {
  */
 const ADD_MARKETPLACE_FAILED = /^(Failed|git error)/i;
 
+/**
+ * `install_plugin` answers every outcome as `msg.Info` text too (igni-core
+ * `plugin_controller.install`): a git error, an unresolvable ref or a
+ * policy refusal reads exactly like success on the wire, so only the
+ * success text counts as success. Confined to {@link PluginsApi.install}.
+ */
+const INSTALL_SUCCEEDED = /^Installed plugin\b/;
+
 export class PluginsApi {
   constructor(private readonly client: Pick<IgniClient, "rpc">) {}
 
@@ -55,9 +63,15 @@ export class PluginsApi {
     }
   }
 
-  install(ref: string): Promise<ActionResult> {
+  async install(ref: string): Promise<ActionResult> {
     const args: InstallPluginArgs = { ref };
-    return this.perform("install_plugin", args);
+    try {
+      const reply = await this.client.rpc<InfoReplyWire>("install_plugin", args);
+      const text = new WirePayload(reply).string("text");
+      return !text || INSTALL_SUCCEEDED.test(text) ? { ok: true } : { ok: false, reason: text };
+    } catch (e) {
+      return { ok: false, reason: failureReason(e) };
+    }
   }
 
   setEnabled(name: string, enabled: boolean): Promise<ActionResult> {

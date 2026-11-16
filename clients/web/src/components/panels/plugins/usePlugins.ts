@@ -87,7 +87,7 @@ export function usePlugins(api: PluginsApi): PluginsState {
     refreshing: isRunning(PluginAction.refresh()),
     installingRef: isRunning(PluginAction.installRef()),
     installPlugin: (plugin) =>
-      void run(PluginAction.plugin(plugin.name), () => api.install(plugin.source)),
+      void run(PluginAction.plugin(plugin.name), () => api.install(plugin.installRef)),
     installRef: (ref, onDone) =>
       void run(PluginAction.installRef(), () => api.install(ref), onDone),
     toggle: (plugin) =>

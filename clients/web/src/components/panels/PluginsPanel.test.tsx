@@ -124,13 +124,13 @@ describe("the marketplace tab", () => {
     expect(await screen.findByText("No marketplaces configured")).toBeTruthy();
   });
 
-  it("installs by the plugin's source and re-reads the lists", async () => {
+  it("installs by its @<marketplace>/<plugin> ref and re-reads the lists", async () => {
     const { sent } = panelWith();
     await screen.findByText("lint-helper");
     fireEvent.click(screen.getByTitle("Install from https://github.com/acme/plugins.git [lint]"));
     await waitFor(() => expect(sent("get_plugin_details")).toHaveLength(2));
     expect(sent("install_plugin")[0].args).toEqual({
-      ref: "https://github.com/acme/plugins.git [lint]",
+      ref: "@acme-market/lint-helper",
     });
   });
 

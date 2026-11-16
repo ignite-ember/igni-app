@@ -37,6 +37,14 @@ describe("MarketplaceCatalog", () => {
     ]);
   });
 
+  it("installs a catalog plugin as @<marketplace>/<plugin>, not by its display source", () => {
+    expect(catalog.entries().map((e) => e.plugin.installRef)).toEqual([
+      "@acme/commit-tools",
+      "@acme/lint-helper",
+      "git@host:x.git",
+    ]);
+  });
+
   it("filters by name, description or source, ignoring case and blanks", () => {
     const names = (q: string) => catalog.filter(q).map((e) => e.plugin.name);
     expect(names("  ")).toHaveLength(3);
