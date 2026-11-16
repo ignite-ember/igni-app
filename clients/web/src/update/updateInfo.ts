@@ -19,6 +19,9 @@ export class UpdateInfo {
     readonly currentVersion: string,
     readonly latestVersion: string,
     readonly downloadUrl?: string,
+    /** The update policy (``air_gapped``, ``update_check_ttl: 0``) has
+     *  checks off: nothing was asked, so "up to date" would be a guess. */
+    readonly checksDisabled = false,
   ) {}
 
   /** The check's answer, or ``null`` when there was none. */
@@ -30,6 +33,7 @@ export class UpdateInfo {
       p.string("current_version"),
       p.string("latest_version"),
       p.optionalString("download_url"),
+      p.flag("checks_disabled"),
     );
   }
 

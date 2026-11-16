@@ -50,14 +50,29 @@ export function useUpdateCheck(client: IgniClient, windowModel: WindowModel): Up
         if (!info) return;
         if (info.available) {
           announce(info);
-        } else if (!silent) {
+        } else if (silent) {
+          return;
+        } else if (info.checksDisabled) {
+          // Nothing was asked: "up to date" would be a guess (R628).
+          void host.notify({
+            title: "Update checks are off",
+            body: "This install's update policy turns checking off, so igni did not look for a new version.",
+          });
+        } else {
           void host.notify({
             title: "Up to date",
             body: `You're on the latest version (${info.currentVersion}).`,
           });
         }
-      } catch {
-        /* best-effort */
+      } catch (e) {
+        // The background check stays quiet; a click always answers, a
+        // refused mirror included (R628).
+        if (!silent) {
+          void host.notify({
+            title: "Couldn't check for updates",
+            body: e instanceof Error ? e.message : String(e),
+          });
+        }
       }
     },
     [announce, client],

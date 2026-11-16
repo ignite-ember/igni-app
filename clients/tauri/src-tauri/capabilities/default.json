@@ -12,7 +12,6 @@
     "opener:allow-open-url",
     "opener:allow-default-urls",
     "opener:allow-reveal-item-in-dir",
-    "notification:default",
-    "updater:default"
+    "notification:default"
   ]
 }
