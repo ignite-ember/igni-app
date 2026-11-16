@@ -163,8 +163,17 @@ jobs:
         working-directory: igni-core
         run: uv sync --all-extras
 
+      # The enterprise scenarios (e2e/scenario-*.spec.ts) make a corporate
+      # CA and a server certificate with the openssl CLI (ENT-037/038).
+      - name: openssl for the certificate scenarios
+        run: command -v openssl || (apt-get update && apt-get install -y --no-install-recommends openssl)
+
       # IGNI_E2E_STRICT=1 turns an *undeclared* skip into a failure, so
       # coverage cannot go quiet again without this job going red. F130.
+      #
+      # Every live spec talks to scripts/e2e/scripted_model.py, a
+      # deterministic OpenAI-compatible model the fixture starts per
+      # worker: the `@needs-model` specs run here now, with no API key.
       - name: E2E tests
         env:
           IGNI_E2E_STRICT: "1"
@@ -177,6 +186,19 @@ jobs:
           name: playwright-report
           path: igni-app/clients/web/playwright-report/
           retention-days: 7
+
+      # The scenario specs' screenshots, pass or fail: what each state looked
+      # like, for docs/ENTERPRISE_TEST_PLAN.md's evidence.
+      - name: Upload scenario screenshots
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: web-scenario-screenshots
+          path: |
+            igni-app/clients/web/shots/scenarios/
+            igni-app/clients/web/shots/live/
+          if-no-files-found: ignore
+          retention-days: 14
 
   # Tauri Rust shell: the desktop bridge between the system WebView
   # and the BE process. Most of the code is Tauri framework glue;
