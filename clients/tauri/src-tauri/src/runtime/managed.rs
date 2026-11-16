@@ -96,11 +96,38 @@ impl ManagedRuntime {
     /// installed live in uv's directories, shared with whatever else uses
     /// uv, so they stay and the rebuild reuses them rather than downloading
     /// again.
+    ///
+    /// Only those, by name, and the directory itself only once it is empty.
+    /// On Windows the cache is `%LOCALAPPDATA%\igni`, which is also where
+    /// the NSIS installer puts a per-user install of the app (Tauri's
+    /// default `$LOCALAPPDATA\<productName>`): wiping the whole directory
+    /// deleted the installed app and its uninstaller along with the runtime.
     pub fn reset(&self) -> Result<(), String> {
-        if self.root.exists() {
-            fs::remove_dir_all(&self.root)
-                .map_err(|e| format!("wipe cache {}: {}", self.root.display(), e))?;
+        if !self.root.exists() {
+            return Ok(());
         }
+        let marker = self.marker();
+        let parts = [
+            self.uv().path().to_path_buf(),
+            self.venv_dir(),
+            self.hf_home(),
+            marker.path().to_path_buf(),
+            self.root.join(super::marker::LEGACY_FILE_NAME),
+        ];
+        for part in parts {
+            let gone = if part.is_dir() {
+                fs::remove_dir_all(&part)
+            } else {
+                fs::remove_file(&part)
+            };
+            match gone {
+                Ok(()) => {}
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+                Err(e) => return Err(format!("wipe {}: {}", part.display(), e)),
+            }
+        }
+        // Gone with its last component; kept while anything else lives there.
+        let _ = fs::remove_dir(&self.root);
         Ok(())
     }
 
@@ -386,9 +413,27 @@ mod tests {
     #[test]
     fn reset_wipes_the_cache() {
         let rt = at(scratch("reset"));
-        fs::write(rt.root.join("uv"), b"").unwrap();
+        fs::write(rt.uv().path(), b"").unwrap();
+        fs::create_dir_all(rt.venv_dir().join("bin")).unwrap();
+        fs::create_dir_all(rt.hf_home().join("hub")).unwrap();
+        fs::write(rt.marker().path(), b"{}").unwrap();
         rt.reset().unwrap();
-        assert!(!rt.root.exists());
+        assert!(!rt.root.exists(), "an emptied cache directory is removed");
         rt.reset().expect("an absent cache is already reset");
+    }
+
+    #[test]
+    fn reset_leaves_what_is_not_the_runtime() {
+        // A per-user NSIS install shares `%LOCALAPPDATA%\igni` with the cache.
+        let rt = at(scratch("reset_shared"));
+        fs::write(rt.root.join("igni-app.exe"), b"MZ").unwrap();
+        fs::write(rt.root.join("uninstall.exe"), b"MZ").unwrap();
+        fs::write(rt.uv().path(), b"").unwrap();
+        fs::create_dir_all(rt.venv_dir()).unwrap();
+        rt.reset().unwrap();
+        assert!(rt.root.join("igni-app.exe").exists(), "the installed app was deleted");
+        assert!(rt.root.join("uninstall.exe").exists(), "the uninstaller was deleted");
+        assert!(!rt.uv().path().exists() && !rt.venv_dir().exists());
+        fs::remove_dir_all(&rt.root).unwrap();
     }
 }
