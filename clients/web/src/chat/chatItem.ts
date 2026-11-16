@@ -49,6 +49,9 @@ export interface UserItem {
    *  ``get_pending_messages``. It has no run of its own; Retry re-sends
    *  it with ``force``, which supersedes the backend's pending row. */
   restored?: boolean;
+  /** Sent while a run was in flight and not started yet: it stays below
+   *  everything that run still streams until its own run starts. */
+  queued?: boolean;
 }
 
 export interface AssistantItem {
@@ -105,6 +108,8 @@ export interface InfoItem {
   kind: "info";
   id: number;
   text: string;
+  /** The "Queued" note under a queued message, gone when it runs. */
+  queued?: boolean;
 }
 
 export interface ErrorItem {

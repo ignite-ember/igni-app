@@ -409,3 +409,56 @@ describe("run stats line", () => {
     expect(play([runCompleted(5000, 50, 3, "parent-run")], items)).toBe(items);
   });
 });
+
+describe("a message queued behind a run in flight (R645)", () => {
+  const runStarted = (run_id: string): ServerMessage =>
+    ({ type: "run_started", run_id, parent_run_id: "", agent_name: "igni" }) as ServerMessage;
+  const runCompleted = (run_id: string): ServerMessage =>
+    ({
+      type: "run_completed",
+      input_tokens: 20500,
+      output_tokens: 146,
+      reasoning_tokens: 0,
+      duration: 51.6,
+      run_id,
+      parent_run_id: "",
+    }) as ServerMessage;
+
+  it("waits below the streaming reply, then runs as its own turn", () => {
+    let t = transcript([factory.user("Write a story")]);
+    t = t.applyServerMessage(runStarted("r1")).applyServerMessage(delta("Once upon "));
+    // Queued while the story streams.
+    t = t.append(factory.queuedUser("Then say BANANA")).append(factory.queuedNote("Queued"));
+    t = t.applyServerMessage(delta("a time.")).applyServerMessage(runCompleted("r1"));
+
+    // The story stays one block, its stats under it, the queued message below.
+    expect(t.items.map((i) => i.kind)).toEqual(["user", "assistant", "stats", "user", "info"]);
+    expect((t.items[1] as Extract<ChatItem, { kind: "assistant" }>).text).toBe("Once upon a time.");
+
+    // The queued run starts: the note goes and the reply is a new block.
+    t = t.applyServerMessage(runStarted("r2")).applyServerMessage(delta("BANANA-QUEUE"));
+    expect(t.items.map((i) => i.kind)).toEqual(["user", "assistant", "stats", "user", "assistant"]);
+    expect(t.items[3]).toMatchObject({ text: "Then say BANANA", runId: "r2" });
+    expect(t.items[3]).not.toHaveProperty("queued", true);
+    expect((t.items[4] as Extract<ChatItem, { kind: "assistant" }>).text).toBe("BANANA-QUEUE");
+  });
+
+  it("is not started by the running turn's own run_started", () => {
+    let t = transcript([factory.user("first")]);
+    // Queued before the first run_started arrived.
+    t = t.append(factory.queuedUser("second")).append(factory.queuedNote("Queued"));
+    t = t.applyServerMessage(runStarted("r1"));
+    expect(t.items[0]).toMatchObject({ text: "first", runId: "r1" });
+    expect(t.items.slice(1).map((i) => (i as { queued?: boolean }).queued)).toEqual([true, true]);
+    // A resumed run re-announcing itself does not start it either.
+    t = t.applyServerMessage(runStarted("r1"));
+    expect(t.hasQueued).toBe(true);
+  });
+
+  it("settles into ordinary messages when nothing runs any more", () => {
+    const t = transcript([factory.user("a"), factory.queuedUser("b"), factory.queuedNote("Queued")]);
+    const settled = t.settleQueued();
+    expect(settled.items.map((i) => i.kind)).toEqual(["user", "user"]);
+    expect(settled.hasQueued).toBe(false);
+  });
+});

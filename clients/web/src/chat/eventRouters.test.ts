@@ -114,8 +114,12 @@ describe("MirrorEventRouter", () => {
       queued: false,
       extension_id: "x",
     } as ServerMessage);
-    expect(s.t.kinds()).toEqual(["user", "info", "user"]);
-    expect(s.t.items[2]).toMatchObject({ fromExtension: "x" });
+    // The queued one waits below with its note until a message runs
+    // straight away, which means nothing is in flight: it settles.
+    expect(s.t.kinds()).toEqual(["user", "user"]);
+    expect(s.t.items[0]).toMatchObject({ text: "theirs" });
+    expect(s.t.items[0]).not.toHaveProperty("queued", true);
+    expect(s.t.items[1]).toMatchObject({ fromExtension: "x" });
   });
 
   it("drops an approval another view answered", () => {

@@ -54,8 +54,8 @@ describe("MessageSubmitter", () => {
     await s.submitter.submit("and then this");
     expect(s.client.queueMessage).toHaveBeenCalledWith("and then this");
     expect(s.t.items).toMatchObject([
-      { kind: "user", text: "and then this" },
-      { kind: "info", text: QUEUED_NOTE },
+      { kind: "user", text: "and then this", queued: true },
+      { kind: "info", text: QUEUED_NOTE, queued: true },
     ]);
     expect(s.streamer.send).not.toHaveBeenCalled();
   });

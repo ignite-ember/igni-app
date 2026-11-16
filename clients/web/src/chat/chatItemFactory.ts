@@ -51,6 +51,16 @@ export class ChatItemFactory {
     return fromExtension ? { kind: "user", id, text, fromExtension } : { kind: "user", id, text };
   }
 
+  /** A message sent while a run was in flight. */
+  queuedUser(text: string, fromExtension?: string): UserItem {
+    return { ...this.user(text, fromExtension), queued: true };
+  }
+
+  /** The note under a queued message. */
+  queuedNote(text: string): InfoItem {
+    return { ...this.info(text), queued: true };
+  }
+
   assistant(text: string): AssistantItem {
     return { kind: "assistant", id: this.ids.next(), text };
   }

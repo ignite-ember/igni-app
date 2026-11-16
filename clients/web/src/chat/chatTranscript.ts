@@ -20,21 +20,70 @@ export interface ItemAt<T extends ChatItem> {
   item: T;
 }
 
+/** A queued message or its note: part of the queued tail. */
+const isQueued = (it: ChatItem): boolean =>
+  (it.kind === "user" || it.kind === "info") && it.queued === true;
+
 export class ChatTranscript {
   constructor(
     readonly items: ChatItem[],
     readonly factory: ChatItemFactory,
   ) {}
 
+  /**
+   * Where the queued tail starts: the messages sent while a run was in
+   * flight, with their notes. Everything the running turn still adds
+   * (its text, tools, stats) goes above the tail, so a queued message
+   * neither splits the reply it was sent during nor collects the next
+   * run's text into that reply (R645). The tail's first message joins
+   * the transcript when its own run starts ({@link startQueued}).
+   */
+  private get tailStart(): number {
+    let i = this.items.length;
+    while (i > 0 && isQueued(this.items[i - 1])) i--;
+    return i;
+  }
+
+  get hasQueued(): boolean {
+    return this.tailStart < this.items.length;
+  }
+
+  /** The tail's first message has started its run: it becomes an
+   *  ordinary message and its note goes. */
+  startQueued(): ChatTranscript {
+    const start = this.tailStart;
+    if (start === this.items.length) return this;
+    const tail = this.items.slice(start);
+    const first = tail.findIndex((it) => it.kind === "user");
+    if (first < 0) return this.with(this.items.slice(0, start));
+    let next = first + 1;
+    while (next < tail.length && tail[next].kind !== "user") next++;
+    const started = { ...tail[first], queued: undefined } as ChatItem;
+    return this.with([...this.items.slice(0, start), started, ...tail.slice(next)]);
+  }
+
+  /** No run is in flight any more: whatever is still queued is an
+   *  ordinary message, and the notes go. */
+  settleQueued(): ChatTranscript {
+    if (!this.hasQueued) return this;
+    const start = this.tailStart;
+    const settled = this.items
+      .slice(start)
+      .filter((it) => it.kind === "user")
+      .map((it) => ({ ...it, queued: undefined }) as ChatItem);
+    return this.with([...this.items.slice(0, start), ...settled]);
+  }
+
   /** Stream text into the open bubble of its kind, or open one. */
   appendText(text: string, thinking: boolean): ChatTranscript {
     if (!text) return this;
-    const last = this.items.at(-1);
+    const at = this.tailStart - 1;
+    const last = this.items[at];
     if (thinking && last?.kind === "thinking") {
-      return this.replaceAt(this.items.length - 1, { ...last, text: last.text + text });
+      return this.replaceAt(at, { ...last, text: last.text + text });
     }
     if (!thinking && last?.kind === "assistant") {
-      return this.replaceAt(this.items.length - 1, { ...last, text: last.text + text });
+      return this.replaceAt(at, { ...last, text: last.text + text });
     }
     return this.append(thinking ? this.factory.thinking(text) : this.factory.assistant(text));
   }
@@ -139,8 +188,12 @@ export class ChatTranscript {
     return this.with(items);
   }
 
+  /** At the end, or above the queued tail for anything but a queued
+   *  message or note. */
   append(item: ChatItem): ChatTranscript {
-    return this.with([...this.items, item]);
+    const start = this.tailStart;
+    if (isQueued(item) || start === this.items.length) return this.with([...this.items, item]);
+    return this.insertAt(start, item);
   }
 
   insertAt(index: number, item: ChatItem): ChatTranscript {
@@ -149,14 +202,14 @@ export class ChatTranscript {
 
   /** The last item matching ``pred``. With ``stopAtUser`` the search
    *  ends at the first user message that does not match: the latest
-   *  turn only. */
+   *  turn only. The queued tail is not searched: nothing has run there. */
   lastWhere<T extends ChatItem>(
     pred: (it: ChatItem) => it is T,
     stopAtUser?: boolean,
   ): ItemAt<T> | null;
   lastWhere(pred: (it: ChatItem) => boolean, stopAtUser?: boolean): ItemAt<ChatItem> | null;
   lastWhere(pred: (it: ChatItem) => boolean, stopAtUser = false): ItemAt<ChatItem> | null {
-    for (let index = this.items.length - 1; index >= 0; index--) {
+    for (let index = this.tailStart - 1; index >= 0; index--) {
       const item = this.items[index];
       if (pred(item)) return { index, item };
       if (stopAtUser && item.kind === "user") return null;
