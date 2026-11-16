@@ -10,9 +10,11 @@ use tauri::menu::{
 };
 use tauri::{AppHandle, Manager, Wry};
 
+use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
+
 use crate::bootstrap;
 use crate::diagnostics::BackendDiagnostics;
-use crate::error::LogOnError;
+use crate::error::{LogOnError, ShellError};
 use crate::events::ShellEvent;
 use crate::windows::WindowManager;
 
@@ -109,7 +111,11 @@ impl MenuAction {
             }
             MenuAction::ToggleDevtools => Self::toggle_devtools(app),
             MenuAction::ReinstallBackend => {
-                bootstrap::reinstall_backend(app.clone()).log_on_error("reinstall_backend");
+                let outcome = bootstrap::reinstall_backend(app.clone());
+                if let Some(text) = Self::refusal(&outcome) {
+                    Self::tell(app, "igni · Reinstall Backend", text);
+                }
+                outcome.log_on_error("reinstall_backend");
             }
             MenuAction::DiagnoseBackend => BackendDiagnostics::show(app),
             MenuAction::Quit => app.exit(0),
@@ -125,6 +131,23 @@ impl MenuAction {
                 Self::forward(app, self.as_id());
             }
         }
+    }
+
+    /// What to tell the person when a menu action they asked for was
+    /// refused. A refusal sent only to the log looked like a click that
+    /// did nothing (R618).
+    fn refusal(outcome: &Result<(), ShellError>) -> Option<String> {
+        outcome.as_ref().err().map(ToString::to_string)
+    }
+
+    /// A native message box, off the main thread's event handler.
+    fn tell(app: &AppHandle, title: &str, text: String) {
+        app.dialog()
+            .message(text)
+            .title(title)
+            .kind(MessageDialogKind::Warning)
+            .buttons(MessageDialogButtons::Ok)
+            .show(|_| {});
     }
 
     /// Send a menu id to the focused window's web UI.
@@ -322,6 +345,15 @@ mod tests {
     #[test]
     fn an_unknown_id_is_not_an_action() {
         assert_eq!(MenuAction::from_id("quit"), None);
+    }
+
+    #[test]
+    fn a_refused_reinstall_is_told_in_the_error_s_own_words() {
+        assert_eq!(MenuAction::refusal(&Ok(())), None);
+        assert_eq!(
+            MenuAction::refusal(&Err(ShellError::AttachedNotOwned)).as_deref(),
+            Some(ShellError::AttachedNotOwned.to_string().as_str())
+        );
     }
 
     #[test]

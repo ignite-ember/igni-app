@@ -90,8 +90,12 @@ impl ManagedRuntime {
         Uv::in_dir(&self.root)
     }
 
-    /// Wipe the cache so the next bootstrap re-downloads everything. Wired
-    /// to the "Reinstall Backend (Clean)" menu item.
+    /// Wipe igni's cache — uv, the venv, the install marker and the decision
+    /// model — so the next bootstrap rebuilds them. Wired to the "Reinstall
+    /// Backend (Clean)" menu item. uv's own package cache and the CPython it
+    /// installed live in uv's directories, shared with whatever else uses
+    /// uv, so they stay and the rebuild reuses them rather than downloading
+    /// again.
     pub fn reset(&self) -> Result<(), String> {
         if self.root.exists() {
             fs::remove_dir_all(&self.root)
