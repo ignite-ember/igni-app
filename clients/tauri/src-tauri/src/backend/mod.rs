@@ -11,4 +11,4 @@ mod ws_token;
 pub(crate) use conn::{BackendConn, BackendVersionInfo};
 pub(crate) use process::{BackendProcess, SHUTDOWN_GRACE};
 pub(crate) use supervisor::BackendSupervisor;
-pub(crate) use ws_token::WsToken;
+pub(crate) use ws_token::{TokenHandoff, WsToken};
