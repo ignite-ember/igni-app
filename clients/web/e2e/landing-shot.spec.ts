@@ -1,5 +1,5 @@
 /**
- * Product-shot capture for the ignite-ember.sh landing page.
+ * Product-shot capture for the igni.sh landing page.
  *
  * Boots the REAL app (full chrome — sidebar, header, composer,
  * status footer) against the fixture WebSocket backend, scripts a

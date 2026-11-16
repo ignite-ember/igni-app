@@ -253,7 +253,7 @@ impl AppMenu {
         let about = || AboutMetadata {
             name: Some("igni".into()),
             copyright: Some("© 2026 Ignite Ember".into()),
-            website: Some("https://ignite-ember.sh".into()),
+            website: Some("https://igni.sh".into()),
             ..Default::default()
         };
         slots
