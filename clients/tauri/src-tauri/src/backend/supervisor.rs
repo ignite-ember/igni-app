@@ -105,6 +105,31 @@ impl BackendSupervisor {
         }
     }
 
+    /// Refuse a restart before stopping anything: only a backend this app
+    /// spawned is its to restart. Called on the menu's thread so the
+    /// refusal can be shown at once.
+    pub fn check_restartable(&self) -> Result<(), ShellError> {
+        match &*Self::lock(&self.slot) {
+            BackendSlot::Starting | BackendSlot::Attached => Err(ShellError::RestartNotOwned),
+            BackendSlot::Owned(_) | BackendSlot::Released => Ok(()),
+        }
+    }
+
+    /// Stop the owned backend so a fresh one can be spawned (File ›
+    /// Restart Backend). Graceful, so the backend drains its sessions and
+    /// removes its lockfile, and run off the main thread for that reason.
+    /// The published connection is withdrawn: a window opened meanwhile
+    /// must not be pointed at the stopped backend's port.
+    pub fn release_for_restart(&self) -> Result<(), ShellError> {
+        self.check_restartable()?;
+        let slot = std::mem::replace(&mut *Self::lock(&self.slot), BackendSlot::Released);
+        if let BackendSlot::Owned(mut process) = slot {
+            process.shutdown(SHUTDOWN_GRACE);
+        }
+        *Self::lock(&self.conn) = None;
+        Ok(())
+    }
+
     /// Stop the backend on app exit, but only one this app spawned.
     pub fn shutdown_on_exit(&self) {
         let slot = std::mem::replace(&mut *Self::lock(&self.slot), BackendSlot::Released);
@@ -225,6 +250,46 @@ mod tests {
         assert!(s.slot.is_poisoned());
         s.shutdown_on_exit();
         assert!(s.release_for_reinstall().is_err());
+    }
+
+    #[test]
+    fn restart_of_an_attached_backend_is_refused() {
+        let s = BackendSupervisor::with_slot(BackendSlot::Attached);
+        let err = s.release_for_restart().unwrap_err();
+        assert!(matches!(err, ShellError::RestartNotOwned));
+        assert!(err
+            .to_string()
+            .starts_with("This window is attached to a backend started by another igni client"));
+        assert!(matches!(
+            *BackendSupervisor::lock(&s.slot),
+            BackendSlot::Attached
+        ));
+    }
+
+    #[test]
+    fn restart_before_bootstrap_resolves_is_refused() {
+        assert!(BackendSupervisor::default().check_restartable().is_err());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn restart_stops_the_owned_backend_and_withdraws_its_connection() {
+        // Restart Backend used to close only the web UI's socket: the
+        // backend kept its PID and the window sat on "Connecting to
+        // backend…" (R619).
+        let (s, pid) = owned_sleep();
+        *BackendSupervisor::lock(&s.conn) = Some(BackendConn::new(
+            1,
+            None,
+            BackendVersionInfo::discovered("0".into()),
+        ));
+        s.release_for_restart().unwrap();
+        assert!(is_released(&s));
+        assert!(
+            !discovery::pid_alive(pid as i32),
+            "the old backend should be gone"
+        );
+        assert!(s.current_conn().is_none());
     }
 
     #[test]

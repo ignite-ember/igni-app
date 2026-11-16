@@ -19,7 +19,6 @@ afterEach(cleanup);
 
 function deps(page: PageRoute | null, signedIn = true): HostBindingsDeps {
   return {
-    client: { close: vi.fn() },
     windowModel: { write: vi.fn(), get: vi.fn(() => ({})) } as never,
     newChat: vi.fn(),
     updateCheck: { checkNow: vi.fn() } as never,

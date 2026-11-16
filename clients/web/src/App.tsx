@@ -119,7 +119,6 @@ export default function App() {
   const { actions, switcher, pageServices } = handlers;
 
   useHostBindings({
-    client,
     windowModel,
     newChat: actions.newChat,
     updateCheck,

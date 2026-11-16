@@ -81,7 +81,7 @@ declare global {
 }
 
 /** The native menu items the desktop shell routes to the web UI. */
-export const HOST_MENU_IDS = ["new_chat", "check_update", "restart_backend"] as const;
+export const HOST_MENU_IDS = ["new_chat", "check_update"] as const;
 export type HostMenuId = (typeof HOST_MENU_IDS)[number];
 
 /** The `igni-host` CustomEvent's detail: `{type, payload}`. */

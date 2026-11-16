@@ -9,12 +9,10 @@ import { useEffect, useRef } from "react";
 import { Arrivals } from "../chat/arrival";
 import type { PageRoute } from "../chat/pageStack";
 import type { WindowModel } from "../clientState";
-import type { IgniClient } from "../protocol/client";
 import type { UpdateCheck } from "../update/useUpdateCheck";
 import { host } from "./host";
 
 export interface HostBindingsDeps {
-  client: Pick<IgniClient, "close">;
   windowModel: WindowModel;
   /** The sidebar's New chat: ``/clear``, a new session on the backend. */
   newChat: () => void;
@@ -27,7 +25,7 @@ export interface HostBindingsDeps {
 }
 
 export function useHostBindings(deps: HostBindingsDeps): void {
-  const { client, windowModel, newChat, updateCheck, page, signedIn, projectDir, org } = deps;
+  const { windowModel, newChat, updateCheck, page, signedIn, projectDir, org } = deps;
 
   useEffect(() => host.stampPlatform(document.documentElement), []);
 
@@ -49,17 +47,10 @@ export function useHostBindings(deps: HostBindingsDeps): void {
         // session and model context (R624).
         if (id === "new_chat") newChat();
         else if (id === "check_update") void checkNow(false); // answers either way
-        else if (id === "restart_backend") {
-          // The shell restarts the backend; drop the dead socket so the
-          // client reconnects rather than sitting on it.
-          try {
-            client.close();
-          } catch {
-            /* already closed */
-          }
-        }
+        // Restart Backend is the shell's own: it restarts the backend
+        // and reloads every window onto the new one (R619).
       }),
-    [client, newChat, checkNow],
+    [newChat, checkNow],
   );
 
   // The desktop window's title follows the folder and the org.

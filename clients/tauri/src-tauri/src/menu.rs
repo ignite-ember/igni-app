@@ -117,6 +117,13 @@ impl MenuAction {
                 }
                 outcome.log_on_error("reinstall_backend");
             }
+            MenuAction::RestartBackend => {
+                let outcome = bootstrap::restart_backend(app.clone());
+                if let Some(text) = Self::refusal(&outcome) {
+                    Self::tell(app, "igni · Restart Backend", text);
+                }
+                outcome.log_on_error("restart_backend");
+            }
             MenuAction::DiagnoseBackend => BackendDiagnostics::show(app),
             MenuAction::Quit => app.exit(0),
             MenuAction::ToggleFullscreen => {
@@ -127,7 +134,7 @@ impl MenuAction {
                         .log_on_error("toggling fullscreen");
                 }
             }
-            MenuAction::CheckUpdate | MenuAction::NewChat | MenuAction::RestartBackend => {
+            MenuAction::CheckUpdate | MenuAction::NewChat => {
                 Self::forward(app, self.as_id());
             }
         }
@@ -414,7 +421,6 @@ mod tests {
     #[test]
     fn the_ids_the_web_ui_handles_are_unchanged() {
         assert_eq!(MenuAction::NewChat.as_id(), "new_chat");
-        assert_eq!(MenuAction::RestartBackend.as_id(), "restart_backend");
         assert_eq!(MenuAction::CheckUpdate.as_id(), "check_update");
     }
 }

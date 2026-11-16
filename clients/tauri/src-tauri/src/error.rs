@@ -36,6 +36,8 @@ pub(crate) enum ShellError {
     },
     /// Reinstall asked of a backend this app does not own.
     AttachedNotOwned,
+    /// Restart asked of a backend this app does not own.
+    RestartNotOwned,
     /// The update policy forbids the request; carries the policy's reason.
     UpdatesOff(String),
     NoUpdatePending,
@@ -79,6 +81,10 @@ impl fmt::Display for ShellError {
             ShellError::AttachedNotOwned => f.write_str(
                 "This window is attached to a backend started by another igni client, so it \
                  can't be reinstalled from here. Close the other client first, then reopen igni.",
+            ),
+            ShellError::RestartNotOwned => f.write_str(
+                "This window is attached to a backend started by another igni client, so it \
+                 can't be restarted from here. Close the other client first, then reopen igni.",
             ),
             ShellError::UpdatesOff(reason) => f.write_str(reason),
             ShellError::NoUpdatePending => f.write_str("no update pending"),
@@ -147,6 +153,15 @@ mod tests {
             ShellError::AttachedNotOwned.to_string(),
             "This window is attached to a backend started by another igni client, so it \
              can't be reinstalled from here. Close the other client first, then reopen igni."
+        );
+    }
+
+    #[test]
+    fn the_restart_refusal_says_restart() {
+        assert_eq!(
+            ShellError::RestartNotOwned.to_string(),
+            "This window is attached to a backend started by another igni client, so it \
+             can't be restarted from here. Close the other client first, then reopen igni."
         );
     }
 
