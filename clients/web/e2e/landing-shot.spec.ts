@@ -86,8 +86,9 @@ const capture = "capture landing product shot";
 test(capture, { tag: "@manual" }, async ({ page, backend, appUrl }) => {
   // Seat the session in a believable project before first paint so
   // the header shows a real folder rather than /tmp/test-project.
-  backend.onRpc("attach_session", () => ({
-    session_id: "sess-landing",
+  // A window with no folder of its own attaches the default session.
+  backend.onRpc("attach_session", (args) => ({
+    session_id: args.session_id || args.project_dir ? "sess-landing" : "a1f9c2e4",
     project_dir: PROJECT,
   }));
   backend.onRpc("get_status", () => status(12_400));

@@ -94,6 +94,37 @@ describe("SessionSwitcher#bindOnConnect", () => {
     expect(s.windowModel.state.session).toBe("s-default");
   });
 
+  it("attaches the default session, so the backend shows its waiting approvals again", async () => {
+    const s = setup({
+      rpc: async (method) =>
+        method === "attach_session" ? { session_id: "s-default", project_dir: "/launch" } : "s-named",
+    });
+    await s.switcher.bindOnConnect({ wantedDir: "", arrival: null });
+    expect(s.client.rpc).toHaveBeenCalledWith("attach_session", {});
+    expect(s.client.rpc).not.toHaveBeenCalledWith("get_session_id");
+    expect(s.client.sessionId).toBe("s-default");
+    expect(s.windowModel.state.session).toBe("s-default");
+  });
+
+  it("names the default session when the backend cannot attach it", async () => {
+    const s = setup({
+      rpc: async (method) => {
+        if (method === "attach_session") throw new Error("unknown method");
+        return method === "get_session_id" ? "s-named" : undefined;
+      },
+    });
+    await s.switcher.bindOnConnect({ wantedDir: "", arrival: null });
+    expect(s.client.rpc).toHaveBeenCalledWith("attach_session", {});
+    expect(s.client.sessionId).toBe("s-named");
+  });
+
+  it("/clear only reads the renewed id: no attach, so no approval is shown twice", async () => {
+    const s = setup({ rpc: async () => "s-renewed" });
+    s.client.sessionId = "s-old";
+    await s.switcher.followRenewed();
+    expect(s.client.rpc.mock.calls.map((c) => c[0])).toEqual(["get_session_id"]);
+  });
+
   it("keeps a session it is already bound to across a reconnect", async () => {
     const s = setup();
     s.client.sessionId = "s-live";

@@ -165,7 +165,7 @@ describe("starting up", () => {
     await waitFor(() =>
       expect(rpcs()).toEqual(
         expect.arrayContaining([
-          "get_session_id",
+          "attach_session",
           "get_chat_history",
           "get_status",
           "list_sessions",
@@ -417,7 +417,9 @@ describe("slash commands that change the conversation", () => {
     await answerCommand("/clear", { action: "clear" });
     await waitFor(() => expect(screen.queryByText("old question")).toBeNull());
     await waitFor(() =>
-      expect(be.received().filter((m) => m.method === "get_session_id").length).toBeGreaterThan(1),
+      // The window attached its session on connect; /clear reads the
+      // renewed id.
+      expect(be.received().filter((m) => m.method === "get_session_id").length).toBeGreaterThan(0),
     );
   });
 

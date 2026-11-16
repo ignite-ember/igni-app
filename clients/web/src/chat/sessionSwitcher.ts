@@ -151,7 +151,20 @@ export class SessionSwitcher {
     return res;
   }
 
+  /** The backend's default session, attached rather than only named:
+   *  an attach is what makes the backend show again every approval the
+   *  session is waiting on (a ``run_paused`` right after the answer),
+   *  which a window that was closed and reopened needs. The re-sent
+   *  pause replaces the open approvals (``HitlRequests.show``), so it
+   *  never stacks a second dialog. A backend that cannot attach still
+   *  names its session. */
   private async defaultSession(): Promise<string> {
+    try {
+      const attached = (await this.attach({})).sessionId;
+      if (attached) return attached;
+    } catch {
+      // Named below instead.
+    }
     return SessionIdReply.parse(await this.deps.client.rpc<unknown>("get_session_id"));
   }
 
