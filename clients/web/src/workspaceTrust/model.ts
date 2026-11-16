@@ -6,7 +6,7 @@
  * language servers and its permission/safety settings wait. There is no
  * terminal here to prompt on, so the window asks: it reads the folder's
  * decision with `get_workspace_trust` when it connects and whenever the
- * folder changes, and opens igni's own dialog (`ui.dialog`, kind
+ * folder or the bound session changes, and opens igni's own dialog (`ui.dialog`, kind
  * `workspace_trust`) while the state is `ask`. The answer goes back with
  * `set_workspace_trust`; the backend pushes `workspace_trust_required`
  * with the new status, so every window showing the dialog for that folder
@@ -72,6 +72,13 @@ export function useWorkspaceTrust(
   projectDir: string | null | undefined,
   windowModel: WindowModel,
   dialog: Dialog | null,
+  /** The session the window is bound to. Picking a folder mid-session
+   *  writes the folder before the window binds the new session, so the
+   *  read the folder change starts goes to the old session and answers
+   *  for the old folder; the backend's push for the new one arrives
+   *  while the old session is bound and is dropped. Reading again once
+   *  the new session is bound is what asks about the new folder (R688). */
+  sessionId = "",
 ): void {
   // The latest dialog, for the push handler registered once per connection.
   const dialogRef = useRef<Dialog | null>(dialog);
@@ -126,5 +133,5 @@ export function useWorkspaceTrust(
       alive = false;
       off();
     };
-  }, [client, connected, projectDir, windowModel]);
+  }, [client, connected, projectDir, sessionId, windowModel]);
 }

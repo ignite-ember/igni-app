@@ -98,7 +98,7 @@ export default function App() {
     windowModel,
   );
   // "Trust this folder?" while the folder's decision is ``ask``.
-  useWorkspaceTrust(client, connected, projectDir, windowModel, dialog);
+  useWorkspaceTrust(client, connected, projectDir, windowModel, dialog, sessionId);
   // Events and host-model signals for installed extensions.
   const extensionTraffic = useExtensionTraffic(client, connected);
   useStatusPoll(refreshStatus, connected);
