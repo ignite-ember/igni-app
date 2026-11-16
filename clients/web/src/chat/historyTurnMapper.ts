@@ -13,8 +13,10 @@ import type {
   ToolTurn,
   UserTurn,
   VisualizationTurn,
+  WorkflowTurn,
 } from "../protocol/historyTurns";
 import { parseOrchestrateEvent } from "../protocol/orchestrateEvents";
+import { parseWorkflowEvent, type WorkflowEvent } from "../protocol/workflowEvents";
 import type { ChatItem, StatsItem } from "./chatItem";
 import type { ChatItemFactory } from "./chatItemFactory";
 import { OrchestrateAgentTree } from "./orchestrateAgentTree";
@@ -22,6 +24,7 @@ import { PlanTaskList } from "./planTasks";
 import { estimateTokens } from "./runCompletion";
 import { UserMessageText } from "./userMessageText";
 import { toolOutputForDisplay } from "./toolOutput";
+import { WorkflowRunModel } from "./workflowRun";
 
 type Mappers = {
   [K in HistoryTurn["role"]]?: (turn: Extract<HistoryTurn, { role: K }>) => ChatItem | null;
@@ -38,6 +41,7 @@ export class HistoryTurnMapper {
     plan: (turn) => this.fromPlan(turn),
     visualization: (turn) => this.fromVisualization(turn),
     team: (turn) => this.fromTeam(turn),
+    workflow: (turn) => this.fromWorkflow(turn),
   };
 
   constructor(private readonly items: ChatItemFactory) {}
@@ -144,5 +148,19 @@ export class HistoryTurnMapper {
       specId: turn.spec_id,
       fromExtension: turn.extension_id || undefined,
     });
+  }
+
+  /** The run card the live ``workflow_event`` pushes drew, folded from
+   *  the same tape through the same model. Nothing to draw (no event
+   *  this client reads) is no card. */
+  private fromWorkflow(turn: WorkflowTurn): ChatItem | null {
+    const events: WorkflowEvent[] = [];
+    for (const raw of turn.events) {
+      const event = parseWorkflowEvent(raw);
+      if (event) events.push(event);
+    }
+    const run = WorkflowRunModel.fromEvents(events);
+    if (!run) return null;
+    return { kind: "workflow", id: this.items.ids.next(), run: run.state };
   }
 }

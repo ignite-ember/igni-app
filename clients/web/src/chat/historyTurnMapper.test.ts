@@ -4,6 +4,7 @@ import { ChatItemFactory } from "./chatItemFactory";
 import { ChatItemIds } from "./chatItemIds";
 import { HistoryTurnMapper } from "./historyTurnMapper";
 import { parseOrchestrateEvent } from "../protocol/orchestrateEvents";
+import { parseWorkflowEvent } from "../protocol/workflowEvents";
 import { ChatTranscript } from "./chatTranscript";
 
 let history: HistoryTurnMapper;
@@ -353,5 +354,83 @@ describe("HistoryTurnMapper: a team turn (R665)", () => {
 
   it("is no card when none of its events can be read", () => {
     expect(restoredItem({ role: "team", card_id: "c1", events: [{ type: "visualization_delta" }] })).toBeNull();
+  });
+});
+
+
+describe("HistoryTurnMapper: a workflow turn (R664)", () => {
+  /** The run's ``workflow_event`` records, as the backend keeps them. */
+  const EVENTS = [
+    {
+      workflow_run_id: "wf_1",
+      name: "file-facts",
+      ts: 1000,
+      seq: 0,
+      type: "workflow_started",
+      payload: { name: "file-facts", args: {} },
+    },
+    {
+      workflow_run_id: "wf_1",
+      name: "file-facts",
+      ts: 1100,
+      seq: 1,
+      type: "phase_started",
+      payload: { phase_id: "p1", title: "Read the files" },
+    },
+    {
+      workflow_run_id: "wf_1",
+      name: "file-facts",
+      ts: 1200,
+      seq: 2,
+      type: "agent_started",
+      payload: { id: "a1", label: "calc.py" },
+    },
+    {
+      workflow_run_id: "wf_1",
+      name: "file-facts",
+      ts: 1300,
+      seq: 3,
+      type: "agent_completed",
+      payload: { id: "a1", status: "completed", result: "ok" },
+    },
+    {
+      workflow_run_id: "wf_1",
+      name: "file-facts",
+      ts: 1400,
+      seq: 4,
+      type: "workflow_completed",
+      payload: { status: "completed", result: "done" },
+    },
+  ];
+
+  it("draws the card the live pushes drew, settled", () => {
+    let live = new ChatTranscript([], new ChatItemFactory(new ChatItemIds()));
+    for (const raw of EVENTS) live = live.applyWorkflowEvent(parseWorkflowEvent(raw)!);
+    const liveCard = live.items[0];
+
+    const card = new HistoryTurnMapper(new ChatItemFactory(new ChatItemIds())).map(
+      parseHistoryTurn({
+        role: "workflow",
+        run_id: "",
+        workflow_run_id: "wf_1",
+        name: "file-facts",
+        events: EVENTS,
+      }),
+    );
+    expect(card).toMatchObject({ kind: "workflow" });
+    if (card?.kind !== "workflow" || liveCard.kind !== "workflow") throw new Error("no card");
+    expect(card.run).toEqual(liveCard.run);
+    expect(card.run.status).toBe("completed");
+    expect(card.run.phases[0]?.agents[0]).toMatchObject({ label: "calc.py", status: "completed" });
+  });
+
+  it("is no card when none of its events can be read", () => {
+    expect(
+      restoredItem({ role: "workflow", workflow_run_id: "wf_1", events: [{ type: "log" }] }),
+    ).toBeNull();
+  });
+
+  it("is no card when the run has no events at all", () => {
+    expect(restoredItem({ role: "workflow", workflow_run_id: "wf_1", events: [] })).toBeNull();
   });
 });

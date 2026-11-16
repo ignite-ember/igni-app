@@ -54,6 +54,29 @@ describe("parseHistoryTurn", () => {
     expect(parseHistoryTurn({ role: "team" })).toMatchObject({ card_id: "", tool_call_id: "", events: [] });
   });
 
+  it("reads a workflow turn's run id, name and events", () => {
+    expect(
+      parseHistoryTurn({
+        role: "workflow",
+        run_id: "",
+        workflow_run_id: "wf_1",
+        name: "file-facts",
+        events: [{ type: "workflow_started" }],
+      }),
+    ).toEqual({
+      role: "workflow",
+      run_id: "",
+      workflow_run_id: "wf_1",
+      name: "file-facts",
+      events: [{ type: "workflow_started" }],
+    });
+    expect(parseHistoryTurn({ role: "workflow" })).toMatchObject({
+      workflow_run_id: "",
+      name: "",
+      events: [],
+    });
+  });
+
   it("marks a role it does not render as unknown", () => {
     expect(parseHistoryTurn({ role: "system", content: "boot" })).toEqual({
       role: "unknown",

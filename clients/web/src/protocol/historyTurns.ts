@@ -74,6 +74,16 @@ export interface StatsTurn extends TurnBase {
   duration: number;
 }
 
+/** A workflow run's card, as it was drawn during the run: the run's
+ *  ``workflow_event`` records, oldest first, so the card can be drawn
+ *  again from the tape. */
+export interface WorkflowTurn extends TurnBase {
+  role: "workflow";
+  workflow_run_id: string;
+  name: string;
+  events: unknown[];
+}
+
 /** A role this client does not render (``system``, anything newer). */
 export interface UnknownTurn extends TurnBase {
   role: "unknown";
@@ -89,6 +99,7 @@ export type HistoryTurn =
   | VisualizationTurn
   | TeamTurn
   | StatsTurn
+  | WorkflowTurn
   | UnknownTurn;
 
 type KnownTurn = Exclude<HistoryTurn, UnknownTurn>;
@@ -114,6 +125,13 @@ class HistoryTurnParser {
       events: this.p.list("events"),
     }),
     stats: (run_id) => this.stats(run_id),
+    workflow: (run_id) => ({
+      role: "workflow",
+      run_id,
+      workflow_run_id: this.p.text("workflow_run_id"),
+      name: this.p.text("name"),
+      events: this.p.list("events"),
+    }),
   };
 
   constructor(private readonly p: WirePayload) {}
