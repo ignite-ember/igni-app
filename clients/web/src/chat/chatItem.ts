@@ -49,6 +49,9 @@ export interface UserItem {
    *  ``get_pending_messages``. It has no run of its own; Retry re-sends
    *  it with ``force``, which supersedes the backend's pending row. */
   restored?: boolean;
+  /** The restored prompt's ``message_id``, which Discard hands to
+   *  ``discard_pending_message``. */
+  pendingMessageId?: string;
   /** Sent while a run was in flight and not started yet: it stays below
    *  everything that run still streams until its own run starts. */
   queued?: boolean;
@@ -60,9 +63,8 @@ export interface AssistantItem {
   text: string;
   /** Set when the turn did not complete normally. */
   interrupted?: AssistantInterrupted;
-  /** The banner under prompts restored after a crash: the backend has
-   *  no way to discard a pending row on its own, so it offers Retry
-   *  and Edit prompt, not Discard. */
+  /** The banner under prompts restored after a crash: its Discard
+   *  drops their pending rows (``discard_pending_message``). */
   restored?: boolean;
 }
 

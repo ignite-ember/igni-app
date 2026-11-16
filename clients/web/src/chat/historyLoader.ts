@@ -80,10 +80,15 @@ export class HistoryLoader {
   private addPending(load: HistoryLoad, pending: unknown): void {
     if (!Array.isArray(pending) || pending.length === 0) return;
     for (const row of pending) {
-      const item = this.mapper.map(
-        parseHistoryTurn({ role: "user", content: new WirePayload(row).value("content") }),
-      );
-      if (item) load.items.push(item.kind === "user" ? { ...item, restored: true } : item);
+      const fields = new WirePayload(row);
+      const item = this.mapper.map(parseHistoryTurn({ role: "user", content: fields.value("content") }));
+      if (item) {
+        load.items.push(
+          item.kind === "user"
+            ? { ...item, restored: true, pendingMessageId: fields.string("message_id") }
+            : item,
+        );
+      }
     }
     load.items.push(
       this.factory.info(

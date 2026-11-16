@@ -51,9 +51,14 @@ describe("HistoryLoader", () => {
   it("ends a crash's restored prompts with the recovery banner (R652)", async () => {
     const load = await loader({
       get_chat_history: [],
-      get_pending_messages: [{ content: "draw a lighthouse" }],
+      get_pending_messages: [{ content: "draw a lighthouse", message_id: "m-7", received_at: 1 }],
     }).load("s1");
-    expect(load.items[0]).toMatchObject({ kind: "user", text: "draw a lighthouse", restored: true });
+    expect(load.items[0]).toMatchObject({
+      kind: "user",
+      text: "draw a lighthouse",
+      restored: true,
+      pendingMessageId: "m-7",
+    });
     expect(load.items.at(-1)).toMatchObject({ kind: "assistant", interrupted: "abandoned", restored: true });
   });
 

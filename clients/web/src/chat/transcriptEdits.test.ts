@@ -148,7 +148,7 @@ describe("TranscriptEdits: the interrupted banner", () => {
 describe("TranscriptEdits: prompts restored after a crash (R652)", () => {
   function restored(t: ArrayTranscript) {
     const before = t.chatItems.info("earlier");
-    const prompt: UserItem = { ...t.chatItems.user("draw a lighthouse"), restored: true };
+    const prompt: UserItem = { ...t.chatItems.user("draw a lighthouse"), restored: true, pendingMessageId: "m1" };
     const note = t.chatItems.info("1 message above was interrupted");
     const banner: AssistantItem = { ...t.chatItems.assistant(""), interrupted: "abandoned", restored: true };
     t.items = [before, prompt, note, banner];
@@ -163,6 +163,44 @@ describe("TranscriptEdits: prompts restored after a crash (R652)", () => {
     expect(s.t.items[0]).toEqual(before);
     expect(s.t.items.at(-1)).toMatchObject({ kind: "user", text: "draw a lighthouse" });
     expect(s.streamer.retry).toHaveBeenCalledWith("draw a lighthouse", 3);
+  });
+
+  it("Discard drops every restored prompt's pending row, then the prompts, note and banner", async () => {
+    const s = setup({ rpc: async () => ({ ok: true }) });
+    const before = s.t.chatItems.info("earlier");
+    const first: UserItem = { ...s.t.chatItems.user("one"), restored: true, pendingMessageId: "m1" };
+    const second: UserItem = { ...s.t.chatItems.user("two"), restored: true, pendingMessageId: "m2" };
+    const note = s.t.chatItems.info("2 messages above were interrupted");
+    const banner: AssistantItem = { ...s.t.chatItems.assistant(""), interrupted: "abandoned", restored: true };
+    s.t.items = [before, first, second, note, banner];
+    await s.edits.discardInterrupted(banner.id);
+    expect(s.client.rpc.mock.calls).toEqual([
+      ["discard_pending_message", { session_id: "s1", message_id: "m1" }],
+      ["discard_pending_message", { session_id: "s1", message_id: "m2" }],
+    ]);
+    expect(s.t.items).toEqual([before]);
+  });
+
+  it("Discard keeps a prompt the backend refuses to drop yet, and says why", async () => {
+    const s = setup({
+      rpc: async () => ({ ok: false, error: "its run may still be finishing; try again in a minute" }),
+    });
+    const { prompt, banner } = restored(s.t);
+    await s.edits.discardInterrupted(banner.id);
+    expect(s.t.items).toContainEqual(prompt);
+    expect(s.t.items).toContainEqual(banner);
+    expect(s.t.items.at(-1)).toMatchObject({
+      kind: "info",
+      text: "Not discarded: its run may still be finishing; try again in a minute",
+    });
+  });
+
+  it("Discard keeps the restored prompt when the backend cannot be asked", async () => {
+    const s = setup({ rpc: async () => Promise.reject(new Error("offline")) });
+    const { prompt } = restored(s.t);
+    await s.edits.discardInterrupted(s.t.items[3].id);
+    expect(s.t.items).toContainEqual(prompt);
+    expect(s.t.items.at(-1)).toMatchObject({ kind: "info", text: "Not discarded: offline" });
   });
 
   it("Edit prompt puts the restored prompt back in the composer", async () => {

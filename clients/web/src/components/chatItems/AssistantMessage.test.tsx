@@ -15,9 +15,8 @@ describe("AssistantMessage's banner", () => {
     expect((screen.getByRole("button", { name: /discard/i }) as HTMLButtonElement).disabled).toBe(false);
   });
 
-  it("offers Retry and Edit prompt, not Discard, under prompts restored after a crash (R652)", () => {
-    // The backend has no call that discards a pending row: a Discard
-    // here would come back with the next load.
+  it("offers Retry, Edit prompt and Discard under prompts restored after a crash (R652)", () => {
+    // Discard drops the pending rows through discard_pending_message.
     render(
       <AssistantMessage
         item={{ kind: "assistant", id: 1, text: "", interrupted: "abandoned", restored: true }}
@@ -26,6 +25,6 @@ describe("AssistantMessage's banner", () => {
     );
     expect((screen.getByRole("button", { name: /^retry/i }) as HTMLButtonElement).disabled).toBe(false);
     expect((screen.getByRole("button", { name: /edit prompt/i }) as HTMLButtonElement).disabled).toBe(false);
-    expect((screen.getByRole("button", { name: /discard/i }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole("button", { name: /discard/i }) as HTMLButtonElement).disabled).toBe(false);
   });
 });
