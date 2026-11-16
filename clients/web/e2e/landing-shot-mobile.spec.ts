@@ -1,5 +1,5 @@
 /**
- * Phone-width product shot for the ignite-ember.sh landing page.
+ * Phone-width product shot for the igni.sh landing page.
  *
  * The desktop capture (landing-shot.spec.ts) is 1920x1080; shown at
  * ~358px on a phone it scales to 19%, which makes the app's 14px UI
