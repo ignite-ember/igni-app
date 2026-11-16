@@ -38,8 +38,9 @@ pub(crate) enum TokenHandoff {
 }
 
 impl TokenHandoff {
-    /// The first igni-core release that reads `IGNI_WS_TOKEN_FD`. igni-core
-    /// 1.0.4 is released without it; the change lands in the release after.
+    /// The first igni-core release that reads `IGNI_WS_TOKEN_FD` is 1.0.5.
+    /// igni-core 1.0.4 is released without it and reads the token from its
+    /// environment.
     pub const PIPE_SINCE: (u64, u64, u64) = (1, 0, 5);
 
     /// The handoff the backend's igni-core understands, by the

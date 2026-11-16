@@ -26,7 +26,7 @@ function rig(answer: unknown) {
   return { hook, notify, windowModel };
 }
 
-const disabled = { available: false, current_version: "1.0.4", latest_version: "", checks_disabled: true };
+const disabled = { available: false, current_version: "1.0.5", latest_version: "", checks_disabled: true };
 
 describe("useUpdateCheck", () => {
   it("says checks are off, not 'up to date', when the policy turned them off", async () => {
@@ -46,7 +46,7 @@ describe("useUpdateCheck", () => {
   });
 
   it("stays quiet in the background about everything but an update", async () => {
-    for (const answer of [disabled, new Error("offline"), { available: false, current_version: "1.0.4" }]) {
+    for (const answer of [disabled, new Error("offline"), { available: false, current_version: "1.0.5" }]) {
       const { hook, notify } = rig(answer);
       await act(() => hook.result.current.check(true));
       expect(notify).not.toHaveBeenCalled();
@@ -55,7 +55,7 @@ describe("useUpdateCheck", () => {
   });
 
   it("still says 'up to date' after a real check found nothing", async () => {
-    const { hook, notify } = rig({ available: false, current_version: "1.0.4", latest_version: "1.0.4" });
+    const { hook, notify } = rig({ available: false, current_version: "1.0.5", latest_version: "1.0.5" });
     await act(() => hook.result.current.check(false));
     expect(notify.mock.calls[0][0]).toMatchObject({ title: "Up to date" });
   });
