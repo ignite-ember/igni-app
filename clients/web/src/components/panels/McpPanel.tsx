@@ -2,6 +2,7 @@ import { Skeleton } from "@ignite-ember/ui-react";
 import type { IgniClient } from "../../protocol/client";
 import { Drawer } from "./Drawer";
 import { ADD_SERVER_PROMPT } from "./mcp/addServerPrompt";
+import { McpServer } from "./mcp/mcpServer";
 import { McpServerEntry } from "./mcp/McpServerEntry";
 import { useMcpServers } from "./mcp/useMcpServers";
 
@@ -32,8 +33,15 @@ export function McpPanel({
   onClose: () => void;
   onAddServer: (seed: string) => void;
 }) {
-  const { servers, busy, loadError, actionError, toggle, setToolEnabled } =
+  const { servers, approvals, busy, loadError, actionError, toggle, setToolEnabled, setApproval } =
     useMcpServers(client);
+  // A configured server the details left out still needs its answer.
+  const listed = new Set(servers?.map((s) => s.name));
+  const unlisted = servers
+    ? [...approvals.values()]
+        .filter((a) => !listed.has(a.name))
+        .map((a) => McpServer.parse({ name: a.name, connected: false }))
+    : [];
 
   return (
     <Drawer
@@ -53,18 +61,20 @@ export function McpPanel({
       {servers === null && <McpSkeleton />}
       {loadError && <div className="msg-error">{loadError}</div>}
       {actionError && <div className="msg-error">{actionError}</div>}
-      {servers?.length === 0 && !loadError && (
+      {servers?.length === 0 && unlisted.length === 0 && !loadError && (
         <div className="msg-info">No MCP servers configured.</div>
       )}
-      {servers?.map((s) => (
+      {[...(servers ?? []), ...unlisted].map((s) => (
         <McpServerEntry
           key={s.name}
           server={s}
+          approval={approvals.get(s.name)}
           busy={busy === s.name}
           onToggle={() => toggle(s)}
           onToolToggle={(tool, enabled) =>
             setToolEnabled(s.name, tool, enabled)
           }
+          onApprove={(approved) => setApproval(s.name, approved)}
         />
       ))}
     </Drawer>

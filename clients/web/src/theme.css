@@ -6918,6 +6918,17 @@ button.mcp-server-head:focus-visible {
   display: inline-flex;
 }
 
+.mcp-server-actions {
+  display: flex;
+  gap: var(--space-4);
+  flex-shrink: 0;
+}
+
+/* Waiting for the person's approval: amber, but still, not a spinner. */
+.tool-status.running.mcp-waiting {
+  animation: none;
+}
+
 .mcp-skeleton {
   display: flex;
   flex-direction: column;
