@@ -50,8 +50,10 @@ export function ExtensionPageHost({
         request.path === "ui.show_dialog" ? DIALOG_WAIT_MS : undefined,
       ),
     );
-  const onServiceToken = async () =>
-    ServiceTokenReply.parse(await caller.rpc<unknown>("extension_service_token", {}));
+  const onServiceToken = async ({ refresh }: { refresh: boolean }) =>
+    ServiceTokenReply.parse(
+      await caller.rpc<unknown>("extension_service_token", refresh ? { refresh: true } : {}),
+    );
   return (
     <Drawer title={page.label} titleInBody onClose={onClose}>
       <ExtensionPage

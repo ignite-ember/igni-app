@@ -546,7 +546,20 @@ describe("the extension's own service, from a frame", () => {
         error: undefined,
       }),
     );
-    expect(onServiceToken).toHaveBeenCalledWith();
+    expect(onServiceToken).toHaveBeenCalledWith({ refresh: false });
+  });
+
+  it("passes the guest's refresh on, so a refused token is not handed back", async () => {
+    const onServiceToken = vi.fn(async () => ({ ok: true, token: "t2", expiresIn: 600 }));
+    const { frame } = mount({ onServiceToken });
+    const nonce = handshake(frame);
+    send(frame, { kind: "service-token", nonce, id: "s4", refresh: true });
+    await waitFor(() =>
+      expect(repliesTo(frame)).toContainEqual(
+        expect.objectContaining({ kind: "service-token-reply", id: "s4", ok: true }),
+      ),
+    );
+    expect(onServiceToken).toHaveBeenCalledWith({ refresh: true });
   });
 
   it("refuses when this window fetches no tokens", async () => {

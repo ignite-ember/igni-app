@@ -127,8 +127,12 @@ export interface ExtensionFrameProps {
    * `caller` — and the backend answers for the service recorded on
    * that extension's origin. Nothing the frame sends names an
    * audience. Absent, every request is refused here.
+   *
+   * `refresh` is true when the guest asks again after its service
+   * answered `401`: the backend then mints a new token instead of
+   * answering from its cache with the one the service refused.
    */
-  onServiceToken?: () => Promise<{
+  onServiceToken?: (options: { refresh: boolean }) => Promise<{
     ok: boolean;
     token?: string;
     expiresIn?: number;
@@ -280,7 +284,8 @@ export function ExtensionFrame({
           refuse("this window does not fetch service tokens");
           return;
         }
-        void tokenFor().then(
+        const refresh = "refresh" in message && message.refresh === true;
+        void tokenFor({ refresh }).then(
           (reply) =>
             post({
               igni: BRIDGE_VERSION,
