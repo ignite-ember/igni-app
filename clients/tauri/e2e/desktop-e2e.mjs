@@ -294,7 +294,10 @@ async function firstLaunch() {
   // A development extension, installed the documented way into this HOME.
   const igni = WIN ? path.join(path.dirname(PYTHON), "igni.exe") : path.join(path.dirname(PYTHON), "igni");
   const src = fs.mkdtempSync(path.join(os.tmpdir(), "igni-ext-"));
-  const extEnv = { ...appEnv(home), IGNI_DEV_EXTENSIONS: "1" };
+  // PYTHONIOENCODING: `igni ext init` prints "→", which a Windows console's
+  // cp1252 cannot encode, and the command dies with UnicodeEncodeError
+  // (an igni-core bug, reported with this suite).
+  const extEnv = { ...appEnv(home), IGNI_DEV_EXTENSIONS: "1", PYTHONIOENCODING: "utf-8" };
   execFileSync(igni, ["ext", "init", "--id", "acme.hello", "hello"], { cwd: src, env: extEnv, stdio: "inherit" });
   execFileSync(igni, ["ext", "install", "hello"], { cwd: src, env: extEnv, stdio: "inherit" });
 

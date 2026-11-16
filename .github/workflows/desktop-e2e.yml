@@ -299,6 +299,11 @@ jobs:
           "$RUNNER_TEMP/uv057/Scripts/pip" install --quiet uv==0.5.7
           "$RUNNER_TEMP/uv057/Scripts/uv" python install 3.12
 
+      - name: PLAT-008 ENT-033 the installed app starts and stops its backend (no WebDriver)
+        if: success() || failure()
+        shell: pwsh
+        run: igni-app/clients/tauri/e2e/windows-install.ps1 -Action smoke -Bundle igni-app/clients/tauri/src-tauri/target/release/bundle -Out $env:IGNI_E2E_OUT
+
       - name: ENT-016 air-gapped with no runtime
         if: success() || failure()
         run: node igni-app/clients/tauri/e2e/desktop-e2e.mjs --suite air-gapped
