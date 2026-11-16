@@ -33,6 +33,11 @@ impl ProvisionedRuntime {
             })
     }
 
+    /// The interpreter it names.
+    pub fn python(&self) -> &Path {
+        &self.python
+    }
+
     /// Use the interpreter, or say why it cannot be used. Never falls back
     /// to downloading: the administrator chose this one.
     pub fn install(
