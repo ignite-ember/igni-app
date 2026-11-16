@@ -117,13 +117,22 @@ jobs:
       # The organisation's package mirror: igni-core built from main and
       # every wheel `igni-core[decisions]` needs (CPU torch), as a PEP 503
       # index served from loopback.
+      #
+      # ripgrep is built here from its sdist (this runner has Rust): PyPI's
+      # only Linux wheel of ripgrep 15.1.0 is manylinux_2_39, which needs
+      # glibc 2.39 (Ubuntu 24.04+), and igni-core requires it on every
+      # x86_64 Linux. On Ubuntu 22.04 — where the .deb is built — a
+      # customer's first launch would have to compile it. An igni-core
+      # packaging bug, reported with this suite; an organisation's mirror
+      # carries the built wheel, as this one does.
       - name: A local package index for the first-launch install
         run: |
           set -euo pipefail
           wh="$RUNNER_TEMP/wheelhouse"
           (cd igni-core && uv build --wheel --out-dir "$wh")
           core=$(ls "$wh"/igni_core-*.whl)
-          python -m pip download --quiet --dest "$wh" --only-binary=:all: \
+          python -m pip wheel --quiet --no-deps --wheel-dir "$wh" "ripgrep==15.1.0"
+          python -m pip download --quiet --dest "$wh" --only-binary=:all: --find-links "$wh" \
             --extra-index-url https://download.pytorch.org/whl/cpu "${core}[decisions]"
           python igni-app/scripts/e2e/make_simple_index.py "$wh" "$RUNNER_TEMP/index"
           nohup python -m http.server 8899 --bind 127.0.0.1 --directory "$RUNNER_TEMP/index" \

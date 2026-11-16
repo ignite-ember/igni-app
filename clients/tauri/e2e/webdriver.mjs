@@ -7,6 +7,13 @@ const ELEMENT = "element-6066-11e4-a52f-4f735466cecf";
 
 export class WebDriverError extends Error {}
 
+/** A web element reference: the W3C key, or the legacy "ELEMENT" some
+ *  drivers still answer with, or whatever single key the driver used. */
+function elementId(ref) {
+  if (!ref || typeof ref !== "object") throw new WebDriverError(`not an element reference: ${JSON.stringify(ref)}`);
+  return ref[ELEMENT] ?? ref.ELEMENT ?? Object.values(ref)[0];
+}
+
 export class Session {
   constructor(base, id) {
     this.base = base;
@@ -55,12 +62,12 @@ export class Session {
 
   async find(css) {
     const v = await this.cmd("POST", "/element", { using: "css selector", value: css });
-    return new Element(this, v[ELEMENT]);
+    return new Element(this, elementId(v));
   }
 
   async findAll(css) {
     const v = await this.cmd("POST", "/elements", { using: "css selector", value: css });
-    return v.map((e) => new Element(this, e[ELEMENT]));
+    return v.map((e) => new Element(this, elementId(e)));
   }
 
   /** Base64 PNG of the window. */

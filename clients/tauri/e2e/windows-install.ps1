@@ -63,6 +63,9 @@ switch ($Action) {
     if (-not $exe) { throw "NSIS /S reported success but igni-app.exe is not installed" }
     Write-Host "NSIS installed: $exe"
     $dir = Split-Path $exe
+    # The managed runtime's cache is %LOCALAPPDATA%\igni too; its "Reinstall
+    # Backend (Clean)" must not take the app with it (runtime/managed.rs reset).
+    Write-Host "::notice::NSIS install directory: $dir; managed runtime cache: $env:LOCALAPPDATA\igni"
     $uninstaller = Get-ChildItem -Path $dir -Filter "uninstall*.exe" | Select-Object -First 1
     if (-not $uninstaller) { throw "no uninstaller beside $exe" }
     $p = Start-Process $uninstaller.FullName -ArgumentList "/S" -Wait -PassThru
