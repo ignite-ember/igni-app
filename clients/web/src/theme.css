@@ -973,6 +973,13 @@ button {
   background: var(--danger);
 }
 
+/* The account chip's marker: the person is signed in, but the igni
+   server is not answering. Amber, not red — the account is fine; the
+   server is the one that is away. */
+.dot.not-answering {
+  background: var(--warning);
+}
+
 @keyframes pulse-dot {
   0%,
   100% {
