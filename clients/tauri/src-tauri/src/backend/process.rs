@@ -1,7 +1,7 @@
 //! A backend process this app spawned and therefore owns.
 
 use std::io::{BufRead, BufReader};
-use std::process::{Child, ChildStdout, Command, Stdio};
+use std::process::{Child, ChildStdout, Stdio};
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -51,7 +51,7 @@ impl BackendProcess {
         let version = BackendVersionInfo::from(&install);
 
         progress("Starting the igni backend…");
-        let mut cmd = Command::new(&install.python);
+        let mut cmd = runtime::host_command(&install.python);
         cmd.args([
             "-m",
             "igni_core.backend",
@@ -196,6 +196,7 @@ impl BackendProcess {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::process::Command;
 
     // Real child processes: the thing under test is whether a signal is
     // delivered and the child reaped, which a mock would only echo back.

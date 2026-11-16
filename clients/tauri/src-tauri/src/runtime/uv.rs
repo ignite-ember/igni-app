@@ -4,7 +4,6 @@
 use std::fs;
 use std::io::Read;
 use std::path::{Path, PathBuf};
-use std::process::Command;
 use std::time::Duration;
 
 #[cfg(not(target_os = "windows"))]
@@ -154,7 +153,7 @@ impl Uv {
     }
 
     pub fn run(&self, args: &[&str]) -> Result<(), String> {
-        let status = Command::new(&self.path)
+        let status = super::host_command(&self.path)
             .args(args)
             .status()
             .map_err(|e| format!("spawn uv: {e}"))?;

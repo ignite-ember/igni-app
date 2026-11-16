@@ -7,7 +7,6 @@
 
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::process::Command;
 
 use crate::update_policy::UpdatePolicy;
 
@@ -247,7 +246,7 @@ impl ManagedRuntime {
     /// the model already in `HF_HOME` it only loads it.
     fn prefetch_model(&self, progress: ProgressFn) -> Result<(), String> {
         progress("Checking igni's decision model (~1.7 GB on first install)…");
-        let status = Command::new(self.venv_python())
+        let status = super::host_command(self.venv_python())
             .args(["-m", "igni_core.prefetch_models"])
             .env("HF_HOME", self.hf_home())
             .status()
