@@ -357,8 +357,14 @@ async function firstLaunch() {
     );
     await session.waitFor("the extension frame", () => session.exec("return !!document.querySelector('iframe')"), { timeout: 60_000 });
     // The frame is another origin; its content is checked by switching into it.
+    // Into the frame: by reference, the W3C way; WebKitWebDriver refuses
+    // that ("Invalid frame ID object"), so by index (the page has one frame).
     const frame = await session.find("iframe");
-    await session.cmd("POST", "/frame", { id: { "element-6066-11e4-a52f-4f735466cecf": frame.id } });
+    try {
+      await session.cmd("POST", "/frame", { id: { "element-6066-11e4-a52f-4f735466cecf": frame.id } });
+    } catch {
+      await session.cmd("POST", "/frame", { id: 0 });
+    }
     await session.waitFor("the page's answer from its backend", async () =>
       (await session.bodyText()).includes("hello from the extension backend"),
       { timeout: 60_000 },
@@ -419,6 +425,7 @@ async function provisioned() {
   // The workflow has written the managed-settings file (root-owned):
   //   air_gapped: true, runtime_python: <IGNI_E2E_PYTHON>,
   //   update_endpoint: http://127.0.0.1:<IGNI_E2E_UPDATE_PORT>/latest.json
+  // (plain HTTP on purpose: ENT-024, the updater must refuse it)
   const model = await startServer(SCRIPTED_MODEL, ["--port", "0"]);
   const { home, project } = makeHome(model.port);
   const hits = [];
@@ -449,15 +456,18 @@ async function provisioned() {
     }
   });
 
-  await step("ENT-023 ENT-027", "Check for Updates asks only the managed update_endpoint", async () => {
+  await step("ENT-024", "a plain-HTTP managed update_endpoint is refused, with no fallback to the vendor's", async () => {
     const answer = await session.execAsync(
       "const done = arguments[arguments.length - 1];" +
         "window.__TAURI__.core.invoke('igni_check_update').then(r => done(JSON.stringify(r)), e => done('error: ' + e));",
     );
     console.log(`  update check answered: ${answer}`);
-    if (!hits.some((u) => u.startsWith("/latest.json"))) {
-      throw new Error(`the managed update_endpoint was not asked (hits: ${JSON.stringify(hits)}; answer: ${answer})`);
+    // The updater accepts only https mirrors; the check must say so and
+    // name the managed endpoint, not quietly ask the compiled one.
+    if (!/^error: /.test(answer) || !answer.includes(`127.0.0.1:${port}/latest.json`)) {
+      throw new Error(`expected a refusal naming the managed endpoint, got: ${answer}`);
     }
+    if (hits.length) throw new Error(`the refused endpoint was asked anyway: ${JSON.stringify(hits)}`);
   });
 
   await stopDriver();

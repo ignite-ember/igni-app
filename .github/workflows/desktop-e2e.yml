@@ -161,7 +161,7 @@ jobs:
           cat "$RUNNER_TEMP/index-server.log" | tail -20
           grep -q 'GET /simple/igni-core/' "$RUNNER_TEMP/index-server.log"
 
-      - name: ENT-015 ENT-023 managed settings (runtime_python, update_endpoint, air-gapped)
+      - name: ENT-015 ENT-024 managed settings (runtime_python, an http update_endpoint, air-gapped)
         if: success() || failure()
         env:
           IGNI_E2E_UPDATE_PORT: "8898"
@@ -307,7 +307,7 @@ jobs:
         if: success() || failure()
         run: node igni-app/clients/tauri/e2e/desktop-e2e.mjs --suite first-launch
 
-      - name: ENT-003 ENT-015 ENT-023 managed settings in %PROGRAMDATA%
+      - name: ENT-003 ENT-015 ENT-024 managed settings in %PROGRAMDATA%
         if: success() || failure()
         env:
           IGNI_E2E_UPDATE_PORT: "8898"

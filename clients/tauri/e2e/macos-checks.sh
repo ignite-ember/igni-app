@@ -58,11 +58,13 @@ export HOME="$ROOT/home"
 PROJECT="$ROOT/project"
 mkdir -p "$HOME/.igni" "$PROJECT"
 echo "# macOS e2e project" > "$PROJECT/README.md"
-MODEL_LOG="$OUT/scripted-model.out"
-"$PYTHON" "$(dirname "$0")/../../../scripts/e2e/scripted_model.py" --port 0 > "$MODEL_LOG" 2>&1 &
+MODEL_PORT_FILE="$ROOT/model.port"
+"$PYTHON" "$(dirname "$0")/../../../scripts/e2e/scripted_model.py" --port 0 --port-file "$MODEL_PORT_FILE" \
+  > "$OUT/scripted-model.out" 2>&1 &
 MODEL_PID=$!
-for _ in $(seq 1 50); do grep -q '"port"' "$MODEL_LOG" && break; sleep 0.2; done
-MODEL_PORT=$(python3 -c 'import json,sys; print(json.loads(open(sys.argv[1]).readline())["port"])' "$MODEL_LOG")
+for _ in $(seq 1 100); do [ -s "$MODEL_PORT_FILE" ] && break; sleep 0.2; done
+[ -s "$MODEL_PORT_FILE" ] || { cat "$OUT/scripted-model.out"; echo "the scripted model did not start" >&2; exit 1; }
+MODEL_PORT=$(cat "$MODEL_PORT_FILE")
 cat > "$HOME/.igni/config.yaml" <<YAML
 runtime_python: $PYTHON
 models:
