@@ -183,15 +183,14 @@ let app = null; // Windows: the app process this runner started itself
 /**
  * Linux: tauri-driver in front of WebKitWebDriver, which launches the app.
  *
- * Windows: msedgedriver *attached* to an app this runner starts. Launched
- * by msedgedriver (what tauri-driver asks for), the session never starts —
- * "DevToolsActivePort file doesn't exist" — because the driver looks for
- * the DevTools port file in a profile directory of its own, while a Tauri
- * app gives WebView2 its own data directory (wry sets it explicitly). So
- * the app is started with WebView2's remote-debugging port switched on
- * through WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS, and the driver attaches
- * to it with `debuggerAddress`, the documented way to drive a running
- * WebView2.
+ * Windows: msedgedriver *attached* to an app this runner starts, with
+ * WebView2's remote-debugging port switched on through
+ * WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS and `debuggerAddress`, the
+ * documented way to drive a running WebView2. Launched by msedgedriver
+ * (what tauri-driver asks for) the session never started: the driver
+ * passes its switches in that same variable, which the app ignored until
+ * `windows/browser_args.rs`, and it hands the app's arguments over as
+ * `--<arg>`, so the project folder is lost.
  */
 async function startDriver(env) {
   driverEnv = env;
@@ -380,10 +379,10 @@ async function firstLaunch() {
   // A development extension, installed the documented way into this HOME.
   const igni = WIN ? path.join(path.dirname(PYTHON), "igni.exe") : path.join(path.dirname(PYTHON), "igni");
   const src = fs.mkdtempSync(path.join(os.tmpdir(), "igni-ext-"));
-  // PYTHONIOENCODING: `igni ext init` prints "→", which a Windows console's
-  // cp1252 cannot encode, and the command dies with UnicodeEncodeError
+  // PYTHONUTF8: `igni ext init` writes "→" with the platform's default
+  // encoding, which is cp1252 on Windows, and dies with UnicodeEncodeError
   // (an igni-core bug, reported with this suite).
-  const extEnv = { ...appEnv(home), IGNI_DEV_EXTENSIONS: "1", PYTHONIOENCODING: "utf-8" };
+  const extEnv = { ...appEnv(home), IGNI_DEV_EXTENSIONS: "1", PYTHONUTF8: "1", PYTHONIOENCODING: "utf-8" };
   execFileSync(igni, ["ext", "init", "--id", "acme.hello", "hello"], { cwd: src, env: extEnv, stdio: "inherit" });
   execFileSync(igni, ["ext", "install", "hello"], { cwd: src, env: extEnv, stdio: "inherit" });
 
