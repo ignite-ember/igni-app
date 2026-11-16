@@ -23,10 +23,30 @@ describe("SessionRow", () => {
       session_id: "s1",
       name: "Named",
       detail: "s1",
+      has_paused_run: false,
     });
     expect(new SessionRow("s1", "", 0).toEntry().name).toBe("s1");
     const dated = new SessionRow("s1", "", 1_700_000_000).toEntry();
     expect(dated.name).toMatch(/^Chat · /);
     expect(dated.detail).toMatch(/^s1 · /);
+  });
+
+  it("reads the flag that says a run is waiting for the person", () => {
+    // The backend sends it with every row of ``list_sessions``.
+    expect(SessionRow.parse({ session_id: "s1", has_paused_run: true }).hasPausedRun).toBe(true);
+    expect(SessionRow.parse({ session_id: "s1", has_paused_run: true }).toEntry().has_paused_run).toBe(
+      true,
+    );
+  });
+
+  it("reads a backend that does not send the flag as no run waiting", () => {
+    // Older backends omit it entirely. That is not a session with a
+    // paused run; it is a session whose state we do not know.
+    expect(SessionRow.parse({ session_id: "s1" }).hasPausedRun).toBe(false);
+    expect(SessionRow.parse({ session_id: "s1" }).toEntry().has_paused_run).toBe(false);
+    // And a flag that is not a plain true is not a waiting run either.
+    expect(SessionRow.parse({ session_id: "s1", has_paused_run: "true" }).hasPausedRun).toBe(false);
+    expect(SessionRow.parse({ session_id: "s1", has_paused_run: 1 }).hasPausedRun).toBe(false);
+    expect(SessionRow.parse({ session_id: "s1", has_paused_run: null }).hasPausedRun).toBe(false);
   });
 });

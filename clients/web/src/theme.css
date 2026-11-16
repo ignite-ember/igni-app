@@ -5612,6 +5612,20 @@ button {
   flex-shrink: 0;
 }
 
+/* A session with a run waiting for an answer. A small amber pill, so
+   the row says out loud that something is waiting on the person — the
+   question itself is one click away, in the chat it belongs to. */
+.session-item .session-waiting {
+  flex-shrink: 0;
+  padding: 0 6px;
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--warning) 18%, transparent);
+  color: var(--accent-orange-text, var(--warning));
+  font-size: var(--text-2xs);
+  font-weight: 600;
+  line-height: 16px;
+}
+
 /* ── Group pill + its "yours or theirs" popover ────────────────── */
 
 .group-pill-wrap {

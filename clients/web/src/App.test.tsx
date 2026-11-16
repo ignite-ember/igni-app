@@ -25,6 +25,7 @@ import {
   startFixtureBackend,
   type Envelope,
   type FixtureBackend,
+  type RpcAfterHandler,
   type RpcHandler,
 } from "../e2e/fixtures/backend";
 
@@ -89,7 +90,10 @@ beforeAll(() => {
   console.info = () => {};
 });
 
-async function boot(handlers: Record<string, RpcHandler> = {}) {
+async function boot(
+  handlers: Record<string, RpcHandler> = {},
+  after: Record<string, RpcAfterHandler> = {},
+) {
   be = await startFixtureBackend({
     rpcHandlers: {
       list_extensions: () => ({ extensions: [] }),
@@ -106,6 +110,7 @@ async function boot(handlers: Record<string, RpcHandler> = {}) {
       }),
       ...handlers,
     },
+    rpcAfterHandlers: after,
   });
   window.history.replaceState({}, "", `/?ws=${encodeURIComponent(be.url)}`);
   render(
@@ -214,6 +219,111 @@ describe("starting up", () => {
       }),
     });
     expect(await screen.findByText("Trust this folder?", {}, { timeout: 5000 })).toBeTruthy();
+  });
+});
+
+describe("a session waiting for an answer", () => {
+  /** The approval a paused run asks the person, as the core sends it:
+   *  a ``run_paused`` carrying the requirement. */
+  function pausedRun(sessionId: string, id: string): Envelope {
+    return {
+      type: "run_paused",
+      id,
+      session_id: sessionId,
+      run_id: "run-1",
+      requirements: [
+        {
+          requirement_id: "req-1",
+          tool_name: "run_shell_command",
+          friendly_name: "run shell command",
+          tool_args: { command: "echo hi" },
+          agent_path: [],
+          details: "",
+          type: "hitl_request",
+        },
+      ],
+    };
+  }
+
+  it("says in the sidebar which session has a run waiting for the person", async () => {
+    await boot({
+      list_sessions: () => ({
+        sessions: [
+          { session_id: "sess-waiting", name: "Waiting chat", has_paused_run: true },
+          { session_id: "sess-quiet", name: "Quiet chat" },
+        ],
+      }),
+    });
+    const marker = await screen.findByRole("img", { name: "Waiting for your answer" });
+    // The marker is on the row of the session that waits, and only there.
+    expect(marker.closest(".session-item")?.textContent).toContain("Waiting chat");
+    const rows = Array.from(document.querySelectorAll(".session-item"));
+    expect(rows.filter((r) => r.querySelector(".session-waiting"))).toHaveLength(1);
+  });
+
+  it("says nothing about waiting when the backend does not send the flag", async () => {
+    // An older backend omits ``has_paused_run``. That is not a session
+    // with a paused run; it is a session whose state we do not know.
+    await boot({
+      list_sessions: () => ({ sessions: [{ session_id: "sess-quiet", name: "Quiet chat" }] }),
+    });
+    expect(await screen.findByText("Quiet chat")).toBeTruthy();
+    expect(screen.queryByRole("img", { name: "Waiting for your answer" })).toBeNull();
+  });
+
+  it("picking a waiting session attaches it and shows the approval it brings back", async () => {
+    // The approval is asked in the session that paused it, and the
+    // backend shows it again only after an attach. A pick that did not
+    // attach left the question unanswerable in this window (R647).
+    await boot(
+      {
+        list_sessions: () => ({
+          sessions: [{ session_id: "sess-waiting", name: "Waiting chat", has_paused_run: true }],
+        }),
+        attach_session: (args) => ({
+          session_id: String(args.session_id || "sess-default"),
+          project_dir: "/tmp/test-project",
+        }),
+      },
+      {
+        attach_session: (args, id, send) => {
+          // Only the attach of the waiting session replays it; the
+          // window's own attach at boot is a different session.
+          if (args.session_id !== "sess-waiting") return;
+          send(pausedRun("sess-waiting", id));
+        },
+      },
+    );
+    await screen.findByRole("img", { name: "Waiting for your answer" });
+    act(() => {
+      fireEvent.click(screen.getByText("Waiting chat"));
+    });
+    await waitFor(() =>
+      expect(
+        be.received().some(
+          (m) =>
+            m.type === "rpc_request" &&
+            m.method === "attach_session" &&
+            (m.args as { session_id?: string }).session_id === "sess-waiting",
+        ),
+      ).toBe(true),
+    );
+    expect(await screen.findByRole("button", { name: /Allow once/ })).toBeTruthy();
+  });
+
+  it("a new window that attaches to a paused session shows the approval", async () => {
+    // A fresh window attaches to the backend's default session, and
+    // that session has a run waiting. The approval the attach brings
+    // back has to show, or the run looks stuck (R647).
+    await boot(
+      {
+        attach_session: () => ({ session_id: "sess-paused", project_dir: "/tmp/test-project" }),
+      },
+      {
+        attach_session: (_args, id, send) => send(pausedRun("sess-paused", id)),
+      },
+    );
+    expect(await screen.findByRole("button", { name: /Allow once/ })).toBeTruthy();
   });
 });
 
