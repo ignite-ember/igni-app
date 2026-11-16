@@ -63,3 +63,22 @@ describe("the loading page's stages", () => {
     expect(PAGE).not.toMatch(/ignite-ember|Ember backend|embedding model/i);
   });
 });
+
+describe("a failure the page was too late to hear", () => {
+  // An air-gapped machine with no runtime fails before WebView2 has loaded
+  // the page; the event was lost and the page sat on "Starting up…"
+  // (Windows desktop E2E, ENT-016). The page asks the shell on attach.
+  const lib = readFileSync(path.join(TAURI, "lib.rs"), "utf8");
+  const bootstrap = readFileSync(path.join(TAURI, "bootstrap.rs"), "utf8");
+
+  it("is asked for when the page attaches", () => {
+    expect(PAGE).toContain('invoke("igni_bootstrap_state")');
+  });
+
+  it("is a command the shell registers and keeps the failure for", () => {
+    expect(lib).toContain("bootstrap::igni_bootstrap_state");
+    expect(lib).toContain("bootstrap::BootstrapState::default()");
+    expect(bootstrap).toMatch(/state\.failed\(&message\)/);
+  });
+});
+

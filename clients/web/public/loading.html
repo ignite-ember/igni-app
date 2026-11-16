@@ -214,25 +214,40 @@
   // progress channel as soon as it's available. If the page is
   // loaded directly in a non-Tauri context (web preview), the
   // listener never fires — the page just shows "Starting up…".
+  let shownError = false;
+  function showError(message) {
+    // Once: the event, the catch-up and the shell's own eval may all carry it.
+    if (shownError || document.querySelector(".igni-loading-error")) return;
+    shownError = true;
+    status.textContent = "";
+    stepLabel.textContent = "";
+    // Stop the shimmer and recolor the bar red so the
+    // visible state matches the error message.
+    bar.classList.remove("shimmer");
+    fill.style.background = "#d04a4a";
+    const node = document.createElement("div");
+    node.className = "igni-loading-error";
+    node.textContent = "Bootstrap failed:\n\n" + message;
+    document.querySelector(".igni-loading-shell").appendChild(node);
+  }
+
   function attach() {
     if (window.__TAURI__ && window.__TAURI__.event) {
       window.__TAURI__.event.listen("igni-bootstrap-progress", e => {
         if (typeof e.payload === "string") applyStatus(e.payload);
       });
       window.__TAURI__.event.listen("igni-bootstrap-error", e => {
-        if (typeof e.payload === "string") {
-          status.textContent = "";
-          stepLabel.textContent = "";
-          // Stop the shimmer and recolor the bar red so the
-          // visible state matches the error message.
-          bar.classList.remove("shimmer");
-          fill.style.background = "#d04a4a";
-          const node = document.createElement("div");
-          node.className = "igni-loading-error";
-          node.textContent = "Bootstrap failed:\n\n" + e.payload;
-          document.querySelector(".igni-loading-shell").appendChild(node);
-        }
+        if (typeof e.payload === "string") showError(e.payload);
       });
+      // What happened before this page was listening: an instant failure
+      // (air-gapped with no runtime) is emitted before WebView2 has even
+      // loaded the page, and was lost — the page sat on "Starting up…".
+      if (window.__TAURI__.core && window.__TAURI__.core.invoke) {
+        window.__TAURI__.core.invoke("igni_bootstrap_state").then(state => {
+          if (state && typeof state.progress === "string") applyStatus(state.progress);
+          if (state && typeof state.error === "string") showError(state.error);
+        }, () => {});
+      }
       return true;
     }
     return false;
