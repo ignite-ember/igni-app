@@ -15,6 +15,7 @@ import type {
 } from "../protocol/orchestrateEvents";
 import type { OrchestrateItem } from "./chatItem";
 import type { ChatItemIds } from "./chatItemIds";
+import { toolOutputForDisplay } from "./toolOutput";
 
 /** One sub-agent's slice of an orchestrate run. */
 export interface OrchestrateAgent {
@@ -208,7 +209,7 @@ export class OrchestrateAgentTree {
     if (i < 0) i = lastIndex((t) => t.tool === ev.tool && t.status === "running");
     if (i < 0) return tools.slice();
     const next = tools.slice();
-    next[i] = { ...tools[i], status: ev.is_error ? "error" : "done", result: ev.result };
+    next[i] = { ...tools[i], status: ev.is_error ? "error" : "done", result: toolOutputForDisplay(ev.result) };
     return next;
   }
 

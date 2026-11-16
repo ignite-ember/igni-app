@@ -120,6 +120,19 @@ describe("HistoryTurnMapper#map", () => {
     }
   });
 
+  it("restores a tool turn's output without the model-facing wrapper", () => {
+    const item = restoredItem({
+      role: "tool",
+      tool_name: "run_shell_command",
+      friendly_name: "Bash",
+      args: "command=ls",
+      content: "<untrusted_tool_output nonce=0f0f>\na.txt\n</untrusted_tool_output nonce=0f0f>",
+      is_error: false,
+      run_id: "r1",
+    });
+    expect(item?.kind === "tool" && item.result).toBe("a.txt");
+  });
+
   it("marks restored tool turns with tool_call_error as error", () => {
     const item = restoredItem({
       role: "tool",

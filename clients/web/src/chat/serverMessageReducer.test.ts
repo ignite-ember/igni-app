@@ -86,6 +86,14 @@ describe("ChatTranscript#applyServerMessage", () => {
     expect(tool.result).toBe("content");
   });
 
+  it("shows a tool's output without the wrapper igni puts round it for the model", () => {
+    const items = play([
+      toolStarted,
+      { ...toolCompleted, full_result: "<untrusted_tool_output nonce=6ad364b6>\nls out\n</untrusted_tool_output nonce=6ad364b6>" } as ServerMessage,
+    ]);
+    expect((items[0] as Extract<ChatItem, { kind: "tool" }>).result).toBe("ls out");
+  });
+
   it("marks failed tools as errors", () => {
     const items = play([
       toolStarted,

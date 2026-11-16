@@ -17,6 +17,7 @@ import type {
 import type { ChatItem, ToolItem, UserItem } from "./chatItem";
 import type { ChatTranscript } from "./chatTranscript";
 import { RunCompletion } from "./runCompletion";
+import { toolOutputForDisplay } from "./toolOutput";
 
 /** A message type with no handler (``model_completed`` among them:
  *  per-step totals re-count the whole context) leaves the transcript
@@ -64,7 +65,7 @@ export class ServerMessageReducer {
     return this.transcript.replaceAt(hit.index, {
       ...hit.item,
       status: msg.is_rejected ? "rejected" : msg.is_error ? "error" : "done",
-      result: msg.full_result || msg.summary,
+      result: toolOutputForDisplay(msg.full_result || msg.summary),
       isError: msg.is_error,
       diffRows: msg.diff_rows ?? null,
     });

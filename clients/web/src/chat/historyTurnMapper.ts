@@ -18,6 +18,7 @@ import type { ChatItemFactory } from "./chatItemFactory";
 import { PlanTaskList } from "./planTasks";
 import { estimateTokens } from "./runCompletion";
 import { UserMessageText } from "./userMessageText";
+import { toolOutputForDisplay } from "./toolOutput";
 
 type Mappers = {
   [K in HistoryTurn["role"]]?: (turn: Extract<HistoryTurn, { role: K }>) => ChatItem | null;
@@ -97,7 +98,7 @@ export class HistoryTurnMapper {
       name: turn.name,
       args: turn.args,
       status: turn.is_rejected ? "rejected" : turn.is_error ? "error" : "done",
-      result: turn.content,
+      result: toolOutputForDisplay(turn.content),
       isError: turn.is_error,
       diffRows: null,
     };
