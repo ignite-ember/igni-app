@@ -1,3 +1,4 @@
+import type { Ref } from "react";
 import { Monogram } from "@ignite-ember/ui-react";
 
 import type { StatusUpdate } from "../protocol/messages";
@@ -17,16 +18,20 @@ export function AccountChip({
   name,
   onOpenAccount,
   onLogIn,
+  buttonRef,
 }: {
   status: Pick<StatusUpdate, "cloud_email" | "cloud_connected"> | null;
   name: string;
   onOpenAccount: () => void;
   onLogIn: () => void;
+  /** The account button, for the menu to hand focus back to. */
+  buttonRef?: Ref<HTMLButtonElement>;
 }) {
   if (status === null) return null;
   if (status.cloud_email) {
     return (
       <button
+        ref={buttonRef}
         className="chip"
         title={
           status.cloud_connected ? "Account" : "Account: not connected to the igni server"

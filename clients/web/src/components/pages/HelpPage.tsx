@@ -106,7 +106,7 @@ export function HelpPage({
 
       {sections.map((group) => (
         <section className="help-group" key={group.title}>
-          <h3 className="help-group-title">{group.title}</h3>
+          <h2 className="help-group-title">{group.title}</h2>
           {group.blurb && <p className="help-group-blurb">{group.blurb}</p>}
           <div className="help-commands">
             {group.commands.map((name) => (
@@ -121,7 +121,7 @@ export function HelpPage({
 
       {skills.length > 0 && (
         <section className="help-group">
-          <h3 className="help-group-title">Skills</h3>
+          <h2 className="help-group-title">Skills</h2>
           <p className="help-group-blurb">
             Workflows from this project and its installed plugins.
           </p>

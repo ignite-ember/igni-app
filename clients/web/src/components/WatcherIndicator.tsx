@@ -14,7 +14,6 @@ export function WatcherIndicator({ client, onOpen }: { client: IgniClient; onOpe
       className="watcher-pill"
       title={`${count} background process${count === 1 ? "" : "es"} running — click to open the watcher`}
       onClick={onOpen}
-      aria-label="Open watcher panel"
     >
       <span className="watcher-pill-dot" />
       {count} running

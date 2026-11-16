@@ -8409,7 +8409,9 @@ button.mcp-server-head:focus-visible {
 }
 
 .hooks-tag.tone-good {
-  color: var(--success);
+  /* --success on --bg-raised is under 4.5:1 at this size in both
+     themes; the text-weight green clears it (R683). */
+  color: var(--accent-green-text, var(--success));
   border-color: color-mix(in srgb, var(--success) 35%, transparent);
 }
 
@@ -8523,7 +8525,14 @@ button.mcp-server-head:focus-visible {
   background: color-mix(in srgb, var(--igni-orange) 6%, var(--bg-surface));
 }
 
-.watcher-row--stopped {
+.watcher-row--stopped .watcher-pid,
+.watcher-row--stopped .watcher-cmd {
+  /* Dimmed by colour, not opacity: a faded row took its 'exit -15'
+     down to 2.8:1 (R683). */
+  color: var(--fg-muted);
+}
+
+.watcher-row--stopped .watcher-status {
   opacity: 0.65;
 }
 
@@ -8567,7 +8576,8 @@ button.mcp-server-head:focus-visible {
   padding: var(--space-1) var(--space-4);
   font-size: var(--text-xs);
   background: transparent;
-  color: var(--danger);
+  /* --danger is 4.33:1 on the dark surface at 11px (R683). */
+  color: var(--accent-red-text, var(--danger));
   border-color: var(--danger);
 }
 

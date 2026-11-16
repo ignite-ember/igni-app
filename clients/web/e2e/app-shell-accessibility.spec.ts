@@ -15,6 +15,7 @@
 import AxeBuilder from "@axe-core/playwright";
 import type { Page } from "@playwright/test";
 
+import { runSlashCommand } from "./fixtures/composer";
 import { expect, test } from "./fixtures/embed";
 
 /** WCAG 2.0/2.1 A and AA, plus axe's best-practice set. */
@@ -42,6 +43,35 @@ async function violations(page: Page): Promise<string[]> {
         .map((n) => `    ${n.target.join(" ")}\n      ${n.failureSummary?.split("\n")[1] ?? ""}`)
         .join("\n"),
   );
+}
+
+/**
+ * Answer the app's own ``/<action>`` command frame with the
+ * ``command_result`` that opens its page, as the backend does. The
+ * fixture backend records command frames but does not run them.
+ */
+async function answerPageCommands(page: Page) {
+  await page.addInitScript(() => {
+    const send = WebSocket.prototype.send;
+    WebSocket.prototype.send = function (data: string | ArrayBufferLike | Blob | ArrayBufferView) {
+      try {
+        const m = JSON.parse(String(data));
+        const action = /^\/(hooks|watcher|help)$/.exec(String(m?.text ?? "").trim())?.[1];
+        if (m?.type === "command" && action) {
+          setTimeout(() => {
+            this.dispatchEvent(
+              new MessageEvent("message", {
+                data: JSON.stringify({ type: "command_result", id: m.id, kind: "action", content: "", action }),
+              }),
+            );
+          }, 0);
+        }
+      } catch {
+        /* not JSON */
+      }
+      return send.call(this, data);
+    };
+  });
 }
 
 for (const theme of ["dark", "light"] as const) {
@@ -122,6 +152,55 @@ for (const theme of ["dark", "light"] as const) {
         expect(found, found.join("\n\n")).toEqual([]);
       });
     }
+
+    test("the Hooks page, with a background hook, has no axe violations", async ({ page, backend, appUrl }) => {
+      // The 'background' tag was --success on --bg-raised at 11px:
+      // 4.41:1 light, 4.16:1 dark (R683).
+      backend.onRpc("get_hooks_details", () => [
+        { event: "Stop", type: "command", command: ".igni/hooks/on-stop.sh", url: "", matcher: "",
+          timeout_ms: 10000, background: true, headers: {} },
+        { event: "PreToolUse", type: "command", command: ".igni/hooks/guard.sh", url: "", matcher: "Bash",
+          timeout_ms: 5000, background: false, headers: {} },
+      ]);
+      await answerPageCommands(page);
+      await open(page, appUrl);
+      await runSlashCommand(page, "/hooks", page.locator(".hooks-tag.tone-good").first());
+      const found = await violations(page);
+      expect(found, found.join("\n\n")).toEqual([]);
+    });
+
+    test("the Watcher page, with a stopped process, has no axe violations", async ({ page, backend, appUrl }) => {
+      // A stopped row's 'exit -15' was faded to 2.8:1, and the row's
+      // accessible name left out the visible exit text (R683).
+      backend.onRpc("list_background_processes", () => [
+        { pid: 8201, cmd: "sleep 901", elapsed_seconds: 47, is_running: true },
+        { pid: 8512, cmd: "python3 -m http.server 19418", elapsed_seconds: 8, is_running: false, exit_code: -15 },
+      ]);
+      await answerPageCommands(page);
+      await open(page, appUrl);
+      await runSlashCommand(page, "/watcher", page.locator(".watcher-row--stopped"));
+      const found = await violations(page);
+      expect(found, found.join("\n\n")).toEqual([]);
+    });
+
+    test("the Help page has no axe violations", async ({ page, appUrl }) => {
+      // Its groups were <h3> under the page's <h1> (R683).
+      await answerPageCommands(page);
+      await open(page, appUrl);
+      await runSlashCommand(page, "/help", page.locator(".help-group").first());
+      const found = await violations(page);
+      expect(found, found.join("\n\n")).toEqual([]);
+    });
+
+    test("Escape closes the account menu and returns focus to the chip", async ({ page, appUrl }) => {
+      await open(page, appUrl);
+      const chip = page.locator('button.chip[title^="Account"]');
+      await chip.click();
+      await expect(page.locator(".account-menu")).toBeVisible();
+      await page.keyboard.press("Escape");
+      await expect(page.locator(".account-menu")).toHaveCount(0);
+      await expect(chip).toBeFocused();
+    });
 
     test("the notifications drawer has no axe violations", async ({ page, appUrl }) => {
       await open(page, appUrl);
