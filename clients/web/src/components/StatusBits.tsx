@@ -182,12 +182,12 @@ export function BackendVersionChip() {
     info.actual === "unknown" ? "<probe failed>" : `v${info.actual}`;
 
   const title = mismatch
-    ? `Running ignite-ember v${info.actual}, expected v${info.expected}. ` +
+    ? `Running igni-core v${info.actual}, expected v${info.expected}. ` +
       "Diagnose Backend for details."
     : dev
       ? `Dev override active — running the interpreter set in your ` +
         `environment (v${info.actual}). Managed venv is bypassed.`
-      : `ignite-ember v${info.actual}, managed venv.`;
+      : `igni-core v${info.actual}, managed venv.`;
 
   return (
     <span className={`backend-version-chip tone-${tone}`} title={title}>

@@ -6,7 +6,7 @@
 <style>
   /*
     First-launch loading view shown while the Tauri shell does the
-    one-time uv + Python + ignite-ember bootstrap. Rust emits
+    one-time uv + Python + igni-core bootstrap. Rust emits
     ``igni-bootstrap-progress`` Tauri events with short status
     strings; we render the latest one. When the BE is ready the
     Rust side navigates this window to the real app URL, so this
@@ -146,7 +146,7 @@
   </div>
   <div class="igni-loading-step" id="step"></div>
   <div class="igni-loading-hint" id="hint">
-    First launch downloads uv, Python, and ignite-ember (~250 MB total). Subsequent launches start instantly.
+    First launch downloads uv, Python, igni-core and igni's decision model (about 2 GB). Subsequent launches start instantly.
   </div>
 </div>
 <script>
@@ -173,12 +173,17 @@
   // managed venv…`` only fires on the Reinstall path and replaces
   // the uv-download stage, so they share a slot.
   const STAGES = [
+    // Each pattern matches the shell's own message (runtime/managed.rs,
+    // backend/process.rs); src/loadingStages.test.ts holds the two in step.
+    // After the rename these still looked for the package's and the
+    // model's old names, so the bar stopped at step 4 for the whole
+    // igni-core install and the 1.7 GB model download.
     { re: /preparing.*backend/i,         download: false },
     { re: /(downloading uv|refreshing.*venv)/i, download: true  },
     { re: /installing python/i,          download: true  },
     { re: /creating.*venv/i,             download: false },
-    { re: /installing.*ignite-ember/i,   download: true  },
-    { re: /downloading.*embedding model/i, download: true },
+    { re: /(installing|updating) igni-core/i, download: true },
+    { re: /decision model/i,             download: true  },
     { re: /starting.*backend/i,          download: false },
   ];
   const TOTAL = STAGES.length;
@@ -201,8 +206,8 @@
     }
     // Hide the long-form hint once we're past the visible
     // bootstrap stages — keeps the screen quiet during the
-    // ~3 s "Starting Ember backend…" tail.
-    if (/Starting Ember backend/i.test(text)) hint.style.opacity = "0";
+    // ~3 s "Starting the igni backend…" tail.
+    if (STAGES[TOTAL - 1].re.test(text)) hint.style.opacity = "0";
   }
 
   // The Tauri global is injected by the shell. Subscribe to the
