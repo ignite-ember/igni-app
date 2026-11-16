@@ -341,7 +341,25 @@ let linkEnv = process.env;
  * with the link as its argument — what the desktop would do.
  */
 function openLink(url) {
-  if (WIN) return execFileSync("cmd", ["/c", "start", "", url]);
+  if (WIN) {
+    // What the scheme is registered to, for the log when the link goes nowhere.
+    for (const key of ["HKCU\\Software\\Classes\\igni\\shell\\open\\command", "HKCR\\igni\\shell\\open\\command"]) {
+      try {
+        console.log(`  ${key}: ${execFileSync("reg", ["query", key, "/ve"]).toString().trim().split(/\r?\n/).pop()}`);
+      } catch {
+        console.log(`  ${key}: (none)`);
+      }
+    }
+    execFileSync("cmd", ["/c", "start", "", url]);
+    setTimeout(() => {
+      try {
+        console.log(execFileSync("tasklist", ["/FI", "IMAGENAME eq igni-app.exe"]).toString());
+      } catch {
+        /* diagnostic only */
+      }
+    }, 3_000);
+    return;
+  }
   if (process.platform === "darwin") return execFileSync("open", [url]);
   const handler = execFileSync("xdg-mime", ["query", "default", "x-scheme-handler/igni"], { env: linkEnv })
     .toString()
