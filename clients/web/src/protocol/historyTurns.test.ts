@@ -47,6 +47,13 @@ describe("parseHistoryTurn", () => {
     });
   });
 
+  it("reads a team turn's card id, spawn call and events", () => {
+    expect(
+      parseHistoryTurn({ role: "team", run_id: "r1", card_id: "c1", tool_call_id: "t1", events: [{ type: "x" }] }),
+    ).toEqual({ role: "team", run_id: "r1", card_id: "c1", tool_call_id: "t1", events: [{ type: "x" }] });
+    expect(parseHistoryTurn({ role: "team" })).toMatchObject({ card_id: "", tool_call_id: "", events: [] });
+  });
+
   it("marks a role it does not render as unknown", () => {
     expect(parseHistoryTurn({ role: "system", content: "boot" })).toEqual({
       role: "unknown",

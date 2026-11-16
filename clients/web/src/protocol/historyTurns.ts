@@ -56,6 +56,15 @@ export interface VisualizationTurn extends TurnBase {
   extension_id: string;
 }
 
+/** A sub-agent's or a team's progress card: its ``orchestrate_event``
+ *  payloads in arrival order, placed after the spawn call it came from. */
+export interface TeamTurn extends TurnBase {
+  role: "team";
+  card_id: string;
+  tool_call_id: string;
+  events: unknown[];
+}
+
 /** One per completed top-level run. */
 export interface StatsTurn extends TurnBase {
   role: "stats";
@@ -78,6 +87,7 @@ export type HistoryTurn =
   | ToolTurn
   | PlanTurn
   | VisualizationTurn
+  | TeamTurn
   | StatsTurn
   | UnknownTurn;
 
@@ -96,6 +106,13 @@ class HistoryTurnParser {
     tool: (run_id) => this.tool(run_id),
     plan: (run_id) => this.plan(run_id),
     visualization: (run_id) => this.visualization(run_id),
+    team: (run_id) => ({
+      role: "team",
+      run_id,
+      card_id: this.p.text("card_id"),
+      tool_call_id: this.p.text("tool_call_id"),
+      events: this.p.list("events"),
+    }),
     stats: (run_id) => this.stats(run_id),
   };
 

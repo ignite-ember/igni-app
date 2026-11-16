@@ -33,6 +33,25 @@ describe("HistoryLoader", () => {
     expect(load.historyMap).toEqual([0, 1, -1, 2]);
   });
 
+  it("puts a team card back after the spawn call it came from (R665)", async () => {
+    const load = await loader({
+      get_chat_history: [
+        { role: "user", content: "build it", run_id: "r1" },
+        { role: "tool", tool_name: "spawn_team", content: "done", run_id: "r1" },
+        {
+          role: "team",
+          run_id: "r1",
+          card_id: "c1",
+          events: [{ type: "agent_started", card_id: "c1", agent_path: "root", agent: "lead" }],
+        },
+        { role: "assistant", content: "built", run_id: "r1" },
+      ],
+      get_pending_messages: [],
+    }).load("s1");
+    expect(load.items.map((i) => i.kind)).toEqual(["user", "tool", "orchestrate", "assistant"]);
+    expect(load.historyMap).toEqual([0, 1, 2, 3]);
+  });
+
   it("does not stamp a user message without a run", async () => {
     const load = await loader({ get_chat_history: [{ role: "user", content: "hi" }] }).load("s1");
     expect(load.items[0]).not.toHaveProperty("persisted");

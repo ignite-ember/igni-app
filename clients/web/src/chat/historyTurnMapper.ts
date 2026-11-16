@@ -8,13 +8,16 @@ import type {
   HistoryTurn,
   PlanTurn,
   StatsTurn,
+  TeamTurn,
   ThinkingTurn,
   ToolTurn,
   UserTurn,
   VisualizationTurn,
 } from "../protocol/historyTurns";
+import { parseOrchestrateEvent } from "../protocol/orchestrateEvents";
 import type { ChatItem, StatsItem } from "./chatItem";
 import type { ChatItemFactory } from "./chatItemFactory";
+import { OrchestrateAgentTree } from "./orchestrateAgentTree";
 import { PlanTaskList } from "./planTasks";
 import { estimateTokens } from "./runCompletion";
 import { UserMessageText } from "./userMessageText";
@@ -34,6 +37,7 @@ export class HistoryTurnMapper {
     tool: (turn) => this.fromTool(turn),
     plan: (turn) => this.fromPlan(turn),
     visualization: (turn) => this.fromVisualization(turn),
+    team: (turn) => this.fromTeam(turn),
   };
 
   constructor(private readonly items: ChatItemFactory) {}
@@ -113,6 +117,22 @@ export class HistoryTurnMapper {
       runId: turn.run_id,
       state: PLAN_STATES.find((s) => s === turn.state) ?? "pending",
     });
+  }
+
+  /** The card the live ``orchestrate_event`` pushes drew, folded from
+   *  the same events through the same tree; its run is over, so it does
+   *  not spin. Nothing to draw (no event this client reads) is no card. */
+  private fromTeam(turn: TeamTurn): ChatItem | null {
+    let tree = OrchestrateAgentTree.empty(this.items.ids);
+    let cardId = turn.card_id;
+    for (const raw of turn.events) {
+      const envelope = parseOrchestrateEvent(raw);
+      if (!envelope) continue;
+      cardId ||= envelope.cardId;
+      tree = tree.apply(envelope.event);
+    }
+    if (tree.order.length === 0) return null;
+    return { ...this.items.orchestrate(cardId, tree), streaming: false };
   }
 
   private fromVisualization(turn: VisualizationTurn): ChatItem | null {

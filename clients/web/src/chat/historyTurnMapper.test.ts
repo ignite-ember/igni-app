@@ -3,6 +3,8 @@ import { parseHistoryTurn, type StatsTurn } from "../protocol/historyTurns";
 import { ChatItemFactory } from "./chatItemFactory";
 import { ChatItemIds } from "./chatItemIds";
 import { HistoryTurnMapper } from "./historyTurnMapper";
+import { parseOrchestrateEvent } from "../protocol/orchestrateEvents";
+import { ChatTranscript } from "./chatTranscript";
 
 let history: HistoryTurnMapper;
 beforeEach(() => {
@@ -319,3 +321,37 @@ describe("a message an extension posted", () => {
   });
 });
 
+
+describe("HistoryTurnMapper: a team turn (R665)", () => {
+  const EVENTS = [
+    { type: "agent_started", card_id: "c1", agent_path: "root", agent: "lead", parent: null, task: "plan it" },
+    { type: "agent_started", card_id: "c1", agent_path: "root.coder", agent: "coder", parent: "root" },
+    { type: "tool_started", card_id: "c1", agent_path: "root.coder", tool: "write_file", tool_call_id: "x1", args: "{}" },
+    { type: "tool_completed", card_id: "c1", agent_path: "root.coder", tool: "write_file", tool_call_id: "x1", result: "ok" },
+    { type: "task_created", card_id: "c1", agent_path: "root", title: "write it", assignee: "coder" },
+    { type: "agent_completed", card_id: "c1", agent_path: "root.coder", input_tokens: 10, output_tokens: 5 },
+    { type: "agent_completed", card_id: "c1", agent_path: "root", input_tokens: 20, output_tokens: 7 },
+  ];
+
+  it("draws the card the live pushes drew, settled", () => {
+    let live = new ChatTranscript([], new ChatItemFactory(new ChatItemIds()));
+    for (const raw of EVENTS) live = live.applyOrchestrateEvent(parseOrchestrateEvent(raw)!);
+    const liveCard = live.items[0];
+
+    const card = new HistoryTurnMapper(new ChatItemFactory(new ChatItemIds())).map(
+      parseHistoryTurn({ role: "team", run_id: "r1", card_id: "c1", tool_call_id: "t1", events: EVENTS }),
+    );
+    expect(card).toMatchObject({ kind: "orchestrate", cardId: "c1", streaming: false });
+    if (card?.kind !== "orchestrate" || liveCard.kind !== "orchestrate") throw new Error("no card");
+    expect(card.order).toEqual(["root", "root.coder"]);
+    // Item ids are local counters, numbered in a different order here.
+    const withoutIds = (agents: typeof card.agents) =>
+      Object.values(agents).map((a) => ({ ...a, tools: a.tools.map(({ id: _id, ...t }) => t) }));
+    expect(withoutIds(card.agents)).toEqual(withoutIds(liveCard.agents));
+    expect(card.agents["root.coder"]).toMatchObject({ status: "done" });
+  });
+
+  it("is no card when none of its events can be read", () => {
+    expect(restoredItem({ role: "team", card_id: "c1", events: [{ type: "visualization_delta" }] })).toBeNull();
+  });
+});
