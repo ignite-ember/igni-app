@@ -175,3 +175,33 @@ fn the_bundle_registers_the_igni_url_scheme() {
         .collect();
     assert_eq!(schemes, vec!["igni"]);
 }
+
+#[test]
+fn open_path_is_granted_with_a_scope() {
+    // `opener:allow-open-path` carries no scope of its own ("Enables the
+    // open_path command without any pre-configured scope"), so a bare grant
+    // refused every path: `__IGNI_HOST__.openFile` failed with "Not allowed
+    // to open path" and fell back to the in-app preview (R632). The grant
+    // must name the paths it allows.
+    let cap = json("capabilities/default.json");
+    let perms = cap["permissions"].as_array().expect("permissions[] missing");
+    assert!(
+        !perms.iter().any(|p| p.as_str() == Some("opener:allow-open-path")),
+        "opener:allow-open-path is granted without a scope"
+    );
+    let entry = perms
+        .iter()
+        .find(|p| p["identifier"].as_str() == Some("opener:allow-open-path"))
+        .expect("capabilities/default.json must grant opener:allow-open-path");
+    let allowed: Vec<&str> = entry["allow"]
+        .as_array()
+        .expect("opener:allow-open-path needs an allow[] scope")
+        .iter()
+        .filter_map(|e| e["path"].as_str())
+        .collect();
+    assert!(allowed.contains(&"$HOME/**"), "the scope must cover the home folder: {allowed:?}");
+    assert!(
+        !allowed.iter().any(|p| *p == "**" || *p == "/**"),
+        "the scope must not open every path on the disk: {allowed:?}"
+    );
+}
