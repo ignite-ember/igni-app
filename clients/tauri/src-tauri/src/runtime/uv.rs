@@ -32,6 +32,11 @@ impl Uv {
         }
     }
 
+    /// Where the binary is (or would be).
+    pub fn path(&self) -> &Path {
+        &self.path
+    }
+
     pub fn is_present(&self) -> bool {
         is_executable(&self.path)
     }
@@ -122,18 +127,7 @@ impl Uv {
 
     #[cfg(target_os = "windows")]
     fn extract(&self, archive: &Path) -> Result<(), String> {
-        let file = fs::File::open(archive).map_err(|e| format!("open archive: {e}"))?;
-        let mut zip = zip::ZipArchive::new(file).map_err(|e| format!("open zip: {e}"))?;
-        for i in 0..zip.len() {
-            let mut entry = zip.by_index(i).map_err(|e| format!("zip entry: {e}"))?;
-            if entry.is_file() && entry.name().ends_with("uv.exe") {
-                let mut out =
-                    fs::File::create(&self.path).map_err(|e| format!("create dest: {e}"))?;
-                std::io::copy(&mut entry, &mut out).map_err(|e| format!("copy uv.exe: {e}"))?;
-                return Ok(());
-            }
-        }
-        Err("uv.exe not found in archive".to_string())
+        extract_uv_exe(archive, &self.path)
     }
 
     #[cfg(not(target_os = "windows"))]
@@ -168,9 +162,78 @@ impl Uv {
     }
 }
 
+/// Copy ``uv.exe`` out of uv's Windows release zip to ``dest``.
+///
+/// zip 9 made an entry's ``name()`` fallible (a name that is not valid
+/// UTF-8 is an error, not a lossy string). The call site still read it as
+/// a string, which no CI job compiled — only the Windows build, and only a
+/// release ran that — so the Windows app did not build at all. Compiled
+/// for tests everywhere, so the Linux test job holds this now.
+#[cfg(any(target_os = "windows", test))]
+fn extract_uv_exe(archive: &Path, dest: &Path) -> Result<(), String> {
+    let file = fs::File::open(archive).map_err(|e| format!("open archive: {e}"))?;
+    let mut zip = zip::ZipArchive::new(file).map_err(|e| format!("open zip: {e}"))?;
+    for i in 0..zip.len() {
+        let mut entry = zip.by_index(i).map_err(|e| format!("zip entry: {e}"))?;
+        // An entry whose name is not UTF-8 is not uv.exe.
+        let is_uv = entry.is_file() && entry.name().is_ok_and(|n| n.ends_with("uv.exe"));
+        if is_uv {
+            let mut out = fs::File::create(dest).map_err(|e| format!("create dest: {e}"))?;
+            std::io::copy(&mut entry, &mut out).map_err(|e| format!("copy uv.exe: {e}"))?;
+            return Ok(());
+        }
+    }
+    Err("uv.exe not found in archive".to_string())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn zip_with(dir: &Path, entries: &[(&str, &[u8])]) -> PathBuf {
+        use std::io::Write;
+        let path = dir.join("uv.zip");
+        let mut w = zip::ZipWriter::new(fs::File::create(&path).unwrap());
+        for (name, body) in entries {
+            w.start_file(*name, zip::write::SimpleFileOptions::default()).unwrap();
+            w.write_all(body).unwrap();
+        }
+        w.finish().unwrap();
+        path
+    }
+
+    fn scratch(name: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("igni_uvzip_{name}_{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    #[test]
+    fn uv_exe_is_copied_out_of_the_windows_release_zip() {
+        let dir = scratch("ok");
+        let archive = zip_with(
+            &dir,
+            &[
+                ("uv-x86_64-pc-windows-msvc/README.md", b"readme"),
+                ("uv-x86_64-pc-windows-msvc/uvx.exe", b"not this one"),
+                ("uv-x86_64-pc-windows-msvc/uv.exe", b"MZ uv binary"),
+            ],
+        );
+        let dest = dir.join("uv.exe");
+        extract_uv_exe(&archive, &dest).unwrap();
+        assert_eq!(fs::read(&dest).unwrap(), b"MZ uv binary");
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_zip_without_uv_exe_is_an_error() {
+        let dir = scratch("missing");
+        let archive = zip_with(&dir, &[("uv-x86_64-pc-windows-msvc/uvx.exe", b"x")]);
+        let err = extract_uv_exe(&archive, &dir.join("uv.exe")).unwrap_err();
+        assert!(err.contains("uv.exe not found"), "{err}");
+        let _ = fs::remove_dir_all(&dir);
+    }
 
     #[test]
     fn the_target_is_a_known_triple_on_this_platform() {

@@ -82,6 +82,12 @@ libc = "0.2"
 # platform — see ``runtime::extract_uv``.
 zip = { version = "9", default-features = false, features = ["deflate"] }
 
+# The Windows uv extraction is plain logic over a .zip; its tests build a
+# zip and run on every platform, so a zip API change cannot again break
+# only the Windows build, which no other CI job compiles.
+[dev-dependencies]
+zip = { version = "9", default-features = false, features = ["deflate"] }
+
 [lib]
 name = "igni_app_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
