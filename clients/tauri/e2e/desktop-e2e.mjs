@@ -177,13 +177,33 @@ function managedCache(home) {
 }
 
 let driver = null;
+let driverEnv = process.env;
+let app = null; // Windows: the app process this runner started itself
 
+/**
+ * Linux: tauri-driver in front of WebKitWebDriver, which launches the app.
+ *
+ * Windows: msedgedriver *attached* to an app this runner starts. Launched
+ * by msedgedriver (what tauri-driver asks for), the session never starts —
+ * "DevToolsActivePort file doesn't exist" — because the driver looks for
+ * the DevTools port file in a profile directory of its own, while a Tauri
+ * app gives WebView2 its own data directory (wry sets it explicitly). So
+ * the app is started with WebView2's remote-debugging port switched on
+ * through WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS, and the driver attaches
+ * to it with `debuggerAddress`, the documented way to drive a running
+ * WebView2.
+ */
 async function startDriver(env) {
-  const bin = process.env.TAURI_DRIVER || "tauri-driver";
-  const args = ["--port", "4444"];
-  if (process.env.NATIVE_DRIVER) args.push("--native-driver", process.env.NATIVE_DRIVER);
-  driver = spawn(bin, args, { env, stdio: ["ignore", "pipe", "pipe"] });
-  const log = fs.createWriteStream(path.join(OUT, "tauri-driver.log"));
+  driverEnv = env;
+  const log = fs.createWriteStream(path.join(OUT, WIN ? "msedgedriver.log" : "tauri-driver.log"));
+  if (WIN) {
+    driver = spawn(must("NATIVE_DRIVER"), ["--port=4444", "--verbose"], { env, stdio: ["ignore", "pipe", "pipe"] });
+  } else {
+    const bin = process.env.TAURI_DRIVER || "tauri-driver";
+    const args = ["--port", "4444"];
+    if (process.env.NATIVE_DRIVER) args.push("--native-driver", process.env.NATIVE_DRIVER);
+    driver = spawn(bin, args, { env, stdio: ["ignore", "pipe", "pipe"] });
+  }
   driver.stdout.pipe(log);
   driver.stderr.pipe(log);
   const end = Date.now() + 30_000;
@@ -194,7 +214,7 @@ async function startDriver(env) {
     } catch {
       /* not yet */
     }
-    if (Date.now() > end) throw new Error("tauri-driver did not come up on :4444");
+    if (Date.now() > end) throw new Error("the WebDriver server did not come up on :4444");
     await sleep(500);
   }
 }
@@ -202,6 +222,18 @@ async function startDriver(env) {
 async function stopDriver() {
   if (session) await session.quit();
   session = null;
+  if (app) {
+    // A window close, as a person quits: taskkill without /F sends WM_CLOSE.
+    try {
+      execFileSync("taskkill", ["/PID", String(app.pid)]);
+    } catch {
+      /* already gone */
+    }
+    const end = Date.now() + 15_000;
+    while (app.exitCode === null && Date.now() < end) await sleep(500);
+    if (app.exitCode === null) app.kill();
+    app = null;
+  }
   if (driver) {
     driver.kill();
     driver = null;
@@ -210,9 +242,33 @@ async function stopDriver() {
 }
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const DEVTOOLS_PORT = 9222;
 
 async function launch(project) {
-  session = await Session.start("http://127.0.0.1:4444", APP, { args: [project] });
+  if (!WIN) {
+    session = await Session.start("http://127.0.0.1:4444", APP, { args: [project] });
+    return;
+  }
+  app = spawn(APP, [project], {
+    env: { ...driverEnv, WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: `--remote-debugging-port=${DEVTOOLS_PORT}` },
+    stdio: "ignore",
+  });
+  const end = Date.now() + 60_000;
+  for (;;) {
+    try {
+      const r = await fetch(`http://127.0.0.1:${DEVTOOLS_PORT}/json/version`);
+      if (r.ok) break;
+    } catch {
+      /* not yet */
+    }
+    if (app.exitCode !== null) throw new Error(`the app exited at start (${app.exitCode})`);
+    if (Date.now() > end) throw new Error(`WebView2's DevTools port ${DEVTOOLS_PORT} did not open`);
+    await sleep(500);
+  }
+  session = await Session.startWith("http://127.0.0.1:4444", {
+    browserName: "webview2",
+    "ms:edgeOptions": { debuggerAddress: `127.0.0.1:${DEVTOOLS_PORT}` },
+  });
 }
 
 /** Wait for the chat: the composer's placeholder leaves "Connecting…". */

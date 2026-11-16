@@ -99,7 +99,14 @@ sleep 5
 shot "01-launched"
 [ -n "$(backend_pids)" ] || { cat "$OUT/app.err"; fail "no igni_core.backend for the project within 120 s"; }
 ps -o pid=,command= -p "$(backend_pids | head -1)" | tee "$OUT/backend-ps.txt"
-grep -q "$PYTHON" "$OUT/backend-ps.txt" || fail "the backend is not running on runtime_python"
+# A venv's python re-executes the framework interpreter on macOS, so ps
+# shows that, not the venv path: what must not be there is the managed
+# runtime (~/Library/Caches/igni/venv), and its environment must be the
+# provisioned venv's.
+if grep -q "Library/Caches/igni" "$OUT/backend-ps.txt"; then fail "the backend runs on the managed venv"; fi
+venv_root=$(cd "$(dirname "$PYTHON")/.." && pwd)
+lsof -p "$(backend_pids | head -1)" 2>/dev/null | grep -q "$venv_root" \
+  || fail "the backend has nothing open from the provisioned venv ($venv_root)"
 [ ! -d "$HOME/Library/Caches/igni/venv" ] || fail "a managed venv was created despite runtime_python"
 pass
 

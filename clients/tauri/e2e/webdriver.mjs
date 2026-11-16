@@ -30,6 +30,12 @@ export class Session {
     return new Session(base, res.sessionId ?? res.value?.sessionId);
   }
 
+  /** Start a session with these capabilities as they are. */
+  static async startWith(base, alwaysMatch) {
+    const res = await call(base, "POST", "/session", { capabilities: { alwaysMatch } });
+    return new Session(base, res.sessionId ?? res.value?.sessionId);
+  }
+
   cmd(method, path, body) {
     return call(this.base, method, `/session/${this.id}${path}`, body).then((r) => r.value);
   }

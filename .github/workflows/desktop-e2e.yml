@@ -229,11 +229,10 @@ jobs:
         with:
           workspaces: igni-app/clients/tauri/src-tauri
 
-      - name: tauri-driver
-        run: cargo install tauri-driver --locked
-
       # msedgedriver must match the WebView2 runtime's version, which follows
       # Edge stable; the image's preinstalled driver is used when it matches.
+      # It attaches to the app the runner starts (desktop-e2e.mjs explains
+      # why tauri-driver's launch does not work for a Tauri app on Windows).
       - name: msedgedriver for the WebView2 runtime
         shell: pwsh
         run: |
@@ -303,30 +302,6 @@ jobs:
         if: success() || failure()
         shell: pwsh
         run: igni-app/clients/tauri/e2e/windows-install.ps1 -Action smoke -Bundle igni-app/clients/tauri/src-tauri/target/release/bundle -Out $env:IGNI_E2E_OUT
-
-      # msedgedriver on its own, verbose, with the session tauri-driver
-      # would ask for: when the WebDriver session cannot start, its log says
-      # why. Diagnostic only; the suites below are the gate.
-      - name: msedgedriver session diagnostic
-        if: success() || failure()
-        continue-on-error: true
-        shell: pwsh
-        run: |
-          $log = "$env:IGNI_E2E_OUT\msedgedriver-verbose.log"
-          $drv = Start-Process $env:NATIVE_DRIVER -ArgumentList @("--port=9515", "--verbose", "--log-path=$log") -PassThru
-          Start-Sleep -Seconds 3
-          $project = Join-Path $env:RUNNER_TEMP "diag-project"
-          New-Item -ItemType Directory -Force -Path $project | Out-Null
-          $env:IGNI_RUNTIME_PYTHON = $env:IGNI_E2E_PYTHON
-          $caps = @{ capabilities = @{ alwaysMatch = @{ browserName = "webview2"; "ms:edgeOptions" = @{ binary = $env:IGNI_APP; args = @($project); webviewOptions = @{} } } } } | ConvertTo-Json -Depth 6
-          try {
-            $r = Invoke-RestMethod -Method Post -Uri "http://127.0.0.1:9515/session" -Body $caps -ContentType "application/json" -TimeoutSec 120
-            Write-Host "session: $($r | ConvertTo-Json -Depth 4)"
-            Invoke-RestMethod -Method Delete -Uri "http://127.0.0.1:9515/session/$($r.value.sessionId)" | Out-Null
-          } catch { Write-Host "session failed: $_" }
-          Stop-Process -Id $drv.Id -Force
-          Get-Process igni-app -ErrorAction SilentlyContinue | Stop-Process -Force
-          Get-Content $log -Tail 80
 
       - name: ENT-016 air-gapped with no runtime
         if: success() || failure()
