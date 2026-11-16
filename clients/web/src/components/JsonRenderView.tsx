@@ -64,8 +64,25 @@ function forwardingHandlers(dispatch: DispatchAction | undefined): Record<string
   );
 }
 
+/**
+ * Why a spec cannot be drawn at all, or ``null``. Only a shape no stream
+ * delta can complete counts: a root that is not an element key, or
+ * elements that are not a map. A root still missing mid-stream is not one.
+ * The Renderer draws nothing for these, so the card was empty, or absent,
+ * while the agent said the chart was above (R666).
+ */
+export function unrenderableSpec(spec: unknown): string | null {
+  if (spec == null || typeof spec !== "object") return null;
+  const { root, elements } = spec as { root?: unknown; elements?: unknown };
+  if (root !== undefined && typeof root !== "string") return "its root is not an element key";
+  if (elements !== undefined && (elements === null || typeof elements !== "object" || Array.isArray(elements)))
+    return "its elements are not a map of element keys";
+  return null;
+}
+
 function JsonRenderViewInner({ spec, title, sourceAgent, onDispatchAction }: JsonRenderViewProps) {
   const handlers = useMemo(() => forwardingHandlers(onDispatchAction), [onDispatchAction]);
+  const unrenderable = unrenderableSpec(spec);
   return (
     <div className="jr-view">
       {(title || sourceAgent) && (
@@ -74,9 +91,15 @@ function JsonRenderViewInner({ spec, title, sourceAgent, onDispatchAction }: Jso
           {sourceAgent && <div className="jr-view-source">via {sourceAgent}</div>}
         </div>
       )}
-      <JSONUIProvider registry={registry} handlers={handlers}>
-        <Renderer spec={spec} registry={registry} fallback={unknownComponent} />
-      </JSONUIProvider>
+      {unrenderable ? (
+        <div className="viz-render-error" role="note">
+          This visualization could not be drawn: {unrenderable}.
+        </div>
+      ) : (
+        <JSONUIProvider registry={registry} handlers={handlers}>
+          <Renderer spec={spec} registry={registry} fallback={unknownComponent} />
+        </JSONUIProvider>
+      )}
     </div>
   );
 }
