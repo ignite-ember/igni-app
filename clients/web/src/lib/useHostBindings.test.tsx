@@ -12,6 +12,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { Arrivals } from "../chat/arrival";
 import type { PageRoute } from "../chat/pageStack";
+import { host } from "./host";
 import { useHostBindings, type HostBindingsDeps } from "./useHostBindings";
 
 afterEach(cleanup);
@@ -20,7 +21,7 @@ function deps(page: PageRoute | null, signedIn = true): HostBindingsDeps {
   return {
     client: { close: vi.fn() },
     windowModel: { write: vi.fn(), get: vi.fn(() => ({})) } as never,
-    view: { reset: vi.fn() } as never,
+    newChat: vi.fn(),
     updateCheck: { checkNow: vi.fn() } as never,
     page,
     signedIn,
@@ -154,5 +155,19 @@ describe("an igni:// link the desktop shell was handed", () => {
     renderHook(() => useHostBindings(deps(null, false)));
     await Promise.resolve();
     expect(invoke).not.toHaveBeenCalled();
+  });
+});
+
+describe("the native menu", () => {
+  it("starts a new chat the way the sidebar does, not by blanking the view", () => {
+    let fire: (id: string) => void = () => {};
+    vi.spyOn(host, "onMenu").mockImplementation((handler) => {
+      fire = handler as (id: string) => void;
+      return () => {};
+    });
+    const d = deps(null);
+    renderHook(() => useHostBindings(d));
+    fire("new_chat");
+    expect(d.newChat).toHaveBeenCalledOnce();
   });
 });

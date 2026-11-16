@@ -8,7 +8,6 @@ import { useEffect, useRef } from "react";
 
 import { Arrivals } from "../chat/arrival";
 import type { PageRoute } from "../chat/pageStack";
-import type { TranscriptView } from "../chat/transcriptView";
 import type { WindowModel } from "../clientState";
 import type { IgniClient } from "../protocol/client";
 import type { UpdateCheck } from "../update/useUpdateCheck";
@@ -17,7 +16,8 @@ import { host } from "./host";
 export interface HostBindingsDeps {
   client: Pick<IgniClient, "close">;
   windowModel: WindowModel;
-  view: TranscriptView;
+  /** The sidebar's New chat: ``/clear``, a new session on the backend. */
+  newChat: () => void;
   updateCheck: Pick<UpdateCheck, "checkNow">;
   /** The page on top, whose place the address bar shows. */
   page: PageRoute | null;
@@ -27,7 +27,7 @@ export interface HostBindingsDeps {
 }
 
 export function useHostBindings(deps: HostBindingsDeps): void {
-  const { client, windowModel, view, updateCheck, page, signedIn, projectDir, org } = deps;
+  const { client, windowModel, newChat, updateCheck, page, signedIn, projectDir, org } = deps;
 
   useEffect(() => host.stampPlatform(document.documentElement), []);
 
@@ -45,7 +45,9 @@ export function useHostBindings(deps: HostBindingsDeps): void {
   useEffect(
     () =>
       host.onMenu((id) => {
-        if (id === "new_chat") view.reset(); // the same effect as ``/clear``
+        // The sidebar's New chat, not a blanked view over the same
+        // session and model context (R624).
+        if (id === "new_chat") newChat();
         else if (id === "check_update") void checkNow(false); // answers either way
         else if (id === "restart_backend") {
           // The shell restarts the backend; drop the dead socket so the
@@ -57,7 +59,7 @@ export function useHostBindings(deps: HostBindingsDeps): void {
           }
         }
       }),
-    [client, view, checkNow],
+    [client, newChat, checkNow],
   );
 
   // The desktop window's title follows the folder and the org.

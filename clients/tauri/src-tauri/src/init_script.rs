@@ -47,6 +47,19 @@ mod tests {
     }
 
     #[test]
+    fn each_window_hears_only_the_events_sent_to_it() {
+        // A global listen hears an event emitted to any window (R624).
+        assert!(SCRIPT.contains("getCurrentWebviewWindow()"));
+        for name in ["igni-menu", "igni-open-link", "igni-fullscreen"] {
+            assert!(
+                SCRIPT.contains(&format!("listenHere('{name}'")),
+                "{name} must be heard on this window only"
+            );
+            assert!(!SCRIPT.contains(&format!("event.listen('{name}'")));
+        }
+    }
+
+    #[test]
     fn init_script_invokes_opener_open_url_command() {
         // The capability is useless if the JS calls another command name.
         assert!(SCRIPT.contains("plugin:opener|open_url"));

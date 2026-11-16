@@ -105,17 +105,6 @@ export default function App() {
 
   const { pages, page } = useVisiblePages(route, contributions.pages);
 
-  useHostBindings({
-    client,
-    windowModel,
-    view,
-    updateCheck,
-    page,
-    signedIn: auth === "signed-in",
-    projectDir,
-    org: status?.cloud_org || "",
-  });
-
   // Where the transcript is scrolled (``ui.scroll``), and finding in it.
   const scroll = useTranscriptScroll(windowModel, items);
   const search = useChatSearch(windowModel, items, scroll.virtuosoRef, panel);
@@ -128,6 +117,17 @@ export default function App() {
   };
   const handlers = useShellHandlers(services, view, controller, refreshStatus, pageData);
   const { actions, switcher, pageServices } = handlers;
+
+  useHostBindings({
+    client,
+    windowModel,
+    newChat: actions.newChat,
+    updateCheck,
+    page,
+    signedIn: auth === "signed-in",
+    projectDir,
+    org: status?.cloud_org || "",
+  });
 
   // ── Render ────────────────────────────────────────────────────────
   if (auth === "signed-out") {
