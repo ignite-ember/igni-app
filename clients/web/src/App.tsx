@@ -240,6 +240,7 @@ export default function App() {
           onResolveHitl={controller.resolveHitl}
           actions={actions}
           switcher={switcher}
+          onSend={scroll.scrollToBottom}
         />
         <StatusLine
           status={status}

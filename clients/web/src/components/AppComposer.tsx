@@ -29,6 +29,10 @@ export interface AppComposerProps {
   onResolveHitl: ChatController["resolveHitl"];
   actions: Pick<ShellActions, "runCommand" | "submit">;
   switcher: RunSettingsSwitcher;
+  /** Before a line is sent: bring the transcript to its end, so the person
+   *  sees what they sent and the answer to it. After a long reply the list
+   *  can have stopped following, and the new turn landed out of view. */
+  onSend?: () => void;
 }
 
 /** The composer, with the approval form rising out of it while a run
@@ -47,6 +51,7 @@ export function AppComposer({
   onResolveHitl,
   actions,
   switcher,
+  onSend,
 }: AppComposerProps) {
   const permissionMode = status?.permission_mode;
   const { cancel, controls } = run;
@@ -54,11 +59,14 @@ export function AppComposer({
     () => ({
       onPickModel: (name) => void switcher.pickModel(name),
       onTool: actions.runCommand,
-      onSubmit: actions.submit,
+      onSubmit: (text) => {
+        onSend?.();
+        actions.submit(text);
+      },
       onStop: cancel,
       onPickMode: (mode) => switcher.pickMode(permissionMode, mode),
     }),
-    [switcher, actions, cancel, permissionMode],
+    [switcher, actions, cancel, permissionMode, onSend],
   );
   // Read every render: the tools menu fills in place as extensions
   // install.
