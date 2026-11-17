@@ -99,7 +99,14 @@ test.describe("live BE: plan-decision RPCs", () => {
           response: unknown;
           pushes: unknown[];
         }>((resolve, reject) => {
-          const ws = new WebSocket(wsUrl);
+          // The backend wants its per-launch token offered as a
+          // subprotocol, or it refuses the handshake. The fixture put
+          // it on the window.
+          const token = (window as unknown as { __IGNI_WS_TOKEN__?: string })
+            .__IGNI_WS_TOKEN__;
+          const ws = token
+            ? new WebSocket(wsUrl, ["igni.v1", `igni-token.${token}`])
+            : new WebSocket(wsUrl);
           const pushes: unknown[] = [];
           let response: unknown = null;
           const id = `verify-${Math.random().toString(36).slice(2)}`;
@@ -201,7 +208,14 @@ test.describe("live BE: plan-decision RPCs", () => {
           response: unknown;
           pushes: unknown[];
         }>((resolve, reject) => {
-          const ws = new WebSocket(wsUrl);
+          // The backend wants its per-launch token offered as a
+          // subprotocol, or it refuses the handshake. The fixture put
+          // it on the window.
+          const token = (window as unknown as { __IGNI_WS_TOKEN__?: string })
+            .__IGNI_WS_TOKEN__;
+          const ws = token
+            ? new WebSocket(wsUrl, ["igni.v1", `igni-token.${token}`])
+            : new WebSocket(wsUrl);
           const pushes: unknown[] = [];
           let response: unknown = null;
           const id = `verify-${Math.random().toString(36).slice(2)}`;
