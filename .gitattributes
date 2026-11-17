@@ -1,0 +1,12 @@
+# Every text file is checked out with LF endings, on every platform.
+#
+# A Windows checkout has CRLF by default, and three of the shell's tests
+# read their own source (`include_str!`) and match it literally — so the
+# line endings become part of what they assert, and the tests fail on a
+# checkout whose lines end differently, for a reason that has nothing to
+# do with the code. The same endings are what the shell's own scripts
+# expect when they run under a Windows Git Bash.
+#
+# Nothing is renormalised: every text file in the index is already LF, so
+# this changes the working tree only.
+* text=auto eol=lf
