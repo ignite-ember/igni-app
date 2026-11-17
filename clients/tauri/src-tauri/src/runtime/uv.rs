@@ -126,7 +126,9 @@ impl Uv {
         let mut zip = zip::ZipArchive::new(file).map_err(|e| format!("open zip: {e}"))?;
         for i in 0..zip.len() {
             let mut entry = zip.by_index(i).map_err(|e| format!("zip entry: {e}"))?;
-            if entry.is_file() && entry.name().ends_with("uv.exe") {
+            // zip 9 hands the name back as a Result, so a name that cannot be
+            // read is simply not the file being looked for.
+            if entry.is_file() && entry.name().is_ok_and(|n| n.ends_with("uv.exe")) {
                 let mut out =
                     fs::File::create(&self.path).map_err(|e| format!("create dest: {e}"))?;
                 std::io::copy(&mut entry, &mut out).map_err(|e| format!("copy uv.exe: {e}"))?;
@@ -195,5 +197,40 @@ mod tests {
             "uv"
         };
         assert_eq!(uv.path, Path::new("/c").join(expected));
+    }
+
+    /// The Windows half of the install: the archive is a zip, and the
+    /// executable is found in it by name.
+    ///
+    /// It is Windows-only code, so it only ever runs there — which is
+    /// exactly how the zip crate's `name()` could change from a plain
+    /// string to a `Result` and break the release build while every
+    /// other platform's tests stayed green.
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn the_zip_is_read_for_the_uv_executable() {
+        use std::io::Write;
+
+        let mut buffer = std::io::Cursor::new(Vec::new());
+        {
+            let mut writer = zip::ZipWriter::new(&mut buffer);
+            let options = zip::write::SimpleFileOptions::default();
+            writer.start_file("other.txt", options).unwrap();
+            writer.write_all(b"not uv").unwrap();
+            writer.start_file("uv.exe", options).unwrap();
+            writer.write_all(b"the uv").unwrap();
+            writer.finish().unwrap();
+        }
+
+        let dir = std::env::temp_dir().join(format!("igni-uv-{}", std::process::id()));
+        fs::create_dir_all(&dir).unwrap();
+        let archive = dir.join("uv.zip");
+        fs::write(&archive, buffer.into_inner()).unwrap();
+
+        let uv = Uv::in_dir(&dir);
+        assert_eq!(uv.extract(&archive), Ok(()));
+        assert_eq!(fs::read(&uv.path).unwrap(), b"the uv");
+
+        fs::remove_dir_all(&dir).unwrap();
     }
 }
