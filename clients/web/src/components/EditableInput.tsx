@@ -41,14 +41,35 @@ interface Props {
   onValueChange: (next: string, caret: number) => void;
   onKeyDown?: (e: React.KeyboardEvent<HTMLDivElement>) => void;
   onPaste?: (e: React.ClipboardEvent<HTMLDivElement>) => void;
+  /** The editor's accessible name. A contenteditable has no <label>,
+   *  and a textbox without a name is announced as just "edit text". */
+  ariaLabel?: string;
   /** Labels for `@code:<id>` pills, from whoever inserted them (the
    *  Composer's pill registry). Without one, or for an id it does not
    *  know, a pill reads "code". */
   codePillLabel?: CodePillLabeler;
+  /** The list this editor drives while a completion menu is open, and
+   *  the option highlighted in it. Focus stays here while the arrows
+   *  move the highlight, so these are how a screen reader hears which
+   *  option that is. */
+  controls?: string;
+  activeDescendant?: string;
 }
 
 export const EditableInput = forwardRef<EditableInputHandle, Props>(function EditableInput(
-  { value, disabled, placeholder, className, onValueChange, onKeyDown, onPaste, codePillLabel },
+  {
+    value,
+    disabled,
+    placeholder,
+    className,
+    ariaLabel,
+    onValueChange,
+    onKeyDown,
+    onPaste,
+    codePillLabel,
+    controls,
+    activeDescendant,
+  },
   ref,
 ) {
   const elRef = useRef<HTMLDivElement>(null);
@@ -133,6 +154,9 @@ export const EditableInput = forwardRef<EditableInputHandle, Props>(function Edi
       contentEditable={!disabled}
       role="textbox"
       aria-multiline="true"
+      aria-label={ariaLabel ?? "Message"}
+      aria-controls={controls}
+      aria-activedescendant={activeDescendant}
       data-placeholder={placeholder}
       spellCheck
       suppressContentEditableWarning

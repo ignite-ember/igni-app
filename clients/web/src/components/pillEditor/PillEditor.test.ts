@@ -156,3 +156,28 @@ describe("PillEditor showing a value", () => {
     expect(root.querySelector("[data-pill-path]")).toBe(pill);
   });
 });
+
+describe("PillEditor reading an emptied editor", () => {
+  // Typing "abc" and Backspacing it away leaves the browser's placeholder
+  // `<br>` behind (innerText "\n"). Read as a line break, it made the
+  // draft multi-line, and ↑ refused to recall history from it (R658).
+  it("reads the lone placeholder <br> as an empty draft", () => {
+    const { root, editor } = editorShowing("");
+    root.innerHTML = "<br>";
+    expect(editor.readTyped()).toBe("");
+  });
+
+  it("reads the same placeholder inside the block the browser wraps it in", () => {
+    const { root, editor } = editorShowing("");
+    root.innerHTML = "<div><br></div>";
+    expect(editor.value()).toBe("");
+  });
+
+  it("still reads a line break that has text around it", () => {
+    const { root, editor } = editorShowing("");
+    root.innerHTML = "a<br>";
+    expect(editor.value()).toBe("a\n");
+    root.innerHTML = "<br><br>";
+    expect(editor.value()).toBe("\n\n");
+  });
+});

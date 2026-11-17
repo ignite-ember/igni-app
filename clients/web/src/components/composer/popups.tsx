@@ -3,6 +3,8 @@
  * completion menu, and the backdrop that closes a click-opened one.
  */
 
+import { useEffect, useRef } from "react";
+
 import type { ModelChoice } from "../../protocol/composerWire";
 import type { CompletionMenu, MenuEntry } from "./completionMenu";
 import type { CompletionMenuApi } from "./useCompletionMenu";
@@ -18,6 +20,15 @@ export interface ToolEntry {
 /** How close to the bottom of the `@` menu a scroll asks for the next
  *  page — a head start before the person runs out of rows. */
 const LOAD_MORE_THRESHOLD_PX = 120;
+
+/** The completion list's id, which the editor names in aria-controls. */
+export const COMPLETION_LIST_ID = "composer-completion";
+
+/** The id of the completion option at `index`: the editor's
+ *  aria-activedescendant while that option is highlighted. */
+export function completionOptionId(index: number): string {
+  return `${COMPLETION_LIST_ID}-${index}`;
+}
 
 /** Covers the page under an open popup; a click on it closes the popup. */
 export function PopupBackdrop({ onClose }: { onClose: () => void }) {
@@ -86,9 +97,22 @@ export function CompletionMenuView({
   /** The `@` menu was scrolled near its end: time for the next page. */
   onNearBottom: () => void;
 }) {
+  const listRef = useRef<HTMLDivElement>(null);
+  // Focus stays in the editor and the arrows move the highlight, so the
+  // menu has to follow it: past the eighth row the highlighted command
+  // was below the menu's visible area, and the menu never scrolled
+  // (R683).
+  useEffect(() => {
+    const row = listRef.current?.querySelector<HTMLElement>(`#${completionOptionId(menu.active)}`);
+    row?.scrollIntoView?.({ block: "nearest" });
+  }, [menu.active, menu.entries]);
+
   return (
     <div
       className="popup-menu"
+      // The menu scrolls; focusable, so a keyboard can reach and scroll
+      // it too (axe: scrollable-region-focusable). R683.
+      tabIndex={0}
       onScroll={(e) => {
         if (menu.kind !== "mention") return;
         const el = e.currentTarget;
@@ -97,19 +121,33 @@ export function CompletionMenuView({
         }
       }}
     >
-      {menu.entries.map((entry, i) => (
-        <div
-          key={entry.key}
-          className={`popup-item ${i === menu.active ? "active" : ""}`}
-          onMouseDown={(e) => {
-            e.preventDefault();
-            onChoose(entry);
-          }}
-        >
-          <span className="cmd">{entry.label}</span>
-          {entry.desc && <span className="desc">{entry.desc}</span>}
-        </div>
-      ))}
+      {/* A listbox of options, the highlighted one selected: the editor
+          names it (aria-controls) and the highlighted option
+          (aria-activedescendant), so a screen reader announces the
+          choice the arrows move to. */}
+      <div
+        ref={listRef}
+        id={COMPLETION_LIST_ID}
+        role="listbox"
+        aria-label={menu.kind === "mention" ? "Files" : "Commands"}
+      >
+        {menu.entries.map((entry, i) => (
+          <div
+            key={entry.key}
+            id={completionOptionId(i)}
+            role="option"
+            aria-selected={i === menu.active}
+            className={`popup-item ${i === menu.active ? "active" : ""}`}
+            onMouseDown={(e) => {
+              e.preventDefault();
+              onChoose(entry);
+            }}
+          >
+            <span className="cmd">{entry.label}</span>
+            {entry.desc && <span className="desc">{entry.desc}</span>}
+          </div>
+        ))}
+      </div>
       {menu.kind === "mention" && menu.total > menu.entries.length && (
         <div className="popup-footer" aria-live="polite">
           Showing {menu.entries.length.toLocaleString()} of {menu.total.toLocaleString()} — scroll

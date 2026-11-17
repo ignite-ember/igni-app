@@ -87,16 +87,6 @@ export default function App() {
   const connected = conn === "connected";
   const composerReady = connected && sessionBound;
 
-  useHostBindings({
-    client,
-    windowModel,
-    view,
-    updateCheck,
-    arrival: opening.arrival,
-    signedIn: auth === "signed-in",
-    projectDir,
-    org: status?.cloud_org || "",
-  });
   const { groupName, groupMark } = useGroupBranding(status?.theme);
 
   // The floor's notifications per extension; the backend pushes
@@ -108,7 +98,7 @@ export default function App() {
     windowModel,
   );
   // "Trust this folder?" while the folder's decision is ``ask``.
-  useWorkspaceTrust(client, connected, projectDir, windowModel, dialog);
+  useWorkspaceTrust(client, connected, projectDir, windowModel, dialog, sessionId);
   // Events and host-model signals for installed extensions.
   const extensionTraffic = useExtensionTraffic(client, connected);
   useStatusPoll(refreshStatus, connected);
@@ -127,6 +117,16 @@ export default function App() {
   };
   const handlers = useShellHandlers(services, view, controller, refreshStatus, pageData);
   const { actions, switcher, pageServices } = handlers;
+
+  useHostBindings({
+    windowModel,
+    newChat: actions.newChat,
+    updateCheck,
+    page,
+    signedIn: auth === "signed-in",
+    projectDir,
+    org: status?.cloud_org || "",
+  });
 
   // ── Render ────────────────────────────────────────────────────────
   if (auth === "signed-out") {
@@ -160,7 +160,9 @@ export default function App() {
         onPickSession={actions.pickSession}
       />
 
-      <div className={`main${page ? " main--paged" : ""}`}>
+      {/* The window's one <main>: without it nothing on the page was in a
+          landmark but the sidebar (axe: landmark-one-main, region). R683. */}
+      <main className={`main${page ? " main--paged" : ""}`}>
         <AppHeader
           conn={conn}
           groupName={groupName}
@@ -220,6 +222,7 @@ export default function App() {
             theme={frameTheme}
             signals={extensionTraffic.signals}
             services={pageServices}
+            onRoute={navigator.navigate}
           />
         )}
 
@@ -248,7 +251,7 @@ export default function App() {
           onShowUpdate={updateCheck.showUpdate}
           onOpen={navigator.openPage}
         />
-      </div>
+      </main>
 
       <AppOverlays
         client={client}

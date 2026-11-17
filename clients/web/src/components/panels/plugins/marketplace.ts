@@ -4,21 +4,32 @@
 import { WirePayload } from "../../../protocol/wirePayload";
 import { PluginAbout } from "./pluginAbout";
 
-/** One plugin a marketplace offers. ``source`` is the ref it installs
- *  from; ``branch`` is empty when the catalog names none. */
+/** One plugin a marketplace offers. ``source`` is where it lives, as
+ *  the catalog displays it (``url [subdir]``); ``branch`` is empty when
+ *  the catalog names none; ``market`` is the offering marketplace's
+ *  name, empty when it has none. */
 export class MarketplacePlugin {
   constructor(
     readonly about: PluginAbout,
     readonly source: string,
     readonly branch: string,
+    readonly market: string = "",
   ) {}
 
   /** One catalog entry, or ``null`` when it has no name. */
-  static parse(raw: unknown): MarketplacePlugin | null {
+  static parse(raw: unknown, market = ""): MarketplacePlugin | null {
     const p = new WirePayload(raw);
     const about = PluginAbout.read(p);
     if (!about.name) return null;
-    return new MarketplacePlugin(about, p.string("source"), p.string("branch"));
+    return new MarketplacePlugin(about, p.string("source"), p.string("branch"), market);
+  }
+
+  /** What `install_plugin` takes for it: ``@<marketplace>/<plugin>``,
+   *  which the backend resolves to the source's URL, subdir and branch.
+   *  ``source`` is a display string, not a git URL, so it is only the
+   *  fallback for a marketplace without a name. */
+  get installRef(): string {
+    return this.market ? `@${this.market}/${this.name}` : this.source;
   }
 
   get name(): string {
@@ -52,12 +63,13 @@ export class Marketplace {
 
   static parse(raw: unknown): Marketplace {
     const p = new WirePayload(raw);
+    const name = p.string("name");
     const plugins: MarketplacePlugin[] = [];
     for (const entry of p.list("plugins")) {
-      const plugin = MarketplacePlugin.parse(entry);
+      const plugin = MarketplacePlugin.parse(entry, name);
       if (plugin) plugins.push(plugin);
     }
-    return new Marketplace(p.string("name"), p.string("url"), p.string("last_fetched"), plugins);
+    return new Marketplace(name, p.string("url"), p.string("last_fetched"), plugins);
   }
 
   /** An unnamed marketplace is labelled by its URL. */

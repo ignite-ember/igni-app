@@ -52,6 +52,11 @@ impl BackendConn {
         }
     }
 
+    /// What the backend reports itself as, for the diagnostics.
+    pub fn version(&self) -> &BackendVersionInfo {
+        &self.version
+    }
+
     /// The URL a window loads to reach the backend.
     ///
     /// `project_dir` is set only for a window opened onto a folder of its

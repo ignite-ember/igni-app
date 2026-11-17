@@ -7,7 +7,10 @@
  * failed read says so rather than claiming there are no servers, a
  * policy-blocked server cannot be connected from here, hiding a tool
  * reacts at once and is undone by a re-read when the backend refuses,
- * and a failed connect is reported and leaves the page usable.
+ * and a failed connect is reported and leaves the page usable. A
+ * project's or a plugin's server waiting for its first-use approval says
+ * so, cannot be connected, and is approved (then connected) or has its
+ * approval withdrawn from here; the user's own config is not withdrawable.
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
@@ -69,9 +72,11 @@ interface Opts {
   details?: unknown;
   setTool?: () => Promise<unknown>;
   toggle?: () => Promise<unknown>;
+  approvals?: unknown;
+  setApproval?: (args: unknown) => Promise<unknown>;
 }
 
-function panelWith({ details = [GITHUB], setTool, toggle }: Opts = {}) {
+function panelWith({ details = [GITHUB], setTool, toggle, approvals, setApproval }: Opts = {}) {
   const methods: string[] = [];
   const rpc = vi.fn(async (method: string, args?: unknown) => {
     methods.push(method);
@@ -80,6 +85,11 @@ function panelWith({ details = [GITHUB], setTool, toggle }: Opts = {}) {
       return details;
     }
     if (method === "set_mcp_tool_enabled" && setTool) return setTool();
+    if (method === "list_mcp_approvals") {
+      if (approvals instanceof Error) throw approvals;
+      return approvals ?? [];
+    }
+    if (method === "set_mcp_approval" && setApproval) return setApproval(args);
     void args;
     return null;
   });
@@ -286,5 +296,71 @@ describe("what a server offers", () => {
     const [more] = screen.getAllByRole("button", { name: "Show more…" });
     fireEvent.click(more);
     expect(screen.getByRole("button", { name: "Show less" })).toBeTruthy();
+  });
+});
+
+describe("first-use approvals (R669, R209)", () => {
+  const PROJECT_SERVER = { name: "jira", connected: false, transport: "sse", error: "MCP 'jira' is not approved" };
+  const waiting = { name: "jira", source: "project", source_path: "/work/repo/.mcp.json", approved: false };
+  const approved = { ...waiting, approved: true };
+
+  it("shows a server waiting for approval as refused, with Approve instead of Connect", async () => {
+    panelWith({ details: [PROJECT_SERVER], approvals: [waiting] });
+    expect(await screen.findByText("waiting for your approval · /work/repo/.mcp.json")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Approve jira" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Connect" })).toBeNull();
+  });
+
+  it("approves a server, connects it and re-reads the list", async () => {
+    const setApproval = vi.fn(async () => approved);
+    const { mcpToggle, methods } = panelWith({ details: [PROJECT_SERVER], approvals: [waiting], setApproval });
+    fireEvent.click(await screen.findByRole("button", { name: "Approve jira" }));
+    await waitFor(() => expect(mcpToggle).toHaveBeenCalledWith("jira", true));
+    expect(setApproval).toHaveBeenCalledWith({ server_name: "jira", approved: true });
+    await waitFor(() => expect(methods.filter((m) => m === "list_mcp_approvals")).toHaveLength(2));
+  });
+
+  it("withdraws an approval without connecting anything", async () => {
+    const setApproval = vi.fn(async () => waiting);
+    const { mcpToggle } = panelWith({
+      details: [{ ...PROJECT_SERVER, connected: true, error: "" }],
+      approvals: [approved],
+      setApproval,
+    });
+    fireEvent.click(await screen.findByRole("button", { name: "Revoke the approval of jira" }));
+    await waitFor(() => expect(setApproval).toHaveBeenCalledWith({ server_name: "jira", approved: false }));
+    expect(mcpToggle).not.toHaveBeenCalled();
+  });
+
+  it("offers no Revoke for the user's own config, which is always trusted", async () => {
+    panelWith({ details: [GITHUB], approvals: [{ name: "github", source: "user", source_path: "~/.igni/.mcp.json", approved: true }] });
+    await screen.findByText(/click to expand/);
+    expect(screen.queryByRole("button", { name: /revoke/i })).toBeNull();
+  });
+
+  it("says why an approval was refused, and keeps the server waiting", async () => {
+    panelWith({
+      details: [PROJECT_SERVER],
+      approvals: [waiting],
+      setApproval: async () => {
+        throw new Error("only igni's window may call set_mcp_approval");
+      },
+    });
+    fireEvent.click(await screen.findByRole("button", { name: "Approve jira" }));
+    expect(
+      await screen.findByText("Could not approve jira: only igni's window may call set_mcp_approval"),
+    ).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Approve jira" })).toBeTruthy();
+  });
+
+  it("lists a configured server waiting for approval that the details left out", async () => {
+    panelWith({ details: [], approvals: [waiting] });
+    expect(await screen.findByRole("button", { name: "Approve jira" })).toBeTruthy();
+    expect(screen.queryByText("No MCP servers configured.")).toBeNull();
+  });
+
+  it("works as before against a backend that lists no approvals", async () => {
+    panelWith({ details: [DOWN], approvals: new Error("unknown method") });
+    expect(await screen.findByRole("button", { name: "Connect" })).toBeTruthy();
   });
 });

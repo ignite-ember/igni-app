@@ -75,7 +75,7 @@ describe("searchCode", () => {
     const { client, rpc } = clientAnswering(async () => ({ matches: [match] }));
 
     expect(await client.searchCode("snip")).toEqual({ ok: true, matches: [match] });
-    expect(rpc).toHaveBeenCalledWith("search_code", { snippet: "snip" });
+    expect(rpc).toHaveBeenCalledWith("search_code", { query: "snip" });
   });
 
   it("no matches field is no matches", async () => {

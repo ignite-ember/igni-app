@@ -66,22 +66,25 @@ function mount(
     connected?: boolean;
     projectDir?: string;
     dialog?: Dialog | null;
+    sessionId?: string;
   } = {},
 ) {
   return renderHook(
-    (p: { connected: boolean; projectDir: string; dialog: Dialog | null }) =>
+    (p: { connected: boolean; projectDir: string; dialog: Dialog | null; sessionId: string }) =>
       useWorkspaceTrust(
         r.client as never,
         p.connected,
         p.projectDir,
         r.windowModel as never,
         p.dialog,
+        p.sessionId,
       ),
     {
       initialProps: {
         connected: props.connected ?? true,
         projectDir: props.projectDir ?? "/work/app",
         dialog: props.dialog ?? null,
+        sessionId: props.sessionId ?? "s1",
       },
     },
   );
@@ -200,11 +203,46 @@ describe("the dialog", () => {
     await waitFor(() =>
       expect(r.windowModel.openDialog).toHaveBeenCalledOnce(),
     );
-    view.rerender({ connected: false, projectDir: "/work/app", dialog: null });
-    view.rerender({ connected: true, projectDir: "/work/app", dialog: null });
+    view.rerender({ connected: false, projectDir: "/work/app", dialog: null, sessionId: "s1" });
+    view.rerender({ connected: true, projectDir: "/work/app", dialog: null, sessionId: "s1" });
     await waitFor(() => expect(r.client.rpc).toHaveBeenCalledTimes(2));
     await Promise.resolve();
     expect(r.windowModel.openDialog).toHaveBeenCalledOnce();
+  });
+
+  it("leaves the policy explanation open when the same refusal is read again", async () => {
+    // A window's first load reads the status, opens the explanation, then
+    // reads it again as the folder arrives. The second read is the same
+    // refusal, and it closed the dialog 30 ms after it opened (R680).
+    const refused = status({
+      state: "untrusted",
+      can_trust: false,
+      reason: "Policy forbids it.",
+    });
+    const r = rig(refused);
+    const view = mount(r, { projectDir: "" });
+    await waitFor(() => expect(r.windowModel.openDialog).toHaveBeenCalledOnce());
+    const explanation: Dialog = {
+      id: "d1",
+      spec: { kind: TRUST_DIALOG_KIND, ...refused },
+    };
+    view.rerender({ connected: true, projectDir: "/work/app", dialog: explanation, sessionId: "s1" });
+    await waitFor(() => expect(r.client.rpc).toHaveBeenCalledTimes(2));
+    r.push(refused);
+    await Promise.resolve();
+    expect(r.windowModel.answerDialog).not.toHaveBeenCalled();
+  });
+
+  it("closes the policy explanation once the folder is trusted after all", async () => {
+    const r = rig(new Error("unknown method"));
+    mount(r, {
+      dialog: {
+        id: "d1",
+        spec: { kind: TRUST_DIALOG_KIND, ...status({ state: "untrusted", can_trust: false }) },
+      },
+    });
+    r.push(status({ state: "trusted" }));
+    expect(r.windowModel.answerDialog).toHaveBeenCalledWith("d1", null);
   });
 
   it("does not open for a folder someone chose not to trust", async () => {
@@ -229,8 +267,28 @@ describe("the dialog", () => {
     const r = rig(status({ state: "trusted" }));
     const view = mount(r);
     await waitFor(() => expect(r.client.rpc).toHaveBeenCalledTimes(1));
-    view.rerender({ connected: true, projectDir: "/work/next", dialog: null });
+    view.rerender({ connected: true, projectDir: "/work/next", dialog: null, sessionId: "s1" });
     await waitFor(() => expect(r.client.rpc).toHaveBeenCalledTimes(2));
+  });
+
+  it("asks about a folder picked mid-session once the new session is bound", async () => {
+    // attachFolder writes the folder, then binds the new session: the read
+    // the folder change starts still goes to the old session and answers
+    // "trusted" for the old folder. The new session's "ask" has to be read
+    // again (R688).
+    const r = rig(status({ state: "trusted", path: "/work/app" }));
+    const view = mount(r);
+    await waitFor(() => expect(r.client.rpc).toHaveBeenCalledTimes(1));
+    view.rerender({ connected: true, projectDir: "/work/proj-e", dialog: null, sessionId: "s1" });
+    await waitFor(() => expect(r.client.rpc).toHaveBeenCalledTimes(2));
+    expect(r.windowModel.openDialog).not.toHaveBeenCalled();
+    r.client.rpc.mockImplementation(async () => status({ path: "/work/proj-e" }));
+    view.rerender({ connected: true, projectDir: "/work/proj-e", dialog: null, sessionId: "s2" });
+    await waitFor(() =>
+      expect(r.windowModel.openDialog).toHaveBeenCalledWith(
+        expect.objectContaining({ kind: TRUST_DIALOG_KIND, state: "ask", path: "/work/proj-e" }),
+      ),
+    );
   });
 
   it("stops listening when unmounted, and ignores an answer that arrives after", async () => {

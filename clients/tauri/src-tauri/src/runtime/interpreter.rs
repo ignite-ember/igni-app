@@ -2,7 +2,7 @@
 
 use std::fs;
 use std::path::Path;
-use std::process::{Command, Stdio};
+use std::process::Stdio;
 
 /// Whether `path` is a file that could be run. A directory or a missing
 /// path is not.
@@ -16,7 +16,7 @@ pub(crate) fn probe_cli_version(python: &Path) -> Option<String> {
     if !is_executable(python) {
         return None;
     }
-    let output = Command::new(python)
+    let output = super::host_command(python)
         .args([
             "-c",
             "import igni_core, sys; sys.stdout.write(igni_core.__version__)",

@@ -250,4 +250,60 @@ describe("JsonRenderView", () => {
     const unknown = container.querySelector(".jr-unknown");
     expect(unknown?.textContent).toContain("MysteryComponent");
   });
+
+  // R666: three real visualizer dispatches drew a blank card (errors only
+  // in the console) or no card, while the agent said the chart was above.
+  describe("a malformed spec says it failed", () => {
+    const quiet = () => vi.spyOn(console, "error").mockImplementation(() => {});
+
+    it("names a chart whose data is not a list, instead of a blank", () => {
+      quiet();
+      const spec: Spec = {
+        root: "root",
+        elements: {
+          root: { type: "Card", props: { title: "Monthly Sales 2026" }, children: ["bar"] },
+          bar: { type: "BarGraph", props: { data: { item: [{ x: "Jan", y: 1 }] } }, children: [] },
+        },
+      } as unknown as Spec;
+      const { container } = render(<JsonRenderView spec={spec} />);
+      expect(container.textContent).toContain("Monthly Sales 2026");
+      expect(container.querySelector(".jr-element-error")?.textContent).toMatch(
+        /Could not draw BarGraph: its data is not a list/,
+      );
+    });
+
+    it("names a Table whose columns are not a list", () => {
+      quiet();
+      const spec: Spec = {
+        root: "t",
+        elements: { t: { type: "Table", props: { columns: { item: [] }, rows: [] }, children: [] } },
+      } as unknown as Spec;
+      const { container } = render(<JsonRenderView spec={spec} />);
+      expect(container.querySelector(".jr-element-error")?.textContent).toMatch(
+        /Could not draw Table: its columns is not a list/,
+      );
+    });
+
+    it("says so when the root is not an element key", () => {
+      const spec = {
+        elements: {},
+        root: ["root", { type: "Card" }],
+        children: { item: [] },
+      } as unknown as Spec;
+      render(<JsonRenderView spec={spec} title="Cloud spend" />);
+      expect(screen.getByRole("note").textContent).toContain(
+        "This visualization could not be drawn: its root is not an element key.",
+      );
+    });
+
+    it("draws a chart whose data has not arrived yet as no data, not an error", () => {
+      const spec: Spec = {
+        root: "bar",
+        elements: { bar: { type: "BarGraph", props: {}, children: [] } },
+      } as unknown as Spec;
+      const { container } = render(<JsonRenderView spec={spec} />);
+      expect(container.querySelector(".jr-element-error")).toBeNull();
+      expect(container.querySelector(".jr-empty")).toBeTruthy();
+    });
+  });
 });

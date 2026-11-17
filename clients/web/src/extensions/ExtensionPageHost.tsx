@@ -24,6 +24,8 @@ export function ExtensionPageHost({
   theme,
   signals,
   onClose,
+  onNavigate,
+  onLocation,
 }: {
   extension: ExtensionSummary;
   page: PageRoute;
@@ -33,6 +35,11 @@ export function ExtensionPageHost({
   theme: string;
   signals: ExtensionPageProps["signals"];
   onClose: () => void;
+  /** The page's `bridge.navigate(to)`; the app decides whether to go. */
+  onNavigate?: (to: string) => void;
+  /** The page's `bridge.setLocation(state)`, for the app to fold into
+   *  the window's route so the next `hello` replays it. */
+  onLocation?: (state: Record<string, string>) => void;
 }) {
   const caller = client.asExtension(extension.id);
   const onHost: NonNullable<ExtensionPageProps["onHost"]> = async (request) =>
@@ -43,8 +50,10 @@ export function ExtensionPageHost({
         request.path === "ui.show_dialog" ? DIALOG_WAIT_MS : undefined,
       ),
     );
-  const onServiceToken = async () =>
-    ServiceTokenReply.parse(await caller.rpc<unknown>("extension_service_token", {}));
+  const onServiceToken = async ({ refresh }: { refresh: boolean }) =>
+    ServiceTokenReply.parse(
+      await caller.rpc<unknown>("extension_service_token", refresh ? { refresh: true } : {}),
+    );
   return (
     <Drawer title={page.label} titleInBody onClose={onClose}>
       <ExtensionPage
@@ -57,6 +66,8 @@ export function ExtensionPageHost({
         onHost={onHost}
         onServiceToken={onServiceToken}
         onClose={onClose}
+        onNavigate={onNavigate}
+        onLocation={onLocation}
         onCall={(method, args) => caller.rpc(method, args)}
       />
     </Drawer>

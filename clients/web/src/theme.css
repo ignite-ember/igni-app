@@ -973,6 +973,13 @@ button {
   background: var(--danger);
 }
 
+/* The account chip's marker: the person is signed in, but the igni
+   server is not answering. Amber, not red — the account is fine; the
+   server is the one that is away. */
+.dot.not-answering {
+  background: var(--warning);
+}
+
 @keyframes pulse-dot {
   0%,
   100% {
@@ -1501,6 +1508,17 @@ button {
   background: var(--bg-surface);
   cursor: pointer;
   transition: border-color 0.12s ease, background 0.12s ease, transform 0.12s ease;
+  /* A <button>: drawn as the card it was as a <div>. */
+  margin: 0;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  appearance: none;
+}
+
+.welcome-cap:focus-visible {
+  outline: 2px solid var(--accent-orange-text, #fb9c5a);
+  outline-offset: 2px;
 }
 
 .welcome-cap:hover {
@@ -4276,6 +4294,13 @@ button {
   text-overflow: ellipsis;
 }
 
+/* On the highlighted row's raised background --fg-faint falls under
+   4.5:1 in the dark theme (axe: color-contrast). R683. */
+.popup-item.active .desc,
+.popup-item:hover .desc {
+  color: var(--fg-muted);
+}
+
 /* ── Buttons / dialogs / drawers ────────────────────────────────── */
 
 /* A badge's whole job is to say which kind of thing this is, so a
@@ -4647,6 +4672,12 @@ button {
   justify-content: center;
   z-index: 50;
   animation: fade-in 0.16s ease;
+}
+
+/* A dialog opened from the sign-in wall (.wall, z-index 60) goes above
+   it; at the shared overlay's 50 it was drawn behind the wall. */
+.overlay--over-wall {
+  z-index: 70;
 }
 
 @keyframes fade-in {
@@ -5125,6 +5156,12 @@ button {
   margin: 20px 4px;
 }
 
+/* The drawer's raised surface is lighter than the chat's, and --danger
+   on it falls under 4.5:1 in the dark theme (axe: color-contrast). R683. */
+.notify-panel .msg-error {
+  color: var(--danger-text, var(--danger));
+}
+
 .notify-rows {
   margin: 0;
   padding: 0;
@@ -5580,6 +5617,20 @@ button {
   font-size: var(--text-2xs);
   color: var(--fg-faint);
   flex-shrink: 0;
+}
+
+/* A session with a run waiting for an answer. A small amber pill, so
+   the row says out loud that something is waiting on the person — the
+   question itself is one click away, in the chat it belongs to. */
+.session-item .session-waiting {
+  flex-shrink: 0;
+  padding: 0 6px;
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--warning) 18%, transparent);
+  color: var(--accent-orange-text, var(--warning));
+  font-size: var(--text-2xs);
+  font-weight: 600;
+  line-height: 16px;
 }
 
 /* ── Group pill + its "yours or theirs" popover ────────────────── */
@@ -6886,6 +6937,17 @@ button.mcp-server-head:focus-visible {
 
 .mcp-server-chevron {
   display: inline-flex;
+}
+
+.mcp-server-actions {
+  display: flex;
+  gap: var(--space-4);
+  flex-shrink: 0;
+}
+
+/* Waiting for the person's approval: amber, but still, not a spinner. */
+.tool-status.running.mcp-waiting {
+  animation: none;
 }
 
 .mcp-skeleton {
@@ -8379,7 +8441,9 @@ button.mcp-server-head:focus-visible {
 }
 
 .hooks-tag.tone-good {
-  color: var(--success);
+  /* --success on --bg-raised is under 4.5:1 at this size in both
+     themes; the text-weight green clears it (R683). */
+  color: var(--accent-green-text, var(--success));
   border-color: color-mix(in srgb, var(--success) 35%, transparent);
 }
 
@@ -8493,7 +8557,14 @@ button.mcp-server-head:focus-visible {
   background: color-mix(in srgb, var(--igni-orange) 6%, var(--bg-surface));
 }
 
-.watcher-row--stopped {
+.watcher-row--stopped .watcher-pid,
+.watcher-row--stopped .watcher-cmd {
+  /* Dimmed by colour, not opacity: a faded row took its 'exit -15'
+     down to 2.8:1 (R683). */
+  color: var(--fg-muted);
+}
+
+.watcher-row--stopped .watcher-status {
   opacity: 0.65;
 }
 
@@ -8537,7 +8608,8 @@ button.mcp-server-head:focus-visible {
   padding: var(--space-1) var(--space-4);
   font-size: var(--text-xs);
   background: transparent;
-  color: var(--danger);
+  /* --danger is 4.33:1 on the dark surface at 11px (R683). */
+  color: var(--accent-red-text, var(--danger));
   border-color: var(--danger);
 }
 
@@ -9928,6 +10000,23 @@ button.mcp-server-head:focus-visible {
   width: 100%;
   padding: var(--space-5) var(--space-6);
   font-size: var(--text-lg);
+}
+
+/* The portal address, for a deployment that serves its sign-in page
+   apart from its API. Quiet until opened. */
+.wall-more {
+  text-align: left;
+  font-size: var(--text-sm);
+  color: var(--fg-muted);
+}
+
+.wall-more > summary {
+  cursor: pointer;
+  padding: var(--space-2) 0;
+}
+
+.wall-more > .wall-input {
+  margin-top: var(--space-3);
 }
 
 /* Quieter than the action above it, and still a real control: this

@@ -201,6 +201,52 @@ describe("Sidebar — session list", () => {
     expect(onPick).toHaveBeenCalledWith("wxyz5678");
   });
 
+  it("marks the session a paused run is waiting in", () => {
+    // The backend sends ``has_paused_run`` with every row of
+    // ``list_sessions``: true when a run of that session is paused on
+    // an approval the person has not answered (R647).
+    render(
+      <Sidebar
+        {...defaultProps({
+          sessions: [
+            { session_id: "waiting-1", name: "Alpha", has_paused_run: true },
+            { session_id: "quiet-2", name: "Beta" },
+          ],
+        })}
+      />,
+    );
+    const marker = screen.getByRole("img", { name: "Waiting for your answer" });
+    expect(marker.textContent).toBe("waiting");
+    // The marker is on the row of the session that waits, and only
+    // there: Beta's row says nothing about waiting.
+    const rows = Array.from(document.querySelectorAll(".session-item"));
+    const waiting = rows.find((row) => row.textContent?.includes("Alpha"));
+    const quiet = rows.find((row) => row.textContent?.includes("Beta"));
+    expect(waiting?.querySelector(".session-waiting")).toBeTruthy();
+    expect(quiet?.querySelector(".session-waiting")).toBeNull();
+  });
+
+  it("marks nothing when the backend sends no such flag", () => {
+    // An older backend says nothing about waiting; that is not the
+    // same as saying a run waits.
+    render(<Sidebar {...defaultProps()} />);
+    expect(document.querySelector(".session-waiting")).toBeNull();
+  });
+
+  it("reaches the waiting run by way of the row: clicking the marker picks the session", () => {
+    const onPick = vi.fn();
+    render(
+      <Sidebar
+        {...defaultProps({
+          onPick,
+          sessions: [{ session_id: "waiting-1", name: "Alpha", has_paused_run: true }],
+        })}
+      />,
+    );
+    fireEvent.click(screen.getByRole("img", { name: "Waiting for your answer" }));
+    expect(onPick).toHaveBeenCalledWith("waiting-1");
+  });
+
   it("New chat button calls onNewChat", () => {
     const onNewChat = vi.fn();
     render(<Sidebar {...defaultProps({ onNewChat })} />);

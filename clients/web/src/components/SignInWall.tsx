@@ -52,6 +52,7 @@ export function SignInWall({
   const [step, setStep] = useState<Step>("email");
   const [email, setEmail] = useState("");
   const [server, setServer] = useState("");
+  const [portal, setPortal] = useState("");
   const [found, setFound] = useState<Found | null>(null);
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState("");
@@ -96,8 +97,14 @@ export function SignInWall({
     setBusy(true);
     setFailed("");
     try {
+      // The portal is sent whenever it was given. A deployment that
+      // serves its API and its sign-in page on different ports — the
+      // local one in igni-server's README, :7777 and :3000 — has a
+      // portal igni cannot derive from the API address, and without it
+      // the browser was sent to the API's /cli-auth, a 404 (R219).
       const saved = await client.rpc<Found>("set_server", {
         api_url: server.trim(),
+        ...(portal.trim() ? { portal_url: portal.trim() } : {}),
       });
       if (saved?.error) {
         setFailed(saved.error);
@@ -191,6 +198,19 @@ export function SignInWall({
                 value={server}
                 onChange={(e) => setServer(e.target.value)}
               />
+              {/* Folded away: most deployments serve both from one
+                  address, and the portal is then derived. */}
+              <details className="wall-more">
+                <summary>Sign-in page on a different address?</summary>
+                <input
+                  className="wall-input"
+                  type="url"
+                  aria-label="igni sign-in page address"
+                  placeholder="https://portal.yourcompany.com"
+                  value={portal}
+                  onChange={(e) => setPortal(e.target.value)}
+                />
+              </details>
               <button
                 className="btn btn-primary wall-go"
                 type="submit"
@@ -237,6 +257,7 @@ export function SignInWall({
               onClick={() => {
                 setFailed("");
                 setServer("");
+                setPortal("");
                 setStep("server");
               }}
             >

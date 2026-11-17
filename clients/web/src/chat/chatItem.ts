@@ -45,6 +45,16 @@ export interface UserItem {
   streamingEndedAt?: number;
   /** The BE has persisted the run, so ``truncate_history`` knows it. */
   persisted?: boolean;
+  /** A prompt a crash cut off before its run persisted, restored from
+   *  ``get_pending_messages``. It has no run of its own; Retry re-sends
+   *  it with ``force``, which supersedes the backend's pending row. */
+  restored?: boolean;
+  /** The restored prompt's ``message_id``, which Discard hands to
+   *  ``discard_pending_message``. */
+  pendingMessageId?: string;
+  /** Sent while a run was in flight and not started yet: it stays below
+   *  everything that run still streams until its own run starts. */
+  queued?: boolean;
 }
 
 export interface AssistantItem {
@@ -53,6 +63,9 @@ export interface AssistantItem {
   text: string;
   /** Set when the turn did not complete normally. */
   interrupted?: AssistantInterrupted;
+  /** The banner under prompts restored after a crash: its Discard
+   *  drops their pending rows (``discard_pending_message``). */
+  restored?: boolean;
 }
 
 export interface ThinkingItem {
@@ -97,6 +110,8 @@ export interface InfoItem {
   kind: "info";
   id: number;
   text: string;
+  /** The "Queued" note under a queued message, gone when it runs. */
+  queued?: boolean;
 }
 
 export interface ErrorItem {

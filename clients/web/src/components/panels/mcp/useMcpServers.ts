@@ -2,12 +2,17 @@
 
 import { useCallback, useEffect, useState } from "react";
 import type { IgniClient } from "../../../protocol/client";
+import { McpApproval } from "./mcpApproval";
 import { McpServer } from "./mcpServer";
 
 export interface McpServers {
   /** ``null`` until the first read lands. */
   servers: McpServer[] | null;
-  /** The server whose connect or disconnect is in flight. */
+  /** First-use approvals by server name: a project's or a plugin's
+   *  server never connects until approved. Empty when the backend does
+   *  not list them. */
+  approvals: ReadonlyMap<string, McpApproval>;
+  /** The server whose connect, disconnect or approval is in flight. */
   busy: string | null;
   /** Why the list could not be read, or ``""``. */
   loadError: string;
@@ -15,6 +20,9 @@ export interface McpServers {
   actionError: string;
   toggle: (server: McpServer) => void;
   setToolEnabled: (serverName: string, tool: string, enabled: boolean) => void;
+  /** Approve a server and connect it, or withdraw its approval, which
+   *  disconnects it. */
+  setApproval: (serverName: string, approved: boolean) => void;
 }
 
 function reason(e: unknown): string {
@@ -23,6 +31,7 @@ function reason(e: unknown): string {
 
 export function useMcpServers(client: IgniClient): McpServers {
   const [servers, setServers] = useState<McpServer[] | null>(null);
+  const [approvals, setApprovals] = useState<ReadonlyMap<string, McpApproval>>(new Map());
   const [busy, setBusy] = useState<string | null>(null);
   const [loadError, setLoadError] = useState("");
   const [actionError, setActionError] = useState("");
@@ -37,6 +46,12 @@ export function useMcpServers(client: IgniClient): McpServers {
     } catch (e) {
       setServers([]);
       setLoadError(`Could not read the MCP servers: ${reason(e)}`);
+    }
+    try {
+      setApprovals(McpApproval.parseMap(await client.rpc("list_mcp_approvals")));
+    } catch {
+      // A backend without approvals to list: nothing waits on one here.
+      setApprovals(new Map());
     }
   }, [client]);
 
@@ -86,13 +101,40 @@ export function useMcpServers(client: IgniClient): McpServers {
     }
   };
 
+  const setApproval = async (serverName: string, approved: boolean) => {
+    setBusy(serverName);
+    setActionError("");
+    try {
+      await client.rpc("set_mcp_approval", { server_name: serverName, approved });
+    } catch (e) {
+      setActionError(
+        `Could not ${approved ? "approve" : "withdraw the approval of"} ${serverName}: ${reason(e)}`,
+      );
+      setBusy(null);
+      void refresh();
+      return;
+    }
+    if (approved) {
+      // Approving only records it; the server connects on the next connect.
+      try {
+        await client.mcpToggle(serverName, true);
+      } catch (e) {
+        setActionError(`Approved ${serverName}, but it did not connect: ${reason(e)}`);
+      }
+    }
+    setBusy(null);
+    void refresh();
+  };
+
   return {
     servers,
+    approvals,
     busy,
     loadError,
     actionError,
     toggle: (server) => void toggle(server),
     setToolEnabled: (serverName, tool, enabled) =>
       void setToolEnabled(serverName, tool, enabled),
+    setApproval: (serverName, approved) => void setApproval(serverName, approved),
   };
 }

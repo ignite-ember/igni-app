@@ -65,8 +65,15 @@ export class MirrorEventRouter {
   private onUserMessage(m: UserMessageReceived): void {
     const { view, client } = this.deps;
     if (!m.extension_id && m.client_id === client.clientId) return;
-    view.append(view.chatItems.user(m.text, m.extension_id || undefined));
-    if (m.queued) view.info(QUEUED_NOTE);
+    const ext = m.extension_id || undefined;
+    if (m.queued) {
+      view.append(view.chatItems.queuedUser(m.text, ext));
+      view.append(view.chatItems.queuedNote(QUEUED_NOTE));
+    } else {
+      // It runs now, so nothing is still waiting its turn.
+      view.update((t) => t.settleQueued());
+      view.append(view.chatItems.user(m.text, ext));
+    }
   }
 
   private onPush(m: PushNotification): void {

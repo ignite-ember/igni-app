@@ -28,8 +28,7 @@ test.describe("connection lifecycle", () => {
       "data-placeholder",
       /Message (Ember|igni)/,
     );
-    // FE issues several RPCs on attach — at minimum get_session_id
-    // (or attach_session) + count_context_tokens + get_status. We
+    // FE issues several RPCs on attach — at minimum attach_session + count_context_tokens + get_status. We
     // just check the connection landed; the exact RPC list is an
     // implementation detail that shifts as the app evolves.
     await expect.poll(() => backend.clientCount()).toBe(1);
@@ -73,9 +72,9 @@ test.describe("the composer waits for the window's session", () => {
     // the composer must not offer itself in the meantime.
     let bind: () => void = () => {};
     const bound = new Promise<void>((resolve) => (bind = resolve));
-    backend.onRpc("get_session_id", async () => {
+    backend.onRpc("attach_session", async () => {
       await bound;
-      return "test-session-001";
+      return { session_id: "test-session-001", project_dir: "/tmp/test-project" };
     });
 
     await page.goto(appUrl);
@@ -83,7 +82,7 @@ test.describe("the composer waits for the window's session", () => {
     const editor = page.locator(".composer-editable");
     // Long enough for every RPC before the binding to have answered.
     await expect
-      .poll(() => backend.received().some((m) => m.method === "get_session_id"))
+      .poll(() => backend.received().some((m) => m.method === "attach_session"))
       .toBe(true);
     await page.waitForTimeout(500);
     await expect(editor).toHaveAttribute("data-placeholder", /Connecting/);
@@ -215,7 +214,7 @@ test.describe("push notifications", () => {
     baseURL,
   }) => {
     // Drives the FE-side composition of the multi-session contract:
-    // each tab binds to its own ``session_id`` via ``get_session_id``;
+    // each tab binds to its own ``session_id`` via ``attach_session``;
     // every inbound broadcast is filtered by the FE's WS client
     // (``protocol/client.ts`` ~ line 430) so a tab only renders events
     // stamped for *its* session. Catches a class of "session-id drift"
@@ -223,14 +222,14 @@ test.describe("push notifications", () => {
     // attach, or the filter accidentally matching empty stamps.
     //
     // We rely on the existing fixture (one WS server, broadcasts to
-    // all attached clients) and override ``get_session_id`` to hand
+    // all attached clients) and override ``attach_session`` to hand
     // out distinct ids per connection.
     const handed: string[] = [];
     const POOL = ["sess-alpha", "sess-beta"];
-    backend.onRpc("get_session_id", () => {
+    backend.onRpc("attach_session", () => {
       const id = POOL[handed.length] ?? POOL[POOL.length - 1];
       handed.push(id);
-      return id;
+      return { session_id: id, project_dir: "/tmp/test-project" };
     });
     // Initial composer-model text differs per page only because the
     // session-stamped pushes below land. The fixture's default
@@ -247,7 +246,7 @@ test.describe("push notifications", () => {
 
     // Each page in its own browser context → independent
     // localStorage / IndexedDB → independent ``client_id``, so they
-    // both hit ``get_session_id`` fresh (no leaked SESSION_KEY).
+    // both hit ``attach_session`` fresh (no leaked SESSION_KEY).
     // Fresh contexts get no inherited ``baseURL``; pass it explicitly
     // so the ``?ws=…`` relative path resolves to the dev server.
     const ctxA = await browser.newContext({ baseURL });
@@ -328,7 +327,7 @@ test.describe("push notifications", () => {
     // every event for "shared" must paint on BOTH. Catches the
     // opposite-of-isolation regression — a stamping rule that
     // accidentally drops valid same-session events.
-    backend.onRpc("get_session_id", () => "shared-session");
+    backend.onRpc("attach_session", () => ({ session_id: "shared-session", project_dir: "/tmp/test-project" }));
     backend.onRpc("get_status", () =>
       signedInStatus({
         model: "initial-shared",
@@ -581,11 +580,11 @@ test.describe("session bootstrap", () => {
     backend,
     appUrl,
   }) => {
-    backend.onRpc("get_session_id", () => "fixture-sess-xyz");
+    backend.onRpc("attach_session", () => ({ session_id: "fixture-sess-xyz", project_dir: "/tmp/test-project" }));
     await page.goto(appUrl);
 
     // The composer becomes interactive once the session id is set
-    // (``chat/useSessionBinding.ts`` awaits ``get_session_id`` before letting the user
+    // (``chat/useSessionBinding.ts`` awaits ``attach_session`` before letting the user
     // type). If it never resolves we hang at "Connecting…".
     await expect(page.locator(".composer-editable")).toHaveAttribute(
       "data-placeholder",

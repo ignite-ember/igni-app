@@ -9,20 +9,32 @@
 # reverts the file icon to the system default — what users expect to
 # see on a download — without touching the app icon inside.
 #
-# Usage: strip-dmg-volume-icon.sh <path-to.dmg>
+# Given a second argument, the stapled .app, it also replaces the .app
+# inside the image with it. Tauri builds the .dmg before the release
+# job notarizes and staples the .app, so the .dmg's own copy carried no
+# ticket and a first launch offline could not pass Gatekeeper (R611);
+# the stapler writes the ticket into the bundle on disk, so the image
+# has to be given the stapled bundle.
+#
+# Usage: strip-dmg-volume-icon.sh <path-to.dmg> [<stapled.app>]
 #
 # macOS only. Idempotent: a .dmg without a custom icon is left alone.
 
 set -euo pipefail
 
-if [[ $# -ne 1 ]]; then
-  echo "usage: $0 <path-to.dmg>" >&2
+if [[ $# -lt 1 || $# -gt 2 ]]; then
+  echo "usage: $0 <path-to.dmg> [<stapled.app>]" >&2
   exit 2
 fi
 
 DMG="$1"
 if [[ ! -f "$DMG" ]]; then
   echo "error: $DMG does not exist" >&2
+  exit 2
+fi
+APP="${2:-}"
+if [[ -n "$APP" && ! -d "$APP" ]]; then
+  echo "error: $APP is not an app bundle" >&2
   exit 2
 fi
 
@@ -52,6 +64,18 @@ rm -f "$MOUNT_POINT/.VolumeIcon.icns"
 # Clear the custom-icon flag on the volume so Finder falls back to the
 # default disk image icon. Lowercase ``c`` clears; uppercase sets.
 SetFile -a c "$MOUNT_POINT" 2>/dev/null || true
+
+if [[ -n "$APP" ]]; then
+  INSIDE="$MOUNT_POINT/$(basename "$APP")"
+  if [[ ! -d "$INSIDE" ]]; then
+    echo "error: the image has no $(basename "$APP") to replace" >&2
+    exit 1
+  fi
+  rm -rf "$INSIDE"
+  # ditto keeps the bundle's symlinks, xattrs and the stapled ticket.
+  ditto "$APP" "$INSIDE"
+  echo "replaced $(basename "$APP") in $(basename "$DMG") with $APP"
+fi
 
 cleanup_mount
 trap 'rm -rf "$WORK"' EXIT

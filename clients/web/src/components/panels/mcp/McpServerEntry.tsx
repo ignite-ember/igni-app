@@ -2,6 +2,7 @@
 
 import { useState, type ReactNode } from "react";
 import { ChevronIcon } from "../../Icons";
+import type { McpApproval } from "./mcpApproval";
 import type { McpServer } from "./mcpServer";
 import { PromptRow, ResourceRow, ToolRow } from "./McpRows";
 
@@ -25,18 +26,66 @@ function Section({
   );
 }
 
+/** Approve or Revoke beside the connect button, by the server's
+ *  first-use approval; nothing for a server that needs none. */
+function ApprovalButton({
+  approval,
+  name,
+  busy,
+  onApprove,
+}: {
+  approval: McpApproval | undefined;
+  name: string;
+  busy: boolean;
+  onApprove: (approved: boolean) => void;
+}) {
+  if (approval?.waiting) {
+    return (
+      <button
+        className="btn btn-sm btn-primary"
+        disabled={busy}
+        aria-label={`Approve ${name}`}
+        onClick={() => onApprove(true)}
+      >
+        Approve
+      </button>
+    );
+  }
+  if (approval?.revocable) {
+    return (
+      <button
+        className="btn btn-sm"
+        disabled={busy}
+        aria-label={`Revoke the approval of ${name}`}
+        title="Withdraw the approval: the server is disconnected and does not connect again until approved"
+        onClick={() => onApprove(false)}
+      >
+        Revoke
+      </button>
+    );
+  }
+  return null;
+}
+
 export function McpServerEntry({
   server,
+  approval,
   busy,
   onToggle,
   onToolToggle,
+  onApprove,
 }: {
   server: McpServer;
+  /** Its first-use approval, when it needs one. */
+  approval?: McpApproval;
   busy: boolean;
   onToggle: () => void;
   onToolToggle: (tool: string, enabled: boolean) => void;
+  onApprove: (approved: boolean) => void;
 }) {
   const [open, setOpen] = useState(false);
+  // Refused until approved: no connecting, and the line says why.
+  const waiting = approval?.waiting === true && !server.connected;
   const heading = (
     <>
       <span className="name">
@@ -46,11 +95,11 @@ export function McpServerEntry({
           {server.expandable ? <ChevronIcon /> : null}
         </span>{" "}
         <span
-          className={`tool-status ${server.connected ? "done" : "error"}`}
+          className={`tool-status ${server.connected ? "done" : waiting ? "running mcp-waiting" : "error"}`}
         />{" "}
         {server.name} <span className="meta">· {server.transport}</span>
       </span>
-      <span className="meta">{server.status}</span>
+      <span className="meta">{waiting && approval ? approval.waitingStatus : server.status}</span>
     </>
   );
   return (
@@ -68,13 +117,18 @@ export function McpServerEntry({
         ) : (
           <div className="mcp-server-head">{heading}</div>
         )}
-        <button
-          className="btn btn-sm"
-          disabled={busy || server.policyBlocked}
-          onClick={onToggle}
-        >
-          {busy ? "…" : server.connected ? "Disconnect" : "Connect"}
-        </button>
+        <div className="mcp-server-actions">
+          <ApprovalButton approval={approval} name={server.name} busy={busy} onApprove={onApprove} />
+          {!waiting && (
+            <button
+              className="btn btn-sm"
+              disabled={busy || server.policyBlocked}
+              onClick={onToggle}
+            >
+              {busy ? "…" : server.connected ? "Disconnect" : "Connect"}
+            </button>
+          )}
+        </div>
       </div>
       {open && (
         <div className="mcp-server-body">

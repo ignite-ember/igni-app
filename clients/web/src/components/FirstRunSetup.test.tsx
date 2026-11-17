@@ -42,4 +42,17 @@ describe("FirstRunSetup", () => {
     expect(container.textContent).not.toContain("igni Cloud");
     expect(container.textContent).toContain("models.registry");
   });
+
+  it("does not offer a signed-in person another sign-in", () => {
+    // Signed in and still no model: "Sign in to your igni server" only
+    // opened a second sign-in dialog, which changed nothing (R639).
+    const onLogin = vi.fn();
+    const { container } = render(
+      <FirstRunSetup onLogin={onLogin} signedInAs="owner@acme.example" />,
+    );
+
+    expect(screen.queryByRole("button", { name: /sign in/i })).toBeNull();
+    expect(container.textContent).toContain("owner@acme.example");
+    expect(container.textContent).toContain("models.registry");
+  });
 });

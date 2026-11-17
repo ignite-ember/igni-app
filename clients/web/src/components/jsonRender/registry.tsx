@@ -6,6 +6,7 @@
 
 import { defineRegistry, type ComponentRegistry } from "@json-render/react";
 import { catalog } from "./catalog";
+import { guarded } from "./guarded";
 import { actionComponents } from "./components/actions";
 import { displayComponents } from "./components/display";
 import { feedbackComponents } from "./components/feedback";
@@ -13,13 +14,13 @@ import { inputComponents } from "./components/inputs";
 import { layoutComponents } from "./components/layout";
 
 export const { registry } = defineRegistry(catalog, {
-  components: {
+  components: guarded({
     ...layoutComponents,
     ...displayComponents,
     ...actionComponents,
     ...inputComponents,
     ...feedbackComponents,
-  },
+  }),
 });
 
 /** Rendered for a spec element whose type the catalog does not know.

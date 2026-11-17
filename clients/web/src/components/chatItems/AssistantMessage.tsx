@@ -7,8 +7,8 @@ import { ChatMarkdown } from "../markdown/ChatMarkdown";
 import type { InterruptedHandlers } from "./handlers";
 import { InterruptedBanner, type InterruptedActions } from "./InterruptedBanner";
 
-function bannerActions(itemId: number, handlers: InterruptedHandlers): InterruptedActions {
-  const bind = (handler?: (id: number) => void) => (handler ? () => handler(itemId) : undefined);
+function bannerActions(item: AssistantItem, handlers: InterruptedHandlers): InterruptedActions {
+  const bind = (handler?: (id: number) => void) => (handler ? () => handler(item.id) : undefined);
   return {
     retry: bind(handlers.retry),
     discard: bind(handlers.discard),
@@ -30,7 +30,7 @@ export const AssistantMessage = memo(function AssistantMessage({
         <ChatMarkdown text={item.text} />
       </div>
       {item.interrupted && (
-        <InterruptedBanner reason={item.interrupted} actions={bannerActions(item.id, handlers ?? {})} />
+        <InterruptedBanner reason={item.interrupted} actions={bannerActions(item, handlers ?? {})} />
       )}
     </div>
   );

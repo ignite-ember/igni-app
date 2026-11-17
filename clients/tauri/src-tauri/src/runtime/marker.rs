@@ -160,9 +160,9 @@ mod tests {
         .unwrap();
         assert_eq!(marker.read().ignite.as_deref(), Some("1.0.3"));
         marker
-            .write(&ComponentVersions::of("0.5.7", "3.12", "1.0.4"))
+            .write(&ComponentVersions::of("0.5.7", "3.12", "1.0.5"))
             .unwrap();
-        assert_eq!(marker.read().ignite.as_deref(), Some("1.0.4"));
+        assert_eq!(marker.read().ignite.as_deref(), Some("1.0.5"));
         fs::remove_dir_all(&dir).unwrap();
     }
 }

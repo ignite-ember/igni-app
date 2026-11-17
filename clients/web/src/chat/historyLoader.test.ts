@@ -33,6 +33,25 @@ describe("HistoryLoader", () => {
     expect(load.historyMap).toEqual([0, 1, -1, 2]);
   });
 
+  it("puts a team card back after the spawn call it came from (R665)", async () => {
+    const load = await loader({
+      get_chat_history: [
+        { role: "user", content: "build it", run_id: "r1" },
+        { role: "tool", tool_name: "spawn_team", content: "done", run_id: "r1" },
+        {
+          role: "team",
+          run_id: "r1",
+          card_id: "c1",
+          events: [{ type: "agent_started", card_id: "c1", agent_path: "root", agent: "lead" }],
+        },
+        { role: "assistant", content: "built", run_id: "r1" },
+      ],
+      get_pending_messages: [],
+    }).load("s1");
+    expect(load.items.map((i) => i.kind)).toEqual(["user", "tool", "orchestrate", "assistant"]);
+    expect(load.historyMap).toEqual([0, 1, 2, 3]);
+  });
+
   it("does not stamp a user message without a run", async () => {
     const load = await loader({ get_chat_history: [{ role: "user", content: "hi" }] }).load("s1");
     expect(load.items[0]).not.toHaveProperty("persisted");
@@ -43,9 +62,23 @@ describe("HistoryLoader", () => {
       get_chat_history: new Error("no session"),
       get_pending_messages: [{ content: "one" }, { content: "two" }],
     }).load("s1");
-    expect(load.items.map((i) => i.kind)).toEqual(["user", "user", "info"]);
+    expect(load.items.map((i) => i.kind)).toEqual(["user", "user", "info", "assistant"]);
     expect(load.items[2]).toMatchObject({ text: expect.stringMatching(/^2 messages above were interrupted/) });
     expect(load.historyMap).toEqual([]);
+  });
+
+  it("ends a crash's restored prompts with the recovery banner (R652)", async () => {
+    const load = await loader({
+      get_chat_history: [],
+      get_pending_messages: [{ content: "draw a lighthouse", message_id: "m-7", received_at: 1 }],
+    }).load("s1");
+    expect(load.items[0]).toMatchObject({
+      kind: "user",
+      text: "draw a lighthouse",
+      restored: true,
+      pendingMessageId: "m-7",
+    });
+    expect(load.items.at(-1)).toMatchObject({ kind: "assistant", interrupted: "abandoned", restored: true });
   });
 
   it("is empty when the backend has nothing, or fails", async () => {

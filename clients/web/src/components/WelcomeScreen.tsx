@@ -44,18 +44,24 @@ export function WelcomeScreen({
           <h1>{groupName}</h1>
           <p>Your AI coding agent, in this project.</p>
           {status && !status.model_configured ? (
-            <FirstRunSetup onLogin={onLogin} />
+            <FirstRunSetup onLogin={onLogin} signedInAs={status.cloud_email ?? ""} />
           ) : null}
           <div className="welcome-caps">
+            {/* Buttons, so a keyboard reaches them. As clickable divs
+                the welcome screen had nothing focusable once a signed-in
+                person was no longer offered "Sign in" (R639), and axe
+                failed its scrollable region (scrollable-region-focusable,
+                R683's spec). */}
             {WELCOME_CAPS.map(({ command, desc }) => (
-              <div
+              <button
+                type="button"
                 key={command}
                 className="welcome-cap"
                 onClick={() => onCommand(command)}
               >
                 <code>{command}</code>
                 <span>{desc}</span>
-              </div>
+              </button>
             ))}
           </div>
           <p className="welcome-hint">

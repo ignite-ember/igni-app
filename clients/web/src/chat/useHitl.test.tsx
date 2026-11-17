@@ -60,6 +60,13 @@ describe("useHitl", () => {
     expect(e.defaultPrevented).toBe(false);
   });
 
+  it("a pause re-sent after an attach replaces the open approvals rather than adding a dialog", () => {
+    const { hook } = mount("idle");
+    act(() => hook.result.current.requests.show(REQUESTS));
+    act(() => hook.result.current.requests.show(REQUESTS));
+    expect(hook.result.current.pending?.map((r) => r.requirement_id)).toEqual(["q1", "q2"]);
+  });
+
   it("drops one approval another view answered, and closes when none is left", () => {
     const { hook } = mount();
     act(() => hook.result.current.requests.show(REQUESTS));

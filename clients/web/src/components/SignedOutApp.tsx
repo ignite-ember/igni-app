@@ -31,6 +31,7 @@ export function SignedOutApp({
       {panel?.kind === "login" && (
         <LoginDialog
           client={client}
+          overWall
           onClose={onClosePanel}
           // The wall is gated on ``status.cloud_email``; asked for
           // rather than waited on, so the app opens as soon as it can.

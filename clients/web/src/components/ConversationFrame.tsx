@@ -30,6 +30,9 @@ export function ConversationFrame({
       {/* See `.sr-only` in theme.css: the level message content
           sits under, so a heading the model wrote cannot skip from
           the page down to an h3. F138. */}
+      {/* The welcome screen's heading is the page's <h1>; once the
+          transcript replaces it the window had none. R683. */}
+      {items.length > 0 && <h1 className="sr-only">{groupName}</h1>}
       <h2 className="sr-only">Conversation</h2>
       {items.length === 0 ? (
         <WelcomeScreen

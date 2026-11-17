@@ -3,6 +3,9 @@ import { parseHistoryTurn, type StatsTurn } from "../protocol/historyTurns";
 import { ChatItemFactory } from "./chatItemFactory";
 import { ChatItemIds } from "./chatItemIds";
 import { HistoryTurnMapper } from "./historyTurnMapper";
+import { parseOrchestrateEvent } from "../protocol/orchestrateEvents";
+import { parseWorkflowEvent } from "../protocol/workflowEvents";
+import { ChatTranscript } from "./chatTranscript";
 
 let history: HistoryTurnMapper;
 beforeEach(() => {
@@ -118,6 +121,19 @@ describe("HistoryTurnMapper#map", () => {
     if (item?.kind === "tool") {
       expect(item.result).toContain("drwxr-xr-x");
     }
+  });
+
+  it("restores a tool turn's output without the model-facing wrapper", () => {
+    const item = restoredItem({
+      role: "tool",
+      tool_name: "run_shell_command",
+      friendly_name: "Bash",
+      args: "command=ls",
+      content: "<untrusted_tool_output nonce=0f0f>\na.txt\n</untrusted_tool_output nonce=0f0f>",
+      is_error: false,
+      run_id: "r1",
+    });
+    expect(item?.kind === "tool" && item.result).toBe("a.txt");
   });
 
   it("marks restored tool turns with tool_call_error as error", () => {
@@ -306,3 +322,115 @@ describe("a message an extension posted", () => {
   });
 });
 
+
+describe("HistoryTurnMapper: a team turn (R665)", () => {
+  const EVENTS = [
+    { type: "agent_started", card_id: "c1", agent_path: "root", agent: "lead", parent: null, task: "plan it" },
+    { type: "agent_started", card_id: "c1", agent_path: "root.coder", agent: "coder", parent: "root" },
+    { type: "tool_started", card_id: "c1", agent_path: "root.coder", tool: "write_file", tool_call_id: "x1", args: "{}" },
+    { type: "tool_completed", card_id: "c1", agent_path: "root.coder", tool: "write_file", tool_call_id: "x1", result: "ok" },
+    { type: "task_created", card_id: "c1", agent_path: "root", title: "write it", assignee: "coder" },
+    { type: "agent_completed", card_id: "c1", agent_path: "root.coder", input_tokens: 10, output_tokens: 5 },
+    { type: "agent_completed", card_id: "c1", agent_path: "root", input_tokens: 20, output_tokens: 7 },
+  ];
+
+  it("draws the card the live pushes drew, settled", () => {
+    let live = new ChatTranscript([], new ChatItemFactory(new ChatItemIds()));
+    for (const raw of EVENTS) live = live.applyOrchestrateEvent(parseOrchestrateEvent(raw)!);
+    const liveCard = live.items[0];
+
+    const card = new HistoryTurnMapper(new ChatItemFactory(new ChatItemIds())).map(
+      parseHistoryTurn({ role: "team", run_id: "r1", card_id: "c1", tool_call_id: "t1", events: EVENTS }),
+    );
+    expect(card).toMatchObject({ kind: "orchestrate", cardId: "c1", streaming: false });
+    if (card?.kind !== "orchestrate" || liveCard.kind !== "orchestrate") throw new Error("no card");
+    expect(card.order).toEqual(["root", "root.coder"]);
+    // Item ids are local counters, numbered in a different order here.
+    const withoutIds = (agents: typeof card.agents) =>
+      Object.values(agents).map((a) => ({ ...a, tools: a.tools.map(({ id: _id, ...t }) => t) }));
+    expect(withoutIds(card.agents)).toEqual(withoutIds(liveCard.agents));
+    expect(card.agents["root.coder"]).toMatchObject({ status: "done" });
+  });
+
+  it("is no card when none of its events can be read", () => {
+    expect(restoredItem({ role: "team", card_id: "c1", events: [{ type: "visualization_delta" }] })).toBeNull();
+  });
+});
+
+
+describe("HistoryTurnMapper: a workflow turn (R664)", () => {
+  /** The run's ``workflow_event`` records, as the backend keeps them. */
+  const EVENTS = [
+    {
+      workflow_run_id: "wf_1",
+      name: "file-facts",
+      ts: 1000,
+      seq: 0,
+      type: "workflow_started",
+      payload: { name: "file-facts", args: {} },
+    },
+    {
+      workflow_run_id: "wf_1",
+      name: "file-facts",
+      ts: 1100,
+      seq: 1,
+      type: "phase_started",
+      payload: { phase_id: "p1", title: "Read the files" },
+    },
+    {
+      workflow_run_id: "wf_1",
+      name: "file-facts",
+      ts: 1200,
+      seq: 2,
+      type: "agent_started",
+      payload: { id: "a1", label: "calc.py" },
+    },
+    {
+      workflow_run_id: "wf_1",
+      name: "file-facts",
+      ts: 1300,
+      seq: 3,
+      type: "agent_completed",
+      payload: { id: "a1", status: "completed", result: "ok" },
+    },
+    {
+      workflow_run_id: "wf_1",
+      name: "file-facts",
+      ts: 1400,
+      seq: 4,
+      type: "workflow_completed",
+      payload: { status: "completed", result: "done" },
+    },
+  ];
+
+  it("draws the card the live pushes drew, settled", () => {
+    let live = new ChatTranscript([], new ChatItemFactory(new ChatItemIds()));
+    for (const raw of EVENTS) live = live.applyWorkflowEvent(parseWorkflowEvent(raw)!);
+    const liveCard = live.items[0];
+
+    const card = new HistoryTurnMapper(new ChatItemFactory(new ChatItemIds())).map(
+      parseHistoryTurn({
+        role: "workflow",
+        run_id: "",
+        workflow_run_id: "wf_1",
+        name: "file-facts",
+        events: EVENTS,
+      }),
+    );
+    expect(card).toMatchObject({ kind: "workflow" });
+    if (card?.kind !== "workflow" || liveCard.kind !== "workflow") throw new Error("no card");
+    expect(card.run).toEqual(liveCard.run);
+    expect(card.run.status).toBe("completed");
+    expect(card.run.phases[0]?.agents[0]).toMatchObject({ label: "calc.py", status: "completed" });
+  });
+
+  it("is no card when none of its events can be read", () => {
+    expect(
+      restoredItem({ role: "workflow", workflow_run_id: "wf_1", events: [{ type: "log" }] }),
+    ).toBeNull();
+  });
+
+  it("is no card when the run has no events at all", () => {
+    expect(restoredItem({ role: "workflow", workflow_run_id: "wf_1", events: [] })).toBeNull();
+  });
+});

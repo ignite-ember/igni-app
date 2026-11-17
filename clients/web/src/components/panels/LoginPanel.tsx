@@ -9,9 +9,18 @@ import { WirePayload } from "../../protocol/wirePayload";
 export function LoginPanel({
   client,
   onDone,
+  onCancel,
+  overWall = false,
 }: {
   client: IgniClient;
   onDone: (success: boolean, detail: string) => void;
+  /** The person chose Cancel. Not a failure: nothing went wrong, so it
+   *  must not be reported as "Login failed" in the conversation. */
+  onCancel: () => void;
+  /** Drawn over the sign-in wall, which sits above the ordinary overlay
+   *  layer: without this the dialog (its fallback URL and its Cancel)
+   *  was hidden behind the wall it was opened from. */
+  overWall?: boolean;
 }) {
   const [statusText, setStatusText] = useState("Starting login…");
 
@@ -31,7 +40,7 @@ export function LoginPanel({
   }, []);
 
   return (
-    <div className="overlay">
+    <div className={overWall ? "overlay overlay--over-wall" : "overlay"}>
       <div className="dialog">
         <div className="dialog-title">Sign in to your igni server</div>
         <div className="dialog-sub" style={{ whiteSpace: "pre-wrap" }}>
@@ -42,7 +51,7 @@ export function LoginPanel({
             className="btn btn-danger"
             onClick={() => {
               client.cancelLogin();
-              onDone(false, "cancelled");
+              onCancel();
             }}
           >
             Cancel

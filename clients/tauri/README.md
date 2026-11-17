@@ -10,6 +10,44 @@ Thin native shell around the shared web UI (`clients/web`). On launch it:
 The backend is killed on app exit and also self-terminates if the app
 dies (IGNI_PARENT_PID watchdog).
 
+## igni:// links
+
+The app registers the `igni` URL scheme. A link
+
+```
+igni://open?open=<page kind>&<key>=<value>…
+```
+
+opens the app, or brings its window forward, on that extension page at
+that location. The query is the web client's shareable link
+(`?open=<page kind>&…`, what its address bar shows), read by the same
+code with the same rules: the page kind must look like one, a page gets
+at most 16 string params (keys up to 64 characters, values up to 512),
+igni's own parameters (`ws`, `host`, `dir`, …) are never a page's, a link
+longer than 2048 characters is refused, and a page that is not installed
+opens the chat. The shell checks only the scheme and the length
+(`src-tauri/src/deep_link.rs`); the window decides what the link opens
+(`clients/web/src/chat/arrival.ts`, `Arrivals.fromDeepLink`).
+`clients/web/src/chat/deepLinks.cases.json` is the table both are
+tested against.
+
+The bundle registers the scheme from `plugins.deep-link` in
+`tauri.conf.json`: `CFBundleURLTypes` in the macOS `Info.plist`, a
+registry entry written by the Windows installer, and
+`MimeType=x-scheme-handler/igni` in the Linux `.desktop` file. On Windows
+and Linux the OS starts a second process for a followed link;
+`tauri-plugin-single-instance` hands the URL to the running app instead.
+A link followed before the app has loaded is held and opened once it has,
+after sign-in.
+
+Manual check (an installed bundle, since `cargo run` registers nothing on
+macOS): `open 'igni://open?open=plugins'` on macOS,
+`xdg-open 'igni://open?open=plugins'` on Linux,
+`start igni://open?open=plugins` on Windows. With the app closed it opens
+on the Plugins page; with it open and in the background, the window comes
+forward on the Plugins page; `igni://open?open=no.such.page` opens the
+chat.
+
 ## Prerequisites
 
 - Rust toolchain (`rustup`), see https://v2.tauri.app/start/prerequisites/

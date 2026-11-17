@@ -7,7 +7,6 @@
 
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::process::Command;
 
 use crate::update_policy::UpdatePolicy;
 
@@ -91,8 +90,12 @@ impl ManagedRuntime {
         Uv::in_dir(&self.root)
     }
 
-    /// Wipe the cache so the next bootstrap re-downloads everything. Wired
-    /// to the "Reinstall Backend (Clean)" menu item.
+    /// Wipe igni's cache — uv, the venv, the install marker and the decision
+    /// model — so the next bootstrap rebuilds them. Wired to the "Reinstall
+    /// Backend (Clean)" menu item. uv's own package cache and the CPython it
+    /// installed live in uv's directories, shared with whatever else uses
+    /// uv, so they stay and the rebuild reuses them rather than downloading
+    /// again.
     pub fn reset(&self) -> Result<(), String> {
         if self.root.exists() {
             fs::remove_dir_all(&self.root)
@@ -247,7 +250,7 @@ impl ManagedRuntime {
     /// the model already in `HF_HOME` it only loads it.
     fn prefetch_model(&self, progress: ProgressFn) -> Result<(), String> {
         progress("Checking igni's decision model (~1.7 GB on first install)…");
-        let status = Command::new(self.venv_python())
+        let status = super::host_command(self.venv_python())
             .args(["-m", "igni_core.prefetch_models"])
             .env("HF_HOME", self.hf_home())
             .status()

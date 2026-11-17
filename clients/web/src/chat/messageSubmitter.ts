@@ -54,11 +54,20 @@ export class MessageSubmitter {
    *  context block, the bubble shows what was typed. */
   private async sendMessage(text: string): Promise<void> {
     const { client, view, run, streamer } = this.deps;
-    view.append(view.chatItems.user(text));
     if (isProcessing(run.runPhaseRef.current)) {
+      // Below the running reply until its own run starts (R645).
+      view.append(view.chatItems.queuedUser(text));
+      view.append(view.chatItems.queuedNote(QUEUED_NOTE));
       client.queueMessage(text);
-      view.info(QUEUED_NOTE);
       return;
+    }
+    // Nothing runs now, so nothing is still waiting its turn.
+    view.update((t) => t.settleQueued());
+    view.append(view.chatItems.user(text));
+    // A new message is the person going on past a crash: the
+    // restored prompts' banner has done its job.
+    if (view.current().items.some((it) => it.kind === "assistant" && it.restored)) {
+      view.edit((items) => items.filter((it) => !(it.kind === "assistant" && it.restored)));
     }
     const continued = buildContinuedPrompt(view.current().items, text);
     if (continued.clearIndex >= 0) {

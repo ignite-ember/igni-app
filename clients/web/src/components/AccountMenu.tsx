@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import type { IgniClient } from "../protocol/client";
 import type { StatusUpdate } from "../protocol/messages";
@@ -43,9 +43,30 @@ export function AccountMenu({
       });
   }, [accountMenu, client]);
 
+  // Escape dismisses the menu, like the backdrop click, and puts focus
+  // back on the chip that opened it (R683).
+  const chipRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (!accountMenu) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      e.stopPropagation();
+      setAccountMenu(false);
+      chipRef.current?.focus();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [accountMenu]);
+
   return (
     <>
-      <AccountChip status={status} name={accountName} onLogIn={onLogIn} onOpenAccount={toggle} />
+      <AccountChip
+        status={status}
+        name={accountName}
+        onLogIn={onLogIn}
+        onOpenAccount={toggle}
+        buttonRef={chipRef}
+      />
       {accountMenu && (
         <>
           <div className="account-menu-backdrop" onClick={() => setAccountMenu(false)} />

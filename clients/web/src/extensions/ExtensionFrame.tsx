@@ -127,8 +127,12 @@ export interface ExtensionFrameProps {
    * `caller` — and the backend answers for the service recorded on
    * that extension's origin. Nothing the frame sends names an
    * audience. Absent, every request is refused here.
+   *
+   * `refresh` is true when the guest asks again after its service
+   * answered `401`: the backend then mints a new token instead of
+   * answering from its cache with the one the service refused.
    */
-  onServiceToken?: () => Promise<{
+  onServiceToken?: (options: { refresh: boolean }) => Promise<{
     ok: boolean;
     token?: string;
     expiresIn?: number;
@@ -280,7 +284,8 @@ export function ExtensionFrame({
           refuse("this window does not fetch service tokens");
           return;
         }
-        void tokenFor().then(
+        const refresh = "refresh" in message && message.refresh === true;
+        void tokenFor({ refresh }).then(
           (reply) =>
             post({
               igni: BRIDGE_VERSION,
@@ -356,6 +361,9 @@ export function ExtensionFrame({
         return;
       }
       if (message.kind === "location") {
+        // The frame already knows where it is: when the host folds this
+        // into the params it hands back, that is not news to post.
+        if (located) delivered.current = { ...message.state };
         located?.(message.state);
         return;
       }
@@ -422,12 +430,17 @@ export function ExtensionFrame({
   // Mirrored so `onLoad` can read the queue without taking it as a
   // dependency and rebuilding the greeting on every signal.
   const queuedSignals = useRef<NonNullable<ExtensionFrameProps["signals"]>>([]);
+  /** The tokens last posted (serialised), so a host attribute change
+   *  that moved none of them sends nothing. */
+  const sentTokens = useRef<string | null>(null);
   queuedSignals.current = signals ?? [];
 
   // The frame cannot be spoken to until it has loaded, and it cannot
   // do anything until it has the nonce, so `hello` goes on load.
   const onLoad = useCallback(() => {
     const sent = params ?? {};
+    const tokens = readThemeTokens();
+    sentTokens.current = JSON.stringify(tokens);
     delivered.current = sent;
     const waitingSignals = queuedSignals.current;
     signalsUpTo.current =
@@ -446,7 +459,7 @@ export function ExtensionFrame({
       // Read at send time, not at render time: a token defined in a
       // media query resolves to what the user is actually looking at
       // only once the document has settled.
-      tokens: readThemeTokens(),
+      tokens,
     });
   }, [extensionId, nonce, params, post, serviceUrl, settings, theme]);
 
@@ -499,12 +512,33 @@ export function ExtensionFrame({
   // than a reload: a panel that reloaded every time the user flipped
   // to light mode would lose whatever they were in the middle of.
   useEffect(() => {
+    const tokens = readThemeTokens();
+    sentTokens.current = JSON.stringify(tokens);
     post({
       igni: BRIDGE_VERSION,
       kind: "theme",
       theme,
-      tokens: readThemeTokens(),
+      tokens,
     });
+  }, [post, theme]);
+
+  // A group's branding changes no theme string: it lands as inline
+  // custom properties on <html> (`applyTheme`), so the effect above
+  // never ran for it and a re-branded host kept an open frame in the
+  // old colours until the next dark/light flip. Watch the root's
+  // attributes and re-send whenever the published values moved.
+  useEffect(() => {
+    if (typeof MutationObserver === "undefined") return;
+    const observer = new MutationObserver(() => {
+      if (sentTokens.current === null) return;
+      const tokens = readThemeTokens();
+      const serial = JSON.stringify(tokens);
+      if (serial === sentTokens.current) return;
+      sentTokens.current = serial;
+      post({ igni: BRIDGE_VERSION, kind: "theme", theme, tokens });
+    });
+    observer.observe(document.documentElement, { attributes: true });
+    return () => observer.disconnect();
   }, [post, theme]);
 
   return (

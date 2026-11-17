@@ -1,7 +1,10 @@
 /** One background process in the watcher list: status, pid, elapsed
  *  time or exit code, its command and its latest line on a toggle
  *  button that opens or closes its log, and a Kill button beside it
- *  while it runs. The two buttons are siblings, never nested. */
+ *  while it runs. The two buttons are siblings, never nested.
+ *
+ *  The toggle is named by what it shows. A shorter aria-label left out
+ *  the visible 'exit …' and last line, which fails WCAG 2.5.3 (R683). */
 
 import type { ProcessRow } from "./processTable";
 
@@ -30,17 +33,18 @@ export function WatcherRow({
         type="button"
         className="watcher-row-toggle"
         aria-expanded={selected}
-        aria-label={`PID ${row.pid}: ${row.cmd}`}
         onClick={onToggle}
       >
         <span className="watcher-row-head">
           <span className={`watcher-status watcher-status--${state}`} aria-hidden="true" />
-          <span className="watcher-pid">PID {row.pid}</span>
+          {/* The spaces keep the parts apart in the accessible name; the
+              flex layout drops them visually. */}
+          <span className="watcher-pid">PID {row.pid}</span>{" "}
           <span className="watcher-elapsed">{row.statusLabel(now)}</span>
-        </span>
+        </span>{" "}
         <span className="watcher-cmd" title={row.cmd}>
           {row.cmd}
-        </span>
+        </span>{" "}
         {row.lastLine ? (
           <span className="watcher-lastline" title={row.lastLine}>
             {row.lastLine}

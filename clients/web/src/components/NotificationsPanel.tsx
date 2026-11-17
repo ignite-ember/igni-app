@@ -124,13 +124,16 @@ export function NotificationsPanel({
       {/* Dimmed rather than blocked. What is underneath is still the
           thing being worked on. */}
       <div className="notify-backdrop" onClick={onClose} />
-      <aside
+      {/* A <div>, not an <aside>: `role="dialog"` is not allowed on
+          <aside>, and its <header> then counted as the page's second
+          banner landmark. R683. */}
+      <div
         className="notify-panel"
         role="dialog"
         aria-label="Notifications"
         aria-modal="false"
       >
-        <header className="notify-head">
+        <div className="notify-head">
           <h2 className="notify-title">Notifications</h2>
           <span className="notify-count">
             {unread ? `${unread} unread` : "nothing unread"}
@@ -150,7 +153,7 @@ export function NotificationsPanel({
           <button className="icon-btn" title="Close (Esc)" onClick={onClose}>
             <CloseIcon />
           </button>
-        </header>
+        </div>
         <div className="notify-body">
           {failed && <p className="msg-error">{failed}</p>}
           <NotificationList
@@ -168,7 +171,7 @@ export function NotificationsPanel({
             }}
           />
         </div>
-      </aside>
+      </div>
     </>
   );
 }

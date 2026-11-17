@@ -6,6 +6,7 @@ import { BarChart } from "../charts/BarChart";
 import { CandlestickChart } from "../charts/CandlestickChart";
 import { ChartFrame } from "../charts/ChartFrame";
 import { LineChart } from "../charts/LineChart";
+import { rows } from "../charts/chartGeometry";
 import type { CatalogComponents } from "./catalogComponents";
 
 /** A table row's cells as display strings; null and undefined read as "". */
@@ -16,6 +17,15 @@ function cellText(row: unknown): Record<string, string> {
     out[k] = v == null ? "" : String(v);
   }
   return out;
+}
+
+/** A Table's ``columns`` or ``rows``, as a list or the reason it is not. */
+function listProp<T>(value: T[] | null | undefined, name: string): T[] {
+  try {
+    return rows(value);
+  } catch {
+    throw new Error(`its ${name} is not a list`);
+  }
 }
 
 /** A Metric's delta as its CSS tone, its direction glyph and its label. */
@@ -54,7 +64,8 @@ export const displayComponents: Pick<
   },
 
   Table: ({ props }) => {
-    const cols = props.columns;
+    const cols = listProp(props.columns, "columns");
+    const body = listProp(props.rows, "rows");
     return (
       <table className="jr-table">
         <thead>
@@ -67,7 +78,7 @@ export const displayComponents: Pick<
           </tr>
         </thead>
         <tbody>
-          {props.rows.map((row, i) => {
+          {body.map((row, i) => {
             const cells = cellText(row);
             return (
               <tr key={i}>

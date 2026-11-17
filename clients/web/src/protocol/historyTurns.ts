@@ -56,6 +56,15 @@ export interface VisualizationTurn extends TurnBase {
   extension_id: string;
 }
 
+/** A sub-agent's or a team's progress card: its ``orchestrate_event``
+ *  payloads in arrival order, placed after the spawn call it came from. */
+export interface TeamTurn extends TurnBase {
+  role: "team";
+  card_id: string;
+  tool_call_id: string;
+  events: unknown[];
+}
+
 /** One per completed top-level run. */
 export interface StatsTurn extends TurnBase {
   role: "stats";
@@ -63,6 +72,16 @@ export interface StatsTurn extends TurnBase {
   output_tokens: number;
   reasoning_tokens: number;
   duration: number;
+}
+
+/** A workflow run's card, as it was drawn during the run: the run's
+ *  ``workflow_event`` records, oldest first, so the card can be drawn
+ *  again from the tape. */
+export interface WorkflowTurn extends TurnBase {
+  role: "workflow";
+  workflow_run_id: string;
+  name: string;
+  events: unknown[];
 }
 
 /** A role this client does not render (``system``, anything newer). */
@@ -78,7 +97,9 @@ export type HistoryTurn =
   | ToolTurn
   | PlanTurn
   | VisualizationTurn
+  | TeamTurn
   | StatsTurn
+  | WorkflowTurn
   | UnknownTurn;
 
 type KnownTurn = Exclude<HistoryTurn, UnknownTurn>;
@@ -96,7 +117,21 @@ class HistoryTurnParser {
     tool: (run_id) => this.tool(run_id),
     plan: (run_id) => this.plan(run_id),
     visualization: (run_id) => this.visualization(run_id),
+    team: (run_id) => ({
+      role: "team",
+      run_id,
+      card_id: this.p.text("card_id"),
+      tool_call_id: this.p.text("tool_call_id"),
+      events: this.p.list("events"),
+    }),
     stats: (run_id) => this.stats(run_id),
+    workflow: (run_id) => ({
+      role: "workflow",
+      run_id,
+      workflow_run_id: this.p.text("workflow_run_id"),
+      name: this.p.text("name"),
+      events: this.p.list("events"),
+    }),
   };
 
   constructor(private readonly p: WirePayload) {}

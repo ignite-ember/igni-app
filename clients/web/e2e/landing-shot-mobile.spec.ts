@@ -36,8 +36,9 @@ test.use({ viewport: { width: 460, height: 660 }, deviceScaleFactor: 2 });
 
 const capture = "capture phone product shot";
 test(capture, { tag: "@manual" }, async ({ page, backend, appUrl }) => {
-  backend.onRpc("attach_session", () => ({
-    session_id: "sess-landing",
+  // A window with no folder of its own attaches the default session.
+  backend.onRpc("attach_session", (args) => ({
+    session_id: args.session_id || args.project_dir ? "sess-landing" : "a1f9c2e4",
     project_dir: PROJECT,
   }));
   backend.onRpc("get_session_id", () => "a1f9c2e4");

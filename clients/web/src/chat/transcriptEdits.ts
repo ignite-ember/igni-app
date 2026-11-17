@@ -11,7 +11,7 @@
 
 import type { WindowModel } from "../clientState";
 import type { IgniClient } from "../protocol/client";
-import { InterruptedRun, TruncateHistoryResult } from "../protocol/rpcResults";
+import { DiscardPendingResult, InterruptedRun, TruncateHistoryResult } from "../protocol/rpcResults";
 import type { UserItem } from "./chatItem";
 import type { RunStreamer } from "./runStreamer";
 import type { ShellPort } from "./shellPort";
@@ -42,7 +42,7 @@ export class TranscriptEdits {
 
   readonly retryInterrupted = async (assistantItemId: number): Promise<void> => {
     const prompt = this.promptOf(assistantItemId);
-    if (!prompt?.runId) return;
+    if (!prompt || (!prompt.runId && !prompt.restored)) return;
     const { view, streamer } = this.deps;
     // Snapshot before the trim, so the new run's events still route to
     // the live list.
@@ -58,6 +58,10 @@ export class TranscriptEdits {
   readonly discardInterrupted = async (assistantItemId: number): Promise<void> => {
     const prompt = this.promptOf(assistantItemId);
     if (!prompt) return;
+    if (prompt.restored) {
+      await this.discardRestored();
+      return;
+    }
     await this.truncateFrom(prompt);
     const sessionId = this.deps.windowModel.get("session");
     if (!prompt.runId || !sessionId) return;
@@ -79,6 +83,40 @@ export class TranscriptEdits {
     }
   };
 
+  /** The prompts a crash left pending, all above one banner: their
+   *  rows go first (``discard_pending_message``), then the prompts, the
+   *  note and the banner here. A refusal (a message that arrived under
+   *  a minute ago may still be running) or an unreachable backend keeps
+   *  them, and says why; a retry is harmless, as a discarded row
+   *  answers ``ok`` again. */
+  private async discardRestored(): Promise<void> {
+    const { client, view, windowModel } = this.deps;
+    const sessionId = windowModel.get("session");
+    const prompts = view
+      .current()
+      .items.filter((it): it is UserItem => it.kind === "user" && it.restored === true);
+    if (!sessionId || prompts.length === 0) return;
+    for (const prompt of prompts) {
+      if (!prompt.pendingMessageId) continue;
+      let error = "";
+      try {
+        error = DiscardPendingResult.parse(
+          await client.rpc<unknown>("discard_pending_message", {
+            session_id: sessionId,
+            message_id: prompt.pendingMessageId,
+          }),
+        ).error;
+      } catch (e) {
+        error = e instanceof Error ? e.message : String(e);
+      }
+      if (error) {
+        view.info(`Not discarded: ${error}`);
+        return;
+      }
+    }
+    await this.truncateFrom(prompts[0]);
+  }
+
   /** The trim, then the original prompt back in the composer. */
   readonly editPrompt = async (assistantItemId: number): Promise<void> => {
     const prompt = this.promptOf(assistantItemId);
@@ -96,7 +134,9 @@ export class TranscriptEdits {
    *  backend refused, and nothing was trimmed. */
   private async truncateFrom(target: UserItem): Promise<boolean> {
     const sessionId = this.deps.windowModel.get("session");
-    if (!target.runId || !sessionId) return false;
+    // A prompt restored after a crash has no run: it is trimmed here
+    // only, and the forced re-send supersedes the backend's row.
+    if (!sessionId || (!target.runId && !target.restored)) return false;
     const { view, client, shell } = this.deps;
     // A run cancelled or errored before it persisted is not in the
     // session: the RPC could only fail.

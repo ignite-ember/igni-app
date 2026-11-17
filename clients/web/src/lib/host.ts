@@ -81,7 +81,7 @@ declare global {
 }
 
 /** The native menu items the desktop shell routes to the web UI. */
-export const HOST_MENU_IDS = ["new_chat", "check_update", "restart_backend"] as const;
+export const HOST_MENU_IDS = ["new_chat", "check_update"] as const;
 export type HostMenuId = (typeof HOST_MENU_IDS)[number];
 
 /** The `igni-host` CustomEvent's detail: `{type, payload}`. */
@@ -93,6 +93,8 @@ interface HostMenuEvent {
 /** The window event the desktop shell dispatches its menu items on. */
 const HOST_EVENT = "igni-host";
 const HOST_MENU_TYPE = "igni:menu";
+/** The desktop shell was handed an `igni://` link for this window. */
+const HOST_OPEN_LINK_TYPE = "igni:open-link";
 
 /** Header descendants that keep their own click rather than dragging. */
 const DRAG_EXEMPT =
@@ -284,6 +286,34 @@ export class Host {
     };
     window.addEventListener(HOST_EVENT, listener);
     return () => window.removeEventListener(HOST_EVENT, listener);
+  }
+
+  /**
+   * Be told that the desktop shell has an `igni://` link waiting: one
+   * followed while the app was running. The link itself is fetched with
+   * `takeOpenLink`, so a window takes it once, whichever way it learnt.
+   */
+  onOpenLink(handler: () => void): () => void {
+    const listener = (e: Event) => {
+      const detail = (e as CustomEvent<{ type?: string } | null>).detail;
+      if (detail?.type === HOST_OPEN_LINK_TYPE) handler();
+    };
+    window.addEventListener(HOST_EVENT, listener);
+    return () => window.removeEventListener(HOST_EVENT, listener);
+  }
+
+  /** The `igni://` link the desktop shell is holding, taken (it is
+   *  given out once), or `null`: none, or not the desktop app. The
+   *  link is untrusted; `Arrivals.fromDeepLink` reads it. */
+  async takeOpenLink(): Promise<string | null> {
+    const invoke = window.__TAURI__?.core?.invoke;
+    if (!invoke) return null;
+    try {
+      const link = await invoke("igni_take_open_link");
+      return typeof link === "string" ? link : null;
+    } catch {
+      return null;
+    }
   }
 
   /** The desktop window's title, Finder-style: the project folder's

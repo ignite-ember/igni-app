@@ -50,6 +50,11 @@ export class PillEditor {
       node.childNodes.forEach(walk);
     };
     this.root.childNodes.forEach(walk);
+    // A contenteditable emptied by Backspace keeps a lone `<br>` so the
+    // line still has height. It is the browser's placeholder, not a line
+    // the person typed: read as "\n" it made an empty composer look
+    // multi-line, and ↑ would not recall history from it.
+    if (out === "\n" && this.root.textContent === "") return "";
     return out;
   }
 

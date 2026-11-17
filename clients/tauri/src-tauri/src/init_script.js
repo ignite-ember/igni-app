@@ -107,18 +107,34 @@ window.__IGNI_HOST__ = Object.assign(window.__IGNI_HOST__ || {}, {
   };
 })();
 
+// The shell sends menu, link and fullscreen events to one window
+// (events.rs ``ShellEvent::target``). A global ``event.listen`` hears
+// events sent to every window, so each window listens on its own.
+function listenHere(name, handler) {
+  const ww = window.__TAURI__.webviewWindow;
+  const here = ww && ww.getCurrentWebviewWindow ? ww.getCurrentWebviewWindow() : null;
+  return here ? here.listen(name, handler) : window.__TAURI__.event.listen(name, handler);
+}
+
 if (window.__TAURI__ && window.__TAURI__.event) {
-  window.__TAURI__.event.listen('igni-menu', (e) => {
+  listenHere('igni-menu', (e) => {
     const id = e && e.payload;
     if (typeof id !== 'string') return;
     window.dispatchEvent(new CustomEvent('igni-host', {
       detail: { type: 'igni:menu', payload: { id } }
     }));
   });
+  // An igni:// link is waiting for this window (deep_link.rs); the web
+  // UI takes it with ``igni_take_open_link``.
+  listenHere('igni-open-link', () => {
+    window.dispatchEvent(new CustomEvent('igni-host', {
+      detail: { type: 'igni:open-link' }
+    }));
+  });
   // Mirror native fullscreen state into a ``data-fullscreen`` attr
   // on ``<html>`` so CSS can collapse the header gutter when the
   // OS hides our traffic-light cluster behind the slide-down panel.
-  window.__TAURI__.event.listen('igni-fullscreen', (e) => {
+  listenHere('igni-fullscreen', (e) => {
     const on = !!(e && e.payload);
     document.documentElement.dataset.fullscreen = on ? 'true' : 'false';
   });

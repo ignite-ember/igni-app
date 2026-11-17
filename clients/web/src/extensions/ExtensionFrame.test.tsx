@@ -376,6 +376,45 @@ describe("following the host", () => {
     // middle of.
     expect(frame.getAttribute("src")).toBe(src);
   });
+
+  // A group's branding lands as inline custom properties on <html>
+  // (lib/theme.ts applyTheme) and changes no theme string, so a push
+  // keyed on the theme prop alone never carried it (R452).
+  it("re-sends the tokens when the host is re-branded under an open frame", async () => {
+    const root = document.documentElement;
+    try {
+      const { frame } = mount({ theme: "light" });
+      handshake(frame);
+      const before = repliesTo(frame).length;
+
+      root.style.setProperty("--igni-orange", "#ff1493");
+
+      await waitFor(() =>
+        expect(repliesTo(frame).slice(before)).toContainEqual(
+          expect.objectContaining({
+            kind: "theme",
+            theme: "light",
+            tokens: expect.objectContaining({ "--igni-orange": "#ff1493" }),
+          }),
+        ),
+      );
+    } finally {
+      root.style.removeProperty("--igni-orange");
+    }
+  });
+
+  it("does not re-send when a host attribute changes but no token does", async () => {
+    const { frame } = mount({ theme: "light" });
+    handshake(frame);
+    const before = repliesTo(frame).length;
+
+    document.documentElement.setAttribute("data-unrelated", "1");
+    await new Promise((r) => setTimeout(r, 0));
+    document.documentElement.removeAttribute("data-unrelated");
+    await new Promise((r) => setTimeout(r, 0));
+
+    expect(repliesTo(frame).slice(before)).toEqual([]);
+  });
 });
 
 describe("the host object model, from a frame", () => {
@@ -507,7 +546,20 @@ describe("the extension's own service, from a frame", () => {
         error: undefined,
       }),
     );
-    expect(onServiceToken).toHaveBeenCalledWith();
+    expect(onServiceToken).toHaveBeenCalledWith({ refresh: false });
+  });
+
+  it("passes the guest's refresh on, so a refused token is not handed back", async () => {
+    const onServiceToken = vi.fn(async () => ({ ok: true, token: "t2", expiresIn: 600 }));
+    const { frame } = mount({ onServiceToken });
+    const nonce = handshake(frame);
+    send(frame, { kind: "service-token", nonce, id: "s4", refresh: true });
+    await waitFor(() =>
+      expect(repliesTo(frame)).toContainEqual(
+        expect.objectContaining({ kind: "service-token-reply", id: "s4", ok: true }),
+      ),
+    );
+    expect(onServiceToken).toHaveBeenCalledWith({ refresh: true });
   });
 
   it("refuses when this window fetches no tokens", async () => {

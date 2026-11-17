@@ -144,3 +144,13 @@ describe("buildContinuedPrompt", () => {
     expect(result.text).not.toContain("completed");
   });
 });
+
+describe("buildContinuedPrompt: the banner under restored prompts (R652)", () => {
+  it("is not a partial to continue from", () => {
+    const items: ChatItem[] = [
+      userItem(1, "draw a lighthouse"),
+      { kind: "assistant", id: 2, text: "", interrupted: "abandoned", restored: true },
+    ];
+    expect(buildContinuedPrompt(items, "hello")).toEqual({ text: "hello", clearIndex: -1 });
+  });
+});

@@ -37,7 +37,7 @@ describe("the watcher panel", () => {
       return { output: "hello", is_running: true, exit_code: null };
     });
     render(<WatcherPanel client={client} onClose={() => {}} />);
-    const toggle = await screen.findByRole("button", { name: "PID 9: sleep 600" });
+    const toggle = await screen.findByRole("button", { name: /^PID 9 \S+ sleep 600$/ });
     expect(toggle.tagName).toBe("BUTTON");
     expect(toggle.contains(screen.getByRole("button", { name: /kill/i }))).toBe(false);
     expect(toggle.getAttribute("aria-expanded")).toBe("false");

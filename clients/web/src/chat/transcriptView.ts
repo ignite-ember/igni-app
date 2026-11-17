@@ -33,8 +33,9 @@ export class TranscriptView {
     return this.transcript(this.itemsRef.current);
   }
 
+  /** Through the transcript, so an item lands above any queued tail. */
   append(item: ChatItem): void {
-    this.setItems((prev) => [...prev, item]);
+    this.update((t) => t.append(item));
   }
 
   info(text: string): void {

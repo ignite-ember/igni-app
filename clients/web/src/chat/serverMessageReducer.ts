@@ -17,6 +17,7 @@ import type {
 import type { ChatItem, ToolItem, UserItem } from "./chatItem";
 import type { ChatTranscript } from "./chatTranscript";
 import { RunCompletion } from "./runCompletion";
+import { toolOutputForDisplay } from "./toolOutput";
 
 /** A message type with no handler (``model_completed`` among them:
  *  per-step totals re-count the whole context) leaves the transcript
@@ -64,7 +65,7 @@ export class ServerMessageReducer {
     return this.transcript.replaceAt(hit.index, {
       ...hit.item,
       status: msg.is_rejected ? "rejected" : msg.is_error ? "error" : "done",
-      result: msg.full_result || msg.summary,
+      result: toolOutputForDisplay(msg.full_result || msg.summary),
       isError: msg.is_error,
       diffRows: msg.diff_rows ?? null,
     });
@@ -83,18 +84,34 @@ export class ServerMessageReducer {
 
   /** A sub-agent run gets an inline marker unless a live orchestrate
    *  card already shows it. A top-level run stamps its id and start
-   *  time on the user message that has none yet. */
+   *  time on the user message that has none yet — a queued message's,
+   *  once its run is the one starting. */
   private onRunStarted(msg: RunStarted): ChatTranscript {
     const t = this.transcript;
     if (msg.parent_run_id) {
-      const last = t.items.at(-1);
+      const last = t.lastWhere(() => true)?.item;
       if (last?.kind === "orchestrate" && last.streaming) return t;
       return t.append(t.factory.agent(msg.agent_name));
     }
-    if (!msg.run_id) return t;
+    return this.stamp(this.queuedRunStarting(msg.run_id), msg.run_id);
+  }
+
+  /** A top-level run that is not the latest message's own (it has a
+   *  run, and this is a different one) is the queued message's: the
+   *  tail's first message joins the transcript. */
+  private queuedRunStarting(runId: string | undefined): ChatTranscript {
+    const t = this.transcript;
+    if (!runId || !t.hasQueued) return t;
+    const latest = t.lastWhere((it): it is UserItem => it.kind === "user");
+    if (latest && (!latest.item.runId || latest.item.runId === runId)) return t;
+    return t.startQueued();
+  }
+
+  private stamp(t: ChatTranscript, runId: string | undefined): ChatTranscript {
+    if (!runId) return t;
     const hit = t.lastWhere((it): it is UserItem => it.kind === "user" && !it.runId, true);
     if (!hit) return t;
-    return t.replaceAt(hit.index, { ...hit.item, runId: msg.run_id, startedAt: Date.now() });
+    return t.replaceAt(hit.index, { ...hit.item, runId, startedAt: Date.now() });
   }
 
   private onStreamingDone(msg: StreamingDone): ChatTranscript {

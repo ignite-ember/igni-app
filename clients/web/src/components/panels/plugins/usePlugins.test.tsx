@@ -51,6 +51,22 @@ describe("usePlugins", () => {
     expect(hook.result.current.catalog?.marketCount).toBe(0);
   });
 
+  it("installs a catalog plugin by its marketplace ref", async () => {
+    const api = fakeApi({
+      catalog: vi.fn(async () => ({
+        ok: true,
+        value: MarketplaceCatalog.parse([
+          { name: "official", plugins: [{ name: "commit-commands", source: "https://g/x [plugins/commit-commands]" }] },
+        ]),
+      })),
+    });
+    const hook = mount(api);
+    await waitFor(() => expect(hook.result.current.catalog?.pluginCount).toBe(1));
+    const plugin = hook.result.current.catalog!.entries()[0].plugin;
+    await act(async () => hook.result.current.installPlugin(plugin));
+    expect(api.install).toHaveBeenCalledWith("@official/commit-commands");
+  });
+
   it("marks one plugin busy while its toggle runs, then re-reads the lists", async () => {
     let finish: (r: ActionResult) => void = () => {};
     const api = fakeApi({ setEnabled: vi.fn(() => new Promise<ActionResult>((r) => (finish = r))) });

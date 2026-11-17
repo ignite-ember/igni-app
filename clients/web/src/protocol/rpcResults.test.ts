@@ -4,6 +4,7 @@ import {
   AttachSessionResult,
   CloudPlan,
   ContextTokenCount,
+  DiscardPendingResult,
   HostModelReply,
   InterruptedRun,
   ListExtensionsResult,
@@ -85,6 +86,14 @@ describe("RPC results the chat shell reads", () => {
     expect(ContextTokenCount.parse(1200)).toBe(1200);
     expect(ContextTokenCount.parse(0)).toBe(0);
     expect(ContextTokenCount.parse("12")).toBe(0);
+  });
+
+  it("reads discard_pending_message, a refusal always carrying a reason", () => {
+    expect(DiscardPendingResult.parse({ ok: true })).toEqual(new DiscardPendingResult(true, ""));
+    expect(DiscardPendingResult.parse({ ok: false, error: "try again in a minute" }).error).toBe(
+      "try again in a minute",
+    );
+    expect(DiscardPendingResult.parse(null)).toEqual(new DiscardPendingResult(false, "the backend kept it"));
   });
 
   it("reads truncate_history", () => {

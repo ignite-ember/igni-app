@@ -54,6 +54,18 @@ describe("what it draws", () => {
     expect(onCall).toHaveBeenCalledWith("ext.acme.scanner.indicator", {});
   });
 
+  it("asks for a source written already namespaced as the same tool", async () => {
+    // permissions.tools names tools as <id>.<tool>, and a manifest
+    // that wrote source that way got ext.<id>.<id>.<tool>, refused by
+    // the backend, and no chip (R292).
+    const { onCall } = draw(
+      { label: "fresh", tone: "success", detail: "" },
+      { source: "acme.scanner.indicator" },
+    );
+    await screen.findByText("fresh");
+    expect(onCall).toHaveBeenCalledWith("ext.acme.scanner.indicator", {});
+  });
+
   it("maps a tone to one of the four states the floor publishes", async () => {
     const { container } = draw({ label: "stale", tone: "warning", detail: "" });
     await screen.findByText("stale");

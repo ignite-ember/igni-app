@@ -352,9 +352,10 @@ jobs:
           fi
 
           # The .app inside the .dmg also needs to be the stapled
-          # version. Re-upload the DMG too; that happens in the
-          # existing "Strip DMG volume icon" step which re-builds
-          # and re-uploads via gh release upload --clobber.
+          # version: Tauri built the .dmg before this step stapled
+          # the .app. The "Strip DMG volume icon" step below puts the
+          # stapled .app into the .dmg, checks its ticket, and
+          # re-uploads via gh release upload --clobber.
 
           # Replace the .app.tar.gz that tauri-action uploaded with
           # the stapled version. tauri-bundler emits the tarball
@@ -481,6 +482,12 @@ jobs:
       # ``--clobber`` to replace what tauri-action just uploaded.
       # The .app.tar.gz updater payload (separately signed) is
       # untouched, so the auto-updater chain stays valid.
+      #
+      # It also puts the stapled .app into the .dmg. Tauri built the
+      # .dmg from the .app before "Notarize + staple" ran, so the
+      # .dmg's copy had no ticket, and a first launch offline could
+      # not pass Gatekeeper (R611). The ticket is checked inside the
+      # finished image before it is uploaded.
       - name: Strip DMG volume icon (macOS)
         if: matrix.platform == 'macos-26'
         env:
@@ -488,8 +495,19 @@ jobs:
         run: |
           set -euo pipefail
           shopt -s nullglob
+          APP=$(find clients/tauri/src-tauri/target -maxdepth 8 -path '*release/bundle/macos*' -name 'igni.app' -print -quit)
+          if [ -z "$APP" ]; then
+            echo "::error::igni.app not found"
+            exit 1
+          fi
+          xcrun stapler validate "$APP"
           for dmg in clients/tauri/src-tauri/target/*/release/bundle/dmg/*.dmg; do
-            clients/tauri/scripts/strip-dmg-volume-icon.sh "$dmg"
+            clients/tauri/scripts/strip-dmg-volume-icon.sh "$dmg" "$APP"
+            CHECK="$RUNNER_TEMP/dmg-check"
+            mkdir -p "$CHECK"
+            hdiutil attach -nobrowse -readonly -mountpoint "$CHECK" "$dmg" >/dev/null
+            xcrun stapler validate "$CHECK/igni.app"
+            hdiutil detach "$CHECK" -quiet
             gh release upload "${{ github.ref_name }}" "$dmg" --clobber
           done
 

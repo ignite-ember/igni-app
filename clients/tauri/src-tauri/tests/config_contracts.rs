@@ -32,10 +32,32 @@ fn capability_default_grants_opener_open_url() {
 }
 
 #[test]
+fn no_window_reaches_the_updater_plugin_directly() {
+    // `AppUpdater` is the only thing that builds an `Updater`, so the
+    // update policy (air_gapped, update_check_ttl, the managed file, a
+    // mirror) decides every request. `updater:default` handed any page
+    // script `plugin:updater|check` / `download_and_install`, which went
+    // to the compiled endpoint whatever the policy said (R628). The web
+    // UI asks through `igni_check_update` / `igni_install_update`.
+    let cap = json("capabilities/default.json");
+    let granted: Vec<String> = cap["permissions"]
+        .as_array()
+        .expect("permissions[] missing")
+        .iter()
+        .map(|p| match p {
+            serde_json::Value::String(s) => s.clone(),
+            other => other["identifier"].as_str().unwrap_or_default().to_owned(),
+        })
+        .collect();
+    let updater: Vec<&String> = granted.iter().filter(|p| p.starts_with("updater:")).collect();
+    assert!(updater.is_empty(), "a window is granted {updater:?}");
+}
+
+#[test]
 fn capability_default_applies_to_every_app_window() {
     // `main` is the launch window; New Window opens `w-2`, `w-3`, ... A
     // grant scoped to `main` alone left every other window without the
-    // opener, dialog, notification and updater bridges.
+    // opener, dialog and notification bridges.
     let cap = json("capabilities/default.json");
     let windows: Vec<&str> = cap["windows"]
         .as_array()
@@ -135,5 +157,51 @@ fn the_compiled_default_is_still_the_vendor_host() {
     assert!(
         conf.contains("\"pubkey\""),
         "the updater has no pubkey, so a mirror could serve any build it liked"
+    );
+}
+
+#[test]
+fn the_bundle_registers_the_igni_url_scheme() {
+    // `igni://open?open=<page>&...` links (src/deep_link.rs). The bundler
+    // turns this into CFBundleURLTypes on macOS, the installer's registry
+    // entry on Windows and x-scheme-handler/igni in the Linux .desktop
+    // file; without it the OS has nothing to hand a link to.
+    let conf = json("tauri.conf.json");
+    let schemes: Vec<&str> = conf["plugins"]["deep-link"]["desktop"]["schemes"]
+        .as_array()
+        .expect("plugins.deep-link.desktop.schemes[] missing")
+        .iter()
+        .filter_map(|s| s.as_str())
+        .collect();
+    assert_eq!(schemes, vec!["igni"]);
+}
+
+#[test]
+fn open_path_is_granted_with_a_scope() {
+    // `opener:allow-open-path` carries no scope of its own ("Enables the
+    // open_path command without any pre-configured scope"), so a bare grant
+    // refused every path: `__IGNI_HOST__.openFile` failed with "Not allowed
+    // to open path" and fell back to the in-app preview (R632). The grant
+    // must name the paths it allows.
+    let cap = json("capabilities/default.json");
+    let perms = cap["permissions"].as_array().expect("permissions[] missing");
+    assert!(
+        !perms.iter().any(|p| p.as_str() == Some("opener:allow-open-path")),
+        "opener:allow-open-path is granted without a scope"
+    );
+    let entry = perms
+        .iter()
+        .find(|p| p["identifier"].as_str() == Some("opener:allow-open-path"))
+        .expect("capabilities/default.json must grant opener:allow-open-path");
+    let allowed: Vec<&str> = entry["allow"]
+        .as_array()
+        .expect("opener:allow-open-path needs an allow[] scope")
+        .iter()
+        .filter_map(|e| e["path"].as_str())
+        .collect();
+    assert!(allowed.contains(&"$HOME/**"), "the scope must cover the home folder: {allowed:?}");
+    assert!(
+        !allowed.iter().any(|p| *p == "**" || *p == "/**"),
+        "the scope must not open every path on the disk: {allowed:?}"
     );
 }

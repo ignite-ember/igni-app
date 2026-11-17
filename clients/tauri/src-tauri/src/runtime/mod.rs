@@ -11,6 +11,7 @@
 //! ([`ProvisionedRuntime`]), else the managed cache ([`ManagedRuntime`]).
 
 mod dev_override;
+mod host_env;
 mod install_plan;
 mod interpreter;
 mod managed;
@@ -23,6 +24,7 @@ use std::path::PathBuf;
 use crate::desktop_settings::DesktopSettings;
 
 pub(crate) use dev_override::DevOverride;
+pub(crate) use host_env::host_command;
 pub(crate) use interpreter::{is_executable, probe_cli_version};
 pub(crate) use managed::ManagedRuntime;
 pub(crate) use provisioned::ProvisionedRuntime;

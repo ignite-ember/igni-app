@@ -54,8 +54,8 @@ describe("MessageSubmitter", () => {
     await s.submitter.submit("and then this");
     expect(s.client.queueMessage).toHaveBeenCalledWith("and then this");
     expect(s.t.items).toMatchObject([
-      { kind: "user", text: "and then this" },
-      { kind: "info", text: QUEUED_NOTE },
+      { kind: "user", text: "and then this", queued: true },
+      { kind: "info", text: QUEUED_NOTE, queued: true },
     ]);
     expect(s.streamer.send).not.toHaveBeenCalled();
   });
@@ -72,5 +72,16 @@ describe("MessageSubmitter", () => {
     expect(s.t.items.at(-1)).toMatchObject({ kind: "user", text: "continue" });
     // The partial is consumed once, not prepended to every later message.
     expect((s.t.items[1] as AssistantItem).interrupted).toBeUndefined();
+  });
+});
+
+describe("MessageSubmitter: past a crash (R652)", () => {
+  it("drops the restored prompts' banner and sends the message as typed", async () => {
+    const s = setup();
+    const banner: AssistantItem = { ...s.t.chatItems.assistant(""), interrupted: "abandoned", restored: true };
+    s.t.items = [{ ...s.t.chatItems.user("draw a lighthouse"), restored: true }, banner];
+    await s.submitter.submit("something else");
+    expect(s.t.items.some((it) => it.id === banner.id)).toBe(false);
+    expect(s.streamer.send).toHaveBeenCalledWith("something else");
   });
 });

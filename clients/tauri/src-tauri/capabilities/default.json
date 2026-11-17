@@ -8,11 +8,13 @@
     "core:window:allow-is-fullscreen",
     "core:window:allow-start-dragging",
     "dialog:allow-open",
-    "opener:allow-open-path",
+    {
+      "identifier": "opener:allow-open-path",
+      "allow": [{ "path": "$HOME/**" }]
+    },
     "opener:allow-open-url",
     "opener:allow-default-urls",
     "opener:allow-reveal-item-in-dir",
-    "notification:default",
-    "updater:default"
+    "notification:default"
   ]
 }

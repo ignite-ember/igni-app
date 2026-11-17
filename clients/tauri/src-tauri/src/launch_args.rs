@@ -2,6 +2,8 @@
 
 use std::path::{Path, PathBuf};
 
+use crate::deep_link::DeepLinks;
+
 /// The environment variable naming the project folder.
 const PROJECT_DIR_ENV: &str = "IGNI_PROJECT_DIR";
 /// Wipes the managed runtime before bootstrap, for a user who cannot
@@ -24,13 +26,14 @@ impl LaunchArgs {
         )
     }
 
-    /// The project folder, first signal wins: a positional argument, the
+    /// The project folder, first signal wins: a positional argument (not
+    /// an `igni://` link, which Windows and Linux pass the same way), the
     /// environment variable, a `.git` above `cwd` (`cargo tauri dev` runs
     /// from `src-tauri/`), then `~/Documents`, home, and `.`.
     pub fn resolve(args: &[String], env_dir: Option<String>, cwd: Option<PathBuf>) -> Self {
         let project_dir = args
             .iter()
-            .find(|a| !a.starts_with("--"))
+            .find(|a| !a.starts_with("--") && !DeepLinks::is_link_arg(a))
             .cloned()
             .or_else(|| {
                 env_dir
@@ -99,6 +102,18 @@ mod tests {
         );
         assert_eq!(got.project_dir(), "/work/repo");
         assert!(got.reinstall());
+    }
+
+    #[test]
+    fn a_followed_link_is_not_the_project_folder() {
+        let got = LaunchArgs::resolve(
+            &args(&["igni://open?open=acme.notes", "/work/repo"]),
+            None,
+            None,
+        );
+        assert_eq!(got.project_dir(), "/work/repo");
+        let got = LaunchArgs::resolve(&args(&["igni://open"]), Some("/env".into()), None);
+        assert_eq!(got.project_dir(), "/env");
     }
 
     #[test]

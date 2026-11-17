@@ -95,7 +95,7 @@ export function ProgramsPanel({
           <p className="programs-note">
             {revoked === 0
               ? "There were no approver tokens to revoke."
-              : `Revoked ${revoked} approver ${revoked === 1 ? "token" : "tokens"}. Programs already connected keep approving until they disconnect.`}
+              : `Revoked ${revoked} approver ${revoked === 1 ? "token" : "tokens"}. Programs connected with one were disconnected and can no longer approve.`}
           </p>
         )}
         <div className="programs-actions">

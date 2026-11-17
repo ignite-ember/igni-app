@@ -7,6 +7,11 @@ export interface SessionEntry {
   session_id: string;
   name: string;
   detail?: string;
+  /** True when this session has a run waiting for the person to answer
+   *  an approval. The backend sends it with ``list_sessions``; a
+   *  backend that does not send it says nothing, so no row claims to
+   *  be waiting. */
+  has_paused_run?: boolean;
 }
 
 export interface SidebarLink {
@@ -191,6 +196,20 @@ export function Sidebar({
               onClick={() => onPick(s.session_id)}
             >
               <span className="session-name">{s.name || s.session_id}</span>
+              {/* A run is waiting for an answer in this session. The
+                  marker sits inside the row, so picking the row is
+                  what reaches it: the row attaches the session, and
+                  the backend shows the approval again. */}
+              {s.has_paused_run && (
+                <span
+                  className="session-waiting"
+                  role="img"
+                  aria-label="Waiting for your answer"
+                  title="Waiting for your answer"
+                >
+                  waiting
+                </span>
+              )}
               <span className="session-id">{s.session_id.slice(0, 8)}</span>
             </div>
           ))}

@@ -20,16 +20,25 @@ export type OHLCPoint = {
 const isFiniteNumber = (v: unknown): v is number =>
   typeof v === "number" && Number.isFinite(v);
 
+/** A chart's ``data``: absent (still streaming) is no rows yet; anything
+ *  else that is not a list is a malformed spec, said as such rather than
+ *  as a TypeError from inside the chart. */
+export function rows<T>(data: T[] | null | undefined): T[] {
+  if (data == null) return [];
+  if (!Array.isArray(data)) throw new Error("its data is not a list");
+  return data;
+}
+
 /** The rows of a series that are complete. Mid-stream, partial-json
  *  hands us placeholder rows; a missing or non-finite value would put
  *  NaN into SVG attributes, which renders broken paths. */
 export function completeSeries(data: SeriesPoint[]): SeriesPoint[] {
-  return data.filter((d) => d != null && d.x != null && isFiniteNumber(d.y));
+  return rows(data).filter((d) => d != null && d.x != null && isFiniteNumber(d.y));
 }
 
 /** The OHLC rows whose four prices have all arrived. */
 export function completeOHLC(data: OHLCPoint[]): OHLCPoint[] {
-  return data.filter(
+  return rows(data).filter(
     (d) =>
       d != null &&
       isFiniteNumber(d.o) &&

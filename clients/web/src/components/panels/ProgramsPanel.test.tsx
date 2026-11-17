@@ -50,7 +50,11 @@ describe("the programs page", () => {
     fireEvent.click(screen.getByText("Make an approver token"));
     await screen.findByText("tok-123");
     fireEvent.click(screen.getByText("Revoke all approver tokens"));
-    expect(await screen.findByText(/Revoked 2 approver tokens/)).toBeTruthy();
+    const note = await screen.findByText(/Revoked 2 approver tokens/);
+    // The backend closes the connections that attached with a revoked
+    // token (1008); the note must not tell the person they keep approving.
+    expect(note.textContent).toMatch(/disconnected/);
+    expect(note.textContent).not.toMatch(/keep approving/);
     expect(screen.queryByText("tok-123")).toBeNull();
   });
 
