@@ -178,6 +178,10 @@ export interface VisualizationItem {
   sourceAgent: string;
   /** Set when an extension appended the card: its id. */
   fromExtension?: string;
+  /** What the card could not draw, in words. Set once the spec is
+   *  whole and its gaps are real — the card says them instead of
+   *  drawing a blank (R666). */
+  notices?: string[];
 }
 
 /** Roll-up of one top-level run. */

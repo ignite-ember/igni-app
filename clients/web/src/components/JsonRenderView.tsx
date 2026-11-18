@@ -21,12 +21,21 @@
  *   ``JSONUIProvider`` forwards every fired action to the parent
  *   ``onDispatchAction`` callback, which is wired to the
  *   ``dispatch_visualization_action`` RPC.
+ * - **The spec's shape is read, not policed.** ``jsonRender/specShape.ts``
+ *   reads a wrapped array as the list it stands for, so a model that
+ *   writes ``{"item": [...]}`` gets the chart it asked for.
+ * - **What the spec leaves out is said.** The chat layer reads the
+ *   gaps in the spec before pruning it to what the renderer can walk
+ *   (``jsonRender/specIntegrity.ts``) and passes them down as
+ *   ``notices``: a card that could not draw everything says so
+ *   instead of being quietly blank.
  */
 
 import { Renderer, JSONUIProvider } from "@json-render/react";
 import type { Spec } from "@json-render/core";
 import { memo, useMemo } from "react";
 import { registry, unknownComponent } from "./jsonRender/registry";
+import { normaliseSpec } from "./jsonRender/specShape";
 import "./JsonRenderView.css";
 
 export type DispatchAction = (name: string, params: Record<string, unknown>) => Promise<unknown>;
@@ -37,6 +46,9 @@ interface JsonRenderViewProps {
   spec: Spec;
   title?: string;
   sourceAgent?: string;
+  /** What the card could not draw, in words — read from the spec
+   *  before it was pruned to what the renderer can walk (R666). */
+  notices?: string[];
   onDispatchAction?: DispatchAction;
 }
 
@@ -80,9 +92,13 @@ export function unrenderableSpec(spec: unknown): string | null {
   return null;
 }
 
-function JsonRenderViewInner({ spec, title, sourceAgent, onDispatchAction }: JsonRenderViewProps) {
+function JsonRenderViewInner({ spec, title, sourceAgent, notices, onDispatchAction }: JsonRenderViewProps) {
   const handlers = useMemo(() => forwardingHandlers(onDispatchAction), [onDispatchAction]);
-  const unrenderable = unrenderableSpec(spec);
+  // A model that wraps an array in {"item": [...]} means the list the
+  // catalog asked for; the renderer reads it as one, so the card draws
+  // instead of saying it could not (see jsonRender/specShape.ts).
+  const drawable = useMemo(() => normaliseSpec(spec), [spec]);
+  const unrenderable = unrenderableSpec(drawable);
   return (
     <div className="jr-view">
       {(title || sourceAgent) && (
@@ -96,9 +112,18 @@ function JsonRenderViewInner({ spec, title, sourceAgent, onDispatchAction }: Jso
           This visualization could not be drawn: {unrenderable}.
         </div>
       ) : (
-        <JSONUIProvider registry={registry} handlers={handlers}>
-          <Renderer spec={spec} registry={registry} fallback={unknownComponent} />
-        </JSONUIProvider>
+        <>
+          <JSONUIProvider registry={registry} handlers={handlers}>
+            <Renderer spec={drawable} registry={registry} fallback={unknownComponent} />
+          </JSONUIProvider>
+          {notices && notices.length > 0 && (
+            <div className="viz-render-error" role="note">
+              {notices.map((notice) => (
+                <div key={notice}>This visualization could not be fully drawn: {notice}.</div>
+              ))}
+            </div>
+          )}
+        </>
       )}
     </div>
   );

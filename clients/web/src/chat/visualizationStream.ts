@@ -14,6 +14,7 @@
 
 import type { Spec } from "@json-render/core";
 import { parse as parsePartialJson, Allow } from "partial-json";
+import { specIssueText } from "../components/jsonRender/specIntegrity";
 import type { ChatItem, VisualizationItem } from "./chatItem";
 import type { ChatItemFactory } from "./chatItemFactory";
 
@@ -53,38 +54,42 @@ export function visualizationDeltaFromPayload(
   };
 }
 
-/** Attempt to partial-parse the accumulated JSON into a Spec that
- *  is SAFE for @json-render/react's Renderer to walk.
+/** A spec as the Renderer can walk it, and the spec as it arrived. */
+export interface PartialSpec {
+  /** The spec, pruned to what the Renderer can walk. */
+  spec: Spec;
+  /** The spec before the pruning: what the gaps are read from. */
+  raw: unknown;
+}
+
+/**
+ * The spec, pruned to what @json-render/react's Renderer can walk.
  *
- *  "Safe" means: root resolves to an element in the map, and every
- *  child id referenced from an element's ``children`` array also
- *  resolves. If either invariant is broken, the Renderer throws
- *  (which crashes the surrounding React tree — the bug this
- *  function prevents).
+ * "Safe" means: root resolves to an element in the map, and every
+ * child id referenced from an element's ``children`` array also
+ * resolves. If either invariant is broken, the Renderer throws
+ * (which crashes the surrounding React tree — the bug this
+ * function prevents).
  *
- *  Returns null when the current buffer can't yet be coerced into
- *  a safe spec. Callers keep the previous good spec on screen
- *  until a new safe one arrives — that's what makes progressive
- *  streaming look smooth instead of flickering broken frames.
+ * The pruning is what a broken spec is silently repaired with, so
+ * what it took out is read from the spec BEFORE the pruning
+ * (``specIntegrity.ts``) and said on the card — otherwise the repair
+ * is what hides the gap (R666).
+ *
+ * Returns null when the spec can't be coerced into a safe one.
  */
-export function parsePartialSpec(json: string): Spec | null {
-  let partial: unknown;
-  try {
-    partial = parsePartialJson(json, Allow.ALL);
-  } catch {
-    return null;
-  }
+export function pruneSpec(spec: unknown): Spec | null {
   if (
-    !partial ||
-    typeof partial !== "object" ||
-    Array.isArray(partial) ||
-    !("root" in (partial as Record<string, unknown>)) ||
-    !("elements" in (partial as Record<string, unknown>))
+    !spec ||
+    typeof spec !== "object" ||
+    Array.isArray(spec) ||
+    !("root" in (spec as Record<string, unknown>)) ||
+    !("elements" in (spec as Record<string, unknown>))
   ) {
     return null;
   }
-  const root = (partial as { root: unknown }).root;
-  const elementsRaw = (partial as { elements: unknown }).elements;
+  const root = (spec as { root: unknown }).root;
+  const elementsRaw = (spec as { elements: unknown }).elements;
   if (typeof root !== "string" || !root) return null;
   if (
     !elementsRaw ||
@@ -124,9 +129,41 @@ export function parsePartialSpec(json: string): Spec | null {
   }
   if (!safeElements[root]) return null;
   return {
-    ...(partial as Record<string, unknown>),
+    ...(spec as Record<string, unknown>),
     elements: safeElements,
   } as Spec;
+}
+
+/** Attempt to partial-parse the accumulated JSON into a Spec that
+ *  is SAFE for @json-render/react's Renderer to walk.
+ *
+ *  Returns null when the current buffer can't yet be coerced into
+ *  a safe spec. Callers keep the previous good spec on screen
+ *  until a new safe one arrives — that's what makes progressive
+ *  streaming look smooth instead of flickering broken frames.
+ */
+export function parsePartialSpec(json: string): Spec | null {
+  let partial: unknown;
+  try {
+    partial = parsePartialJson(json, Allow.ALL);
+  } catch {
+    return null;
+  }
+  return pruneSpec(partial);
+}
+
+/** The accumulated JSON, parsed: the spec the Renderer can walk, and
+ *  the spec as it arrived (the gaps are read from that one). */
+export function readPartialSpec(json: string): PartialSpec | null {
+  let partial: unknown;
+  try {
+    partial = parsePartialJson(json, Allow.ALL);
+  } catch {
+    return null;
+  }
+  const spec = pruneSpec(partial);
+  if (!spec) return null;
+  return { spec, raw: partial };
 }
 
 /** Fold one visualization_delta into the current items list.
@@ -134,6 +171,12 @@ export function parsePartialSpec(json: string): Spec | null {
  *  (e.g. an early delta that can't yet be partial-parsed). Callers
  *  can shallow-compare and skip re-render. A new card takes its id
  *  from ``factory``, which must be the one the list's other items came from.
+ *
+ *  On the final delta the spec is whole, so what it leaves out is
+ *  said on the card ("its children 'chart' and 'table' are not
+ *  elements of it"). Before that, an element may point at an id that
+ *  has not arrived yet — that is the stream at work, not a gap — so
+ *  nothing is said until the spec is final (R666).
  */
 export function applyVisualizationDelta(
   items: ChatItem[],
@@ -141,8 +184,10 @@ export function applyVisualizationDelta(
   factory: ChatItemFactory,
 ): ChatItem[] {
   if (!event.spec_id || typeof event.json !== "string") return items;
-  const spec = parsePartialSpec(event.json);
-  if (!spec) return items;
+  const read = readPartialSpec(event.json);
+  if (!read) return items;
+  const spec = read.spec;
+  const notices = event.final ? specIssueText(read.raw) : undefined;
 
   const idx = items.findIndex(
     (it) => it.kind === "visualization" && it.specId === event.spec_id,
@@ -150,7 +195,12 @@ export function applyVisualizationDelta(
   const existing = items[idx];
   if (existing?.kind === "visualization") {
     const next = items.slice();
-    const updated: VisualizationItem = { ...existing, spec, title: event.title || existing.title };
+    const updated: VisualizationItem = {
+      ...existing,
+      spec,
+      title: event.title || existing.title,
+      ...(notices ? { notices } : {}),
+    };
     next[idx] = updated;
     return next;
   }
@@ -162,6 +212,7 @@ export function applyVisualizationDelta(
       sourceAgent: event.source ?? "visualizer",
       specId: event.spec_id,
       fromExtension: event.source,
+      ...(notices ? { notices } : {}),
     }),
   ];
 }

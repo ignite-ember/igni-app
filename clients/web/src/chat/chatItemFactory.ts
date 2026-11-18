@@ -39,6 +39,8 @@ export interface VisualizationInput {
   sourceAgent: string;
   specId: string;
   fromExtension?: string;
+  /** What the card could not draw, in words. */
+  notices?: string[];
 }
 
 export type StatsInput = Omit<StatsItem, "kind" | "id">;
@@ -119,6 +121,7 @@ export class ChatItemFactory {
       title: input.title,
       sourceAgent: input.sourceAgent,
       ...(input.fromExtension ? { fromExtension: input.fromExtension } : {}),
+      ...(input.notices ? { notices: input.notices } : {}),
     };
   }
 
