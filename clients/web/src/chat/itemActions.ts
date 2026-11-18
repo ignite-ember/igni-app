@@ -6,10 +6,11 @@
 
 import type { BackendCalls } from "../protocol/backendCalls";
 import type { IgniClient } from "../protocol/client";
-import { VisualizationActionResult } from "../protocol/rpcResults";
+import { VisualizationActionResult, VisualizationVerdictResult } from "../protocol/rpcResults";
 import type { ChatItem } from "./chatItem";
 import type { RunStreamer } from "./runStreamer";
 import type { TranscriptView } from "./transcriptView";
+import type { VisualizationVerdictReport } from "./visualizationStream";
 import type { WorkflowLauncher } from "./workflowLauncher";
 
 export interface ItemActionsDeps {
@@ -89,6 +90,28 @@ export class ItemActions {
       );
     } catch (e) {
       console.warn("dispatch_visualization_action failed", e);
+      return undefined;
+    }
+  };
+
+  /** What the client drew of a card, kept by the backend against the
+   *  card and its draw. The visualizer's recap quotes it, so the agent
+   *  says what is on the screen rather than what it hoped for (R666). */
+  readonly reportVisualizationVerdict = async (
+    verdict: VisualizationVerdictReport,
+  ): Promise<VisualizationVerdictResult | undefined> => {
+    try {
+      return VisualizationVerdictResult.parse(
+        await this.deps.client.rpc<unknown>("report_visualization_verdict", {
+          spec_id: verdict.spec_id,
+          revision: verdict.revision,
+          total: verdict.total,
+          failed: verdict.failed,
+          issues: verdict.issues,
+        }),
+      );
+    } catch (e) {
+      console.warn("report_visualization_verdict failed", e);
       return undefined;
     }
   };

@@ -30,14 +30,14 @@ test("watcher panel shows live background processes", async ({
   await page.goto("/");
   await page.evaluate(
     async ({ wsUrl }) => {
-      // The fixture gave this page the backend's window token; a raw
-          // socket must offer it the way the app does, or it is refused.
-          const token = (window as unknown as { __IGNI_WS_TOKEN__?: string })
-            .__IGNI_WS_TOKEN__;
-          const ws = new WebSocket(
-            wsUrl,
-            token ? ["igni.v1", `igni-token.${token}`] : undefined,
-          );
+      // The backend wants its per-launch token offered as a
+      // subprotocol, or it refuses the handshake. The fixture put it
+      // on the window.
+      const token = (window as unknown as { __IGNI_WS_TOKEN__?: string })
+        .__IGNI_WS_TOKEN__;
+      const ws = token
+        ? new WebSocket(wsUrl, ["igni.v1", `igni-token.${token}`])
+        : new WebSocket(wsUrl);
       await new Promise<void>((resolve, reject) => {
         ws.onopen = () => resolve();
         ws.onerror = () => reject(new Error(`WebSocket to ${wsUrl} was refused`));

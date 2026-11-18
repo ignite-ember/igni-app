@@ -19,13 +19,18 @@ export class SessionRow {
     readonly name: string,
     /** Seconds since the epoch; ``0`` when unknown. */
     readonly updatedAt: number,
+    /** True when this session has a run waiting for the person to answer
+     *  an approval. A backend that does not send the flag says nothing
+     *  about waiting — not that it is waiting — so the flag counts only
+     *  when it is a plain ``true``. */
+    readonly hasPausedRun: boolean = false,
   ) {}
 
   static parse(raw: unknown): SessionRow {
     const p = new WirePayload(raw);
     const id = String(p.value("session_id") ?? p.value("id") ?? "");
     const ts = Number(p.value("updated_at") ?? p.value("created_at") ?? 0) || 0;
-    return new SessionRow(id, p.text("name"), ts);
+    return new SessionRow(id, p.text("name"), ts, p.value("has_paused_run") === true);
   }
 
   /** The rows of an answer: wrapped (``{sessions: [...]}``, as the
@@ -45,6 +50,7 @@ export class SessionRow {
       session_id: this.sessionId,
       name: this.name || (when ? `Chat · ${when}` : this.sessionId),
       detail: [this.sessionId, when].filter(Boolean).join(" · "),
+      has_paused_run: this.hasPausedRun,
     };
   }
 }

@@ -74,7 +74,7 @@ function wireChatController(deps: ChatControllerDeps): ChatController {
   });
   const onEvent = streamEvents.route.bind(streamEvents);
   const streamer = new RunStreamer({ client, view, run, shell, notifier, onEvent });
-  const sessions = new SessionSwitcher({ client, windowModel, view, historyLoader, shell });
+  const sessions = new SessionSwitcher({ client, windowModel, view, historyLoader, shell, hitl });
   const commands = new SlashCommandRouter({
     client,
     view,
@@ -100,7 +100,10 @@ function wireChatController(deps: ChatControllerDeps): ChatController {
       editPrompt: edits.editPrompt,
     },
     workflow: { rerun: items.rerunWorkflow, cancel: items.cancelWorkflow },
-    visualization: { dispatchAction: items.dispatchVisualizationAction },
+    visualization: {
+      dispatchAction: items.dispatchVisualizationAction,
+      reportVerdict: items.reportVisualizationVerdict,
+    },
   };
   const resolveHitl = (decisions: HitlAnswers): void => {
     hitl.clear();

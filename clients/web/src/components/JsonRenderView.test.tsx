@@ -20,7 +20,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import type { Spec } from "@json-render/core";
-import { JsonRenderView } from "./JsonRenderView";
+import { JsonRenderView, type CardDrawResult } from "./JsonRenderView";
 
 // ── Fixtures ────────────────────────────────────────────────────────
 
@@ -262,7 +262,7 @@ describe("JsonRenderView", () => {
         root: "root",
         elements: {
           root: { type: "Card", props: { title: "Monthly Sales 2026" }, children: ["bar"] },
-          bar: { type: "BarGraph", props: { data: { item: [{ x: "Jan", y: 1 }] } }, children: [] },
+          bar: { type: "BarGraph", props: { data: 42 }, children: [] },
         },
       } as unknown as Spec;
       const { container } = render(<JsonRenderView spec={spec} />);
@@ -276,7 +276,7 @@ describe("JsonRenderView", () => {
       quiet();
       const spec: Spec = {
         root: "t",
-        elements: { t: { type: "Table", props: { columns: { item: [] }, rows: [] }, children: [] } },
+        elements: { t: { type: "Table", props: { columns: "Provider", rows: [] }, children: [] } },
       } as unknown as Spec;
       const { container } = render(<JsonRenderView spec={spec} />);
       expect(container.querySelector(".jr-element-error")?.textContent).toMatch(
@@ -304,6 +304,205 @@ describe("JsonRenderView", () => {
       const { container } = render(<JsonRenderView spec={spec} />);
       expect(container.querySelector(".jr-element-error")).toBeNull();
       expect(container.querySelector(".jr-empty")).toBeTruthy();
+    });
+  });
+
+  // R666: the model wrote the array inside an object under an "item" key,
+  // so the card said "Could not draw BarGraph: its data is not a list" over
+  // a chart that was there all along. The wrapper is read as the list it
+  // stands for.
+  describe("a spec whose arrays arrived wrapped", () => {
+    it("draws the chart", () => {
+      const spec: Spec = {
+        root: "root",
+        elements: {
+          root: { type: "Card", props: { title: "Monthly Sales 2026" }, children: ["bar"] },
+          bar: {
+            type: "BarGraph",
+            props: { data: { item: [{ x: "Jan", y: 120 }, { x: "Feb", y: 135 }] } },
+            children: [],
+          },
+        },
+      } as unknown as Spec;
+      const { container } = render(<JsonRenderView spec={spec} />);
+      expect(container.querySelector(".jr-element-error")).toBeNull();
+      expect(container.querySelectorAll(".jr-barchart-bar").length).toBe(2);
+    });
+
+    it("draws the table", () => {
+      const spec: Spec = {
+        root: "t",
+        elements: {
+          t: {
+            type: "Table",
+            props: {
+              columns: { item: [{ key: "provider", label: "Provider" }] },
+              rows: { item: [{ provider: "AWS" }] },
+            },
+            children: [],
+          },
+        },
+      } as unknown as Spec;
+      const { container } = render(<JsonRenderView spec={spec} />);
+      expect(container.querySelector(".jr-element-error")).toBeNull();
+      expect(container.querySelector("table")).toBeTruthy();
+      expect(container.textContent).toContain("AWS");
+    });
+  });
+
+  // R666: the model wrote the values as text ("120"), so the series
+  // came out empty, the card said "no data", and the agent said the
+  // chart was above. The values are read as the numbers they stand for.
+  describe("a chart whose values arrive as text", () => {
+    it("draws the bars", () => {
+      const spec: Spec = {
+        root: "root",
+        elements: {
+          root: { type: "Card", props: { title: "Monthly Sales 2026" }, children: ["bar"] },
+          bar: {
+            type: "BarGraph",
+            props: { data: [{ x: "Jan", y: "120" }, { x: "Feb", y: "135" }] },
+            children: [],
+          },
+        },
+      } as unknown as Spec;
+      const { container } = render(<JsonRenderView spec={spec} />);
+      expect(container.querySelector(".jr-element-error")).toBeNull();
+      expect(container.querySelectorAll(".jr-barchart-bar").length).toBe(2);
+    });
+
+    it("says so when the values are not numbers at all", () => {
+      const spec: Spec = {
+        root: "root",
+        elements: {
+          root: { type: "Card", props: { title: "Monthly Sales 2026" }, children: ["bar"] },
+          bar: {
+            type: "BarGraph",
+            props: { data: [{ x: "Jan", y: "n/a" }, { x: "Feb", y: "n/a" }] },
+            children: [],
+          },
+        },
+      } as unknown as Spec;
+      const { container } = render(<JsonRenderView spec={spec} />);
+      expect(container.querySelector(".jr-element-error")?.textContent).toMatch(
+        /Could not draw BarGraph: its y values are not numbers/,
+      );
+    });
+  });
+
+  // R666: the card said nothing when the spec itself was broken — the
+  // chart was pruned away and the card came out blank, while the agent
+  // said the chart was above. The gaps are said on the card.
+  describe("a spec that leaves something out", () => {
+    const spec: Spec = {
+      root: "root",
+      elements: {
+        root: { type: "Card", props: { title: "Cloud Spend" }, children: [] },
+      },
+    } as unknown as Spec;
+
+    it("says what it could not draw", () => {
+      render(
+        <JsonRenderView
+          spec={spec}
+          notices={["its child 'chart' is not an element of it"]}
+        />,
+      );
+      expect(screen.getByRole("note").textContent).toContain(
+        "This visualization could not be fully drawn: its child 'chart' is not an element of it.",
+      );
+    });
+
+    it("says nothing when there is nothing to say", () => {
+      const { container } = render(<JsonRenderView spec={spec} notices={[]} />);
+      expect(container.querySelector(".viz-render-error")).toBeNull();
+    });
+  });
+
+  // R666: the card knew what it drew and nobody was told. The agent
+  // said the chart was above a card that drew nothing. The card says
+  // what it drew, so the agent can be told.
+  describe("what the card drew is said back", () => {
+    const quiet = () => vi.spyOn(console, "error").mockImplementation(() => {});
+    const last = (say: ReturnType<typeof vi.fn>): CardDrawResult =>
+      say.mock.calls.at(-1)?.[0] as CardDrawResult;
+
+    it("names the element it could not draw", () => {
+      quiet();
+      const say = vi.fn();
+      const spec: Spec = {
+        root: "root",
+        elements: {
+          root: { type: "Card", props: { title: "Monthly Sales 2026" }, children: ["bar"] },
+          bar: { type: "BarGraph", props: { data: 42 }, children: [] },
+        },
+      } as unknown as Spec;
+
+      render(<JsonRenderView spec={spec} onDrawResult={say} />);
+
+      const result = last(say);
+      expect(result.total).toBe(2);
+      expect(result.failed).toEqual([
+        { type: "BarGraph", message: "its data is not a list" },
+      ]);
+      expect(result.issues).toEqual([]);
+    });
+
+    it("says so when it drew everything", () => {
+      const say = vi.fn();
+
+      render(<JsonRenderView spec={AAPL_SPEC} onDrawResult={say} />);
+
+      const result = last(say);
+      expect(result.total).toBe(2);
+      expect(result.failed).toEqual([]);
+    });
+
+    it("carries what was wrong with the card's shape", () => {
+      const say = vi.fn();
+      const spec: Spec = {
+        root: "root",
+        elements: { root: { type: "Card", props: { title: "Cloud Spend" }, children: [] } },
+      } as unknown as Spec;
+
+      render(
+        <JsonRenderView
+          spec={spec}
+          notices={["its child 'chart' is not an element of it"]}
+          onDrawResult={say}
+        />,
+      );
+
+      expect(last(say).issues).toEqual(["its child 'chart' is not an element of it"]);
+    });
+
+    it("says nothing was drawn when the card could not be drawn at all", () => {
+      const say = vi.fn();
+      const spec = {
+        elements: {},
+        root: ["root", { type: "Card" }],
+        children: { item: [] },
+      } as unknown as Spec;
+
+      render(<JsonRenderView spec={spec} onDrawResult={say} />);
+
+      const result = last(say);
+      expect(result.total).toBe(0);
+      expect(result.failed).toEqual([]);
+      expect(result.issues).toEqual(["its root is not an element key"]);
+    });
+
+    it("says nothing when nobody is listening", () => {
+      quiet();
+      const spec: Spec = {
+        root: "root",
+        elements: {
+          root: { type: "Card", props: { title: "Monthly Sales 2026" }, children: ["bar"] },
+          bar: { type: "BarGraph", props: { data: 42 }, children: [] },
+        },
+      } as unknown as Spec;
+
+      expect(() => render(<JsonRenderView spec={spec} />)).not.toThrow();
     });
   });
 });

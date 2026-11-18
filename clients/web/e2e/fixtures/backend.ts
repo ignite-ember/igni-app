@@ -33,12 +33,25 @@ export type RpcHandler = (args: Record<string, unknown>) => unknown;
  *  protocol shapes without fighting types. */
 export type Envelope = Record<string, unknown>;
 
+/** What the backend sends right after it answers a method — the
+ *  approvals a session is waiting on, replayed the way the real
+ *  backend replays them (on the request's own id, so the client can
+ *  tell what its attach brought back). ``send`` writes to the client
+ *  that asked. */
+export type RpcAfterHandler = (
+  args: Record<string, unknown>,
+  id: string,
+  send: (envelope: Envelope) => void,
+) => void;
+
 export interface FixtureBackend {
   /** ws:// URL with a chosen port for the running server. Pass this
    *  to the FE via the ``?ws=`` query param. */
   url: string;
   /** Override or add an RPC handler. Wins over the defaults. */
   onRpc(method: string, handler: RpcHandler): void;
+  /** What the backend sends right after it answers this method. */
+  onRpcAfter(method: string, handler: RpcAfterHandler): void;
   /** Push an arbitrary envelope to every connected client. */
   pushEvent(envelope: Envelope): void;
   /** All FE→BE messages seen so far, in arrival order. */
@@ -92,6 +105,10 @@ export interface StartOptions {
    *  calling ``onRpc`` after instantiation when the handler must
    *  fire before the first call). */
   rpcHandlers?: Record<string, RpcHandler>;
+  /** What the backend sends right after it answers a method, from the
+   *  start. The real backend replays a session's waiting approvals
+   *  after an attach, on the attach's own id. */
+  rpcAfterHandlers?: Record<string, RpcAfterHandler>;
   /** Stable ``client_id`` returned in the Welcome. Tests sometimes
    *  read it back via ``client.clientId`` and want determinism. */
   clientId?: string;
@@ -154,6 +171,7 @@ export async function startFixtureBackend(
     ...defaultHandlers(),
     ...(opts.rpcHandlers || {}),
   };
+  const afterHandlers: Record<string, RpcAfterHandler> = { ...(opts.rpcAfterHandlers || {}) };
   const clientId = opts.clientId ?? "test-client-001";
 
   const wss = new WebSocketServer({ host: "127.0.0.1", port: 0 });
@@ -200,8 +218,21 @@ export async function startFixtureBackend(
           // test holds a reply back to see what the app does meanwhile.
           void (async () => {
             try {
-              const result = await handler((msg.args as Record<string, unknown>) || {});
+              const args = (msg.args as Record<string, unknown>) || {};
+              const result = await handler(args);
               ws.send(JSON.stringify({ type: "rpc_response", id, result }));
+              // What the backend sends right after the answer: the
+              // approvals a session is waiting on, replayed on this
+              // request's id, the way a real attach replays them. Its
+              // own try: a broken hook must not turn into a second
+              // response for a request that was already answered.
+              try {
+                afterHandlers[method]?.(args, id, (envelope) =>
+                  ws.send(JSON.stringify(envelope)),
+                );
+              } catch (exc) {
+                console.error(`fixture: ${method} after-handler failed:`, exc);
+              }
             } catch (exc) {
               ws.send(
                 JSON.stringify({ type: "rpc_response", id, error: String(exc) }),
@@ -233,6 +264,9 @@ export async function startFixtureBackend(
     url,
     onRpc(method, handler) {
       handlers[method] = handler;
+    },
+    onRpcAfter(method, handler) {
+      afterHandlers[method] = handler;
     },
     pushEvent(envelope) {
       broadcast(envelope);

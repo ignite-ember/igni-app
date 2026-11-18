@@ -13,6 +13,7 @@ import type { IgniClient } from "../protocol/client";
 import { AttachSessionResult, SessionIdReply } from "../protocol/rpcResults";
 import { Arrivals, type Arrival } from "./arrival";
 import type { HistoryLoader } from "./historyLoader";
+import type { HitlRequests } from "./hitlRequests";
 import { planSessionBinding, type SessionBindingPlan } from "./sessionBinding";
 import { SidebarLayout } from "./sidebarLayout";
 import type { ShellPort } from "./shellPort";
@@ -24,6 +25,9 @@ export interface SessionSwitcherDeps {
   view: TranscriptView;
   historyLoader: Pick<HistoryLoader, "load">;
   shell: Pick<ShellPort, "setSessions" | "refreshStatus" | "refreshSessions">;
+  /** The open approvals, so a switch can drop the ones asked in the
+   *  session this window is leaving. */
+  hitl: Pick<HitlRequests, "clear">;
 }
 
 /** Where a window is opened from: its ``?dir=`` and a link's page. */
@@ -49,13 +53,26 @@ export class SessionSwitcher {
 
   /** Bind this view to ``id``, no ``switch_session`` RPC: the backend's
    *  pool resumes it lazily in its own runtime, so other tabs keep
-   *  theirs. First contact can take seconds, hence the note. */
+   *  theirs. First contact can take seconds, hence the note.
+   *
+   *  The session is attached, though, and that is what makes the
+   *  backend show again the approval it is waiting on (a ``run_paused``
+   *  right after the answer): a run paused on a question is answered in
+   *  the session that asked it, so a window that only loaded the
+   *  history would leave the question unanswerable. */
   async pick(id: string): Promise<void> {
-    const { view, historyLoader, shell, windowModel } = this.deps;
+    const { client, view, historyLoader, shell, windowModel } = this.deps;
+    const leaving = client.sessionId;
     try {
       this.bindTo(id);
       const short = id.slice(0, 8);
       view.reset([view.chatItems.info(`Loading session ${short}…`)]);
+      // The approval on screen was asked in the session this window is
+      // leaving; answering it here would answer it in the wrong
+      // session. The one asked in the session picked comes back with
+      // the attach below.
+      if (leaving && leaving !== id) this.deps.hitl.clear();
+      await this.attachTo(id);
       view.showHistory(await historyLoader.load(id), [view.chatItems.info(`Resumed session ${short}.`)]);
       void shell.refreshStatus();
     } catch (e) {
@@ -151,7 +168,34 @@ export class SessionSwitcher {
     return res;
   }
 
+  /** Attach the session this window picked, so the backend resumes it
+   *  and shows again the approval it is waiting on. Best-effort: a
+   *  backend that refuses the attach — a session of another project,
+   *  or one that predates the method — still shows the history, and
+   *  the approval it is waiting on is asked in the window that has
+   *  it. */
+  private async attachTo(id: string): Promise<void> {
+    try {
+      await this.attach({ session_id: id });
+    } catch {
+      // The history is worth showing even when the attach is refused.
+    }
+  }
+
+  /** The backend's default session, attached rather than only named:
+   *  an attach is what makes the backend show again every approval the
+   *  session is waiting on (a ``run_paused`` right after the answer),
+   *  which a window that was closed and reopened needs. The re-sent
+   *  pause replaces the open approvals (``HitlRequests.show``), so it
+   *  never stacks a second dialog. A backend that cannot attach still
+   *  names its session. */
   private async defaultSession(): Promise<string> {
+    try {
+      const attached = (await this.attach({})).sessionId;
+      if (attached) return attached;
+    } catch {
+      // Named below instead.
+    }
     return SessionIdReply.parse(await this.deps.client.rpc<unknown>("get_session_id"));
   }
 

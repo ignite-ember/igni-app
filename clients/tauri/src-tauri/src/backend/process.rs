@@ -7,7 +7,7 @@ use std::time::{Duration, Instant};
 
 use crate::backend::ready_line::ReadyLine;
 use crate::backend::stderr_tail::StderrTail;
-use crate::backend::{BackendVersionInfo, WsToken};
+use crate::backend::{BackendVersionInfo, TokenHandoff, WsToken};
 use crate::error::ShellError;
 use crate::runtime::{self, ProgressFn};
 
@@ -67,8 +67,10 @@ impl BackendProcess {
         for (k, v) in &install.env {
             cmd.env(k, v);
         }
-        WsToken::apply(token, &mut cmd);
-        let mut child = cmd.spawn().map_err(|source| ShellError::Spawn {
+        // A pipe only for an igni-core that reads one; an older one would
+        // mint its own token and no window could connect.
+        let handoff = TokenHandoff::for_core_version(install.actual_cli_version.as_deref());
+        let mut child = Self::launch(cmd, token, handoff).map_err(|source| ShellError::Spawn {
             python: install.python.clone(),
             source,
         })?;
@@ -92,6 +94,20 @@ impl BackendProcess {
             port,
             version,
         })
+    }
+
+    /// Start `cmd` with `token` handed over as `handoff` says: on a pipe,
+    /// the token is written right after the spawn, before anything waits
+    /// on the ready line, since the backend reads it at start.
+    fn launch(
+        mut cmd: Command,
+        token: Option<&WsToken>,
+        handoff: TokenHandoff,
+    ) -> std::io::Result<Child> {
+        WsToken::apply(token, handoff, &mut cmd);
+        let mut child = cmd.spawn()?;
+        WsToken::hand_over(token, handoff, &mut child);
+        Ok(child)
     }
 
     /// Read stdout until the ready line; EOF first is a startup failure,
@@ -251,6 +267,49 @@ mod tests {
             matches!(backend.child.try_wait(), Ok(Some(_))),
             "reaped, not a zombie"
         );
+    }
+
+    /// What a launched child printed: the token it was handed, either way.
+    #[cfg(unix)]
+    fn launched_output(script: &str, handoff: TokenHandoff) -> String {
+        use std::io::Read as _;
+        let mut cmd = Command::new("sh");
+        cmd.arg("-c")
+            .arg(script)
+            .stdin(Stdio::null())
+            .stdout(Stdio::piped());
+        let token = WsToken::from("tok-9".to_string());
+        let mut child = BackendProcess::launch(cmd, Some(&token), handoff).unwrap();
+        let mut out = String::new();
+        child
+            .stdout
+            .take()
+            .unwrap()
+            .read_to_string(&mut out)
+            .unwrap();
+        child.wait().unwrap();
+        out
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_backend_that_reads_a_pipe_is_handed_its_token_on_stdin_at_start() {
+        // Reads its token first, as igni-core does, then says it is ready.
+        let out = launched_output(
+            "read -r t; echo \"token=$t fd=$IGNI_WS_TOKEN_FD env=${IGNI_WS_TOKEN:-none}\"; echo ready",
+            TokenHandoff::Pipe,
+        );
+        assert_eq!(out, "token=tok-9 fd=0 env=none\nready\n");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn an_older_backend_is_handed_its_token_in_its_environment() {
+        let out = launched_output(
+            "read -r t; echo \"stdin=${t:-empty} fd=${IGNI_WS_TOKEN_FD:-none} env=$IGNI_WS_TOKEN\"",
+            TokenHandoff::Env,
+        );
+        assert_eq!(out, "stdin=empty fd=none env=tok-9\n");
     }
 
     #[cfg(unix)]

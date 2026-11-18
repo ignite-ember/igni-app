@@ -178,6 +178,21 @@ export class TruncateHistoryResult {
   }
 }
 
+/** ``discard_pending_message``: ``error`` says why a pending message
+ *  was kept (one that arrived under a minute ago may still be running). */
+export class DiscardPendingResult {
+  constructor(
+    readonly ok: boolean,
+    readonly error: string,
+  ) {}
+
+  static parse(raw: unknown): DiscardPendingResult {
+    const p = new WirePayload(raw);
+    const ok = p.flag("ok");
+    return new DiscardPendingResult(ok, ok ? "" : p.string("error") || "the backend kept it");
+  }
+}
+
 /** ``pop_pending_loop_iteration``: the next ``/loop`` prompt, empty
  *  when no loop is waiting (the backend answers ``null``). */
 export class PendingLoopIteration {
@@ -217,5 +232,27 @@ export class VisualizationActionResult {
   static parse(raw: unknown): VisualizationActionResult {
     const p = new WirePayload(raw);
     return new VisualizationActionResult(p.flag("ok"), p.string("action"), p.value("params"));
+  }
+}
+
+/** ``report_visualization_verdict``: what the backend kept. */
+export class VisualizationVerdictResult {
+  constructor(
+    readonly ok: boolean,
+    readonly spec_id: string,
+    readonly revision: number,
+    readonly drawn: number,
+    readonly total: number,
+  ) {}
+
+  static parse(raw: unknown): VisualizationVerdictResult {
+    const p = new WirePayload(raw);
+    return new VisualizationVerdictResult(
+      p.flag("ok"),
+      p.string("spec_id"),
+      p.number("revision"),
+      p.number("drawn"),
+      p.number("total"),
+    );
   }
 }

@@ -18,6 +18,7 @@ import { ChatItemIds } from "./chatItemIds";
 import {
   applyVisualizationDelta,
   parsePartialSpec,
+  visualizationDeltaFromPayload,
   type VisualizationDeltaEvent,
 } from "./visualizationStream";
 
@@ -191,6 +192,151 @@ describe("applyVisualizationDelta — reducer", () => {
       json: '{"root":"r","elements":{"r":{"type":"Text","props":{"text":"x"}}}}',
     });
     expect(result).toBe(items);
+  });
+});
+
+// ── What the card could not draw ───────────────────────────────────
+
+describe("applyVisualizationDelta — the gaps in the spec", () => {
+  const card = (items: ChatItem[]): Extract<ChatItem, { kind: "visualization" }> =>
+    items[0] as Extract<ChatItem, { kind: "visualization" }>;
+
+  /** The real shape of a broken spec: the root points at a chart that
+   *  is not an element, so the card draws the root and nothing else. */
+  const DANGLING = JSON.stringify({
+    root: "root",
+    elements: {
+      root: { type: "Stack", children: ["title", "chart"] },
+      title: { type: "Heading", props: { text: "Cloud Spend" }, children: [] },
+    },
+  });
+
+  it("says nothing while the spec is still streaming", () => {
+    // Mid-stream, an element may point at an id that has not arrived
+    // yet. That is the stream at work, not a gap.
+    const items = fold([], { spec_id: "run-1", json: DANGLING });
+    expect(card(items).notices).toBeUndefined();
+  });
+
+  it("says what the spec leaves out once it is final", () => {
+    const items = fold([], { spec_id: "run-1", json: DANGLING, final: true });
+    expect(card(items).notices).toEqual(["its child 'chart' is not an element of it"]);
+  });
+
+  it("says when nothing refers to the elements", () => {
+    const items = fold(
+      [],
+      {
+        spec_id: "run-1",
+        json: JSON.stringify({
+          root: "root",
+          elements: {
+            root: { type: "Stack" },
+            chart: { type: "BarGraph", props: { data: [] }, children: [] },
+          },
+        }),
+        final: true,
+      },
+    );
+    expect(card(items).notices).toEqual([
+      "nothing refers to the element 'chart', so it is not drawn",
+    ]);
+  });
+
+  it("says nothing about a spec that hangs together", () => {
+    const items = fold(
+      [],
+      {
+        spec_id: "run-1",
+        json: JSON.stringify({
+          root: "root",
+          elements: {
+            root: { type: "Stack", children: ["chart"] },
+            chart: { type: "BarGraph", props: { data: [] }, children: [] },
+          },
+        }),
+        final: true,
+      },
+    );
+    expect(card(items).notices).toEqual([]);
+  });
+
+  it("drops the notice when a later spec hangs together", () => {
+    let items = fold([], { spec_id: "run-1", json: DANGLING, final: true });
+    expect(card(items).notices).toHaveLength(1);
+    items = fold(
+      items,
+      {
+        spec_id: "run-1",
+        json: JSON.stringify({
+          root: "root",
+          elements: {
+            root: { type: "Stack", children: ["chart"] },
+            chart: { type: "BarGraph", props: { data: [] }, children: [] },
+          },
+        }),
+        final: true,
+      },
+    );
+    expect(card(items).notices).toEqual([]);
+  });
+});
+
+// ── Which draw the card is on ───────────────────────────────────────
+
+describe("the draw the card is on", () => {
+  const card = (items: ChatItem[]): Extract<ChatItem, { kind: "visualization" }> =>
+    items[0] as Extract<ChatItem, { kind: "visualization" }>;
+
+  const SPEC = JSON.stringify({
+    root: "root",
+    elements: { root: { type: "Stack", children: ["chart"] } },
+  });
+
+  it("a partial frame is not a draw", () => {
+    const items = fold([], { spec_id: "run-1", json: SPEC });
+    expect(card(items).final).toBe(false);
+    expect(card(items).revision).toBeUndefined();
+  });
+
+  it("the whole card names its draw", () => {
+    const items = fold([], { spec_id: "run-1", json: SPEC, final: true, revision: 1 });
+    expect(card(items).final).toBe(true);
+    expect(card(items).revision).toBe(1);
+  });
+
+  it("a card drawn twice keeps the draw it is on", () => {
+    let items = fold([], { spec_id: "run-1", json: SPEC, final: true, revision: 1 });
+    expect(card(items).revision).toBe(1);
+    items = fold(items, { spec_id: "run-1", json: SPEC, final: true, revision: 2 });
+    expect(card(items).revision).toBe(2);
+  });
+
+  it("a card being redrawn is not whole until it is", () => {
+    let items = fold([], { spec_id: "run-1", json: SPEC, final: true, revision: 1 });
+    items = fold(items, { spec_id: "run-1", json: SPEC });
+    expect(card(items).final).toBe(false);
+    expect(card(items).revision).toBe(1);
+  });
+
+  it("the draw is read off the wire", () => {
+    const event = visualizationDeltaFromPayload({
+      type: "visualization_delta",
+      spec_id: "run-1",
+      json: SPEC,
+      final: true,
+      revision: 3,
+    });
+    expect(event?.revision).toBe(3);
+  });
+
+  it("a wire frame with no draw says so", () => {
+    const event = visualizationDeltaFromPayload({
+      type: "visualization_delta",
+      spec_id: "run-1",
+      json: SPEC,
+    });
+    expect(event?.revision).toBeUndefined();
   });
 });
 

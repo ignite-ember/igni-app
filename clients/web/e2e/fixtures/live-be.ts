@@ -23,7 +23,7 @@
  * ``reporters/skips.ts`` enforces.
  */
 
-import { test as base, type BrowserContext } from "@playwright/test";
+import { test as base, type Page } from "@playwright/test";
 import {
   ChildProcessWithoutNullStreams,
   execFile,
@@ -49,18 +49,13 @@ export type LiveBe = {
   /** How this backend came to be — asserted by the fixture's own test. */
   origin: "spawned" | "IGNI_LIVE_WS";
   /**
-   * The window token the backend requires (``IGNI_WS_TOKEN``), or "" for a
-   * borrowed backend started without one. The fixture hands it to every
-   * page of the test's browser context as ``window.__IGNI_WS_TOKEN__``, the
-   * way an embedder does, so ``?ws=`` alone connects.
+   * The backend's per-launch window token, or null when it takes none.
+   *
+   * A backend started by hand mints one and prints it once; a browser
+   * has to offer it as a WebSocket subprotocol or the handshake is
+   * refused and the app waits at "Connecting to backend…" forever.
    */
-  token: string;
-  /** The backend's own HOME (``~/.igni`` lives there), or null if borrowed. */
-  home: string | null;
-  /** SIGKILL the spawned backend (a crash). */
-  kill(): Promise<void>;
-  /** Start it again on the same port, home, project and token. */
-  restart(): Promise<void>;
+  wsToken: string | null;
 };
 
 // Project root: walk up from clients/web/e2e/fixtures to the repo root.
@@ -280,47 +275,132 @@ function homeEnv(home: string): NodeJS.ProcessEnv {
   return { HOME: home, USERPROFILE: home };
 }
 
-function readyUrl(proc: ChildProcessWithoutNullStreams): Promise<string> {
+/**
+ * The backend's per-launch window token, as it prints it.
+ *
+ * A backend started by hand has no launcher to hand it a secret, so it
+ * mints one, says so once on stderr, and requires it from every window
+ * connection: ``igni window token for this backend (shown once, never
+ * written to disk): <token>``. The browser offers it as a WebSocket
+ * subprotocol (``igni-token.<token>``), which is the one handshake
+ * field a page can set.
+ *
+ * The fixture is the backend's launcher here, so it reads the token off
+ * the child's stderr and hands it to the page. Without it every live
+ * spec sat at "Connecting to backend…" for its whole timeout: the
+ * backend refused the handshake, and the app had no way to say why.
+ *
+ * See ``igni_core/transport/ws_auth.py``.
+ */
+const TOKEN_LINE =
+  /igni window token for this backend \(shown once, never written to disk\): (\S+)/;
+
+/** The token in the child's stderr so far, or null. */
+function tokenIn(stderr: string): string | null {
+  const found = TOKEN_LINE.exec(stderr);
+  return found ? found[1] : null;
+}
+
+/**
+ * Hand the token to the page, before it loads anything.
+ *
+ * The web client reads it from ``window.__IGNI_WS_TOKEN__`` (the
+ * desktop shell uses the URL fragment instead — ``#igni_ws_token=``),
+ * and reads it when the WebSocket is built, so an init script is the
+ * one place that is early enough and late enough.
+ */
+async function offerToken(page: Page, token: string | null): Promise<void> {
+  if (!token) return;
+  await page.addInitScript((value) => {
+    (
+      window as unknown as { __IGNI_WS_TOKEN__?: string }
+    ).__IGNI_WS_TOKEN__ = value;
+  }, token);
+}
+
+function ready(proc: ChildProcessWithoutNullStreams): Promise<{
+  wsUrl: string;
+  wsToken: string | null;
+}> {
   let stderrBuf = "";
   proc.stderr.on("data", (chunk) => {
     stderrBuf += chunk.toString();
   });
-  return new Promise<string>((resolve, reject) => {
-    const timeout = setTimeout(() => {
-      reject(
-        new Error(
-          `BE did not emit ready line within 30s.\nstderr:\n${stderrBuf}`,
-        ),
-      );
-    }, 30_000);
-    let stdoutBuf = "";
-    proc.stdout.on("data", (chunk) => {
-      stdoutBuf += chunk.toString();
-      // The ready line is its own JSON envelope on its own line.
-      for (const line of stdoutBuf.split("\n")) {
-        const t = line.trim();
-        if (!t.startsWith("{")) continue;
-        try {
-          const parsed = JSON.parse(t);
-          if (parsed.status === "ready" && parsed.ws_url) {
-            clearTimeout(timeout);
-            resolve(String(parsed.ws_url));
-            return;
+  return new Promise<{ wsUrl: string; wsToken: string | null }>(
+    (resolve, reject) => {
+      const timeout = setTimeout(() => {
+        reject(
+          new Error(
+            `BE did not emit ready line within 30s.\nstderr:\n${stderrBuf}`,
+          ),
+        );
+      }, 30_000);
+      let stdoutBuf = "";
+      let settled = false;
+      proc.stdout.on("data", (chunk) => {
+        stdoutBuf += chunk.toString();
+        // The ready line is its own JSON envelope on its own line.
+        for (const line of stdoutBuf.split("\n")) {
+          const t = line.trim();
+          if (!t.startsWith("{")) continue;
+          try {
+            const parsed = JSON.parse(t);
+            if (parsed.status === "ready" && parsed.ws_url) {
+              if (settled) return;
+              settled = true;
+              clearTimeout(timeout);
+              // The token is printed before the socket opens, but
+              // stderr and stdout are separate pipes, so it may still
+              // be on its way when the ready line lands. Give it a
+              // moment rather than racing it — and say so plainly if it
+              // never arrives, instead of letting every spec time out
+              // on "Connecting to backend…".
+              const found = tokenIn(stderrBuf);
+              if (found) {
+                resolve({ wsUrl: String(parsed.ws_url), wsToken: found });
+                return;
+              }
+              let waited = 0;
+              const poll = setInterval(() => {
+                waited += 50;
+                const token = tokenIn(stderrBuf);
+                if (token) {
+                  clearInterval(poll);
+                  resolve({ wsUrl: String(parsed.ws_url), wsToken: token });
+                } else if (waited >= 5_000) {
+                  clearInterval(poll);
+                  reject(
+                    new Error(
+                      "the backend printed no window token, so the browser " +
+                        "cannot authenticate against it. It should print one " +
+                        "line, once: " +
+                        "'igni window token for this backend (shown once, " +
+                        "never written to disk): <token>'. See " +
+                        "igni_core/transport/ws_auth.py.\nstderr:\n" +
+                        stderrBuf.slice(-2_000),
+                    ),
+                  );
+                }
+              }, 50);
+              return;
+            }
+          } catch {
+            // partial JSON line; keep buffering
           }
-        } catch {
-          // partial JSON line; keep buffering
         }
-      }
-    });
-    proc.on("exit", (code) => {
-      clearTimeout(timeout);
-      reject(
-        new Error(
-          `BE exited with code ${code} before ready.\nstderr:\n${stderrBuf}`,
-        ),
-      );
-    });
-  });
+      });
+      proc.on("exit", (code) => {
+        clearTimeout(timeout);
+        if (settled) return;
+        settled = true;
+        reject(
+          new Error(
+            `BE exited with code ${code} before ready.\nstderr:\n${stderrBuf}`,
+          ),
+        );
+      });
+    },
+  );
 }
 
 async function stop(proc: ChildProcessWithoutNullStreams): Promise<void> {
@@ -563,43 +643,19 @@ export const test = base.extend<
     { scope: "worker" },
   ],
 
-  orphanScenario: [null, { option: true }],
-  devExtensions: [[], { option: true }],
-  backendEnv: [{}, { option: true }],
-  extraConfig: ["", { option: true }],
-  extraModels: [[], { option: true }],
-  modelUrl: [null, { option: true }],
-
-  liveBe: async (
-    {
-      orphanScenario,
-      devExtensions,
-      backendEnv,
-      extraConfig,
-      extraModels,
-      modelUrl,
-      context,
-      scriptedModel,
-    },
-    use,
-  ) => {
+  liveBe: async ({ page, orphanScenario }, use) => {
     const borrowed = process.env.IGNI_LIVE_WS;
     if (borrowed && !orphanScenario) {
-      // A backend started by hand prints its window token once; export it
-      // as IGNI_LIVE_WS_TOKEN to borrow it.
-      const token = (process.env.IGNI_LIVE_WS_TOKEN ?? "").trim();
-      if (token) await giveToken(context, token);
-      const cannot = async () => {
-        throw new Error("a borrowed backend (IGNI_LIVE_WS) cannot be killed or restarted");
-      };
+      // A borrowed backend may want a token of its own. The person
+      // running it knows it — it is the line its launcher printed, or
+      // the one igni-client's ``Local(url=..., token=...)`` takes.
+      const token = process.env.IGNI_LIVE_WS_TOKEN ?? null;
+      await offerToken(page, token);
       await use({
         wsUrl: borrowed,
         projectDir: null,
-        home: null,
         origin: "IGNI_LIVE_WS",
-        token,
-        kill: cannot,
-        restart: cannot,
+        wsToken: token,
       });
       return;
     }
@@ -650,28 +706,9 @@ export const test = base.extend<
 
     let proc = start("0");
     try {
-      const wsUrl = await readyUrl(proc);
-      const port = new URL(wsUrl).port;
-      await use({
-        wsUrl,
-        projectDir,
-        home,
-        origin: "spawned",
-        token,
-        // The backend dying under the app: SIGKILL, no shutdown path.
-        kill: async () => {
-          proc.kill("SIGKILL");
-          await new Promise<void>((resolve) =>
-            proc.exitCode !== null || proc.signalCode !== null ? resolve() : proc.on("exit", () => resolve()),
-          );
-        },
-        // A backend again on the same port, home, project and token — what
-        // the desktop shell's Restart Backend does.
-        restart: async () => {
-          proc = start(port);
-          await readyUrl(proc);
-        },
-      });
+      const { wsUrl, wsToken } = await ready(proc);
+      await offerToken(page, wsToken);
+      await use({ wsUrl, projectDir, origin: "spawned", wsToken });
     } finally {
       await stop(proc);
       // Order matters: the seeded processes outlive the backend by

@@ -59,7 +59,6 @@ pub fn run() {
             updater::igni_check_update,
             updater::igni_install_update,
             deep_link::igni_take_open_link,
-            bootstrap::igni_bootstrap_state,
         ])
         .setup(|app| {
             let handle = app.handle();
@@ -70,7 +69,6 @@ pub fn run() {
             app.manage(WindowManager::default());
             app.manage(launch.clone());
             app.manage(DeepLinks::default());
-            app.manage(bootstrap::BootstrapState::default());
 
             // igni:// links (`deep_link.rs`): the one the app was launched
             // with is held for the window to take once the app has

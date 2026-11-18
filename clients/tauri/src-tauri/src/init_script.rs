@@ -37,7 +37,16 @@ mod tests {
 
     use super::*;
 
-    const SCRIPT: &str = InitScript::TEMPLATE;
+    /// The script as the checkout gave it, with the line endings
+    /// normalised.
+    ///
+    /// A Windows checkout has CRLF, and the assertions below match the
+    /// text literally — so a test that reads "the listener is registered
+    /// on a line of its own" would fail on a checkout whose lines end
+    /// differently, for a reason that has nothing to do with the script.
+    fn script_text() -> String {
+        InitScript::TEMPLATE.replace("\r\n", "\n")
+    }
 
     #[test]
     fn the_platform_token_is_replaced() {
@@ -49,33 +58,36 @@ mod tests {
     #[test]
     fn each_window_hears_only_the_events_sent_to_it() {
         // A global listen hears an event emitted to any window (R624).
-        assert!(SCRIPT.contains("getCurrentWebviewWindow()"));
+        assert!(script_text().contains("getCurrentWebviewWindow()"));
         for name in ["igni-menu", "igni-open-link", "igni-fullscreen"] {
             assert!(
-                SCRIPT.contains(&format!("listenHere('{name}'")),
+                script_text().contains(&format!("listenHere('{name}'")),
                 "{name} must be heard on this window only"
             );
-            assert!(!SCRIPT.contains(&format!("event.listen('{name}'")));
+            assert!(!script_text().contains(&format!("event.listen('{name}'")));
         }
     }
 
     #[test]
     fn init_script_invokes_opener_open_url_command() {
         // The capability is useless if the JS calls another command name.
-        assert!(SCRIPT.contains("plugin:opener|open_url"));
+        assert!(script_text().contains("plugin:opener|open_url"));
     }
 
     #[test]
     fn init_script_intercepts_clicks_at_capture_phase() {
         // Without the capture-phase `true`, React handlers can consume the
         // click first and the webview navigates to the link itself.
-        assert!(SCRIPT.contains("'click'"), "must register a click handler");
         assert!(
-            SCRIPT.contains("addEventListener(\n    'click',"),
+            script_text().contains("'click'"),
+            "must register a click handler"
+        );
+        assert!(
+            script_text().contains("addEventListener(\n    'click',"),
             "click listener must use capture phase"
         );
         assert!(
-            SCRIPT.contains("true\n  );"),
+            script_text().contains("true\n  );"),
             "the listener's third arg must be the literal `true`"
         );
     }
@@ -84,14 +96,14 @@ mod tests {
     fn init_script_allowlist_covers_http_https_mailto_tel() {
         for scheme in ["http://", "https://", "mailto:", "tel:"] {
             assert!(
-                SCRIPT.contains(&format!("'{scheme}'")),
+                script_text().contains(&format!("'{scheme}'")),
                 "isExternal() must match `{scheme}`"
             );
         }
         // Routing these would leak local paths or sandbox content to a browser.
         for forbidden in ["ftp://", "file://", "data:"] {
             assert!(
-                !SCRIPT.contains(&format!("'{forbidden}'")),
+                !script_text().contains(&format!("'{forbidden}'")),
                 "isExternal() must NOT route `{forbidden}`"
             );
         }
@@ -100,26 +112,26 @@ mod tests {
     #[test]
     fn init_script_shims_window_open() {
         // Through the same opener as the anchor handler.
-        assert!(SCRIPT.contains("window.open = function"));
-        assert!(SCRIPT.contains("openExternalUrl(url)"));
+        assert!(script_text().contains("window.open = function"));
+        assert!(script_text().contains("openExternalUrl(url)"));
     }
 
     #[test]
     fn init_script_exposes_openurl_on_ember_host() {
         // `host.openUrl` in the FE; the welcome screen's sign-in link uses it.
-        assert!(SCRIPT.contains("openUrl: openExternalUrl"));
+        assert!(script_text().contains("openUrl: openExternalUrl"));
     }
 
     #[test]
     fn init_script_respects_default_prevented_and_left_button_only() {
-        assert!(SCRIPT.contains("e.defaultPrevented"));
-        assert!(SCRIPT.contains("e.button !== 0"));
+        assert!(script_text().contains("e.defaultPrevented"));
+        assert!(script_text().contains("e.button !== 0"));
     }
 
     #[test]
     fn init_script_walks_event_path_for_nested_anchor() {
         // An icon inside an `<a>` is the event target, not the anchor.
-        assert!(SCRIPT.contains("composedPath"));
-        assert!(SCRIPT.contains("tagName === 'A'"));
+        assert!(script_text().contains("composedPath"));
+        assert!(script_text().contains("tagName === 'A'"));
     }
 }

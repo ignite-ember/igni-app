@@ -96,12 +96,6 @@ impl ManagedRuntime {
     /// installed live in uv's directories, shared with whatever else uses
     /// uv, so they stay and the rebuild reuses them rather than downloading
     /// again.
-    ///
-    /// Only those, by name, and the directory itself only once it is empty.
-    /// On Windows the cache is `%LOCALAPPDATA%\igni`, which is also where
-    /// the NSIS installer puts a per-user install of the app (Tauri's
-    /// default `$LOCALAPPDATA\<productName>`): wiping the whole directory
-    /// deleted the installed app and its uninstaller along with the runtime.
     pub fn reset(&self) -> Result<(), String> {
         if !self.root.exists() {
             return Ok(());
@@ -367,7 +361,11 @@ mod tests {
         // beside it, so neither an igni upgrade nor a Python bump wipes it.
         let rt = at(PathBuf::from("/c"));
         assert!(!rt.hf_home().starts_with(rt.venv_dir()));
-        let src = include_str!("managed.rs");
+        // The source is read with its line endings normalised: a Windows
+        // checkout has CRLF, and the function below is found by its
+        // closing brace — so on CRLF the slice would run on past it and
+        // count another file's `remove_dir_all`.
+        let src = include_str!("managed.rs").replace("\r\n", "\n");
         let rebuild = src
             .split("fn rebuild_venv")
             .nth(1)

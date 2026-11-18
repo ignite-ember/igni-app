@@ -49,6 +49,9 @@ export interface UserItem {
    *  ``get_pending_messages``. It has no run of its own; Retry re-sends
    *  it with ``force``, which supersedes the backend's pending row. */
   restored?: boolean;
+  /** The restored prompt's ``message_id``, which Discard hands to
+   *  ``discard_pending_message``. */
+  pendingMessageId?: string;
   /** Sent while a run was in flight and not started yet: it stays below
    *  everything that run still streams until its own run starts. */
   queued?: boolean;
@@ -60,9 +63,8 @@ export interface AssistantItem {
   text: string;
   /** Set when the turn did not complete normally. */
   interrupted?: AssistantInterrupted;
-  /** The banner under prompts restored after a crash: the backend has
-   *  no way to discard a pending row on its own, so it offers Retry
-   *  and Edit prompt, not Discard. */
+  /** The banner under prompts restored after a crash: its Discard
+   *  drops their pending rows (``discard_pending_message``). */
   restored?: boolean;
 }
 
@@ -176,6 +178,17 @@ export interface VisualizationItem {
   sourceAgent: string;
   /** Set when an extension appended the card: its id. */
   fromExtension?: string;
+  /** What the card could not draw, in words. Set once the spec is
+   *  whole and its gaps are real — the card says them instead of
+   *  drawing a blank (R666). */
+  notices?: string[];
+  /** Which draw of the card this is. The first draw is 1. The card
+   *  sends it back with its verdict, so the verdict names the draw it
+   *  is about. Absent while the card is still being drawn. */
+  revision?: number;
+  /** Whether the last delta of this card was the whole card. The
+   *  card reports what it drew once it is whole (R666). */
+  final?: boolean;
 }
 
 /** Roll-up of one top-level run. */

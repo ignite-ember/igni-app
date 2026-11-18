@@ -298,7 +298,7 @@ export const VIEW_STATE: Record<string, Partial<Record<Category, string[]>>> = {
     menu: ["open"],
   },
   "components/panels/mcp/useMcpServers.ts": {
-    data: ["servers"],
+    data: ["servers", "approvals"],
     pending: ["busy", "loadError", "actionError"],
   },
   "components/panels/PluginsPanel.tsx": {

@@ -122,7 +122,11 @@ mod tests {
     fn a_provisioned_runtime_needs_no_dev_acknowledgement() {
         // The selection reads only the variable and the settings; IGNITE_EMBER_DEV
         // is not among its inputs, which is the difference from IGNI_PYTHON.
-        let src = include_str!("provisioned.rs");
+        // The source is read with its line endings normalised: a Windows
+        // checkout has CRLF, and the function below is found by its
+        // closing brace — so on CRLF the slice would run on past it and
+        // read the whole file, `IGNITE_EMBER_DEV` and all.
+        let src = include_str!("provisioned.rs").replace("\r\n", "\n");
         let body = src
             .split("pub fn named")
             .nth(1)

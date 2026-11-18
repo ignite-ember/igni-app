@@ -5,10 +5,12 @@
  *
  * Who is signed in is `cloud_email`, the address on disk — the same
  * thing the sign-in wall goes by. `cloud_connected` says whether the
- * session holds a live token for the igni server, which an air-gapped,
- * on-prem install can lack while the person is plainly signed in. The
- * chip used to switch on `cloud_connected`, so that person was offered
- * "Log in".
+ * igni server answered the last request, which an air-gapped, on-prem
+ * install can lack while the person is plainly signed in. The chip
+ * used to switch on `cloud_connected`, so that person was offered
+ * "Log in"; it then said "not connected to the igni server", which
+ * reads like "you are not signed in" — a different thing, and the
+ * reason R638 asked the chip to say which of the two it is.
  */
 
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -40,9 +42,28 @@ describe("the account chip", () => {
     expect(onOpenAccount).toHaveBeenCalledOnce();
   });
 
-  it("says the session is not connected, on the chip's title", () => {
+  it("says it is signed in, on the chip's title, when the server is not answering", () => {
+    // The two states the backend can express are "nobody is signed in"
+    // and "somebody is signed in"; the flag only says whether the igni
+    // server answered. The title must not read as "you are signed out".
     chip({ cloud_email: "ann@acme.example", cloud_connected: false });
-    expect(screen.getByRole("button").getAttribute("title")).toMatch(/not connected/i);
+    const title = screen.getByRole("button").getAttribute("title") || "";
+    expect(title).toMatch(/signed in/i);
+    expect(title).toMatch(/igni server/i);
+    expect(title).not.toMatch(/not connected/i);
+  });
+
+  it("marks the chip, so it says so without a hover", () => {
+    chip({ cloud_email: "ann@acme.example", cloud_connected: false });
+    const marker = screen.getByRole("img", { name: /not answering/i });
+    expect(marker.className).toContain("not-answering");
+    // The marker is on the chip of the signed-in person.
+    expect(marker.closest(".chip")).toBeTruthy();
+  });
+
+  it("marks nothing when the server answered", () => {
+    chip({ cloud_email: "ann@acme.example", cloud_connected: true });
+    expect(screen.queryByRole("img", { name: /not answering/i })).toBeNull();
   });
 
   it("names a signed-in, connected person", () => {
@@ -56,6 +77,15 @@ describe("the account chip", () => {
     const { onLogIn } = chip({ cloud_email: "", cloud_connected: false });
     fireEvent.click(screen.getByText("Log in"));
     expect(onLogIn).toHaveBeenCalledOnce();
+  });
+
+  it("says nothing about the server when nobody is signed in", () => {
+    // Not signed in is its own thing; the chip must not blame the
+    // server for it, nor claim a connection it does not have.
+    chip({ cloud_email: "", cloud_connected: false });
+    const title = screen.getByRole("button").getAttribute("title");
+    expect(title ?? "").not.toMatch(/not connected|not answering/i);
+    expect(screen.queryByRole("img", { name: /not answering/i })).toBeNull();
   });
 
   it("offers Log in when nobody is signed in, even with a token", () => {

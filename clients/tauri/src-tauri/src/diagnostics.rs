@@ -274,7 +274,7 @@ mod tests {
             BackendDiagnostics::resolve(&dev, provisioned.as_ref(), &venv);
         BackendDiagnostics {
             versions: VersionReport {
-                app_version: "1.0.3".into(),
+                app_version: "1.0.5".into(),
                 actual: actual.into(),
             },
             interpreter: InterpreterReport {
@@ -299,12 +299,12 @@ mod tests {
     #[test]
     fn the_full_report_reads_as_before() {
         assert_eq!(
-            report("1.0.3", dev(None, None, None)),
+            report("1.0.5", dev(None, None, None)),
             "igni Tauri app · backend diagnostics\n\
              ─────────────────────────────────────\n\
-             App version              : 1.0.3\n\
-             Expected ignite-ember    : 1.0.3\n\
-             Actual ignite-ember      : 1.0.3\n\
+             App version              : 1.0.5\n\
+             Expected ignite-ember    : 1.0.5\n\
+             Actual ignite-ember      : 1.0.5\n\
              \n\
              Backend source           : managed venv\n\
              Interpreter path         : /c/venv/bin/python\n\
@@ -330,14 +330,14 @@ mod tests {
 
     #[test]
     fn an_unacknowledged_override_is_reported_as_ignored() {
-        let text = report("1.0.3", dev(Some("/dev/python"), None, None));
+        let text = report("1.0.5", dev(Some("/dev/python"), None, None));
         assert!(text.contains("↑ override env var set without ack — ignored"));
         assert!(text.contains("Backend source           : managed venv"));
     }
 
     #[test]
     fn an_acknowledged_override_is_the_interpreter() {
-        let text = report("1.0.3", dev(Some(""), Some("/py/python"), Some("TRUE")));
+        let text = report("1.0.5", dev(Some(""), Some("/py/python"), Some("TRUE")));
         assert!(text.contains("Backend source           : dev override"));
         assert!(text.contains("Interpreter path         : /py/python"));
         assert!(!text.contains("ignored"));
@@ -346,7 +346,7 @@ mod tests {
     #[test]
     fn a_provisioned_runtime_is_the_interpreter_it_names() {
         let text = report_with(
-            "1.0.4",
+            "1.0.5",
             dev(None, None, None),
             Some("/home/me/igni-runtime/bin/python"),
         );
@@ -359,8 +359,8 @@ mod tests {
     fn an_attached_backend_is_named_as_such() {
         let mut d = BackendDiagnostics {
             versions: VersionReport {
-                app_version: "1.0.4".into(),
-                actual: "1.0.4".into(),
+                app_version: "1.0.5".into(),
+                actual: "1.0.5".into(),
             },
             interpreter: InterpreterReport {
                 source: Source::Attached,

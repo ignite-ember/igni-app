@@ -46,14 +46,16 @@ function setup(opts: { rpc?: Rpc; model?: Record<string, unknown>; history?: His
     refreshStatus: vi.fn(async () => {}),
     refreshSessions: vi.fn(async () => {}),
   };
+  const hitl = { clear: vi.fn() };
   const switcher = new SessionSwitcher({
     client: client as never,
     windowModel: windowModel as never,
     view: t.view,
     historyLoader,
     shell,
+    hitl,
   });
-  return { t, client, windowModel, historyLoader, shell, switcher, sessions: () => sessions };
+  return { t, client, windowModel, historyLoader, shell, hitl, switcher, sessions: () => sessions };
 }
 
 afterEach(() => vi.restoreAllMocks());
@@ -94,6 +96,37 @@ describe("SessionSwitcher#bindOnConnect", () => {
     expect(s.windowModel.state.session).toBe("s-default");
   });
 
+  it("attaches the default session, so the backend shows its waiting approvals again", async () => {
+    const s = setup({
+      rpc: async (method) =>
+        method === "attach_session" ? { session_id: "s-default", project_dir: "/launch" } : "s-named",
+    });
+    await s.switcher.bindOnConnect({ wantedDir: "", arrival: null });
+    expect(s.client.rpc).toHaveBeenCalledWith("attach_session", {});
+    expect(s.client.rpc).not.toHaveBeenCalledWith("get_session_id");
+    expect(s.client.sessionId).toBe("s-default");
+    expect(s.windowModel.state.session).toBe("s-default");
+  });
+
+  it("names the default session when the backend cannot attach it", async () => {
+    const s = setup({
+      rpc: async (method) => {
+        if (method === "attach_session") throw new Error("unknown method");
+        return method === "get_session_id" ? "s-named" : undefined;
+      },
+    });
+    await s.switcher.bindOnConnect({ wantedDir: "", arrival: null });
+    expect(s.client.rpc).toHaveBeenCalledWith("attach_session", {});
+    expect(s.client.sessionId).toBe("s-named");
+  });
+
+  it("/clear only reads the renewed id: no attach, so no approval is shown twice", async () => {
+    const s = setup({ rpc: async () => "s-renewed" });
+    s.client.sessionId = "s-old";
+    await s.switcher.followRenewed();
+    expect(s.client.rpc.mock.calls.map((c) => c[0])).toEqual(["get_session_id"]);
+  });
+
   it("keeps a session it is already bound to across a reconnect", async () => {
     const s = setup();
     s.client.sessionId = "s-live";
@@ -128,6 +161,70 @@ describe("SessionSwitcher#pick", () => {
       { kind: "info", text: "Resumed session abcdef01." },
     ]);
     expect(s.shell.refreshStatus).toHaveBeenCalled();
+  });
+
+  it("attaches the session it picked, so the backend shows its waiting approval again", async () => {
+    // The approval of a paused run is asked in the session that paused
+    // it, and the backend shows it again only after an attach. A pick
+    // that did not attach left the question unanswerable in this
+    // window (R647).
+    const s = setup({
+      rpc: async (method) =>
+        method === "attach_session" ? { session_id: "s-picked", project_dir: "/work/repo" } : undefined,
+    });
+    await s.switcher.pick("s-picked");
+    expect(s.client.rpc).toHaveBeenCalledWith("attach_session", { session_id: "s-picked" });
+  });
+
+  it("binds the session before the attach, so the approval it replays is not filtered away", async () => {
+    // The replayed approval carries the session's id; the window's
+    // client drops an event stamped for another session.
+    const seen: string[] = [];
+    const s = setup({
+      rpc: async (method) => {
+        if (method === "attach_session") seen.push(s.client.sessionId);
+        return { session_id: "s-picked", project_dir: "/work/repo" };
+      },
+    });
+    await s.switcher.pick("s-picked");
+    expect(seen).toEqual(["s-picked"]);
+  });
+
+  it("shows the history of a session the backend refuses to attach", async () => {
+    // A session of another project is refused by an attach; the
+    // history is still worth showing.
+    const other = new ArrayTranscript().chatItems.user("earlier question");
+    const s = setup({
+      history: { items: [other], historyMap: [0] },
+      rpc: async (method) => {
+        if (method === "attach_session") throw new Error("session belongs to a different project");
+        return undefined;
+      },
+    });
+    await s.switcher.pick("s-other");
+    expect(s.client.sessionId).toBe("s-other");
+    expect(s.t.items[0]).toMatchObject({ kind: "user", text: "earlier question" });
+    expect(s.t.kinds()).not.toContain("error");
+  });
+
+  it("drops the approval asked in the session it is leaving", async () => {
+    // Answering it here would answer it in the wrong session: the
+    // window sends its decisions stamped with the session it is bound
+    // to.
+    const s = setup();
+    s.client.sessionId = "s-old";
+    await s.switcher.pick("s-new");
+    expect(s.hitl.clear).toHaveBeenCalled();
+  });
+
+  it("keeps the approval of the session it picks", async () => {
+    // Picking the session the window is already in is not a switch:
+    // the approval on screen is the one of that session, and the
+    // attach brings the same one back.
+    const s = setup();
+    s.client.sessionId = "s-same";
+    await s.switcher.pick("s-same");
+    expect(s.hitl.clear).not.toHaveBeenCalled();
   });
 
   it("closes the sidebar on a narrow window, and leaves it on a wide one", async () => {
