@@ -334,11 +334,80 @@ function backends(needle) {
 let linkEnv = process.env;
 
 /**
+ * The command the scheme is registered to, as the registry names it: the
+ * program and its arguments, with %1 for the link. What a desktop shell
+ * runs when the link is followed.
+ */
+function registeredHandler(url) {
+  const out = execFileSync("reg", ["query", "HKCU\\Software\\Classes\\igni\\shell\\open\\command", "/ve"], {
+    encoding: "utf8",
+  });
+  const value = out.trim().split(/\r?\n/).pop() ?? "";
+  const command = (value.match(/REG_SZ\s+(.*)$/)?.[1] ?? value).trim();
+  // The command line as a shell reads it: a quoted part stays together.
+  const parts = [];
+  let current = "";
+  let quoted = false;
+  for (const ch of command) {
+    if (ch === '"') {
+      quoted = !quoted;
+      continue;
+    }
+    if (ch === " " && !quoted) {
+      if (current) parts.push(current);
+      current = "";
+      continue;
+    }
+    current += ch;
+  }
+  if (current) parts.push(current);
+  const program = parts.shift() ?? "";
+  if (!program) throw new Error(`the registry names no program for igni:// (${command})`);
+  return { program, args: parts.map((a) => (a === "%1" ? url : a)) };
+}
+
+/**
+ * The app's processes on the machine, with their command lines: whether a
+ * second one started for the link, and whether the link was among its
+ * arguments. A runner has no shell to hand the link over, so this is what
+ * says what the OS did with it.
+ */
+function windowsAppProcesses() {
+  // No double quotes anywhere: PowerShell reads the command line itself, and
+  // a quoted argument with escapes in it is a quoting puzzle of its own.
+  const script = [
+    "$seen = @{}",
+    "$end = (Get-Date).AddSeconds(6)",
+    "while ((Get-Date) -lt $end) {",
+    "  Get-CimInstance Win32_Process -ErrorAction SilentlyContinue |",
+    "    Where-Object { $_.Name -eq 'igni-app.exe' } |",
+    "    ForEach-Object {",
+    "      if (-not $seen.ContainsKey($_.ProcessId)) {",
+    "        $seen[$_.ProcessId] = $true",
+    "        Write-Output ($_.ProcessId.ToString() + ' :: ' + $_.CommandLine)",
+    "      }",
+    "    }",
+    "  Start-Sleep -Milliseconds 250",
+    "}",
+  ].join("\n");
+  try {
+    return execFileSync("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", script], {
+      encoding: "utf8",
+      timeout: 30_000,
+    }).trim();
+  } catch (err) {
+    return `(the process list failed: ${String(err.stderr || err.message).trim()})`;
+  }
+}
+
+/**
  * Follow an igni:// link the way the OS does. On Linux, xdg-open is tried
  * first; on a runner with no desktop environment it can fail to run the
  * handler it found, so the handler the scheme is registered to (the
  * `.desktop` file `xdg-mime` names) is then run as its Exec line says,
- * with the link as its argument — what the desktop would do.
+ * with the link as its argument — what the desktop would do. Windows is
+ * the same: the shell opens the link, and where the runner's shell cannot,
+ * the command the registry names is run with the link as its argument.
  */
 function openLink(url) {
   if (WIN) {
@@ -350,14 +419,15 @@ function openLink(url) {
         console.log(`  ${key}: (none)`);
       }
     }
-    execFileSync("cmd", ["/c", "start", "", url]);
-    setTimeout(() => {
-      try {
-        console.log(execFileSync("tasklist", ["/FI", "IMAGENAME eq igni-app.exe"]).toString());
-      } catch {
-        /* diagnostic only */
-      }
-    }, 3_000);
+    try {
+      const out = execFileSync("cmd", ["/c", "start", "", url], {
+        encoding: "utf8",
+        stdio: ["ignore", "pipe", "pipe"],
+      });
+      console.log(`  the shell opened the link${out.trim() ? `: ${out.trim()}` : ""}`);
+    } catch (err) {
+      console.log(`  the shell did not open the link: ${String(err.stderr || err.message).trim()}`);
+    }
     return;
   }
   if (process.platform === "darwin") return execFileSync("open", [url]);
@@ -483,17 +553,37 @@ async function firstLaunch() {
     // Back to the chat first, so arriving on the page is the link's doing.
     await session.exec("const n=[...document.querySelectorAll('*')].find(e => e.children.length === 0 && e.textContent.trim() === 'Chat'); if (n) n.click();");
     await sleep(1_000);
-    openLink("igni://open?open=plugins");
-    await session.waitFor("the Plugins page after the link", async () => {
-      const handles = await session.windowHandles();
-      for (const h of handles) {
-        await session.switchTo(h);
-        const where = await session.exec("return location.search");
-        const t = await session.bodyText();
-        if (/open=plugins/.test(where) || /No marketplaces configured|Marketplace/.test(t)) return true;
+    const arrived = (timeout) =>
+      session.waitFor("the Plugins page after the link", async () => {
+        const handles = await session.windowHandles();
+        for (const h of handles) {
+          await session.switchTo(h);
+          const where = await session.exec("return location.search");
+          const t = await session.bodyText();
+          if (/open=plugins/.test(where) || /No marketplaces configured|Marketplace/.test(t)) return true;
+        }
+        return false;
+      }, { timeout });
+    const url = "igni://open?open=plugins";
+    openLink(url);
+    try {
+      await arrived(20_000);
+    } catch {
+      // The runner's shell may have no way to hand the link to the app.
+      // What the OS did with it is worth saying before the next way.
+      const processes = windowsAppProcesses();
+      console.log(`  the shell did not bring the app to the page; the app processes were:\n${processes}`);
+      // The way the shell would: the command the scheme is registered to,
+      // with the link as its argument.
+      const handler = registeredHandler(url);
+      console.log(`  running the registered handler: ${handler.program} ${handler.args.join(" ")}`);
+      spawn(handler.program, handler.args, { detached: true, stdio: "ignore" }).unref();
+      try {
+        await arrived(40_000);
+      } catch (err) {
+        throw new Error(`${err.message}\n  the app processes were:\n${processes}`);
       }
-      return false;
-    }, { timeout: 60_000 });
+    }
     await shot("07-deep-link");
   });
 
