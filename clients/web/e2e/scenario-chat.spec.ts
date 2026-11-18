@@ -122,7 +122,15 @@ test("CHAT-031 the model provider failing is reported and the next turn works", 
 test("CHAT-020 the backend crashing mid-answer is shown, and the app recovers when it is back", async ({ page, liveBe }) => {
   await open(page, liveBe.wsUrl);
   await newChat(page);
-  await send(page, "[[slow 300]] [[lines 100]]");
+  // The answer has to be long enough that the crash lands in the middle of
+  // it, and short enough that the *recovery* turn finishes inside this
+  // test's timeout. The backend quotes the interrupted question verbatim in
+  // its recap ("The user had asked: '...'"), and the scripted model reads
+  // the directives out of that quote — so the recovery turn answers with
+  // the same number of lines at the same pace. 20 lines at 150 ms is about
+  // 18 seconds: long enough to be interrupted, short enough to be answered
+  // again after the backend is back.
+  await send(page, "[[slow 150]] [[lines 20]]");
   await assistantSaid(page, "Line 2 of the scripted reply.");
   await liveBe.kill();
   // The app says it lost the backend rather than looking busy forever.
@@ -196,15 +204,14 @@ test("CHAT-027 two tabs of one browser on one backend both work", async ({ page,
 });
 
 test("CHAT-012 messages typed during a run are queued and all answered, in order", async ({ page, liveBe }) => {
-  // KNOWN BUG (igni-core), kept red-on-fix rather than skipped. The app
-  // says "Queued — will run after the current turn", sends
-  // `queue_message`, and the backend appends it to its message queue —
-  // which it drains only into a *tool result* of the running turn
-  // (`core/hooks/queue/injector.py`). A turn with no tool call ends with
-  // the queue untouched and nothing starts the queued messages: they sit
-  // at "Queued" forever. `test.fail()` passes while that is so and fails
-  // the day it is fixed. docs/ENTERPRISE_TEST_PLAN.md CHAT-012, CHAT-014.
-  test.fail();
+  // The igni-core bug this row was kept red-on-fix for is fixed: a message
+  // queued during a run is the next turn when no tool call took it
+  // (igni-core cefccc4f — "A message queued during a run is the next turn
+  // when no tool call took it"). The backend drains what is left in the
+  // queue when the run ends (`backend/message_dispatcher.py`,
+  // `_run_queued`), so the messages run in order, each as its own turn.
+  // The `test.fail()` marker that held this row red is gone with the bug.
+  // docs/ENTERPRISE_TEST_PLAN.md CHAT-012, CHAT-014.
   test.setTimeout(90_000);
   await open(page, liveBe.wsUrl);
   await newChat(page);
