@@ -262,7 +262,7 @@ describe("JsonRenderView", () => {
         root: "root",
         elements: {
           root: { type: "Card", props: { title: "Monthly Sales 2026" }, children: ["bar"] },
-          bar: { type: "BarGraph", props: { data: { item: [{ x: "Jan", y: 1 }] } }, children: [] },
+          bar: { type: "BarGraph", props: { data: 42 }, children: [] },
         },
       } as unknown as Spec;
       const { container } = render(<JsonRenderView spec={spec} />);
@@ -276,7 +276,7 @@ describe("JsonRenderView", () => {
       quiet();
       const spec: Spec = {
         root: "t",
-        elements: { t: { type: "Table", props: { columns: { item: [] }, rows: [] }, children: [] } },
+        elements: { t: { type: "Table", props: { columns: "Provider", rows: [] }, children: [] } },
       } as unknown as Spec;
       const { container } = render(<JsonRenderView spec={spec} />);
       expect(container.querySelector(".jr-element-error")?.textContent).toMatch(
@@ -304,6 +304,118 @@ describe("JsonRenderView", () => {
       const { container } = render(<JsonRenderView spec={spec} />);
       expect(container.querySelector(".jr-element-error")).toBeNull();
       expect(container.querySelector(".jr-empty")).toBeTruthy();
+    });
+  });
+
+  // R666: the model wrote the array inside an object under an "item" key,
+  // so the card said "Could not draw BarGraph: its data is not a list" over
+  // a chart that was there all along. The wrapper is read as the list it
+  // stands for.
+  describe("a spec whose arrays arrived wrapped", () => {
+    it("draws the chart", () => {
+      const spec: Spec = {
+        root: "root",
+        elements: {
+          root: { type: "Card", props: { title: "Monthly Sales 2026" }, children: ["bar"] },
+          bar: {
+            type: "BarGraph",
+            props: { data: { item: [{ x: "Jan", y: 120 }, { x: "Feb", y: 135 }] } },
+            children: [],
+          },
+        },
+      } as unknown as Spec;
+      const { container } = render(<JsonRenderView spec={spec} />);
+      expect(container.querySelector(".jr-element-error")).toBeNull();
+      expect(container.querySelectorAll(".jr-barchart-bar").length).toBe(2);
+    });
+
+    it("draws the table", () => {
+      const spec: Spec = {
+        root: "t",
+        elements: {
+          t: {
+            type: "Table",
+            props: {
+              columns: { item: [{ key: "provider", label: "Provider" }] },
+              rows: { item: [{ provider: "AWS" }] },
+            },
+            children: [],
+          },
+        },
+      } as unknown as Spec;
+      const { container } = render(<JsonRenderView spec={spec} />);
+      expect(container.querySelector(".jr-element-error")).toBeNull();
+      expect(container.querySelector("table")).toBeTruthy();
+      expect(container.textContent).toContain("AWS");
+    });
+  });
+
+  // R666: the model wrote the values as text ("120"), so the series
+  // came out empty, the card said "no data", and the agent said the
+  // chart was above. The values are read as the numbers they stand for.
+  describe("a chart whose values arrive as text", () => {
+    it("draws the bars", () => {
+      const spec: Spec = {
+        root: "root",
+        elements: {
+          root: { type: "Card", props: { title: "Monthly Sales 2026" }, children: ["bar"] },
+          bar: {
+            type: "BarGraph",
+            props: { data: [{ x: "Jan", y: "120" }, { x: "Feb", y: "135" }] },
+            children: [],
+          },
+        },
+      } as unknown as Spec;
+      const { container } = render(<JsonRenderView spec={spec} />);
+      expect(container.querySelector(".jr-element-error")).toBeNull();
+      expect(container.querySelectorAll(".jr-barchart-bar").length).toBe(2);
+    });
+
+    it("says so when the values are not numbers at all", () => {
+      const spec: Spec = {
+        root: "root",
+        elements: {
+          root: { type: "Card", props: { title: "Monthly Sales 2026" }, children: ["bar"] },
+          bar: {
+            type: "BarGraph",
+            props: { data: [{ x: "Jan", y: "n/a" }, { x: "Feb", y: "n/a" }] },
+            children: [],
+          },
+        },
+      } as unknown as Spec;
+      const { container } = render(<JsonRenderView spec={spec} />);
+      expect(container.querySelector(".jr-element-error")?.textContent).toMatch(
+        /Could not draw BarGraph: its y values are not numbers/,
+      );
+    });
+  });
+
+  // R666: the card said nothing when the spec itself was broken — the
+  // chart was pruned away and the card came out blank, while the agent
+  // said the chart was above. The gaps are said on the card.
+  describe("a spec that leaves something out", () => {
+    const spec: Spec = {
+      root: "root",
+      elements: {
+        root: { type: "Card", props: { title: "Cloud Spend" }, children: [] },
+      },
+    } as unknown as Spec;
+
+    it("says what it could not draw", () => {
+      render(
+        <JsonRenderView
+          spec={spec}
+          notices={["its child 'chart' is not an element of it"]}
+        />,
+      );
+      expect(screen.getByRole("note").textContent).toContain(
+        "This visualization could not be fully drawn: its child 'chart' is not an element of it.",
+      );
+    });
+
+    it("says nothing when there is nothing to say", () => {
+      const { container } = render(<JsonRenderView spec={spec} notices={[]} />);
+      expect(container.querySelector(".viz-render-error")).toBeNull();
     });
   });
 });

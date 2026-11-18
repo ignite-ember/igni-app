@@ -20,6 +20,28 @@ export type OHLCPoint = {
 const isFiniteNumber = (v: unknown): v is number =>
   typeof v === "number" && Number.isFinite(v);
 
+/**
+ * The number a value stands for.
+ *
+ * The catalog declares a series point's ``y`` a number, and the
+ * visualizer's prompt is generated from that catalog — but a model igni
+ * does not fine-tune writes the value as text ("120"), and the chart
+ * then has nothing to draw: the series is empty, the card says "no
+ * data", and the agent says the chart is above (R666). A value that
+ * reads as a number is the number the catalog asked for.
+ *
+ * Text that does not read as a number is not a number and is not
+ * guessed at.
+ */
+function numericValue(value: unknown): number | undefined {
+  if (isFiniteNumber(value)) return value;
+  if (typeof value !== "string") return undefined;
+  const text = value.trim();
+  if (text === "") return undefined;
+  const parsed = Number(text);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
 /** A chart's ``data``: absent (still streaming) is no rows yet; anything
  *  else that is not a list is a malformed spec, said as such rather than
  *  as a TypeError from inside the chart. */
@@ -31,21 +53,61 @@ export function rows<T>(data: T[] | null | undefined): T[] {
 
 /** The rows of a series that are complete. Mid-stream, partial-json
  *  hands us placeholder rows; a missing or non-finite value would put
- *  NaN into SVG attributes, which renders broken paths. */
+ *  NaN into SVG attributes, which renders broken paths. A value written
+ *  as text is read as the number it stands for (see
+ *  {@link numericValue}).
+ *
+ *  A row whose value is there but is not a number is a spec the model
+ *  got wrong, not a row the stream has not finished — but a chart that
+ *  has other rows to draw draws them. Only a series with nothing to
+ *  draw says so, in the component's own words, instead of coming out
+ *  as "no data" over data that was there. */
 export function completeSeries(data: SeriesPoint[]): SeriesPoint[] {
-  return rows(data).filter((d) => d != null && d.x != null && isFiniteNumber(d.y));
+  const complete: SeriesPoint[] = [];
+  let wrong = false;
+  for (const row of rows(data)) {
+    if (row == null || row.x == null) continue;
+    const raw = (row as { y?: unknown }).y;
+    const y = numericValue(raw);
+    if (y === undefined) {
+      if (raw !== undefined && raw !== null) wrong = true;
+      continue;
+    }
+    complete.push({ x: row.x, y });
+  }
+  if (complete.length === 0 && wrong) throw new Error("its y values are not numbers");
+  return complete;
 }
 
-/** The OHLC rows whose four prices have all arrived. */
+/** The OHLC rows whose four prices have all arrived, each price read
+ *  as the number it stands for. */
 export function completeOHLC(data: OHLCPoint[]): OHLCPoint[] {
-  return rows(data).filter(
-    (d) =>
-      d != null &&
-      isFiniteNumber(d.o) &&
-      isFiniteNumber(d.h) &&
-      isFiniteNumber(d.l) &&
-      isFiniteNumber(d.c),
-  );
+  const complete: OHLCPoint[] = [];
+  let wrong = false;
+  for (const row of rows(data)) {
+    if (row == null) continue;
+    const raw = row as { o?: unknown; h?: unknown; l?: unknown; c?: unknown; v?: unknown };
+    const o = numericValue(raw.o);
+    const h = numericValue(raw.h);
+    const l = numericValue(raw.l);
+    const c = numericValue(raw.c);
+    if (o === undefined || h === undefined || l === undefined || c === undefined) {
+      // A price that is there but is not a number is the model's
+      // mistake; one that has not arrived is the stream's.
+      if (
+        [raw.o, raw.h, raw.l, raw.c].some(
+          (p) => p !== undefined && p !== null && numericValue(p) === undefined,
+        )
+      ) {
+        wrong = true;
+      }
+      continue;
+    }
+    const v = numericValue(raw.v);
+    complete.push({ x: row.x, o, h, l, c, ...(v === undefined ? {} : { v }) });
+  }
+  if (complete.length === 0 && wrong) throw new Error("its prices are not numbers");
+  return complete;
 }
 
 /** The SVG canvas and the plot box inside it. */

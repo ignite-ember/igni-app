@@ -76,6 +76,7 @@ export function VisualizationCard({
         spec={spec as Spec}
         title={item.title}
         sourceAgent={extensionName || item.sourceAgent}
+        notices={item.notices}
         onDispatchAction={handlers?.dispatchAction}
       />
     </VisualizationErrorBoundary>

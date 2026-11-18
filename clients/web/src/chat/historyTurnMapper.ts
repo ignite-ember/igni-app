@@ -17,6 +17,7 @@ import type {
 } from "../protocol/historyTurns";
 import { parseOrchestrateEvent } from "../protocol/orchestrateEvents";
 import { parseWorkflowEvent, type WorkflowEvent } from "../protocol/workflowEvents";
+import { specIssueText } from "../components/jsonRender/specIntegrity";
 import type { ChatItem, StatsItem } from "./chatItem";
 import type { ChatItemFactory } from "./chatItemFactory";
 import { OrchestrateAgentTree } from "./orchestrateAgentTree";
@@ -25,6 +26,7 @@ import { estimateTokens } from "./runCompletion";
 import { UserMessageText } from "./userMessageText";
 import { toolOutputForDisplay } from "./toolOutput";
 import { WorkflowRunModel } from "./workflowRun";
+import { pruneSpec } from "./visualizationStream";
 
 type Mappers = {
   [K in HistoryTurn["role"]]?: (turn: Extract<HistoryTurn, { role: K }>) => ChatItem | null;
@@ -139,14 +141,21 @@ export class HistoryTurnMapper {
     return { ...this.items.orchestrate(cardId, tree), streaming: false };
   }
 
+  /** The card the live stream drew, folded back from the persisted
+   *  spec. The persisted spec is the one the visualizer emitted, so
+   *  it is pruned to what the renderer can walk and its gaps are said
+   *  on the card — the same a live card says (R666). */
   private fromVisualization(turn: VisualizationTurn): ChatItem | null {
     if (!turn.spec_id || !turn.spec || typeof turn.spec !== "object") return null;
+    const spec = pruneSpec(turn.spec) ?? turn.spec;
+    const notices = specIssueText(turn.spec);
     return this.items.visualization({
-      spec: turn.spec,
+      spec,
       title: turn.title,
       sourceAgent: turn.source_agent,
       specId: turn.spec_id,
       fromExtension: turn.extension_id || undefined,
+      ...(notices.length > 0 ? { notices } : {}),
     });
   }
 
