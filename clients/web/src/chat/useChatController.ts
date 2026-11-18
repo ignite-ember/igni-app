@@ -100,7 +100,10 @@ function wireChatController(deps: ChatControllerDeps): ChatController {
       editPrompt: edits.editPrompt,
     },
     workflow: { rerun: items.rerunWorkflow, cancel: items.cancelWorkflow },
-    visualization: { dispatchAction: items.dispatchVisualizationAction },
+    visualization: {
+      dispatchAction: items.dispatchVisualizationAction,
+      reportVerdict: items.reportVisualizationVerdict,
+    },
   };
   const resolveHitl = (decisions: HitlAnswers): void => {
     hitl.clear();

@@ -5,6 +5,7 @@
  */
 
 import type { ChatItem, ChatItemOf, UserItem } from "../../chat/chatItem";
+import type { VisualizationVerdictReport } from "../../chat/visualizationStream";
 import type { WorkflowRunState } from "../../chat/workflowRun";
 import type { DispatchAction } from "../JsonRenderView";
 
@@ -50,6 +51,9 @@ export interface VisualizationHandlers {
   /** An interactive component's action, sent to the backend. Without
    *  it, actions log locally and do nothing. */
   readonly dispatchAction?: DispatchAction;
+  /** What the client drew of the card, sent to the backend so the
+   *  agent can be told what is on the screen (R666). */
+  readonly reportVerdict?: (verdict: VisualizationVerdictReport) => void;
 }
 
 /**

@@ -41,6 +41,10 @@ export interface VisualizationInput {
   fromExtension?: string;
   /** What the card could not draw, in words. */
   notices?: string[];
+  /** Which draw of the card this is; the first draw is 1. */
+  revision?: number;
+  /** Whether this is the whole card. */
+  final?: boolean;
 }
 
 export type StatsInput = Omit<StatsItem, "kind" | "id">;
@@ -122,6 +126,8 @@ export class ChatItemFactory {
       sourceAgent: input.sourceAgent,
       ...(input.fromExtension ? { fromExtension: input.fromExtension } : {}),
       ...(input.notices ? { notices: input.notices } : {}),
+      ...(input.revision !== undefined ? { revision: input.revision } : {}),
+      ...(input.final !== undefined ? { final: input.final } : {}),
     };
   }
 

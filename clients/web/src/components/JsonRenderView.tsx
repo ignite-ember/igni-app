@@ -29,11 +29,16 @@
  *   (``jsonRender/specIntegrity.ts``) and passes them down as
  *   ``notices``: a card that could not draw everything says so
  *   instead of being quietly blank.
+ * - **What the card drew is said back.** The boundary that catches a
+ *   failed element tells this view, and this view reports the draw
+ *   (``onDrawResult``): the backend keeps it and the agent is told
+ *   what is on the screen rather than what it hoped for (R666).
  */
 
 import { Renderer, JSONUIProvider } from "@json-render/react";
 import type { Spec } from "@json-render/core";
-import { memo, useMemo } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef } from "react";
+import { ElementFailureContext, type ElementDrawFailure } from "./jsonRender/guarded";
 import { registry, unknownComponent } from "./jsonRender/registry";
 import { normaliseSpec } from "./jsonRender/specShape";
 import "./JsonRenderView.css";
@@ -41,6 +46,16 @@ import "./JsonRenderView.css";
 export type DispatchAction = (name: string, params: Record<string, unknown>) => Promise<unknown>;
 
 type ActionHandler = (params: Record<string, unknown>) => Promise<unknown>;
+
+/** What the client drew of one card. */
+export interface CardDrawResult {
+  /** How many elements the card has. */
+  total: number;
+  /** The elements the client could not draw. */
+  failed: ElementDrawFailure[];
+  /** What was wrong with the card's shape. */
+  issues: string[];
+}
 
 interface JsonRenderViewProps {
   spec: Spec;
@@ -50,6 +65,8 @@ interface JsonRenderViewProps {
    *  before it was pruned to what the renderer can walk (R666). */
   notices?: string[];
   onDispatchAction?: DispatchAction;
+  /** What this card drew, said once the draw is on the screen. */
+  onDrawResult?: (result: CardDrawResult) => void;
 }
 
 /** ``JSONUIProvider`` takes ``handlers: Record<string, fn>``, but the
@@ -92,13 +109,79 @@ export function unrenderableSpec(spec: unknown): string | null {
   return null;
 }
 
-function JsonRenderViewInner({ spec, title, sourceAgent, notices, onDispatchAction }: JsonRenderViewProps) {
+/** The failures of one draw, as the boundary catches them. */
+class DrawCollector {
+  private readonly failures: ElementDrawFailure[] = [];
+
+  add(failure: ElementDrawFailure): void {
+    const known = this.failures.some(
+      (f) => f.type === failure.type && f.message === failure.message,
+    );
+    if (!known) this.failures.push(failure);
+  }
+
+  list(): ElementDrawFailure[] {
+    return [...this.failures];
+  }
+}
+
+/** One collector per draw. A new spec is a new draw, and the failures
+ *  of the old one do not answer for it. */
+function useCollector(spec: unknown): DrawCollector {
+  const held = useRef<{ spec: unknown; collector: DrawCollector } | null>(null);
+  if (!held.current || held.current.spec !== spec) {
+    held.current = { spec, collector: new DrawCollector() };
+  }
+  return held.current.collector;
+}
+
+/** How many elements the card has. Zero when it cannot be drawn at
+ *  all: there is then nothing on the screen to count. */
+function elementCount(spec: unknown, unrenderable: string | null): number {
+  if (unrenderable) return 0;
+  const elements = (spec as { elements?: unknown } | null | undefined)?.elements;
+  if (!elements || typeof elements !== "object" || Array.isArray(elements)) return 0;
+  return Object.keys(elements).length;
+}
+
+function JsonRenderViewInner({
+  spec,
+  title,
+  sourceAgent,
+  notices,
+  onDispatchAction,
+  onDrawResult,
+}: JsonRenderViewProps) {
   const handlers = useMemo(() => forwardingHandlers(onDispatchAction), [onDispatchAction]);
   // A model that wraps an array in {"item": [...]} means the list the
   // catalog asked for; the renderer reads it as one, so the card draws
   // instead of saying it could not (see jsonRender/specShape.ts).
   const drawable = useMemo(() => normaliseSpec(spec), [spec]);
   const unrenderable = unrenderableSpec(drawable);
+  const issues = useMemo(
+    () => [...(notices ?? []), ...(unrenderable ? [unrenderable] : [])],
+    [notices, unrenderable],
+  );
+  const total = useMemo(() => elementCount(drawable, unrenderable), [drawable, unrenderable]);
+  const collector = useCollector(drawable);
+  // The report is said once the draw is on the screen: after the
+  // commit, so the boundary has already caught what it could not draw.
+  const say = useRef<(() => void) | null>(null);
+  const onFailure = useCallback(
+    (failure: ElementDrawFailure) => {
+      collector.add(failure);
+      say.current?.();
+    },
+    [collector],
+  );
+  useEffect(() => {
+    const report = () => onDrawResult?.({ total, failed: collector.list(), issues });
+    say.current = report;
+    report();
+    return () => {
+      say.current = null;
+    };
+  }, [onDrawResult, total, issues, collector]);
   return (
     <div className="jr-view">
       {(title || sourceAgent) && (
@@ -113,9 +196,11 @@ function JsonRenderViewInner({ spec, title, sourceAgent, notices, onDispatchActi
         </div>
       ) : (
         <>
-          <JSONUIProvider registry={registry} handlers={handlers}>
-            <Renderer spec={drawable} registry={registry} fallback={unknownComponent} />
-          </JSONUIProvider>
+          <ElementFailureContext.Provider value={onFailure}>
+            <JSONUIProvider registry={registry} handlers={handlers}>
+              <Renderer spec={drawable} registry={registry} fallback={unknownComponent} />
+            </JSONUIProvider>
+          </ElementFailureContext.Provider>
           {notices && notices.length > 0 && (
             <div className="viz-render-error" role="note">
               {notices.map((notice) => (

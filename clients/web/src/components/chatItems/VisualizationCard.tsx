@@ -4,12 +4,12 @@
  * reads the history before the extensions are listed still gets it.
  */
 
-import { Component, type ReactNode } from "react";
+import { Component, useCallback, type ReactNode } from "react";
 import type { Spec } from "@json-render/core";
 
 import type { VisualizationItem } from "../../chat/chatItem";
 import { useExtensionName } from "../../extensions/extensionNames";
-import { JsonRenderView } from "../JsonRenderView";
+import { JsonRenderView, type CardDrawResult } from "../JsonRenderView";
 import type { VisualizationHandlers } from "./handlers";
 
 interface BoundaryProps {
@@ -70,6 +70,28 @@ export function VisualizationCard({
   const extensionName = useExtensionName(item.fromExtension);
   // TODO(pass 2): type the spec at the chat-item boundary instead.
   const spec = item.spec as Spec | null;
+  const reportVerdict = handlers?.reportVerdict;
+  const specId = item.specId;
+  const revision = item.revision;
+  const whole = item.final === true;
+  /** What the card drew, said to the backend — so the agent is told
+   *  what is on the screen rather than what it hoped for (R666). Only
+   *  a whole card that names its draw is reported: a card still being
+   *  drawn has not been drawn yet, and a card an extension appended
+   *  is not the agent's card to be told about. */
+  const onDrawResult = useCallback(
+    (result: CardDrawResult) => {
+      if (!whole || revision === undefined) return;
+      reportVerdict?.({
+        spec_id: specId,
+        revision,
+        total: result.total,
+        failed: result.failed,
+        issues: result.issues,
+      });
+    },
+    [reportVerdict, revision, specId, whole],
+  );
   return (
     <VisualizationErrorBoundary specSignature={specSignature(spec)}>
       <JsonRenderView
@@ -78,6 +100,7 @@ export function VisualizationCard({
         sourceAgent={extensionName || item.sourceAgent}
         notices={item.notices}
         onDispatchAction={handlers?.dispatchAction}
+        onDrawResult={onDrawResult}
       />
     </VisualizationErrorBoundary>
   );

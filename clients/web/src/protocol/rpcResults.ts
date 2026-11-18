@@ -234,3 +234,25 @@ export class VisualizationActionResult {
     return new VisualizationActionResult(p.flag("ok"), p.string("action"), p.value("params"));
   }
 }
+
+/** ``report_visualization_verdict``: what the backend kept. */
+export class VisualizationVerdictResult {
+  constructor(
+    readonly ok: boolean,
+    readonly spec_id: string,
+    readonly revision: number,
+    readonly drawn: number,
+    readonly total: number,
+  ) {}
+
+  static parse(raw: unknown): VisualizationVerdictResult {
+    const p = new WirePayload(raw);
+    return new VisualizationVerdictResult(
+      p.flag("ok"),
+      p.string("spec_id"),
+      p.number("revision"),
+      p.number("drawn"),
+      p.number("total"),
+    );
+  }
+}

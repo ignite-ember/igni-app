@@ -24,11 +24,34 @@ export interface VisualizationDeltaEvent {
   /** ``true`` on the last delta of the stream so callers can trigger
    *  persistence exactly once. */
   final?: boolean;
+  /** Which draw of the card this is; the first draw is 1. Absent on a
+   *  partial frame, which is not a draw. */
+  revision?: number;
   /** The title an extension gave the card (``host.chat.append(view, title)``). */
   title?: string;
   /** The id of the extension that appended the card. Absent on the
    *  visualizer's own cards. */
   source?: string;
+}
+
+/** One element of a card the client could not draw. */
+export interface VisualizationElementFailure {
+  type: string;
+  message: string;
+}
+
+/** What the client drew of one card, said to the backend. */
+export interface VisualizationVerdictReport {
+  /** The card this is about. */
+  spec_id: string;
+  /** Which draw of the card this is; the first draw is 1. */
+  revision: number;
+  /** How many elements the card has. */
+  total: number;
+  /** The elements the client could not draw. */
+  failed: VisualizationElementFailure[];
+  /** What was wrong with the card's shape. */
+  issues: string[];
 }
 
 /** The ``visualization_delta`` an ``orchestrate_event`` push carries,
@@ -49,6 +72,7 @@ export function visualizationDeltaFromPayload(
     spec_id: p.spec_id,
     json: p.json,
     final: p.final === true,
+    revision: typeof p.revision === "number" ? p.revision : undefined,
     title: typeof p.title === "string" ? p.title : undefined,
     source: typeof p.source === "string" && p.source ? p.source : undefined,
   };
@@ -200,6 +224,10 @@ export function applyVisualizationDelta(
       spec,
       title: event.title || existing.title,
       ...(notices ? { notices } : {}),
+      // The card is whole again once the whole card arrives; until
+      // then it is being drawn, and what it drew is not said yet.
+      final: event.final === true,
+      revision: event.revision ?? existing.revision,
     };
     next[idx] = updated;
     return next;
@@ -213,6 +241,8 @@ export function applyVisualizationDelta(
       specId: event.spec_id,
       fromExtension: event.source,
       ...(notices ? { notices } : {}),
+      ...(event.revision !== undefined ? { revision: event.revision } : {}),
+      final: event.final === true,
     }),
   ];
 }
