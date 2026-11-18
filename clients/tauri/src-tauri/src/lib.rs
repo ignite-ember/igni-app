@@ -35,7 +35,14 @@ pub fn run() {
     // process; this hands its URL to the running app (the `deep-link`
     // feature routes it to `on_open_url` below) and ends the second one.
     let builder = tauri::Builder::default()
-        .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
+        .plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
+            // The link the second process was started with is ours to
+            // deliver: the deep-link plugin only reads the arguments of
+            // the process it runs in, and that process has already exited.
+            let links = DeepLinks::links_in(&argv);
+            if !links.is_empty() {
+                DeepLinks::deliver(app, links);
+            }
             if let Some(window) = WindowManager::focused(app) {
                 let _ = window.unminimize();
                 let _ = window.set_focus();

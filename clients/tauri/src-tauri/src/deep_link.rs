@@ -74,6 +74,20 @@ impl DeepLinks {
                 .is_some_and(|head| head.eq_ignore_ascii_case(&format!("{SCHEME}:")))
     }
 
+    /// The links among a second process's arguments.
+    ///
+    /// On Windows and Linux a followed link starts a second process, and
+    /// the single-instance plugin hands that process's arguments to the
+    /// running one. The deep-link plugin only reads the arguments of the
+    /// process it runs in, so this is where the link of a second process
+    /// is found — the first one, the program, is not a link.
+    pub fn links_in(args: &[String]) -> Vec<String> {
+        args.iter()
+            .filter(|arg| Self::is_link_arg(arg))
+            .cloned()
+            .collect()
+    }
+
     /// Hold the last acceptable link of `urls`; `true` when there was one.
     pub fn hold<I: IntoIterator<Item = String>>(&self, urls: I) -> bool {
         let Some(link) = urls.into_iter().filter(|u| Self::accepts(u)).last() else {
@@ -175,5 +189,26 @@ mod tests {
         assert!(!DeepLinks::is_link_arg("ig"));
         assert!(!DeepLinks::is_link_arg("igni:"));
         assert!(!DeepLinks::is_link_arg("ignï/folder"));
+    }
+
+    #[test]
+    fn a_second_process_s_arguments_carry_the_link() {
+        // What the single-instance plugin hands over on Windows and
+        // Linux: the program, then the link the OS followed.
+        let args = vec![
+            r"C:\Users\me\AppData\Local\igni\igni-app.exe".to_string(),
+            "igni://open?open=plugins".to_string(),
+        ];
+        assert_eq!(
+            DeepLinks::links_in(&args),
+            vec!["igni://open?open=plugins".to_string()]
+        );
+    }
+
+    #[test]
+    fn a_second_process_with_no_link_carries_none() {
+        // The program alone: a second launch with a project folder.
+        let args = vec!["/usr/bin/igni-app".to_string(), "/work/repo".to_string()];
+        assert!(DeepLinks::links_in(&args).is_empty());
     }
 }
