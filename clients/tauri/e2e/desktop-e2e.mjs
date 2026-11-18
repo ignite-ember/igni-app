@@ -250,8 +250,16 @@ async function launch(project) {
   }
   app = spawn(APP, [project], {
     env: { ...driverEnv, WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: `--remote-debugging-port=${DEVTOOLS_PORT}` },
-    stdio: "ignore",
+    stdio: ["ignore", "pipe", "pipe"],
   });
+  // The app's own output is kept. It was thrown away (`stdio: "ignore"`),
+  // and then a step that failed had nothing to say about what the app
+  // thought happened: the single-instance plugin's warnings go to
+  // `tracing`, which the app has no subscriber for, so they are lost
+  // either way — but anything the app prints is worth having.
+  const appLog = fs.createWriteStream(path.join(OUT, "app-output.log"));
+  app.stdout?.pipe(appLog, { end: false });
+  app.stderr?.pipe(appLog, { end: false });
   const end = Date.now() + 60_000;
   for (;;) {
     try {
@@ -553,6 +561,18 @@ async function firstLaunch() {
     // Back to the chat first, so arriving on the page is the link's doing.
     await session.exec("const n=[...document.querySelectorAll('*')].find(e => e.children.length === 0 && e.textContent.trim() === 'Chat'); if (n) n.click();");
     await sleep(1_000);
+    // Watch every step the link travels, so a failure says *where* it
+    // stopped: the shell's event, the window's own DOM event, and the
+    // link the window never took. The shell's event is watched through
+    // the global API (`event.listen` takes every target), because the
+    // shell emits it to one window by name.
+    const main = await session.cmd("GET", "/window");
+    await session.execAsync(
+      "const done = arguments[arguments.length - 1];" +
+        "window.__linkTrace = { event: false, dom: false };" +
+        "window.addEventListener('igni-host', (e) => { if (e.detail && e.detail.type === 'igni:open-link') window.__linkTrace.dom = true; });" +
+        "window.__TAURI__.event.listen('igni-open-link', () => { window.__linkTrace.event = true; }).then(() => done('watching'), (e) => done('error: ' + e));",
+    );
     const arrived = (timeout) =>
       session.waitFor("the Plugins page after the link", async () => {
         const handles = await session.windowHandles();
@@ -581,7 +601,24 @@ async function firstLaunch() {
       try {
         await arrived(40_000);
       } catch (err) {
-        throw new Error(`${err.message}\n  the app processes were:\n${processes}`);
+        // Where the link stopped. `event` is the shell's own event: false
+        // means the link never reached the app at all (the handover from
+        // the second process), true with `dom` false means the shell's
+        // event did not reach the window, and `dom` true means the
+        // window saw it and did not act on it. The held link is what the
+        // window never took.
+        await session.switchTo(main);
+        const trace = await session.exec("return JSON.stringify(window.__linkTrace || null)").catch(() => "?");
+        const held = await session
+          .execAsync(
+            "const done = arguments[arguments.length - 1];" +
+              "window.__TAURI__.core.invoke('igni_take_open_link').then((r) => done(r === null ? 'none' : r), (e) => done('error: ' + e));",
+          )
+          .catch(() => "?");
+        throw new Error(
+          `${err.message}\n  the app processes were:\n${processes}\n` +
+            `  the link's way through the app: ${trace}\n  the link the window never took: ${held}`,
+        );
       }
     }
     await shot("07-deep-link");
