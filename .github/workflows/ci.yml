@@ -244,6 +244,45 @@ jobs:
           cd igni-app/clients/tauri/src-tauri
           cargo test --no-default-features
 
+  # The same crate, on Windows. The shell has code that only ever
+  # compiles there — the uv install reads a zip there, and the zip
+  # crate's `name()` changed from a plain string to a `Result` between
+  # two of its releases, which broke the v1.0.5 release build while
+  # every Linux test stayed green. The job above cannot see it; this
+  # one can.
+
+  tauri-rust-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: igni-app
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ignite-ember/igni-sdk
+          path: igni-sdk
+          persist-credentials: false
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ignite-ember/igni-core
+          path: igni-core
+          persist-credentials: false
+
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable branch, 2026-10-16
+        with:
+          toolchain: stable
+
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          workspaces: igni-app/clients/tauri/src-tauri
+
+      - name: Cargo test
+        run: |
+          cd igni-app/clients/tauri/src-tauri
+          cargo test --no-default-features
+
   # The Tauri shell, run: `tests/spawn_smoke.rs` boots the built binary,
   # waits for its backend child to bind a loopback port, quits the shell
   # and checks the parent-PID watchdog takes the backend down with it.
