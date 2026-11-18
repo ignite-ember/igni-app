@@ -14,6 +14,60 @@ const REINSTALL_ROUTE: &str = "loading.html?msg=Reinstalling…";
 /// The loading view the main window shows while the backend restarts.
 const RESTART_ROUTE: &str = "loading.html?msg=Restarting the backend…";
 
+/// What the loading view would have heard so far: the latest progress
+/// line and, once it failed, the failure.
+///
+/// Events reach only a page that is already listening. An instant
+/// failure — an air-gapped machine with no runtime refuses before
+/// anything is downloaded — was emitted, and its message evaluated into
+/// the window, before WebView2 had even loaded `loading.html`; the page
+/// then came up on "Starting up…" and stayed there, with the reason lost.
+/// Found by the Windows desktop E2E job (ENT-016). The page now asks for
+/// this state when it attaches (`igni_bootstrap_state`) as well as
+/// listening.
+#[derive(Default)]
+pub(crate) struct BootstrapState {
+    inner: std::sync::Mutex<BootstrapSnapshot>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, serde::Serialize)]
+pub(crate) struct BootstrapSnapshot {
+    pub progress: Option<String>,
+    pub error: Option<String>,
+}
+
+impl BootstrapState {
+    fn update(&self, f: impl FnOnce(&mut BootstrapSnapshot)) {
+        if let Ok(mut s) = self.inner.lock() {
+            f(&mut s);
+        }
+    }
+
+    pub fn started(&self) {
+        self.update(|s| *s = BootstrapSnapshot::default());
+    }
+
+    pub fn progressed(&self, line: &str) {
+        self.update(|s| s.progress = Some(line.to_string()));
+    }
+
+    pub fn failed(&self, message: &str) {
+        self.update(|s| s.error = Some(message.to_string()));
+    }
+
+    pub fn snapshot(&self) -> BootstrapSnapshot {
+        self.inner.lock().map(|s| s.clone()).unwrap_or_default()
+    }
+}
+
+/// The loading view's catch-up: what it missed before it was listening.
+#[tauri::command]
+pub(crate) fn igni_bootstrap_state(app: AppHandle) -> BootstrapSnapshot {
+    app.try_state::<BootstrapState>()
+        .map(|s| s.snapshot())
+        .unwrap_or_default()
+}
+
 pub(crate) struct Bootstrap<'a> {
     app: &'a AppHandle,
     launch: &'a LaunchArgs,
@@ -182,6 +236,24 @@ mod tests {
         let old = tauri::Url::parse("tauri://localhost/index.html?ws=x").unwrap();
         let conn = BackendConn::new(4200, None, BackendVersionInfo::discovered("1".into()));
         assert!(!rebound_route(&old, &conn).contains("dir="));
+    }
+
+    #[test]
+    fn a_failure_is_kept_for_a_page_that_was_not_listening_yet() {
+        let state = BootstrapState::default();
+        state.started();
+        state.progressed("Preparing the igni backend…");
+        state.failed("igni is air-gapped (air_gapped: true)…");
+        assert_eq!(
+            state.snapshot(),
+            BootstrapSnapshot {
+                progress: Some("Preparing the igni backend…".into()),
+                error: Some("igni is air-gapped (air_gapped: true)…".into()),
+            }
+        );
+        // A restart or a reinstall starts over.
+        state.started();
+        assert_eq!(state.snapshot(), BootstrapSnapshot::default());
     }
 
     #[test]

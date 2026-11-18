@@ -96,6 +96,12 @@ impl ManagedRuntime {
     /// installed live in uv's directories, shared with whatever else uses
     /// uv, so they stay and the rebuild reuses them rather than downloading
     /// again.
+    ///
+    /// Only those, by name, and the directory itself only once it is empty.
+    /// On Windows the cache is `%LOCALAPPDATA%\igni`, which is also where
+    /// the NSIS installer puts a per-user install of the app (Tauri's
+    /// default `$LOCALAPPDATA\<productName>`): wiping the whole directory
+    /// deleted the installed app and its uninstaller along with the runtime.
     pub fn reset(&self) -> Result<(), String> {
         if !self.root.exists() {
             return Ok(());
