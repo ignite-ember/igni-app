@@ -11,10 +11,7 @@ function bannerActions(item: AssistantItem, handlers: InterruptedHandlers): Inte
   const bind = (handler?: (id: number) => void) => (handler ? () => handler(item.id) : undefined);
   return {
     retry: bind(handlers.retry),
-    // Prompts restored after a crash are pending rows, which the
-    // backend has no call to discard: a Discard here would come back
-    // with the next load.
-    discard: item.restored ? undefined : bind(handlers.discard),
+    discard: bind(handlers.discard),
     editPrompt: bind(handlers.editPrompt),
   };
 }
