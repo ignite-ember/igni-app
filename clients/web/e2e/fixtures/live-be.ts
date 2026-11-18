@@ -23,7 +23,7 @@
  * ``reporters/skips.ts`` enforces.
  */
 
-import { test as base, type Page } from "@playwright/test";
+import { test as base, type BrowserContext, type Page } from "@playwright/test";
 import {
   ChildProcessWithoutNullStreams,
   execFile,
@@ -56,6 +56,19 @@ export type LiveBe = {
    * refused and the app waits at "Connecting to backend…" forever.
    */
   wsToken: string | null;
+  /**
+   * The window token the backend requires (``IGNI_WS_TOKEN``), or "" for a
+   * borrowed backend started without one. The fixture hands it to every
+   * page of the test's browser context as ``window.__IGNI_WS_TOKEN__``, the
+   * way an embedder does, so ``?ws=`` alone connects.
+   */
+  token: string;
+  /** The backend's own HOME (``~/.igni`` lives there), or null if borrowed. */
+  home: string | null;
+  /** SIGKILL the spawned backend (a crash). */
+  kill(): Promise<void>;
+  /** Start it again on the same port, home, project and token. */
+  restart(): Promise<void>;
 };
 
 // Project root: walk up from clients/web/e2e/fixtures to the repo root.
@@ -318,7 +331,10 @@ async function offerToken(page: Page, token: string | null): Promise<void> {
   }, token);
 }
 
-function ready(proc: ChildProcessWithoutNullStreams): Promise<{
+function ready(
+  proc: ChildProcessWithoutNullStreams,
+  token: string | null,
+): Promise<{
   wsUrl: string;
   wsToken: string | null;
 }> {
@@ -355,6 +371,13 @@ function ready(proc: ChildProcessWithoutNullStreams): Promise<{
               // moment rather than racing it — and say so plainly if it
               // never arrives, instead of letting every spec time out
               // on "Connecting to backend…".
+              // The fixture is the launcher: it put the token in the
+              // child's environment, so there is nothing to wait for on
+              // stderr.
+              if (token) {
+                resolve({ wsUrl: String(parsed.ws_url), wsToken: token });
+                return;
+              }
               const found = tokenIn(stderrBuf);
               if (found) {
                 resolve({ wsUrl: String(parsed.ws_url), wsToken: found });
@@ -643,19 +666,49 @@ export const test = base.extend<
     { scope: "worker" },
   ],
 
-  liveBe: async ({ page, orphanScenario }, use) => {
+  orphanScenario: [null, { option: true }],
+  devExtensions: [[], { option: true }],
+  backendEnv: [{}, { option: true }],
+  extraConfig: ["", { option: true }],
+  extraModels: [[], { option: true }],
+  modelUrl: [null, { option: true }],
+
+  liveBe: async (
+    {
+      page,
+      orphanScenario,
+      devExtensions,
+      backendEnv,
+      extraConfig,
+      extraModels,
+      modelUrl,
+      context,
+      scriptedModel,
+    },
+    use,
+  ) => {
     const borrowed = process.env.IGNI_LIVE_WS;
     if (borrowed && !orphanScenario) {
       // A borrowed backend may want a token of its own. The person
       // running it knows it — it is the line its launcher printed, or
       // the one igni-client's ``Local(url=..., token=...)`` takes.
-      const token = process.env.IGNI_LIVE_WS_TOKEN ?? null;
-      await offerToken(page, token);
+      const token = (process.env.IGNI_LIVE_WS_TOKEN ?? "").trim();
+      if (token) {
+        await offerToken(page, token);
+        await giveToken(context, token);
+      }
+      const cannot = async () => {
+        throw new Error("a borrowed backend (IGNI_LIVE_WS) cannot be killed or restarted");
+      };
       await use({
         wsUrl: borrowed,
         projectDir: null,
+        home: null,
         origin: "IGNI_LIVE_WS",
-        wsToken: token,
+        wsToken: token || null,
+        token,
+        kill: cannot,
+        restart: cannot,
       });
       return;
     }
@@ -706,9 +759,30 @@ export const test = base.extend<
 
     let proc = start("0");
     try {
-      const { wsUrl, wsToken } = await ready(proc);
+      const { wsUrl, wsToken } = await ready(proc, token);
+      const port = new URL(wsUrl).port;
       await offerToken(page, wsToken);
-      await use({ wsUrl, projectDir, origin: "spawned", wsToken });
+      await use({
+        wsUrl,
+        projectDir,
+        home,
+        origin: "spawned",
+        wsToken,
+        token,
+        // The backend dying under the app: SIGKILL, no shutdown path.
+        kill: async () => {
+          proc.kill("SIGKILL");
+          await new Promise<void>((resolve) =>
+            proc.exitCode !== null || proc.signalCode !== null ? resolve() : proc.on("exit", () => resolve()),
+          );
+        },
+        // A backend again on the same port, home, project and token — what
+        // the desktop shell's Restart Backend does.
+        restart: async () => {
+          proc = start(port);
+          await ready(proc, token);
+        },
+      });
     } finally {
       await stop(proc);
       // Order matters: the seeded processes outlive the backend by
