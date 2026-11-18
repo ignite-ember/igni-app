@@ -18,6 +18,7 @@ import { ChatItemIds } from "./chatItemIds";
 import {
   applyVisualizationDelta,
   parsePartialSpec,
+  visualizationDeltaFromPayload,
   type VisualizationDeltaEvent,
 } from "./visualizationStream";
 
@@ -278,6 +279,64 @@ describe("applyVisualizationDelta — the gaps in the spec", () => {
       },
     );
     expect(card(items).notices).toEqual([]);
+  });
+});
+
+// ── Which draw the card is on ───────────────────────────────────────
+
+describe("the draw the card is on", () => {
+  const card = (items: ChatItem[]): Extract<ChatItem, { kind: "visualization" }> =>
+    items[0] as Extract<ChatItem, { kind: "visualization" }>;
+
+  const SPEC = JSON.stringify({
+    root: "root",
+    elements: { root: { type: "Stack", children: ["chart"] } },
+  });
+
+  it("a partial frame is not a draw", () => {
+    const items = fold([], { spec_id: "run-1", json: SPEC });
+    expect(card(items).final).toBe(false);
+    expect(card(items).revision).toBeUndefined();
+  });
+
+  it("the whole card names its draw", () => {
+    const items = fold([], { spec_id: "run-1", json: SPEC, final: true, revision: 1 });
+    expect(card(items).final).toBe(true);
+    expect(card(items).revision).toBe(1);
+  });
+
+  it("a card drawn twice keeps the draw it is on", () => {
+    let items = fold([], { spec_id: "run-1", json: SPEC, final: true, revision: 1 });
+    expect(card(items).revision).toBe(1);
+    items = fold(items, { spec_id: "run-1", json: SPEC, final: true, revision: 2 });
+    expect(card(items).revision).toBe(2);
+  });
+
+  it("a card being redrawn is not whole until it is", () => {
+    let items = fold([], { spec_id: "run-1", json: SPEC, final: true, revision: 1 });
+    items = fold(items, { spec_id: "run-1", json: SPEC });
+    expect(card(items).final).toBe(false);
+    expect(card(items).revision).toBe(1);
+  });
+
+  it("the draw is read off the wire", () => {
+    const event = visualizationDeltaFromPayload({
+      type: "visualization_delta",
+      spec_id: "run-1",
+      json: SPEC,
+      final: true,
+      revision: 3,
+    });
+    expect(event?.revision).toBe(3);
+  });
+
+  it("a wire frame with no draw says so", () => {
+    const event = visualizationDeltaFromPayload({
+      type: "visualization_delta",
+      spec_id: "run-1",
+      json: SPEC,
+    });
+    expect(event?.revision).toBeUndefined();
   });
 });
 

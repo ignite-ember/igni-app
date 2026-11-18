@@ -20,7 +20,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import type { Spec } from "@json-render/core";
-import { JsonRenderView } from "./JsonRenderView";
+import { JsonRenderView, type CardDrawResult } from "./JsonRenderView";
 
 // ── Fixtures ────────────────────────────────────────────────────────
 
@@ -416,6 +416,93 @@ describe("JsonRenderView", () => {
     it("says nothing when there is nothing to say", () => {
       const { container } = render(<JsonRenderView spec={spec} notices={[]} />);
       expect(container.querySelector(".viz-render-error")).toBeNull();
+    });
+  });
+
+  // R666: the card knew what it drew and nobody was told. The agent
+  // said the chart was above a card that drew nothing. The card says
+  // what it drew, so the agent can be told.
+  describe("what the card drew is said back", () => {
+    const quiet = () => vi.spyOn(console, "error").mockImplementation(() => {});
+    const last = (say: ReturnType<typeof vi.fn>): CardDrawResult =>
+      say.mock.calls.at(-1)?.[0] as CardDrawResult;
+
+    it("names the element it could not draw", () => {
+      quiet();
+      const say = vi.fn();
+      const spec: Spec = {
+        root: "root",
+        elements: {
+          root: { type: "Card", props: { title: "Monthly Sales 2026" }, children: ["bar"] },
+          bar: { type: "BarGraph", props: { data: 42 }, children: [] },
+        },
+      } as unknown as Spec;
+
+      render(<JsonRenderView spec={spec} onDrawResult={say} />);
+
+      const result = last(say);
+      expect(result.total).toBe(2);
+      expect(result.failed).toEqual([
+        { type: "BarGraph", message: "its data is not a list" },
+      ]);
+      expect(result.issues).toEqual([]);
+    });
+
+    it("says so when it drew everything", () => {
+      const say = vi.fn();
+
+      render(<JsonRenderView spec={AAPL_SPEC} onDrawResult={say} />);
+
+      const result = last(say);
+      expect(result.total).toBe(2);
+      expect(result.failed).toEqual([]);
+    });
+
+    it("carries what was wrong with the card's shape", () => {
+      const say = vi.fn();
+      const spec: Spec = {
+        root: "root",
+        elements: { root: { type: "Card", props: { title: "Cloud Spend" }, children: [] } },
+      } as unknown as Spec;
+
+      render(
+        <JsonRenderView
+          spec={spec}
+          notices={["its child 'chart' is not an element of it"]}
+          onDrawResult={say}
+        />,
+      );
+
+      expect(last(say).issues).toEqual(["its child 'chart' is not an element of it"]);
+    });
+
+    it("says nothing was drawn when the card could not be drawn at all", () => {
+      const say = vi.fn();
+      const spec = {
+        elements: {},
+        root: ["root", { type: "Card" }],
+        children: { item: [] },
+      } as unknown as Spec;
+
+      render(<JsonRenderView spec={spec} onDrawResult={say} />);
+
+      const result = last(say);
+      expect(result.total).toBe(0);
+      expect(result.failed).toEqual([]);
+      expect(result.issues).toEqual(["its root is not an element key"]);
+    });
+
+    it("says nothing when nobody is listening", () => {
+      quiet();
+      const spec: Spec = {
+        root: "root",
+        elements: {
+          root: { type: "Card", props: { title: "Monthly Sales 2026" }, children: ["bar"] },
+          bar: { type: "BarGraph", props: { data: 42 }, children: [] },
+        },
+      } as unknown as Spec;
+
+      expect(() => render(<JsonRenderView spec={spec} />)).not.toThrow();
     });
   });
 });

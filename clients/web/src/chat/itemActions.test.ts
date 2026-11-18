@@ -127,4 +127,48 @@ describe("ItemActions team and visualization cards", () => {
     s.client.rpc.mockRejectedValueOnce(new Error("gone"));
     expect(await s.actions.dispatchVisualizationAction("pick", {})).toBeUndefined();
   });
+
+  it("tells the backend what the card drew", async () => {
+    const s = setup();
+    s.client.rpc.mockResolvedValueOnce({
+      ok: true,
+      spec_id: "card-1",
+      revision: 2,
+      drawn: 1,
+      total: 2,
+    });
+
+    const answer = await s.actions.reportVisualizationVerdict({
+      spec_id: "card-1",
+      revision: 2,
+      total: 2,
+      failed: [{ type: "BarGraph", message: "its data is not a list" }],
+      issues: ["its child 'chart' is not an element of it"],
+    });
+
+    expect(s.client.rpc).toHaveBeenCalledWith("report_visualization_verdict", {
+      spec_id: "card-1",
+      revision: 2,
+      total: 2,
+      failed: [{ type: "BarGraph", message: "its data is not a list" }],
+      issues: ["its child 'chart' is not an element of it"],
+    });
+    expect(answer).toMatchObject({ ok: true, spec_id: "card-1", revision: 2, drawn: 1, total: 2 });
+  });
+
+  it("says nothing when the backend will not take the verdict", async () => {
+    const s = setup();
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    s.client.rpc.mockRejectedValueOnce(new Error("gone"));
+
+    expect(
+      await s.actions.reportVisualizationVerdict({
+        spec_id: "card-1",
+        revision: 1,
+        total: 0,
+        failed: [],
+        issues: [],
+      }),
+    ).toBeUndefined();
+  });
 });

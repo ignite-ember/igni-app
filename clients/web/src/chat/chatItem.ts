@@ -182,6 +182,13 @@ export interface VisualizationItem {
    *  whole and its gaps are real — the card says them instead of
    *  drawing a blank (R666). */
   notices?: string[];
+  /** Which draw of the card this is. The first draw is 1. The card
+   *  sends it back with its verdict, so the verdict names the draw it
+   *  is about. Absent while the card is still being drawn. */
+  revision?: number;
+  /** Whether the last delta of this card was the whole card. The
+   *  card reports what it drew once it is whole (R666). */
+  final?: boolean;
 }
 
 /** Roll-up of one top-level run. */
