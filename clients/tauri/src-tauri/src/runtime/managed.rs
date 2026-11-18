@@ -340,7 +340,11 @@ mod tests {
         // beside it, so neither an igni upgrade nor a Python bump wipes it.
         let rt = at(PathBuf::from("/c"));
         assert!(!rt.hf_home().starts_with(rt.venv_dir()));
-        let src = include_str!("managed.rs");
+        // The source is read with its line endings normalised: a Windows
+        // checkout has CRLF, and the function below is found by its
+        // closing brace — so on CRLF the slice would run on past it and
+        // count another file's `remove_dir_all`.
+        let src = include_str!("managed.rs").replace("\r\n", "\n");
         let rebuild = src
             .split("fn rebuild_venv")
             .nth(1)

@@ -79,9 +79,42 @@ mod tests {
             .collect()
     }
 
+    /// The platform's own path separator, so the values below are the ones
+    /// this platform would really carry.
+    fn joined(entries: &[&str]) -> String {
+        std::env::join_paths(entries)
+            .expect("paths join")
+            .to_string_lossy()
+            .into_owned()
+    }
+
+    /// The rule, on every platform: the entries inside the mount are taken
+    /// out, the ones outside are kept.
+    #[test]
+    fn the_mounts_entries_are_taken_out_and_the_rest_kept() {
+        let lib = format!("{MOUNT}/usr/lib/");
+        let outside = "/opt/cuda/lib64";
+        let value = joined(&[lib.as_str(), outside]);
+        let mut cmd = Command::new("python");
+        scrub(&mut cmd, Path::new(MOUNT), |k| {
+            (k == "LD_LIBRARY_PATH").then(|| OsString::from(&value))
+        });
+        let set = envs(&cmd);
+        assert_eq!(
+            set["LD_LIBRARY_PATH"].as_deref(),
+            Some(joined(&[outside]).as_str()),
+            "the mount's entry goes, the one outside it stays"
+        );
+    }
+
+    /// The values seen in /proc/<igni-app pid>/environ under the AppImage.
+    ///
+    /// An AppImage is a Linux thing, and so are the paths in it — the
+    /// separator here is `:` and the mount is a directory under `/tmp`.
+    /// The rule itself is checked on every platform above.
+    #[cfg(unix)]
     #[test]
     fn the_mounts_python_variables_do_not_reach_a_child() {
-        // The values seen in /proc/<igni-app pid>/environ under the AppImage.
         let apprun: HashMap<&str, String> = HashMap::from([
             ("PYTHONHOME", format!("{MOUNT}/usr/")),
             ("PYTHONPATH", format!("{MOUNT}/usr/share/pyshared/:")),
