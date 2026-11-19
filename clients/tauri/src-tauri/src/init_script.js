@@ -110,14 +110,29 @@ window.__IGNI_HOST__ = Object.assign(window.__IGNI_HOST__ || {}, {
 // The shell sends menu, link and fullscreen events to one window
 // (events.rs ``ShellEvent::target``). A global ``event.listen`` hears
 // events sent to every window, so each window listens on its own.
+//
+// What was registered, and for which label, is kept on the window: a
+// step that fails on the way a link takes has to say whether the
+// listener was heard at all.
+window.__igniListen = { label: null, registered: [], failed: [], fired: [] };
+
 function listenHere(name, handler) {
   const ww = window.__TAURI__.webviewWindow;
   const here = ww && ww.getCurrentWebviewWindow ? ww.getCurrentWebviewWindow() : null;
-  return here ? here.listen(name, handler) : window.__TAURI__.event.listen(name, handler);
+  window.__igniListen.label = here ? here.label : null;
+  const promise = here
+    ? here.listen(name, handler)
+    : window.__TAURI__.event.listen(name, handler);
+  promise.then(
+    () => window.__igniListen.registered.push(name),
+    (e) => window.__igniListen.failed.push(`${name}: ${e}`),
+  );
+  return promise;
 }
 
 if (window.__TAURI__ && window.__TAURI__.event) {
   listenHere('igni-menu', (e) => {
+    window.__igniListen.fired.push('igni-menu');
     const id = e && e.payload;
     if (typeof id !== 'string') return;
     window.dispatchEvent(new CustomEvent('igni-host', {
@@ -127,6 +142,7 @@ if (window.__TAURI__ && window.__TAURI__.event) {
   // An igni:// link is waiting for this window (deep_link.rs); the web
   // UI takes it with ``igni_take_open_link``.
   listenHere('igni-open-link', () => {
+    window.__igniListen.fired.push('igni-open-link');
     window.dispatchEvent(new CustomEvent('igni-host', {
       detail: { type: 'igni:open-link' }
     }));
@@ -135,6 +151,7 @@ if (window.__TAURI__ && window.__TAURI__.event) {
   // on ``<html>`` so CSS can collapse the header gutter when the
   // OS hides our traffic-light cluster behind the slide-down panel.
   listenHere('igni-fullscreen', (e) => {
+    window.__igniListen.fired.push('igni-fullscreen');
     const on = !!(e && e.payload);
     document.documentElement.dataset.fullscreen = on ? 'true' : 'false';
   });

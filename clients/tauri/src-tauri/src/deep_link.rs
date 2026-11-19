@@ -108,6 +108,9 @@ impl DeepLinks {
     /// bring a window forward, and tell it a link is waiting. A window
     /// still on the loading view takes it once the app has loaded.
     pub fn deliver(app: &AppHandle, urls: Vec<String>) {
+        let mut windows: Vec<String> = app.webview_windows().into_keys().collect();
+        windows.sort();
+        eprintln!("[igni] a link was handed over; the windows are {windows:?}");
         if !app.state::<DeepLinks>().hold(urls) {
             return;
         }
@@ -116,6 +119,8 @@ impl DeepLinks {
             window.show().log_on_error("showing the window for a link");
             window.set_focus().log_on_error("focusing the window for a link");
             ShellEvent::OpenLink.emit_to(&window);
+        } else {
+            eprintln!("[igni] a link was handed over, but no window had it");
         }
     }
 }

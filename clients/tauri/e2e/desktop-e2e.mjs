@@ -409,6 +409,22 @@ function windowsAppProcesses() {
 }
 
 /**
+ * What the app itself printed, for a step that failed. The app's own
+ * output is the only place the shell's side of a link is visible: what
+ * it emitted, and to whom.
+ */
+function appOutput(lines = 40) {
+  const file = path.join(OUT, "app-output.log");
+  if (!fs.existsSync(file)) return "(the app printed nothing)";
+  try {
+    const all = fs.readFileSync(file, "utf8").split("\n").filter((l) => l.trim());
+    return all.slice(-lines).join("\n");
+  } catch (err) {
+    return `(the app's output could not be read: ${String(err.message)})`;
+  }
+}
+
+/**
  * Follow an igni:// link the way the OS does. On Linux, xdg-open is tried
  * first; on a runner with no desktop environment it can fail to run the
  * handler it found, so the handler the scheme is registered to (the
@@ -609,6 +625,31 @@ async function firstLaunch() {
         // window never took.
         await session.switchTo(main);
         const trace = await session.exec("return JSON.stringify(window.__linkTrace || null)").catch(() => "?");
+        // What the page registered for itself, and for which label: a
+        // listener that was never registered, or one registered for
+        // another label, is a different failure from a listener that
+        // was registered and not called.
+        const listen = await session.exec("return JSON.stringify(window.__igniListen || null)").catch(() => "?");
+        const meta = await session
+          .exec("return JSON.stringify((window.__TAURI_INTERNALS__ || {}).metadata || null)")
+          .catch(() => "?");
+        // What Tauri holds for this window: every listener's target, so
+        // the kind and the label the shell addressed can be read against
+        // the kind and the label the page registered with.
+        const registry = await session
+          .exec(
+            "const r = window.__TAURI_EVENT_PLUGIN_INTERNALS__ || {};" +
+              "const e = r['igni-open-link'] || {};" +
+              "return JSON.stringify(Object.keys(e).map((id) => ({ id: id, target: e[id].target })));",
+          )
+          .catch(() => "?");
+        // Every window the driver can see, and what each shows.
+        const pages = [];
+        for (const h of await session.windowHandles().catch(() => [])) {
+          await session.switchTo(h);
+          pages.push(`${h}: ${await session.exec("return location.href").catch(() => "?")}`);
+        }
+        await session.switchTo(main);
         const held = await session
           .execAsync(
             "const done = arguments[arguments.length - 1];" +
@@ -617,7 +658,13 @@ async function firstLaunch() {
           .catch(() => "?");
         throw new Error(
           `${err.message}\n  the app processes were:\n${processes}\n` +
-            `  the link's way through the app: ${trace}\n  the link the window never took: ${held}`,
+            `  the link's way through the app: ${trace}\n` +
+            `  the window's own listeners: ${listen}\n` +
+            `  the window's own labels: ${meta}\n` +
+            `  the listeners Tauri holds for the window: ${registry}\n` +
+            `  the windows the driver sees:\n    ${pages.join("\n    ")}\n` +
+            `  the link the window never took: ${held}\n` +
+            `  what the app itself said:\n${appOutput()}`,
         );
       }
     }

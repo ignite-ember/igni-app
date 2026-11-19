@@ -62,6 +62,14 @@ impl ShellEvent {
     /// Emit to `window` only, logging a failure rather than dropping it.
     pub fn emit_to<R: Runtime>(&self, window: &WebviewWindow<R>) {
         let target = Self::target(window.label());
+        if matches!(self, ShellEvent::OpenLink) {
+            eprintln!(
+                "[igni] emitting {} to {:?} (the window shows {:?})",
+                self.name(),
+                target,
+                window.url()
+            );
+        }
         let result = match self {
             ShellEvent::BootstrapProgress(text)
             | ShellEvent::BootstrapError(text)
