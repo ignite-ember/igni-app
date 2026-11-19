@@ -643,11 +643,15 @@ async function firstLaunch() {
               "return JSON.stringify(Object.keys(e).map((id) => ({ id: id, target: e[id].target })));",
           )
           .catch(() => "?");
-        // Every window the driver can see, and what each shows.
+        // Every window the driver can see, and what each shows. The
+        // URL carries the window's session token, so only the path is
+        // printed.
+        const shown = (href) => String(href).split(/[?#]/)[0];
         const pages = [];
         for (const h of await session.windowHandles().catch(() => [])) {
           await session.switchTo(h);
-          pages.push(`${h}: ${await session.exec("return location.href").catch(() => "?")}`);
+          const href = await session.exec("return location.href").catch(() => "?");
+          pages.push(`${h}: ${shown(href)}`);
         }
         await session.switchTo(main);
         const held = await session

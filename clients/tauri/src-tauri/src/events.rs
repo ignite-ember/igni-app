@@ -63,11 +63,14 @@ impl ShellEvent {
     pub fn emit_to<R: Runtime>(&self, window: &WebviewWindow<R>) {
         let target = Self::target(window.label());
         if matches!(self, ShellEvent::OpenLink) {
+            // The window's URL carries the session token, so it is not
+            // printed: the label is what a reader needs to tell the
+            // windows apart.
             eprintln!(
-                "[igni] emitting {} to {:?} (the window shows {:?})",
+                "[igni] emitting {} to {:?} (the window is {:?})",
                 self.name(),
                 target,
-                window.url()
+                window.label()
             );
         }
         let result = match self {

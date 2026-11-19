@@ -1,11 +1,18 @@
 //! The script every page load runs first (`loading.html` and the chat UI).
 //!
-//! In order, `init_script.js`: stamps `data-host="tauri"` and
-//! `data-platform` on `<html>` for the host-aware CSS; exposes
-//! `window.__IGNI_PICK_DIR__` and the `window.__IGNI_HOST__` bridges
-//! (`openFile`, `revealInFolder`, `notify`, `setAppTitle`, `openUrl`);
-//! routes external links and `window.open` to the OS; and bridges the
-//! `igni-menu` and `igni-fullscreen` events into the page.
+//! In order, `init_script.js`: registers the shell's event listeners
+//! (`igni-menu`, `igni-open-link`, `igni-fullscreen`) on the window
+//! itself; stamps `data-host="tauri"` and `data-platform` on `<html>`
+//! for the host-aware CSS; exposes `window.__IGNI_PICK_DIR__` and the
+//! `window.__IGNI_HOST__` bridges (`openFile`, `revealInFolder`,
+//! `notify`, `setAppTitle`, `openUrl`); routes external links and
+//! `window.open` to the OS; and mirrors the fullscreen state onto
+//! `<html>`.
+//!
+//! The listeners come first, and nothing in them needs the DOM:
+//! Windows injects this script at document start, where the document's
+//! root element does not exist yet, and an unguarded read of it would
+//! throw and abort the script before the listeners were registered.
 
 /// The real target OS, so the FE need not sniff WKWebView's user agent,
 /// which varies across macOS versions.
@@ -133,5 +140,38 @@ mod tests {
         // An icon inside an `<a>` is the event target, not the anchor.
         assert!(script_text().contains("composedPath"));
         assert!(script_text().contains("tagName === 'A'"));
+    }
+
+    /// The script must survive a document with no root element.
+    ///
+    /// Windows injects it at document start, where the root does not
+    /// exist yet: reading `document.documentElement` unguarded throws
+    /// there, and the throw aborts the whole script — so the window
+    /// never registers its listeners and never hears the shell's link
+    /// (the Windows deep-link failure). The web client runs this
+    /// script for real; this pins the shape the fix took.
+    #[test]
+    fn the_script_survives_a_document_with_no_root_element() {
+        let text = script_text();
+        assert!(
+            text.contains("if (!html) return false;"),
+            "the stamp must not touch a root that is not there yet"
+        );
+        assert!(
+            text.contains("if (html) html.dataset.fullscreen"),
+            "the fullscreen mirror must not touch a root that is not there yet"
+        );
+        // The listeners are registered before the DOM is reached for at
+        // all, so nothing in the DOM work can cost the window them.
+        let listeners = text
+            .find("listenHere('igni-menu'")
+            .expect("the menu listener must be registered");
+        let stamp = text
+            .find("html.dataset.host")
+            .expect("the host must be stamped on the root");
+        assert!(
+            listeners < stamp,
+            "the listeners must be registered before the DOM is touched"
+        );
     }
 }
