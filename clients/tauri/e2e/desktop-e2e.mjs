@@ -300,11 +300,108 @@ async function waitForChat(timeout) {
   );
 }
 
+/** The composer, ready to be typed into — the page's own words. */
+const COMPOSER_USABLE = `
+  const e = document.querySelector('.composer-editable');
+  if (!e) return false;
+  if (document.querySelector('section.page')) return false;
+  const r = e.getBoundingClientRect();
+  if (!(r.width > 0 && r.height > 0)) return false;
+  const ph = e.getAttribute('data-placeholder');
+  if (!ph || !(new RegExp(${JSON.stringify(READY.source)})).test(ph)) return false;
+  const t = [...document.querySelectorAll('button')].find(b => b.textContent.trim() === 'Trust');
+  return !t;
+`;
+
+/** Is the first-run "Trust this folder?" prompt up? */
+const TRUST_PROMPT_UP = `
+  const b = [...document.querySelectorAll('button')].find(b => b.textContent.trim() === 'Trust');
+  return !!b;
+`;
+
+/**
+ * The first-run "Trust this folder?" prompt, answered when it is up.
+ *
+ * It sits over the composer, and the composer is not interactable
+ * while it is there. It appears a moment after the window opens, so a
+ * step that waits only for the chat can reach its click while the
+ * prompt is still on its way in — which is what the provisioned suite
+ * hit on Windows, where the managed runtime makes the chat ready at
+ * once and the prompt arrives after it.
+ *
+ * Answers the prompt when it is up; says whether it was. It is waited
+ * for only when `wait` says so: the prompt is either there or it is
+ * not, and a step that does not need it should not sit on it.
+ */
+async function answerTrustPrompt({ wait = 0 } = {}) {
+  const end = Date.now() + wait;
+  for (;;) {
+    if (await session.exec(TRUST_PROMPT_UP)) {
+      await session.exec(
+        "const b=[...document.querySelectorAll('button')].find(b=>b.textContent.trim()==='Trust'); if(b) b.click();",
+      );
+      await session.waitFor(
+        "the trust prompt to close",
+        async () => !(await session.exec(TRUST_PROMPT_UP)),
+        { timeout: 10_000, interval: 200 },
+      );
+      return true;
+    }
+    if (Date.now() >= end) return false;
+    await sleep(250);
+  }
+}
+
+/**
+ * Back to the chat, when the app is showing a page instead.
+ *
+ * The app restores the window's last page, and the window's model is
+ * kept in the global database — under the user's home. On Windows the
+ * runner's profile is shared by every suite (there is no HOME of its
+ * own there), so the suite that follows the deep-link one opens on
+ * the Plugins page with the chat behind it: the composer is mounted
+ * but not on screen, and the driver says so as "element not
+ * interactable".
+ *
+ * The breadcrumb's "Chat" is the way back.
+ */
+async function backToChat() {
+  await session.exec(
+    "const b=[...document.querySelectorAll('button.page-crumb')].find(b=>b.textContent.trim()==='Chat'); if(b) b.click();",
+  );
+}
+
+/**
+ * The composer, ready to be typed into.
+ *
+ * Two things stand between a fresh window and the composer: the trust
+ * prompt, and a page the app restored. Both are answered here, and
+ * the composer is found again after each, because the page behind it
+ * changes the DOM.
+ */
+async function readyToType() {
+  for (let attempt = 0; attempt < 12; attempt++) {
+    if (await session.exec(COMPOSER_USABLE)) return await session.find(".composer-editable");
+    await answerTrustPrompt({ wait: attempt === 0 ? 0 : 5_000 });
+    await backToChat();
+    await sleep(250);
+  }
+  throw new Error("the composer never became usable");
+}
+
 async function send(text) {
-  const editor = await session.find(".composer-editable");
-  await editor.click();
-  await editor.type(text);
-  await editor.type(""); // Enter
+  for (let attempt = 0; ; attempt++) {
+    const editor = await readyToType();
+    try {
+      await editor.click();
+      await editor.type(text);
+      await editor.type(""); // Enter
+      return;
+    } catch (err) {
+      // The prompt can be on its way in between the check and the click.
+      if (attempt >= 4 || !/not interactable|stale element/i.test(String(err?.message))) throw err;
+    }
+  }
 }
 
 async function assistantSaid(text, timeout = 60_000) {
@@ -727,6 +824,12 @@ async function provisioned() {
   await step("ENT-015", "a managed runtime_python starts the app air-gapped, with no download", async () => {
     await launch(project);
     await waitForChat(5 * 60_000);
+    // The app restores the window's last page, and this suite does not
+    // always start on the chat: on Windows the runner's profile is
+    // shared by every suite, so the one before it left the Plugins page
+    // behind. The chat is what this step is about, so it goes back to it
+    // before the shot.
+    await readyToType();
     await shot("provisioned-chat");
     const t = marker();
     await send(`Reply with exactly ${t}.`);
