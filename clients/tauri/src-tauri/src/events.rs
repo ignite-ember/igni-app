@@ -42,8 +42,19 @@ impl ShellEvent {
     /// handle it is called on, so one New Chat in the second window's
     /// menu cleared both windows, and one Check for Updates checked twice
     /// (R624). `init_script.js` listens on its own webview window to match.
+    ///
+    /// The *kind* is as much a part of the address as the label, and
+    /// Tauri matches it exactly: an event addressed to
+    /// `WebviewWindow { label }` reaches a listener that registered with
+    /// that kind and with no other kind — a listener that registered as
+    /// `Webview { label }` never hears it. The window's own listeners
+    /// are registered from the page, and which kind they carry is the
+    /// page's business (the JS API registers the window's kind, the Rust
+    /// API the webview's). `AnyLabel { label }` is the address every
+    /// listener carrying that label takes, whichever kind it registered
+    /// with — and still no other window's.
     pub fn target(label: &str) -> EventTarget {
-        EventTarget::WebviewWindow {
+        EventTarget::AnyLabel {
             label: label.to_owned(),
         }
     }
@@ -85,9 +96,96 @@ mod tests {
     fn an_event_is_for_its_own_window_only() {
         assert_eq!(
             ShellEvent::target("w-2"),
-            EventTarget::WebviewWindow {
+            EventTarget::AnyLabel {
                 label: "w-2".into()
             }
+        );
+    }
+
+    /// The window's own listeners hear the event, whichever kind they
+    /// registered with. The page registers through the JS API (the
+    /// window's kind) and the shell's own code registers through the
+    /// Rust API (the webview's kind); Tauri matches a kind exactly, so
+    /// an address of one kind reaches the other kind's listeners never.
+    /// The address the shell uses reaches both.
+    #[test]
+    fn the_window_hears_the_shell_event() {
+        use std::sync::atomic::{AtomicBool, Ordering};
+        use std::sync::Arc;
+
+        use tauri::Listener;
+
+        let app = tauri::test::mock_builder()
+            .build(tauri::test::mock_context(tauri::test::noop_assets()))
+            .expect("the mock app");
+        let window = tauri::WebviewWindowBuilder::new(&app, "main", Default::default())
+            .build()
+            .expect("the window");
+
+        // The webview's kind: what the Rust API registers.
+        let webview_kind = Arc::new(AtomicBool::new(false));
+        let flag = Arc::clone(&webview_kind);
+        window.as_ref().listen("igni-open-link", move |_| {
+            flag.store(true, Ordering::SeqCst)
+        });
+        // The window's kind: what the JS API registers.
+        let window_kind = Arc::new(AtomicBool::new(false));
+        let flag = Arc::clone(&window_kind);
+        window.listen("igni-open-link", move |_| {
+            flag.store(true, Ordering::SeqCst)
+        });
+
+        ShellEvent::OpenLink.emit_to(&window);
+
+        assert!(
+            webview_kind.load(Ordering::SeqCst),
+            "the window's webview heard nothing"
+        );
+        assert!(
+            window_kind.load(Ordering::SeqCst),
+            "the window heard nothing"
+        );
+    }
+
+    /// The other window hears nothing: the event is for one window, and
+    /// the second window's menu must not act on it.
+    #[test]
+    fn the_other_window_hears_nothing() {
+        use std::sync::atomic::{AtomicBool, Ordering};
+        use std::sync::Arc;
+
+        use tauri::Listener;
+
+        let app = tauri::test::mock_builder()
+            .build(tauri::test::mock_context(tauri::test::noop_assets()))
+            .expect("the mock app");
+        let first = tauri::WebviewWindowBuilder::new(&app, "main", Default::default())
+            .build()
+            .expect("the first window");
+        let second = tauri::WebviewWindowBuilder::new(&app, "w-2", Default::default())
+            .build()
+            .expect("the second window");
+
+        let webview_kind = Arc::new(AtomicBool::new(false));
+        let flag = Arc::clone(&webview_kind);
+        second.as_ref().listen("igni-open-link", move |_| {
+            flag.store(true, Ordering::SeqCst)
+        });
+        let window_kind = Arc::new(AtomicBool::new(false));
+        let flag = Arc::clone(&window_kind);
+        second.listen("igni-open-link", move |_| {
+            flag.store(true, Ordering::SeqCst)
+        });
+
+        ShellEvent::OpenLink.emit_to(&first);
+
+        assert!(
+            !webview_kind.load(Ordering::SeqCst),
+            "the second window's webview heard an event meant for the first"
+        );
+        assert!(
+            !window_kind.load(Ordering::SeqCst),
+            "the second window heard an event meant for the first"
         );
     }
 }
