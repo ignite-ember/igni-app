@@ -63,7 +63,9 @@ TAURI_ORIGIN = "http://tauri.localhost" if IS_WIN else "tauri://localhost"
 
 # Native strings the shell shows, from src/error.rs, src/menu.rs and
 # src/diagnostics.rs.
-DIAG_TITLE = "Backend Diagnostics"
+# Dialogs are found by words in their body: GTK names a message dialog by
+# its kind, and macOS alerts carry no window title.
+DIAG_TITLE = "backend diagnostics"
 ATTACHED_REINSTALL = "can't be reinstalled from here"
 ATTACHED_RESTART = "can't be restarted from here"
 ATTACHED_PREFIX = "This window is attached to a backend started by another igni client"
@@ -427,9 +429,9 @@ def established_clients(proc: psutil.Process, port: int) -> int:
 def kill_tree(pid: int) -> None:
     try:
         root = psutil.Process(pid)
+        procs = root.children(recursive=True) + [root]
     except psutil.NoSuchProcess:
         return
-    procs = root.children(recursive=True) + [root]
     for p in procs:
         try:
             p.kill()
@@ -630,9 +632,9 @@ class WindowsUI(NativeUI):
         while time.time() < end:
             for w in Desktop(backend="uia").windows(process=pid):
                 try:
-                    if title not in w.window_text():
-                        continue
                     texts = [t.window_text() for t in w.descendants(control_type="Text")]
+                    if title not in w.window_text() and not any(title in t for t in texts):
+                        continue
                     if dismiss:
                         for b in w.descendants(control_type="Button"):
                             if b.window_text().replace("&", "") in ("OK", "Close"):
@@ -805,7 +807,15 @@ class MacUI(NativeUI):
                             pass
                     return block
             time.sleep(1)
-        raise RuntimeError(f"no dialog showing {title!r}; the windows held: {text[-1500:]!r}")
+        self.screenshot(Path(os.environ.get("PROOF_OUT", ".")) / f"dialog-miss-{int(time.time())}.png")
+        try:
+            others = self._osa(
+                'tell application "System Events" to get {name, name of every window} of (every process whose background only is false)',
+                timeout=60,
+            )
+        except RuntimeError as exc:
+            others = str(exc)
+        raise RuntimeError(f"no dialog showing {title!r}; the app's windows held: {text[-1200:]!r}; every app's windows: {others[-600:]!r}")
 
     def key(self, pid, combo, window=None):
         keyname = combo.split("+")[-1]
@@ -855,7 +865,13 @@ class Session:
         return env
 
     def __enter__(self):
-        self.start()
+        # A launch that fails half-way must not leave the app running: the
+        # single-instance plugin would hand every later launch to it.
+        try:
+            self.start()
+        except BaseException:
+            self.stop()
+            raise
         return self
 
     def __exit__(self, *exc):
@@ -909,12 +925,19 @@ class Session:
         from selenium.webdriver.edge.options import Options as EdgeOptions
         from selenium.webdriver.edge.service import Service
 
+        import winreg
+
         port = free_port()
-        # Replaces wry's defaults, which it would otherwise pass; they are
-        # repeated so the webview runs as it does for a user.
-        env["WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS"] = (
-            f"--remote-debugging-port={port} --disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection"
-        )
+        # The app passes its own AdditionalBrowserArguments (wry's
+        # defaults), which win over WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS:
+        # the first round's port never opened. WebView2's per-app policy
+        # key wins over both. wry's defaults are repeated so the webview
+        # runs as it does for a user.
+        args = f"--remote-debugging-port={port} --disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection"
+        key = winreg.CreateKey(winreg.HKEY_CURRENT_USER, r"Software\Policies\Microsoft\Edge\WebView2\AdditionalBrowserArguments")
+        winreg.SetValueEx(key, Path(self.app).name, 0, winreg.REG_SZ, args)
+        winreg.CloseKey(key)
+        env["WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS"] = args
         self.proc = subprocess.Popen([str(self.app), *self.args], env=env, stdout=log, stderr=subprocess.STDOUT)
 
         def devtools():
@@ -1530,7 +1553,12 @@ def menus_and_restart_session(ctx: Ctx):
             ctx.proof.check("R624", "igni > Check for Updates… reaches the web UI and is answered", len(notes) > before, json.dumps(notes[before:])[:300])
             # New Window on a second folder.
             ctx.ui.click(pid, "File", "New Window…")
-            ctx.ui.pick_folder(pid, str(ctx.proj2))
+            try:
+                ctx.ui.pick_folder(pid, str(ctx.proj2))
+            except Exception as exc:
+                # The rest of the session (restart, crash, quit) still runs.
+                s.desktop_shot("folder-picker")
+                ctx.proof.check("R624", "File > New Window… shows a folder picker that takes the chosen folder", False, str(exc)[:300])
             two = wait_for(lambda: len(s.driver.window_handles) >= 2, 40)
             for h in s.driver.window_handles:
                 s.driver.switch_to.window(h)
@@ -1685,12 +1713,12 @@ def attached_session(ctx: Ctx):
                 ctx.proof.check("R618", "the app attaches to the backend another client started (backend_source=discovered)", q.get("backend_source") == ["discovered"] and connected, f"backend_source={q.get('backend_source')} connected={connected}")
             ctx.proof.check("R618", "the app spawned no backend of its own", not backend_tree(s.app_pid), "")
             ctx.ui.click(s.app_pid, "File", "Reinstall Backend (Clean)")
-            text = ctx.ui.dialog(s.app_pid, "Reinstall Backend", timeout=30)
+            text = ctx.ui.dialog(s.app_pid, ATTACHED_REINSTALL, timeout=30)
             (s.dir / "reinstall-refusal.txt").write_text(text, encoding="utf-8")
             ctx.proof.check("R618", "Reinstall on an attached backend is refused in a native dialog that says why", ATTACHED_PREFIX in text and ATTACHED_REINSTALL in text, text[:300])
             ctx.proof.check("R618", "the other client's backend is untouched", hand.poll() is None, "")
             ctx.ui.click(s.app_pid, "File", "Restart Backend")
-            text = ctx.ui.dialog(s.app_pid, "Restart Backend", timeout=30)
+            text = ctx.ui.dialog(s.app_pid, ATTACHED_RESTART, timeout=30)
             (s.dir / "restart-refusal.txt").write_text(text, encoding="utf-8")
             ctx.proof.check("R619", "Restart on an attached backend is refused in a native dialog that says why", ATTACHED_PREFIX in text and ATTACHED_RESTART in text, text[:300])
             ctx.proof.check("R619", "the other client's backend is untouched by the refused restart", hand.poll() is None, "")
@@ -1970,6 +1998,7 @@ def main() -> int:
     import faulthandler
 
     faulthandler.dump_traceback_later(600, repeat=True)
+    os.environ["PROOF_OUT"] = str(Path(a.out).resolve())
     ctx = Ctx(a)
     serve(StubModel, ctx.stub_port)
     serve(ProbeFiles, ctx.probe_port)

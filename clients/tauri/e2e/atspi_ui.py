@@ -172,9 +172,18 @@ def cmd_click(args):
     emit({"ok": False, "error": f"no item {args.menu} > {args.item}"})
 
 
+def labels_of(win):
+    return [name(n) for n in walk(win) if role(n) == "label" and name(n)]
+
+
 def dialog_nodes(app, title):
+    """The dialog whose name or words hold ``title``. A GTK message dialog
+    is named by its kind ("Information", "Warning"), not its title, so
+    its labels are searched too."""
     for win in windows(app):
-        if role(win) in ("alert", "dialog", "frame", "file chooser") and title in name(win):
+        if role(win) not in ("alert", "dialog", "file chooser"):
+            continue
+        if title in name(win) or any(title in text for text in labels_of(win)):
             return win
     return None
 
@@ -192,7 +201,7 @@ def cmd_dialog(args):
     if win is None:
         names = [f"{role(w)}:{name(w)}" for w in windows(app)]
         return emit({"ok": False, "error": f"no dialog titled {args.title!r}", "windows": names})
-    labels = [name(n) for n in walk(win) if role(n) == "label" and name(n)]
+    labels = labels_of(win)
     dismissed = False
     if not args.keep:
         for node in walk(win):
@@ -223,31 +232,17 @@ def cmd_pick(args):
     if chooser is None:
         return emit({"ok": False, "error": "no folder chooser appeared"})
     title = name(chooser)
-    found = xdotool("search", "--sync", "--limit", "1", "--name", title)
+    found = xdotool("search", "--limit", "1", "--name", title)
     wid = found.stdout.split()[0] if found.stdout.split() else None
     if wid:
         xdotool("windowactivate", "--sync", wid)
-    # Ctrl+L opens the location entry, which takes a typed path.
-    xdotool("key", "--clearmodifiers", "ctrl+l")
-    time.sleep(0.8)
-    entry = None
-    for node in walk(chooser):
-        if role(node) == "text":
-            try:
-                if node.get_state_set().contains(Atspi.StateType.EDITABLE) and node.get_state_set().contains(
-                    Atspi.StateType.SHOWING
-                ):
-                    entry = node
-                    break
-            except Exception:
-                continue
-    if entry is None:
-        return emit({"ok": False, "error": "no location entry in the chooser", "title": title})
-    try:
-        Atspi.EditableText.set_text_contents(entry, args.path)
-    except Exception:
-        entry.get_editable_text_iface().set_text_contents(args.path)
+        xdotool("windowfocus", "--sync", wid)
     time.sleep(0.5)
+    # Typing a path that starts with "/" opens the chooser's location
+    # entry; the trailing "/" moves the chooser into the folder, and Select
+    # with nothing highlighted then chooses the folder it is in.
+    xdotool("type", "--delay", "40", args.path.rstrip("/") + "/")
+    time.sleep(1.5)
     pressed = None
     for node in walk(chooser):
         if role(node) == "push button" and name(node).replace("_", "") in ("Select", "Open", "OK"):
