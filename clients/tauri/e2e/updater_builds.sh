@@ -151,7 +151,10 @@ build "$VB"; stage_build B
 for kind in $KINDS; do
   rel="$(get B "$kind")"
   cp "$STAGE/$rel" "$TAURI_DIR/.updater-e2e-keys/payload"
-  (cd "$TAURI_DIR" && "${CLI[@]}" signer sign -f .updater-e2e-keys/other.key -p "$PW" .updater-e2e-keys/payload >/dev/null)
+  # The CLI reads TAURI_SIGNING_PRIVATE_KEY(_PASSWORD) as -k/-p, which
+  # clashes with -f: sign with the other key and nothing from the builds.
+  (cd "$TAURI_DIR" && env -u TAURI_SIGNING_PRIVATE_KEY -u TAURI_SIGNING_PRIVATE_KEY_PASSWORD \
+    "${CLI[@]}" signer sign -f .updater-e2e-keys/other.key -p "$PW" .updater-e2e-keys/payload >/dev/null)
   cp "$KEYDIR/payload.sig" "$STAGE/B-wrongkey/$(basename "$rel").sig"
   rm -f "$KEYDIR/payload" "$KEYDIR/payload.sig"
 done
