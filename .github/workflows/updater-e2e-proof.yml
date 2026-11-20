@@ -23,10 +23,11 @@ name: Updater E2E proof
 #        - B tampered → refused, A stays
 #        - B genuine → installed, relaunched, and the app reports B
 #
-# Linux: the AppImage (updated in place). Windows: the .msi and the NSIS
-# setup (the plugin runs the installer, which relaunches the app). macOS:
-# the .app, ad-hoc signed, driven through the accessibility API (there is
-# no WebDriver for WKWebView); Developer ID signing, notarization and
+# Linux: the AppImage (updated in place), driven through WebDriver.
+# Windows: the .msi and the NSIS setup (the plugin runs the installer,
+# which relaunches the app), driven through UI Automation. macOS: the .app,
+# ad-hoc signed, driven through the accessibility API (there is no
+# WebDriver for WKWebView); Developer ID signing, notarization and
 # Gatekeeper on the updated bundle are not provable here.
 #
 # The backend is the developer override on igni-core at the app's version
@@ -231,39 +232,15 @@ jobs:
         working-directory: igni-core
         run: uv sync
 
-      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable branch, 2026-10-16
-        with:
-          toolchain: stable
-
-      - name: tauri-driver
-        run: cargo install tauri-driver --locked --version "$env:TAURI_DRIVER_VERSION"
-
-      # msedgedriver must match the WebView2 runtime the app runs on.
-      - name: msedgedriver for this machine's WebView2
-        run: |
-          $key = 'HKLM:\SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}'
-          $wv = (Get-ItemProperty $key -ErrorAction SilentlyContinue).pv
-          Write-Output "WebView2 runtime: $wv"
-          New-Item -ItemType Directory -Force -Path "$env:RUNNER_TEMP\edgedriver" | Out-Null
-          try {
-            Invoke-WebRequest "https://msedgedriver.microsoft.com/$wv/edgedriver_win64.zip" -OutFile "$env:RUNNER_TEMP\edgedriver.zip"
-            Expand-Archive "$env:RUNNER_TEMP\edgedriver.zip" -DestinationPath "$env:RUNNER_TEMP\edgedriver" -Force
-            $driver = "$env:RUNNER_TEMP\edgedriver\msedgedriver.exe"
-          } catch {
-            Write-Output "download failed ($_); using the image's driver"
-            $driver = Join-Path $env:EdgeWebDriver 'msedgedriver.exe'
-          }
-          & $driver --version
-          "EDGE_DRIVER=$driver" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
-
+      # No WebDriver here: msedgedriver never got a session on the app's
+      # WebView2 on this runner, so the proof reads and presses the banner
+      # through UI Automation.
       - name: Install A (${{ matrix.kind }}), update it to B
         run: |
           uv run --python 3.12 --script igni-app\clients\tauri\e2e\updater_proof.py `
             --stage updater-stage `
             --kind ${{ matrix.kind }} `
             --core igni-core `
-            --tauri-driver "$env:USERPROFILE\.cargo\bin\tauri-driver.exe" `
-            --native-driver "$env:EDGE_DRIVER" `
             --out "$env:GITHUB_WORKSPACE\proof" `
             --work "$env:RUNNER_TEMP\updater-e2e"
           exit $LASTEXITCODE

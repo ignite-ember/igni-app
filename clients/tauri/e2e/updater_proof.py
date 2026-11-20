@@ -4,6 +4,8 @@
 #   "selenium==4.53.0",
 #   "psutil==7.2.2",
 #   "cryptography==50.0.1",
+#   "pywinauto==0.6.9; sys_platform == 'win32'",
+#   "pillow==12.0.0; sys_platform == 'win32'",
 # ]
 # ///
 """Prove that the installed desktop app updates itself (campaign row R627).
@@ -30,9 +32,12 @@ updater key. It:
      relaunches;
 5. checks that what runs and what is installed is B.
 
-WebDriver (tauri-driver) drives the webview on Linux and Windows. macOS has
-no WebDriver for WKWebView, so there the banner is found and pressed
-through the accessibility API (System Events).
+WebDriver (tauri-driver) drives the webview on Linux. macOS has no
+WebDriver for WKWebView, and on the Windows runner msedgedriver never gets a
+session on the app's WebView2 ("DevToolsActivePort file doesn't exist",
+also when attaching to a DevTools port opened by policy), so on both the
+banner is read and pressed through the accessibility API (System Events,
+UI Automation), as a screen reader would.
 
 Every check lands in ``<out>/verdicts.json`` as it is made; the exit status
 is non-zero if any failed.
@@ -281,6 +286,7 @@ class UpdateServer:
             f.write(bytes([b[0] ^ 0xFF]))
         self.mode = "good"
         self.hits: list[dict] = []
+        self.log_to: Path | None = None
         self.lock = threading.Lock()
         server = self
 
@@ -294,6 +300,8 @@ class UpdateServer:
                 with server.lock:
                     server.hits.append({"t": time.time(), "path": self.path, "mode": server.mode,
                                         "ua": self.headers.get("User-Agent", "")})
+                    if server.log_to:
+                        server.log_to.write_text(json.dumps(server.hits, indent=2), encoding="utf-8")
                 if self.path.split("?")[0] == "/latest.json":
                     body = json.dumps(server.manifest()).encode()
                     self.send_response(200)
@@ -627,7 +635,12 @@ class Session:
             opts = ArgOptions()
             opts.set_capability("browserName", "wry")
             opts.set_capability("tauri:options", {"application": str(self.ctx.installed.exe), "args": args})
-            self.driver = webdriver.Remote(command_executor=f"http://127.0.0.1:{port}", options=opts)
+            from selenium.webdriver.remote.client_config import ClientConfig
+
+            # Bounded: a WebKitWebDriver call that never answers must fail
+            # the check, not hold the job until its timeout.
+            config = ClientConfig(remote_server_addr=f"http://127.0.0.1:{port}", timeout=180)
+            self.driver = webdriver.Remote(command_executor=f"http://127.0.0.1:{port}", options=opts, client_config=config)
             self.driver.set_script_timeout(90)
         else:
             self.proc = subprocess.Popen([str(self.ctx.installed.exe), *args], env=env, stdout=log, stderr=subprocess.STDOUT)
@@ -704,6 +717,13 @@ class Session:
                 pass
         elif IS_MAC:
             subprocess.run(["screencapture", "-x", str(self.dir / f"{label}.png")], timeout=30, check=False)
+        elif IS_WIN:
+            try:
+                from PIL import ImageGrab
+
+                ImageGrab.grab().save(self.dir / f"{label}.png")
+            except Exception:
+                pass
 
     # the banner -------------------------------------------------------
 
@@ -717,23 +737,26 @@ class Session:
 
     def click_install(self) -> None:
         if self.driver is not None:
-            from selenium.webdriver.common.by import By
-
-            for b in self.driver.find_elements(By.CSS_SELECTOR, ".update-prompt button"):
-                if b.text.strip() == INSTALL_BUTTON:
-                    b.click()
-                    return
-            raise RuntimeError("no Install & restart button")
+            # A click event on the button itself, dispatched by the page
+            # rather than through WebKitWebDriver's element click, which
+            # waits on the page and never answered while the install ran.
+            found = self.js(
+                "const b = [...document.querySelectorAll('.update-prompt button')]"
+                ".find(b => b.innerText.trim() === arguments[0]);"
+                "if (!b) return false; setTimeout(() => b.click(), 0); return true;",
+                INSTALL_BUTTON,
+            )
+            if not found:
+                raise RuntimeError("no Install & restart button")
+            return
         self.ctx.ax.press(self.app_pid, INSTALL_BUTTON)
 
     def dismiss(self) -> None:
         if self.driver is not None:
-            from selenium.webdriver.common.by import By
-
-            for b in self.driver.find_elements(By.CSS_SELECTOR, ".update-prompt button"):
-                if b.text.strip() == "Later":
-                    b.click()
-                    return
+            self.js(
+                "const b = [...document.querySelectorAll('.update-prompt button')]"
+                ".find(b => b.innerText.trim() === 'Later'); if (b) b.click();"
+            )
 
     def reload(self) -> None:
         """Run the startup sequence again (and with it the silent check)."""
@@ -744,7 +767,71 @@ class Session:
 # ─── macOS: the banner through the accessibility API ──────────────────
 
 
-class MacAX:
+class NativeAX:
+    """The banner through the platform's accessibility API: ``elements``
+    gives (role, text) rows, ``press`` presses a button by its title."""
+
+    def elements(self, pid: int) -> list[tuple[str, str]]:
+        raise NotImplementedError
+
+    def press(self, pid: int, title: str) -> None:
+        raise NotImplementedError
+
+    def prompt(self, pid: int) -> dict | None:
+        rows = self.elements(pid)
+        texts = [t for r, t in rows if r == "AXStaticText"]
+        buttons = [t for r, t in rows if r == "AXButton"]
+        if "Update available" not in texts and INSTALL_BUTTON not in buttons and "Installing…" not in buttons:
+            return None
+        joined = "\n".join(texts)
+        # The error line (src/components/UpdatePrompt.tsx) is the text that
+        # reads like one; the title and body never do.
+        error = [t for t in texts if re.search(r"(?i)signature|verif|error|invalid|failed|refused|decode|key", t)]
+        return {"text": joined, "error": "\n".join(error), "buttons": [{"text": b, "disabled": False} for b in buttons]}
+
+
+class WinUIA(NativeAX):
+    """UI Automation (pywinauto). WebView2 puts the page's content in the
+    UIA tree under the app's window."""
+
+    ROLES = {"Button": "AXButton", "Text": "AXStaticText"}
+
+    def _windows(self, pid: int):
+        from pywinauto import Desktop
+
+        return [w for w in Desktop(backend="uia").windows() if w.process_id() == pid]
+
+    def _walk(self, pid: int):
+        for w in self._windows(pid):
+            for e in w.descendants():
+                try:
+                    role = self.ROLES.get(e.element_info.control_type)
+                except Exception:
+                    continue
+                if role:
+                    yield role, e
+
+    def elements(self, pid):
+        rows = []
+        for role, e in self._walk(pid):
+            try:
+                rows.append((role, e.window_text()))
+            except Exception:
+                continue
+        return rows
+
+    def press(self, pid, title):
+        for role, e in self._walk(pid):
+            try:
+                if role == "AXButton" and e.window_text() == title:
+                    e.invoke()
+                    return
+            except Exception:
+                continue
+        raise RuntimeError(f"no button {title}")
+
+
+class MacAX(NativeAX):
     """System Events. WKWebView's web content is in the accessibility tree,
     so the banner's text and its buttons can be read and pressed."""
 
@@ -791,18 +878,6 @@ class MacAX:
             role, _, text = line.partition("|")
             rows.append((role, text))
         return rows
-
-    def prompt(self, pid: int) -> dict | None:
-        rows = self.elements(pid)
-        texts = [t for r, t in rows if r == "AXStaticText"]
-        buttons = [t for r, t in rows if r == "AXButton"]
-        if "Update available" not in texts and INSTALL_BUTTON not in buttons and "Installing…" not in buttons:
-            return None
-        joined = "\n".join(texts)
-        # The error line (src/components/UpdatePrompt.tsx) is the text that
-        # reads like one; the title and body never do.
-        error = [t for t in texts if re.search(r"(?i)signature|verif|error|invalid|failed|refused|decode|key", t)]
-        return {"text": joined, "error": "\n".join(error), "buttons": [{"text": b, "disabled": False} for b in buttons]}
 
     def press(self, pid: int, title: str) -> None:
         self._osa(
@@ -855,7 +930,7 @@ class Ctx:
         self.proj = (self.work / "igni-updater-project").resolve()
         self.stub_port = free_port()
         self.installed = Installed(self)
-        self.ax = MacAX() if IS_MAC else None
+        self.ax: NativeAX | None = MacAX() if IS_MAC else WinUIA() if IS_WIN else None
 
     @property
     def user_config(self) -> Path:
@@ -1048,6 +1123,10 @@ def good_update(ctx: Ctx, s: Session) -> dict | None:
                 pass
         ctx.proof.check("genuine update: the relaunched process runs from the installed AppImage path",
                         str(ctx.installed.target) in envs, f"APPIMAGE={envs}")
+    if IS_WIN and new:
+        exes = [d.get("exe", "") for d in described]
+        ctx.proof.check("genuine update: the relaunched process is the installed program",
+                        any(Path(e).resolve() == Path(ctx.installed.exe).resolve() for e in exes if e), json.dumps(exes))
     if IS_MAC and new:
         exes = [d.get("exe", "") for d in described]
         ctx.proof.check("genuine update: the relaunched process runs from the installed bundle",
@@ -1088,6 +1167,7 @@ def run(ctx: Ctx) -> None:
         (ctx.stage / ctx.files["b_sig"]).read_text().strip(),
         (ctx.stage / ctx.files["b_wrong_sig"]).read_text().strip(),
     )
+    ctx.server.log_to = ctx.out / "endpoint-requests.json"
     proof.info("setup", f"endpoint {ctx.server.endpoint}; A={ctx.version_a} B={ctx.version_b}; payload {b.name} "
                         f"({b.stat().st_size} bytes); platforms {ctx.platform_keys()}")
     keys = {p.name: p.read_text() for p in (ctx.stage / "keys").glob("*-binary-keys.json")}
