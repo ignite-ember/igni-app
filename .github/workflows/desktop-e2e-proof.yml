@@ -126,7 +126,9 @@ jobs:
           APPIMAGE=$(ls "$T"/bundle/appimage/*.AppImage | head -1)
           DEB=$(ls "$T"/bundle/deb/*.deb | head -1)
           chmod +x "$APPIMAGE"
-          dbus-run-session -- xvfb-run -a -s "-screen 0 1440x1000x24" \
+          # The session bus inside the display, so what it activates (the
+          # accessibility bus, the desktop portal) can open the display too.
+          xvfb-run -a -s "-screen 0 1440x1000x24" dbus-run-session -- \
             uv run --python 3.12 --script igni-app/clients/tauri/e2e/desktop_proof.py \
               --platform linux \
               --app "$T/igni-app" \

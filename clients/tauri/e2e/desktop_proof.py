@@ -375,6 +375,24 @@ def backend_tree(app_pid: int) -> list[psutil.Process]:
     return [k for k in kids if "igni_core.backend" in " ".join(cmdline(k))]
 
 
+def launched_as(tree: list[psutil.Process]) -> str:
+    """The interpreter path the app started the backend with. A macOS
+    framework Python re-executes itself from inside Python.app, so its argv0
+    is the framework's; the launcher leaves the path it was started as in
+    ``__PYVENV_LAUNCHER__``."""
+    if not tree:
+        return ""
+    proc = tree[0]
+    try:
+        launcher = proc.environ().get("__PYVENV_LAUNCHER__")
+    except (psutil.AccessDenied, psutil.NoSuchProcess, psutil.ZombieProcess):
+        launcher = None
+    if launcher:
+        return launcher
+    argv = cmdline(proc)
+    return argv[0] if argv else ""
+
+
 def listening_port(proc: psutil.Process) -> int | None:
     try:
         for conn in proc.net_connections(kind="tcp"):
@@ -725,22 +743,50 @@ class MacUI(NativeUI):
 
     def dialog(self, pid, title, timeout=25, dismiss=True):
         end = time.time() + timeout
+        # Every element of every window, each read on its own so one
+        # missing value cannot hide the rest; an alert's texts are static
+        # texts whose value or name carries the words.
         script = f"""
         tell application "System Events"
           set p to {self._proc(pid)}
           set out to ""
           repeat with w in windows of p
-            set out to out & "##WINDOW " & (name of w as text) & linefeed
+            set wn to ""
             try
-              repeat with t in static texts of w
-                set out to out & (value of t as text) & linefeed
-              end repeat
+              set wn to (name of w as text)
             end try
+            set out to out & "##WINDOW " & wn & linefeed
+            try
+              set els to entire contents of w
+            on error
+              set els to {{}}
+            end try
+            repeat with e in els
+              try
+                set r to (role of e as text)
+              on error
+                set r to "?"
+              end try
+              set v to ""
+              try
+                set v to (value of e as text)
+              end try
+              set n to ""
+              try
+                set n to (name of e as text)
+              end try
+              set d to ""
+              try
+                set d to (description of e as text)
+              end try
+              if v is not "" or n is not "" or d is not "" then set out to out & r & "|" & n & "|" & v & "|" & d & linefeed
+            end repeat
           end repeat
           return out
         end tell"""
+        text = ""
         while time.time() < end:
-            text = self._osa(script)
+            text = self._osa(script, timeout=120)
             for block in text.split("##WINDOW ")[1:]:
                 if title in block:
                     if dismiss:
@@ -758,8 +804,8 @@ class MacUI(NativeUI):
                         except RuntimeError:
                             pass
                     return block
-            time.sleep(0.5)
-        raise RuntimeError(f"no dialog showing {title!r}")
+            time.sleep(1)
+        raise RuntimeError(f"no dialog showing {title!r}; the windows held: {text[-1500:]!r}")
 
     def key(self, pid, combo, window=None):
         keyname = combo.split("+")[-1]
@@ -819,21 +865,26 @@ class Session:
         self.t0 = time.time()
         env = self.env()
         log = open(self.dir / "app.log", "w", encoding="utf-8", errors="replace")
-        if self.use_webdriver:
+        if self.use_webdriver and IS_WIN:
+            self._attach_webview2(env, log)
+        elif self.use_webdriver:
             from selenium import webdriver
             from selenium.webdriver.common.options import ArgOptions
 
             env["TAURI_WEBVIEW_AUTOMATION"] = "true"
             cmd = [self.ctx.tauri_driver, "--port", "4444"]
-            if IS_WIN:
-                cmd += ["--native-driver", self.ctx.native_driver]
             self.td = subprocess.Popen(cmd, env=env, stdout=log, stderr=subprocess.STDOUT)
             if not wait_for(lambda: socket.create_connection(("127.0.0.1", 4444), timeout=1).close() or True, 30):
                 raise RuntimeError("tauri-driver did not listen on 4444")
             opts = ArgOptions()
             opts.set_capability("browserName", "wry")
             opts.set_capability("tauri:options", {"application": str(self.app), "args": self.args})
-            self.driver = webdriver.Remote(command_executor="http://127.0.0.1:4444", options=opts)
+            from selenium.webdriver.remote.client_config import ClientConfig
+
+            # Without a timeout a session WebKitWebDriver never answers
+            # blocks forever (the first run sat two hours on one).
+            config = ClientConfig(remote_server_addr="http://127.0.0.1:4444", timeout=180)
+            self.driver = webdriver.Remote(command_executor="http://127.0.0.1:4444", options=opts, client_config=config)
             self.driver.set_script_timeout(60)
         else:
             self.proc = subprocess.Popen([str(self.app), *self.args], env=env, stdout=log, stderr=subprocess.STDOUT)
@@ -841,6 +892,44 @@ class Session:
         if not procs:
             raise RuntimeError("the app process never appeared")
         self.app_pid = min(procs, key=lambda p: p.create_time()).pid
+
+    def _attach_webview2(self, env: dict, log):
+        """Windows: start the app with WebView2's DevTools port open and
+        attach msedgedriver to it (``debuggerAddress``).
+
+        tauri-driver's own route (msedgedriver launching the app) failed on
+        the runner with "DevToolsActivePort file doesn't exist" for every
+        session; attaching to a port the app was started with is the
+        documented way to automate a WebView2 app, and it says plainly
+        whether the port ever opened.
+        """
+        import urllib.request
+
+        from selenium import webdriver
+        from selenium.webdriver.edge.options import Options as EdgeOptions
+        from selenium.webdriver.edge.service import Service
+
+        port = free_port()
+        # Replaces wry's defaults, which it would otherwise pass; they are
+        # repeated so the webview runs as it does for a user.
+        env["WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS"] = (
+            f"--remote-debugging-port={port} --disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection"
+        )
+        self.proc = subprocess.Popen([str(self.app), *self.args], env=env, stdout=log, stderr=subprocess.STDOUT)
+
+        def devtools():
+            with urllib.request.urlopen(f"http://127.0.0.1:{port}/json/version", timeout=2) as r:
+                return r.read()
+
+        if not wait_for(devtools, 90, 1):
+            raise RuntimeError(
+                f"the app's WebView2 opened no DevTools port {port} in 90s (app running: {self.proc.poll() is None})"
+            )
+        opts = EdgeOptions()
+        opts.debugger_address = f"127.0.0.1:{port}"
+        service = Service(self.ctx.native_driver, log_output=str(self.dir / "msedgedriver.log"))
+        self.driver = webdriver.Edge(service=service, options=opts)
+        self.driver.set_script_timeout(60)
 
     def stop(self):
         if self.driver is not None:
@@ -1164,7 +1253,7 @@ def r617_unacknowledged(ctx: Ctx):
                 # must be the managed one, never the override.
                 s.connected(240)
                 tree = backend_tree(s.app_pid)
-                argv0 = cmdline(tree[0])[0] if tree else ""
+                argv0 = launched_as(tree)
                 ctx.proof.check(
                     "R617",
                     f"IGNITE_EMBER_DEV={label}: the override is ignored; the backend runs from the managed venv",
@@ -1204,10 +1293,7 @@ def r617_acknowledged(ctx: Ctx):
     env = {"IGNI_PYTHON": ctx.core_py, "IGNITE_EMBER_DEV": "TRUE"}
     with Session(ctx, "r617-igni-python", args=[ctx.proj], env=env) as s:
         ok = s.connected(180)
-        leaf = backend_leaf(s.app_pid)
-        argv0 = cmdline(leaf[0])[0] if leaf else ""
-        tree = backend_tree(s.app_pid)
-        argv0 = cmdline(tree[0])[0] if tree else argv0
+        argv0 = launched_as(backend_tree(s.app_pid))
         ctx.proof.check("R617", "IGNI_PYTHON with IGNITE_EMBER_DEV=TRUE starts the backend from that interpreter", ok and same_path(argv0, ctx.core_py), f"connected={ok} argv0={argv0}")
 
 
@@ -1388,7 +1474,7 @@ def override_session(ctx: Ctx):
         ok = s.connected(240)
         s.shot("connected")
         tree = backend_tree(s.app_pid)
-        argv0 = cmdline(tree[0])[0] if tree else ""
+        argv0 = launched_as(tree)
         ctx.proof.check("R617", "IGNI_DEV_BACKEND + IGNITE_EMBER_DEV=1 starts the backend from the override, over IGNI_PYTHON", ok and same_path(argv0, ctx.core_py), f"connected={ok} argv0={argv0}")
         if s.driver is not None:
             q = urllib.parse.parse_qs(urllib.parse.urlsplit(s.url()).query)
@@ -1564,22 +1650,26 @@ def start_hand_backend(ctx: Ctx, log: Path) -> tuple[subprocess.Popen, int]:
         stderr=open(log, "w", encoding="utf-8", errors="replace"),
         text=True,
     )
-    end = time.time() + 120
-    while time.time() < end:
-        line = proc.stdout.readline()
-        if not line:
-            if proc.poll() is not None:
-                raise RuntimeError("the hand-started backend exited before ready")
-            continue
-        try:
-            msg = json.loads(line)
-        except ValueError:
-            continue
-        if msg.get("status") == "ready":
-            threading.Thread(target=lambda: [None for _ in proc.stdout], daemon=True).start()
-            port = int(str(msg.get("ws_url", "")).rsplit(":", 1)[-1].strip("/"))
-            return proc, port
-    raise RuntimeError("no ready line from the hand-started backend")
+    found: dict = {}
+
+    def read():
+        for line in proc.stdout:
+            if "port" in found:
+                continue
+            try:
+                msg = json.loads(line)
+            except ValueError:
+                continue
+            if isinstance(msg, dict) and msg.get("status") == "ready":
+                found["port"] = int(str(msg.get("ws_url", "")).rsplit(":", 1)[-1].strip("/"))
+
+    threading.Thread(target=read, daemon=True).start()
+    if not wait_for(lambda: "port" in found or proc.poll() is not None, 120):
+        kill_tree(proc.pid)
+        raise RuntimeError("no ready line from the hand-started backend in 120s")
+    if "port" not in found:
+        raise RuntimeError("the hand-started backend exited before ready")
+    return proc, found["port"]
 
 
 def attached_session(ctx: Ctx):
@@ -1621,7 +1711,7 @@ def provisioned_session(ctx: Ctx):
         with Session(ctx, "provisioned-setting", args=[ctx.proj], env={"IGNI_AIR_GAPPED": "1"}) as s:
             ok = s.connected(240)
             tree = backend_tree(s.app_pid)
-            argv0 = cmdline(tree[0])[0] if tree else ""
+            argv0 = launched_as(tree)
             ctx.proof.check("R620", "runtime_python in ~/.igni/config.yaml runs the backend from that interpreter", ok and same_path(argv0, ctx.core_py), f"argv0={argv0}")
             text = diagnose(ctx, s)
             ctx.proof.check("R620", "Diagnose (provisioned): source, interpreter and the runtime_python line", diag_line(text, "Backend source") == "provisioned (runtime_python)" and same_path(diag_line(text, "Interpreter path"), ctx.core_py) and same_path(diag_line(text, "runtime_python setting"), ctx.core_py) and diag_line(text, "IGNI_RUNTIME_PYTHON") == "<unset>", text[:600])
@@ -1741,7 +1831,7 @@ def managed_sessions(ctx: Ctx, app: Path, row_install: str):
         s.desktop_shot("managed-connected")
         leaf = backend_leaf(s.app_pid)
         tree = backend_tree(s.app_pid)
-        argv0 = cmdline(tree[0])[0] if tree else ""
+        argv0 = launched_as(tree)
         venv_py = ctx.cache_root / "venv" / ("Scripts/python.exe" if IS_WIN else "bin/python")
         err = s.loading_error() if s.driver is not None else ""
         ctx.proof.check(row_install, "a clean machine: the app installs its managed runtime (uv, CPython, igni-core from PyPI) and the window connects", ok and same_path(argv0, venv_py), f"connected={ok} argv0={argv0} error={err[:300]}")
@@ -1795,7 +1885,7 @@ def appimage_provisioned(ctx: Ctx, app: Path):
         with Session(ctx, "r613-appimage-runtime-python", app=app, args=[ctx.proj]) as s:
             ok = s.connected(300)
             tree = backend_tree(s.app_pid)
-            argv0 = cmdline(tree[0])[0] if tree else ""
+            argv0 = launched_as(tree)
             ctx.proof.check("R613", "AppImage, runtime_python: the provisioned interpreter runs the backend and the window connects", ok and same_path(argv0, ctx.core_py), f"argv0={argv0}")
             leaf = backend_leaf(s.app_pid)
             if leaf:
@@ -1876,6 +1966,10 @@ def main() -> int:
     ap.add_argument("--work", required=True)
     ap.add_argument("--only", default="", help="comma-separated scenario names")
     a = ap.parse_args()
+    # A hung step names itself: every thread's stack, every ten minutes.
+    import faulthandler
+
+    faulthandler.dump_traceback_later(600, repeat=True)
     ctx = Ctx(a)
     serve(StubModel, ctx.stub_port)
     serve(ProbeFiles, ctx.probe_port)
