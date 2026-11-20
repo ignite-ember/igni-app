@@ -743,6 +743,17 @@ class MacUI(NativeUI):
             end tell"""
         )
 
+    # A message dialog with no parent window is shown by rfd through
+    # CFUserNotificationDisplayAlert: the system's UserNotificationCenter
+    # draws it, so it is that (background) process's window, not the app's.
+    # Run 44788577615's screenshot shows it on screen, outside the app's
+    # accessibility tree.
+    ALERT_OWNERS = ("UserNotificationCenter", "CoreServicesUIAgent")
+
+    def _procs(self, pid) -> str:
+        owners = " or ".join(f'name is "{n}"' for n in self.ALERT_OWNERS)
+        return f"(every process whose unix id is {pid} or {owners})"
+
     def dialog(self, pid, title, timeout=25, dismiss=True):
         end = time.time() + timeout
         # Every element of every window, each read on its own so one
@@ -750,8 +761,8 @@ class MacUI(NativeUI):
         # texts whose value or name carries the words.
         script = f"""
         tell application "System Events"
-          set p to {self._proc(pid)}
           set out to ""
+          repeat with p in {self._procs(pid)}
           repeat with w in windows of p
             set wn to ""
             try
@@ -784,6 +795,7 @@ class MacUI(NativeUI):
               if v is not "" or n is not "" or d is not "" then set out to out & r & "|" & n & "|" & v & "|" & d & linefeed
             end repeat
           end repeat
+          end repeat
           return out
         end tell"""
         text = ""
@@ -791,15 +803,17 @@ class MacUI(NativeUI):
             text = self._osa(script, timeout=120)
             for block in text.split("##WINDOW ")[1:]:
                 if title in block:
+                    self.screenshot(Path(os.environ.get("PROOF_OUT", ".")) / f"dialog-{int(time.time())}.png")
                     if dismiss:
                         try:
                             self._osa(
                                 f"""tell application "System Events"
-                                  set p to {self._proc(pid)}
+                                  repeat with p in {self._procs(pid)}
                                   repeat with w in windows of p
                                     try
                                       click button "OK" of w
                                     end try
+                                  end repeat
                                   end repeat
                                 end tell"""
                             )
@@ -934,9 +948,14 @@ class Session:
         # key wins over both. wry's defaults are repeated so the webview
         # runs as it does for a user.
         args = f"--remote-debugging-port={port} --disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection"
-        key = winreg.CreateKey(winreg.HKEY_CURRENT_USER, r"Software\Policies\Microsoft\Edge\WebView2\AdditionalBrowserArguments")
-        winreg.SetValueEx(key, Path(self.app).name, 0, winreg.REG_SZ, args)
-        winreg.CloseKey(key)
+        for hive in (winreg.HKEY_CURRENT_USER, winreg.HKEY_LOCAL_MACHINE):
+            try:
+                key = winreg.CreateKey(hive, r"Software\Policies\Microsoft\Edge\WebView2\AdditionalBrowserArguments")
+                for value_name in (Path(self.app).name, "*"):
+                    winreg.SetValueEx(key, value_name, 0, winreg.REG_SZ, args)
+                winreg.CloseKey(key)
+            except OSError:
+                pass
         env["WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS"] = args
         self.proc = subprocess.Popen([str(self.app), *self.args], env=env, stdout=log, stderr=subprocess.STDOUT)
 
@@ -945,8 +964,16 @@ class Session:
                 return r.read()
 
         if not wait_for(devtools, 90, 1):
+            browsers = []
+            for proc in psutil.process_iter(["name"]):
+                if (proc.info["name"] or "").lower() == "msedgewebview2.exe":
+                    argv = " ".join(cmdline(proc))
+                    if "--type=" not in argv:
+                        browsers.append(argv[:700])
+            (self.dir / "webview2-browsers.txt").write_text("\n\n".join(browsers), encoding="utf-8")
             raise RuntimeError(
-                f"the app's WebView2 opened no DevTools port {port} in 90s (app running: {self.proc.poll() is None})"
+                f"the app's WebView2 opened no DevTools port {port} in 90s (app running: {self.proc.poll() is None});"
+                f" WebView2 browser processes: {len(browsers)}; first started as: {browsers[0][:400] if browsers else '-'}"
             )
         opts = EdgeOptions()
         opts.debugger_address = f"127.0.0.1:{port}"
@@ -1483,12 +1510,8 @@ def r624_menu_structure(ctx: Ctx, s: Session):
         quit_item = next((i for i in menus.get("igni", []) if i["name"] == "Quit igni"), None)
         fs_item = next((i for i in menus.get("View", []) if i["name"] == "Toggle Full Screen"), None)
         ctx.proof.check("R624", "off macOS, Quit igni and Toggle Full Screen are there and enabled", bool(quit_item and quit_item["enabled"] and fs_item and fs_item["enabled"]), json.dumps([quit_item, fs_item]))
-        own = ("igni", "File", "View")
-        disabled = [f"{m} > {i['name']}" for m, items in menus.items() if m in own for i in items if i["name"] and not i["enabled"]]
-        ctx.proof.check("R624", "off macOS, nothing in the igni, File or View menus is drawn disabled", not disabled, json.dumps(disabled))
-        others = [f"{m} > {i['name']}" for m, items in menus.items() if m not in own for i in items if i["name"] and not i["enabled"]]
-        if others:
-            ctx.proof.info("R624", "disabled items in the Edit and Window menus (the OS's predefined ones)", json.dumps(others))
+        disabled = [f"{m} > {i['name']}" for m, items in menus.items() for i in items if i["name"] and not i["enabled"]]
+        ctx.proof.check("R624", "off macOS, no menu item is drawn disabled", not disabled, json.dumps(disabled))
 
 
 def override_session(ctx: Ctx):

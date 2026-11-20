@@ -239,9 +239,9 @@ def cmd_pick(args):
         xdotool("windowfocus", "--sync", wid)
     time.sleep(0.5)
     # Typing a path that starts with "/" opens the chooser's location
-    # entry; the trailing "/" moves the chooser into the folder, and Select
-    # with nothing highlighted then chooses the folder it is in.
-    xdotool("type", "--delay", "40", args.path.rstrip("/") + "/")
+    # entry, and Select then chooses the folder it names. (With a trailing
+    # "/" GTK chose the parent: run 44788577615.)
+    xdotool("type", "--delay", "40", args.path.rstrip("/"))
     time.sleep(1.5)
     pressed = None
     for node in walk(chooser):
