@@ -259,31 +259,61 @@ def trust_ca(ca: Path) -> None:
 # ─── the update endpoint ──────────────────────────────────────────────
 
 
-class UpdateServer:
-    """``latest.json`` and B's payload, in one of three modes:
+# The stash release.yml's build legs upload for each installer kind
+# (scripts/latest-json.mjs's LEGS), and the release asset name each one's
+# latest.json entry points at.
+STASHES = {
+    "appimage": "updater-sig-linux-appimage",
+    "msi": "updater-sig-windows-msi",
+    "nsis": "updater-sig-windows-nsis",
+    "app": "updater-sig-aarch64",
+}
+MAC_ASSET = "igni_aarch64.app.tar.gz"  # the stapled tarball's release name
 
-    ``good``      B's payload with the signature its build wrote
-    ``wrongkey``  B's payload with a signature from the other throwaway key
-    ``tampered``  B's payload with one byte flipped, and B's own signature
+
+class UpdateServer:
+    """``latest.json`` and B's payloads, in one of three modes:
+
+    ``good``      B's payloads with the signatures their builds wrote
+    ``wrongkey``  B's payloads with signatures from the other throwaway key
+    ``tampered``  B's payloads with one byte flipped, and B's own signatures
+
+    latest.json itself is what the release's ``updater-json`` job would
+    publish: ``scripts/latest-json.mjs`` run on the stashes the build legs
+    would upload, one per installer kind this runner has a B for (on Windows
+    both the .msi and the NSIS setup, so an install proves it takes its own
+    entry and not the other's, nor the default).
     """
 
-    def __init__(self, work: Path, cert: Path, key: Path, version: str, platform_keys: list[str],
-                 payload: Path, sig: str, wrong_sig: str):
+    def __init__(self, ctx: "Ctx", cert: Path, key: Path):
+        self.ctx = ctx
         self.port = free_port()
         self.base = f"https://127.0.0.1:{self.port}"
-        self.version = version
-        self.platform_keys = platform_keys
-        self.payload = payload
-        self.sig = sig
-        self.wrong_sig = wrong_sig
-        self.tampered = work / "tampered" / payload.name
-        self.tampered.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copyfile(payload, self.tampered)
-        with open(self.tampered, "r+b") as f:
-            f.seek(self.tampered.stat().st_size // 2)
-            b = f.read(1)
-            f.seek(-1, 1)
-            f.write(bytes([b[0] ^ 0xFF]))
+        self.work = ctx.work / "endpoint"
+        self.legs: dict[str, dict] = {}
+        self.served: dict[str, Path] = {}
+        for kind, files in ctx.all_kinds.items():
+            payload = ctx.stage / files["b"]
+            asset = MAC_ASSET if kind == "app" else payload.name
+            tampered = self.work / "tampered" / asset
+            tampered.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(payload, tampered)
+            with open(tampered, "r+b") as f:
+                f.seek(tampered.stat().st_size // 2)
+                b = f.read(1)
+                f.seek(-1, 1)
+                f.write(bytes([b[0] ^ 0xFF]))
+            self.legs[kind] = {
+                "stash": STASHES[kind],
+                "asset": asset,
+                "sig": (ctx.stage / files["b_sig"]).read_text().strip(),
+                "wrong_sig": (ctx.stage / files["b_wrong_sig"]).read_text().strip(),
+            }
+            self.served[f"/dl/{asset}"] = payload
+            self.served[f"/dl/tampered/{asset}"] = tampered
+        self.manifests = {mode: self._assemble(mode) for mode in ("good", "wrongkey", "tampered")}
+        for mode, m in self.manifests.items():
+            (ctx.out / f"latest-{mode}.json").write_text(json.dumps(m, indent=2), encoding="utf-8")
         self.mode = "good"
         self.hits: list[dict] = []
         self.log_to: Path | None = None
@@ -310,8 +340,7 @@ class UpdateServer:
                     self.end_headers()
                     self.wfile.write(body)
                     return
-                path = {f"/dl/{server.payload.name}": server.payload,
-                        f"/dl/tampered/{server.payload.name}": server.tampered}.get(self.path.split("?")[0])
+                path = server.served.get(self.path.split("?")[0])
                 if path is None:
                     self.send_response(404)
                     self.send_header("Content-Length", "0")
@@ -325,25 +354,41 @@ class UpdateServer:
                     shutil.copyfileobj(f, self.wfile, 1 << 20)
 
         self.httpd = http.server.ThreadingHTTPServer(("127.0.0.1", self.port), Handler)
-        ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
-        ctx.load_cert_chain(str(cert), str(key))
-        self.httpd.socket = ctx.wrap_socket(self.httpd.socket, server_side=True)
+        tls = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+        tls.load_cert_chain(str(cert), str(key))
+        self.httpd.socket = tls.wrap_socket(self.httpd.socket, server_side=True)
         threading.Thread(target=self.httpd.serve_forever, daemon=True).start()
+
+    def _assemble(self, mode: str) -> dict:
+        """latest.json for ``mode``, by the release's own script."""
+        sigs = self.work / "stashes" / mode
+        for leg in self.legs.values():
+            d = sigs / leg["stash"]
+            d.mkdir(parents=True, exist_ok=True)
+            (d / "updater.sig").write_text(leg["wrong_sig"] if mode == "wrongkey" else leg["sig"], encoding="utf-8")
+            if leg["stash"] != STASHES["app"]:
+                (d / "asset").write_text(leg["asset"] + "\n", encoding="utf-8")
+        out = self.work / f"latest-{mode}.json"
+        base = f"{self.base}/dl/tampered" if mode == "tampered" else f"{self.base}/dl"
+        subprocess.run(
+            ["node", str(self.ctx.latest_json_script), "--sigs", str(sigs), "--version", self.ctx.version_b,
+             "--base-url", base, "--pub-date", "2026-11-20T00:00:00Z",
+             "--notes", f"updater e2e proof ({mode})", "--out", str(out)],
+            check=True, stdout=subprocess.DEVNULL,
+        )
+        return json.loads(out.read_text(encoding="utf-8"))
 
     @property
     def endpoint(self) -> str:
         return f"{self.base}/latest.json"
 
+    @property
+    def own_asset(self) -> str:
+        """The asset this runner's install must fetch, and no other."""
+        return self.legs[self.ctx.kind]["asset"]
+
     def manifest(self) -> dict:
-        tampered = self.mode == "tampered"
-        url = f"{self.base}/dl/{'tampered/' if tampered else ''}{self.payload.name}"
-        sig = self.wrong_sig if self.mode == "wrongkey" else self.sig
-        return {
-            "version": self.version,
-            "notes": f"updater e2e proof ({self.mode})",
-            "pub_date": "2026-11-20T00:00:00Z",
-            "platforms": {k: {"signature": sig, "url": url} for k in self.platform_keys},
-        }
+        return self.manifests[self.mode]
 
     def set_mode(self, mode: str) -> None:
         with self.lock:
@@ -918,6 +963,8 @@ class Ctx:
         manifest = json.loads((self.stage / "manifest.json").read_text())
         self.kind = a.kind
         self.files = manifest["kinds"][a.kind]
+        self.all_kinds = manifest["kinds"]
+        self.latest_json_script = Path(a.latest_json_script).resolve()
         self.version_a = manifest["version_a"]
         self.version_b = manifest["version_b"]
         self.platform = manifest["platform"]
@@ -940,13 +987,6 @@ class Ctx:
         self.user_config.parent.mkdir(parents=True, exist_ok=True)
         self.user_config.write_text(text, encoding="utf-8")
         (self.out / "config-history.log").open("a", encoding="utf-8").write(f"--- {time.strftime('%H:%M:%S')}\n{text}\n")
-
-    def platform_keys(self) -> list[str]:
-        if self.kind == "appimage":
-            return ["linux-x86_64-appimage", "linux-x86_64"]
-        if self.kind == "app":
-            return ["darwin-aarch64-app", "darwin-aarch64"]
-        return [f"windows-x86_64-{self.kind}", "windows-x86_64"]
 
     def prepare_project(self) -> None:
         """A trusted folder whose backend reads as signed in and answers from
@@ -1019,8 +1059,9 @@ def refused_install(ctx: Ctx, s: Session, mode: str, label: str, expect: str) ->
         error = (after_click or {}).get("error", "")
         ctx.proof.check(f"{label}: Install is refused and the banner says why", re.search(expect, error, re.I) is not None,
                         f"error={error[:300]!r} expected /{expect}/")
-        ctx.proof.check(f"{label}: the app downloaded the payload before refusing it",
-                        any(h["t"] >= clicked for h in downloads(hits)), json.dumps(downloads(hits))[:300])
+        fetched = [h["path"].rsplit("/", 1)[-1] for h in downloads(hits) if h["t"] >= clicked]
+        ctx.proof.check(f"{label}: the app downloaded its own installer's payload ({srv.own_asset}) before refusing it",
+                        bool(fetched) and set(fetched) == {srv.own_asset}, json.dumps(downloads(hits))[:300])
         after = ctx.installed.state()
         ctx.proof.check(f"{label}: what is installed is still A", after == before,
                         f"before={json.dumps(before)[:200]} after={json.dumps(after)[:200]}")
@@ -1103,8 +1144,9 @@ def good_update(ctx: Ctx, s: Session) -> dict | None:
 
     new = wait_for(relaunched, 300, 1) or []
     hits = srv.since(mark)
-    ctx.proof.check("genuine update: the payload was downloaded once Install was pressed",
-                    any(h["t"] >= clicked for h in downloads(hits)), json.dumps(downloads(hits))[:300])
+    fetched = [h["path"].rsplit("/", 1)[-1] for h in downloads(hits) if h["t"] >= clicked]
+    ctx.proof.check(f"genuine update: Install fetched this install's own entry, {srv.own_asset}, and nothing else",
+                    bool(fetched) and set(fetched) == {srv.own_asset}, json.dumps(downloads(hits))[:300])
     state = wait_for(lambda: (st := ctx.installed.state()) and ctx.installed.matches_b(st)[0] and st, 300, 2) or ctx.installed.state()
     ok, why = ctx.installed.matches_b(state)
     ctx.proof.check(f"genuine update: what is installed is now B ({ctx.version_b})", ok, why)
@@ -1162,14 +1204,12 @@ def run(ctx: Ctx) -> None:
     ca, cert, key = make_tls(ctx.work)
     trust_ca(ca)
     b = ctx.stage / ctx.files["b"]
-    ctx.server = UpdateServer(
-        ctx.work, cert, key, ctx.version_b, ctx.platform_keys(), b,
-        (ctx.stage / ctx.files["b_sig"]).read_text().strip(),
-        (ctx.stage / ctx.files["b_wrong_sig"]).read_text().strip(),
-    )
+    ctx.server = UpdateServer(ctx, cert, key)
     ctx.server.log_to = ctx.out / "endpoint-requests.json"
-    proof.info("setup", f"endpoint {ctx.server.endpoint}; A={ctx.version_a} B={ctx.version_b}; payload {b.name} "
-                        f"({b.stat().st_size} bytes); platforms {ctx.platform_keys()}")
+    good = ctx.server.manifests["good"]
+    proof.info("setup", f"endpoint {ctx.server.endpoint}; A={ctx.version_a} B={ctx.version_b}; this install's payload "
+                        f"{ctx.server.own_asset} ({b.stat().st_size} bytes); latest.json by scripts/latest-json.mjs, keys "
+                        f"{sorted(good['platforms'])}")
     keys = {p.name: p.read_text() for p in (ctx.stage / "keys").glob("*-binary-keys.json")}
     proof.info("setup: which updater key each build carries", json.dumps(keys))
     threading.Thread(target=http.server.ThreadingHTTPServer(("127.0.0.1", ctx.stub_port), StubModel).serve_forever,
@@ -1222,6 +1262,8 @@ def main() -> int:
     ap.add_argument("--native-driver")
     ap.add_argument("--out", required=True)
     ap.add_argument("--work", required=True)
+    ap.add_argument("--latest-json-script", default=str(Path(__file__).resolve().parents[3] / "scripts" / "latest-json.mjs"),
+                    help="the release's latest.json assembler")
     a = ap.parse_args()
     ctx = Ctx(a)
     try:

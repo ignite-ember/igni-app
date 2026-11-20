@@ -15,7 +15,10 @@ name: Updater E2E proof
 #      release.yml are untouched, and no secret is read);
 #   2. clients/tauri/e2e/updater_proof.py serves latest.json and B's payload
 #      over HTTPS from 127.0.0.1 (a throwaway CA trusted for the run),
-#      installs A, points it there with `update_endpoint` in
+#      latest.json being exactly what release.yml's updater-json job would
+#      publish (scripts/latest-json.mjs on the stashes the build legs would
+#      upload; on Windows both the .msi and NSIS entries, so each install
+#      must pick its own), installs A, points it there with `update_endpoint` in
 #      ~/.igni/config.yaml (the deployment setting the shell already reads),
 #      and presses the update banner's "Install & restart":
 #        - update_check_ttl: 0 → no request at all
