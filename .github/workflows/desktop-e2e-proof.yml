@@ -100,6 +100,12 @@ jobs:
         working-directory: igni-app/clients/web
         run: npm ci
 
+      # The shell's init script, run in a page before and after Tauri's
+      # global API arrives (the R624 fix for Windows).
+      - name: The init script's own test
+        working-directory: igni-app/clients/web
+        run: npx vitest run src/lib/initScript.test.ts
+
       - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable branch, 2026-10-16
         with:
           toolchain: stable

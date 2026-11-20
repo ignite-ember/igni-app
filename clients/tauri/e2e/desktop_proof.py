@@ -1598,7 +1598,12 @@ def menus_and_restart_session(ctx: Ctx):
             try:
                 ctx.ui.key(pid, "ctrl+n" if not IS_MAC else "cmd+n", window=ctx.proj.name)
                 before_key = s.session_id()
-                sid2 = wait_for(lambda: (lambda v: v if v and v != before_key else None)(s.session_id()), 30)
+                sid2 = wait_for(lambda: (lambda v: v if v and v != before_key else None)(s.session_id()), 15)
+                if not sid2:
+                    # A keystroke synthesised into Xvfb can land before the
+                    # window manager has given the window focus; one retry.
+                    ctx.ui.key(pid, "ctrl+n" if not IS_MAC else "cmd+n", window=ctx.proj.name)
+                    sid2 = wait_for(lambda: (lambda v: v if v and v != before_key else None)(s.session_id()), 20)
                 ctx.proof.check("R624", "the New Chat accelerator (Ctrl/Cmd+N) does the same", bool(sid2), f"{before_key} -> {sid2}")
             except Exception as exc:
                 ctx.proof.check("R624", "the New Chat accelerator (Ctrl/Cmd+N) does the same", False, str(exc)[:300])
@@ -1663,7 +1668,8 @@ def menus_and_restart_session(ctx: Ctx):
                 # The item acts on the focused window; ask every window.
                 states = (
                     "const d = arguments[arguments.length-1];"
-                    " Promise.all(window.__TAURI__.window.getAllWindows().map(w => w.isFullscreen().then(f => [w.label, f])))"
+                    " Promise.resolve(window.__TAURI__.window.getAllWindows())"
+                    " .then(ws => Promise.all(ws.map(w => w.isFullscreen().then(f => [w.label, f]))))"
                     " .then(d, (e) => d(String(e)));"
                 )
                 fs = wait_for(lambda: (lambda v: v if isinstance(v, list) and any(f for _, f in v) else None)(s.js_async(states)), 15)
