@@ -31,10 +31,15 @@ pub(crate) enum MenuAction {
     Quit,
     /// Linux and Windows: the predefined fullscreen item is macOS-only.
     ToggleFullscreen,
+    /// Linux: GTK has no predefined Close Window, Minimize or Maximize, and
+    /// muda draws them disabled.
+    CloseWindow,
+    Minimize,
+    Maximize,
 }
 
 impl MenuAction {
-    const ALL: [MenuAction; 9] = [
+    const ALL: [MenuAction; 12] = [
         MenuAction::CheckUpdate,
         MenuAction::NewChat,
         MenuAction::NewWindow,
@@ -44,6 +49,9 @@ impl MenuAction {
         MenuAction::ToggleDevtools,
         MenuAction::Quit,
         MenuAction::ToggleFullscreen,
+        MenuAction::CloseWindow,
+        MenuAction::Minimize,
+        MenuAction::Maximize,
     ];
 
     /// The menu item id, which is also the id the web UI receives.
@@ -58,6 +66,9 @@ impl MenuAction {
             MenuAction::ToggleDevtools => "toggle_devtools",
             MenuAction::Quit => "quit_app",
             MenuAction::ToggleFullscreen => "toggle_fullscreen",
+            MenuAction::CloseWindow => "close_window",
+            MenuAction::Minimize => "minimize_window",
+            MenuAction::Maximize => "maximize_window",
         }
     }
 
@@ -76,6 +87,9 @@ impl MenuAction {
             MenuAction::ToggleDevtools => "Toggle Developer Tools",
             MenuAction::Quit => "Quit igni",
             MenuAction::ToggleFullscreen => "Toggle Full Screen",
+            MenuAction::CloseWindow => "Close Window",
+            MenuAction::Minimize => "Minimize",
+            MenuAction::Maximize => "Maximize",
         }
     }
 
@@ -90,6 +104,8 @@ impl MenuAction {
             MenuAction::ToggleDevtools => Some("CmdOrCtrl+Alt+I"),
             MenuAction::Quit => Some("CmdOrCtrl+Q"),
             MenuAction::ToggleFullscreen => Some("F11"),
+            MenuAction::CloseWindow => Some("CmdOrCtrl+W"),
+            MenuAction::Minimize | MenuAction::Maximize => None,
             MenuAction::CheckUpdate
             | MenuAction::RestartBackend
             | MenuAction::ReinstallBackend
@@ -155,6 +171,26 @@ impl MenuAction {
                         .log_on_error("toggling fullscreen");
                 }
             }
+            MenuAction::CloseWindow => {
+                if let Some(window) = WindowManager::focused(app) {
+                    window.close().log_on_error("closing the window");
+                }
+            }
+            MenuAction::Minimize => {
+                if let Some(window) = WindowManager::focused(app) {
+                    window.minimize().log_on_error("minimizing the window");
+                }
+            }
+            MenuAction::Maximize => {
+                if let Some(window) = WindowManager::focused(app) {
+                    let result = if window.is_maximized().unwrap_or(false) {
+                        window.unmaximize()
+                    } else {
+                        window.maximize()
+                    };
+                    result.log_on_error("maximizing the window");
+                }
+            }
             MenuAction::CheckUpdate | MenuAction::NewChat => {
                 Self::forward(app, self.as_id());
             }
@@ -213,12 +249,25 @@ enum Slot {
     ShowAll,
     NativeQuit,
     NativeFullscreen,
+    Undo,
+    Redo,
+    Cut,
+    Copy,
+    Paste,
+    SelectAll,
+    NativeMinimize,
+    NativeMaximize,
+    NativeCloseWindow,
 }
 
-/// What the menus hold on a platform. `macos` and `debug` are passed in,
-/// not read from `cfg!`, so each combination can be tested anywhere.
+/// What the menus hold on a platform. `macos`, `gtk` and `debug` are
+/// passed in, not read from `cfg!`, so each combination can be tested
+/// anywhere.
 struct MenuLayout {
     macos: bool,
+    /// Linux: muda's GTK backend has no Undo, Redo, Minimize, Maximize or
+    /// Close Window, and draws each one disabled.
+    gtk: bool,
     debug: bool,
 }
 
@@ -226,8 +275,54 @@ impl MenuLayout {
     const fn current() -> Self {
         Self {
             macos: cfg!(target_os = "macos"),
+            gtk: cfg!(target_os = "linux"),
             debug: cfg!(debug_assertions),
         }
+    }
+
+    /// Close Window, through the shell where GTK has none.
+    fn close_window(&self) -> Slot {
+        if self.gtk {
+            Slot::Action(MenuAction::CloseWindow)
+        } else {
+            Slot::NativeCloseWindow
+        }
+    }
+
+    fn file_menu(&self) -> Vec<Slot> {
+        vec![
+            Slot::Action(MenuAction::NewChat),
+            Slot::Action(MenuAction::NewWindow),
+            Slot::Separator,
+            Slot::Action(MenuAction::RestartBackend),
+            Slot::Action(MenuAction::ReinstallBackend),
+            Slot::Action(MenuAction::DiagnoseBackend),
+            Slot::Separator,
+            self.close_window(),
+        ]
+    }
+
+    /// The webview undoes and redoes typing itself (Ctrl+Z, Ctrl+Shift+Z);
+    /// on GTK the menu items for it would only ever be disabled.
+    fn edit_menu(&self) -> Vec<Slot> {
+        let mut slots = Vec::new();
+        if !self.gtk {
+            slots.extend([Slot::Undo, Slot::Redo, Slot::Separator]);
+        }
+        slots.extend([Slot::Cut, Slot::Copy, Slot::Paste, Slot::SelectAll]);
+        slots
+    }
+
+    fn window_menu(&self) -> Vec<Slot> {
+        let (minimize, maximize) = if self.gtk {
+            (
+                Slot::Action(MenuAction::Minimize),
+                Slot::Action(MenuAction::Maximize),
+            )
+        } else {
+            (Slot::NativeMinimize, Slot::NativeMaximize)
+        };
+        vec![minimize, maximize, Slot::Separator, self.close_window()]
     }
 
     fn app_menu(&self) -> Vec<Slot> {
@@ -294,6 +389,17 @@ impl AppMenu {
                     Slot::ShowAll => Box::new(PredefinedMenuItem::show_all(app, None)?),
                     Slot::NativeQuit => Box::new(PredefinedMenuItem::quit(app, None)?),
                     Slot::NativeFullscreen => Box::new(PredefinedMenuItem::fullscreen(app, None)?),
+                    Slot::Undo => Box::new(PredefinedMenuItem::undo(app, None)?),
+                    Slot::Redo => Box::new(PredefinedMenuItem::redo(app, None)?),
+                    Slot::Cut => Box::new(PredefinedMenuItem::cut(app, None)?),
+                    Slot::Copy => Box::new(PredefinedMenuItem::copy(app, None)?),
+                    Slot::Paste => Box::new(PredefinedMenuItem::paste(app, None)?),
+                    Slot::SelectAll => Box::new(PredefinedMenuItem::select_all(app, None)?),
+                    Slot::NativeMinimize => Box::new(PredefinedMenuItem::minimize(app, None)?),
+                    Slot::NativeMaximize => Box::new(PredefinedMenuItem::maximize(app, None)?),
+                    Slot::NativeCloseWindow => {
+                        Box::new(PredefinedMenuItem::close_window(app, None)?)
+                    }
                 })
             })
             .collect()
@@ -307,52 +413,13 @@ impl AppMenu {
 
     /// Set before the first window builds, or macOS shows Tauri's stub.
     pub fn build(app: &AppHandle) -> tauri::Result<Menu<Wry>> {
-        let separator = || PredefinedMenuItem::separator(app);
-
         // On Linux and Windows the app menu folds into the window's.
         let layout = MenuLayout::current();
         let app_menu = Self::submenu(app, "igni", layout.app_menu())?;
-        let file_menu = Submenu::with_items(
-            app,
-            "File",
-            true,
-            &[
-                &MenuAction::NewChat.item(app)?,
-                &MenuAction::NewWindow.item(app)?,
-                &separator()?,
-                &MenuAction::RestartBackend.item(app)?,
-                &MenuAction::ReinstallBackend.item(app)?,
-                &MenuAction::DiagnoseBackend.item(app)?,
-                &separator()?,
-                &PredefinedMenuItem::close_window(app, None)?,
-            ],
-        )?;
-        let edit_menu = Submenu::with_items(
-            app,
-            "Edit",
-            true,
-            &[
-                &PredefinedMenuItem::undo(app, None)?,
-                &PredefinedMenuItem::redo(app, None)?,
-                &separator()?,
-                &PredefinedMenuItem::cut(app, None)?,
-                &PredefinedMenuItem::copy(app, None)?,
-                &PredefinedMenuItem::paste(app, None)?,
-                &PredefinedMenuItem::select_all(app, None)?,
-            ],
-        )?;
+        let file_menu = Self::submenu(app, "File", layout.file_menu())?;
+        let edit_menu = Self::submenu(app, "Edit", layout.edit_menu())?;
         let view_menu = Self::submenu(app, "View", layout.view_menu())?;
-        let window_menu = Submenu::with_items(
-            app,
-            "Window",
-            true,
-            &[
-                &PredefinedMenuItem::minimize(app, None)?,
-                &PredefinedMenuItem::maximize(app, None)?,
-                &separator()?,
-                &PredefinedMenuItem::close_window(app, None)?,
-            ],
-        )?;
+        let window_menu = Self::submenu(app, "Window", layout.window_menu())?;
         MenuBuilder::new(app)
             .items(&[&app_menu, &file_menu, &edit_menu, &view_menu, &window_menu])
             .build()
@@ -397,12 +464,17 @@ mod tests {
         for macos in [true, false] {
             let release = MenuLayout {
                 macos,
+                gtk: false,
                 debug: false,
             };
             assert!(!release
                 .view_menu()
                 .contains(&Slot::Action(MenuAction::ToggleDevtools)));
-            let debug = MenuLayout { macos, debug: true };
+            let debug = MenuLayout {
+                macos,
+                gtk: false,
+                debug: true,
+            };
             assert!(debug
                 .view_menu()
                 .contains(&Slot::Action(MenuAction::ToggleDevtools)));
@@ -413,6 +485,7 @@ mod tests {
     fn linux_and_windows_get_a_quit_and_fullscreen_that_work() {
         let other = MenuLayout {
             macos: false,
+            gtk: true,
             debug: false,
         };
         let app_menu = other.app_menu();
@@ -439,12 +512,78 @@ mod tests {
     fn macos_keeps_its_own_app_menu() {
         let mac = MenuLayout {
             macos: true,
+            gtk: false,
             debug: false,
         };
         assert!(mac.app_menu().contains(&Slot::NativeQuit));
         assert!(mac.app_menu().contains(&Slot::Services));
         assert!(!mac.app_menu().contains(&Slot::Action(MenuAction::Quit)));
         assert_eq!(mac.view_menu(), vec![Slot::NativeFullscreen]);
+    }
+
+    /// Every item GTK cannot draw enabled, by the slot that would hold it.
+    const GTK_DISABLED: [Slot; 5] = [
+        Slot::Undo,
+        Slot::Redo,
+        Slot::NativeMinimize,
+        Slot::NativeMaximize,
+        Slot::NativeCloseWindow,
+    ];
+
+    // R624: on Linux, File > Close Window, Edit > Undo/Redo and the whole
+    // Window menu were drawn disabled (the desktop proof read them so
+    // through AT-SPI, run 44788577615).
+    #[test]
+    fn linux_menus_hold_nothing_gtk_draws_disabled() {
+        let linux = MenuLayout {
+            macos: false,
+            gtk: true,
+            debug: false,
+        };
+        let all: Vec<Slot> = [
+            linux.app_menu(),
+            linux.file_menu(),
+            linux.edit_menu(),
+            linux.view_menu(),
+            linux.window_menu(),
+        ]
+        .concat();
+        for dead in GTK_DISABLED {
+            assert!(!all.contains(&dead), "{dead:?} is drawn disabled on GTK");
+        }
+        assert!(linux
+            .file_menu()
+            .contains(&Slot::Action(MenuAction::CloseWindow)));
+        assert_eq!(
+            linux.window_menu(),
+            vec![
+                Slot::Action(MenuAction::Minimize),
+                Slot::Action(MenuAction::Maximize),
+                Slot::Separator,
+                Slot::Action(MenuAction::CloseWindow),
+            ]
+        );
+        assert_eq!(
+            linux.edit_menu(),
+            vec![Slot::Cut, Slot::Copy, Slot::Paste, Slot::SelectAll]
+        );
+    }
+
+    #[test]
+    fn macos_and_windows_keep_the_predefined_edit_and_window_items() {
+        for macos in [true, false] {
+            let layout = MenuLayout {
+                macos,
+                gtk: false,
+                debug: false,
+            };
+            assert!(layout.edit_menu().starts_with(&[Slot::Undo, Slot::Redo]));
+            assert!(layout.file_menu().contains(&Slot::NativeCloseWindow));
+            assert!(layout.window_menu().contains(&Slot::NativeMinimize));
+            assert!(!layout
+                .window_menu()
+                .contains(&Slot::Action(MenuAction::CloseWindow)));
+        }
     }
 
     #[test]
