@@ -1071,10 +1071,15 @@ class Session:
         from selenium.webdriver.common.by import By
         from selenium.webdriver.common.keys import Keys
 
-        el = self.driver.find_element(By.CSS_SELECTOR, ".composer-editable")
-        el.click()
-        el.send_keys(text)
-        el.send_keys(Keys.ENTER)
+        # A window that is not ready shows in the reply check that follows;
+        # it does not end the session.
+        try:
+            el = self.driver.find_element(By.CSS_SELECTOR, ".composer-editable")
+            el.click()
+            el.send_keys(text)
+            el.send_keys(Keys.ENTER)
+        except Exception as exc:
+            (self.dir / "send-chat-error.txt").write_text(f"{type(exc).__name__}: {exc}"[:2000], encoding="utf-8")
 
     def assistant_said(self, token: str, timeout: float = 60) -> bool:
         return bool(
@@ -1360,8 +1365,15 @@ window.__cspInline = 'not run';
 const s = document.createElement('script');
 s.textContent = "window.__cspInline = 'ran'";
 document.head.appendChild(s);
-try { out.evalResult = String(eval('40 + 2')); } catch (err) { out.evalError = err.name + ': ' + err.message; }
-try { out.functionResult = String(new Function('return 7')()); } catch (err) { out.functionError = err.name + ': ' + err.message; }
+// eval and new Function run from a timer, in an ordinary task: code that
+// a DevTools client evaluates may generate code from strings whatever the
+// page's policy (WebView2 let it through in run 44799523100).
+setTimeout(() => {
+  try { out.evalResult = String(eval('40 + 2')); } catch (err) { out.evalError = err.name + ': ' + err.message; }
+  try { out.functionResult = String(new Function('return 7')()); } catch (err) { out.functionError = err.name + ': ' + err.message; }
+}, 0);
+window.__cspTimerString = 'not run';
+try { setTimeout("window.__cspTimerString = 'ran'", 0); } catch (err) { out.timerStringError = String(err); }
 const ext = document.createElement('script');
 ext.src = 'http://127.0.0.1:' + probePort + '/probe.js';
 ext.onload = () => { out.externalLoaded = true; };
@@ -1374,7 +1386,7 @@ img.src = 'https://example.com/igni-csp-probe.png';
 fetch('https://example.com/').then(() => { out.fetchOk = true; }, (e) => { out.fetchError = String(e); });
 const meta = document.querySelector('meta[http-equiv="Content-Security-Policy"]');
 out.meta = meta ? meta.content : null;
-setTimeout(() => { out.inline = window.__cspInline; out.external = window.__cspExternal || 'not run'; done(out); }, 4000);
+setTimeout(() => { out.inline = window.__cspInline; out.external = window.__cspExternal || 'not run'; out.timerString = window.__cspTimerString; done(out); }, 4000);
 """
 
 CAPABILITY_PROBE = r"""
@@ -1426,8 +1438,14 @@ def r622_checks(ctx: Ctx, s: Session):
         frag = urllib.parse.urlsplit(s.url()).fragment
         token = urllib.parse.parse_qs(frag).get("igni_ws_token", [""])[0]
         ctx.proof.check("R622", "the window was handed a per-launch token in its URL fragment", bool(token), fingerprint(token) if token else "none")
+    # What the app handed the backend, read from the process the app
+    # spawned (on Windows the venv launcher). The interpreter takes the
+    # token variables out of its own environment as it reads them, which
+    # Windows reflects in what another process can read.
+    spawned = backend_tree(s.app_pid)
+    handed = spawned[0] if spawned else proc
     try:
-        environ = proc.environ()
+        environ = handed.environ()
     except psutil.AccessDenied:
         environ = {}
     fd = environ.get("IGNI_WS_TOKEN_FD")
@@ -1469,6 +1487,7 @@ def r632_checks(ctx: Ctx, s: Session):
     ctx.proof.check("R632", "an inline <script> does not run", res.get("inline") == "not run", f"inline={res.get('inline')}")
     ctx.proof.check("R632", "eval() is refused", "evalError" in res, res.get("evalError") or f"eval returned {res.get('evalResult')}")
     ctx.proof.check("R632", "new Function() is refused", "functionError" in res, res.get("functionError") or f"returned {res.get('functionResult')}")
+    ctx.proof.check("R632", "a string handed to setTimeout is not run", res.get("timerString") == "not run", f"timerString={res.get('timerString')}")
     ctx.proof.check("R632", "a script from another origin (a loopback server) neither loads nor is requested", res.get("external") == "not run" and not res.get("externalLoaded") and not ProbeFiles.hits, f"external={res.get('external')} hits={ProbeFiles.hits}")
     ctx.proof.check("R632", "an image from a remote host is blocked", not res.get("imageLoaded"), f"imageError={res.get('imageError')}")
     ctx.proof.check("R632", "fetch() to a remote host is blocked", not res.get("fetchOk"), res.get("fetchError") or "")
@@ -1559,6 +1578,18 @@ def menus_and_restart_session(ctx: Ctx):
             s.send_chat(f"Remember the codeword {token}. Reply with exactly {token}.")
             ctx.proof.check("R619", "the window chats (stub model answers through the real backend)", s.assistant_said(token, 90), "")
             s.shot("chatted")
+            # The shell forwards New Chat and Check for Updates to the page as
+            # an "igni-menu" event. Emitted from the page to its own window,
+            # it tells the page's listener apart from the shell's sending.
+            heard = s.js_async(
+                "const d = arguments[arguments.length-1]; let got = false;"
+                " const on = (e) => { if (e.detail && e.detail.type === 'igni:menu' && e.detail.payload.id === 'probe') got = true; };"
+                " window.addEventListener('igni-host', on);"
+                " const label = window.__TAURI__.window.getCurrentWindow().label;"
+                " window.__TAURI__.event.emitTo({kind: 'WebviewWindow', label}, 'igni-menu', 'probe')"
+                "   .then(() => setTimeout(() => { window.removeEventListener('igni-host', on); d({got, label}); }, 1500), (e) => d({got, error: String(e)}));"
+            )
+            ctx.proof.info("R624", "the page's igni-menu listener hears an event sent to its own window", json.dumps(heard))
             sid0 = s.session_id()
             ctx.ui.click(pid, "File", "New Chat")
             sid1 = wait_for(lambda: (lambda v: v if v and v != sid0 else None)(s.session_id()), 30)
@@ -1566,8 +1597,9 @@ def menus_and_restart_session(ctx: Ctx):
             ctx.proof.check("R624", "File > New Chat starts a new session (new id, empty transcript)", bool(sid1) and bool(empty), f"{sid0} -> {sid1}")
             try:
                 ctx.ui.key(pid, "ctrl+n" if not IS_MAC else "cmd+n", window=ctx.proj.name)
-                sid2 = wait_for(lambda: (lambda v: v if v and v != sid1 else None)(s.session_id()), 30)
-                ctx.proof.check("R624", "the New Chat accelerator (Ctrl/Cmd+N) does the same", bool(sid2), f"{sid1} -> {sid2}")
+                before_key = s.session_id()
+                sid2 = wait_for(lambda: (lambda v: v if v and v != before_key else None)(s.session_id()), 30)
+                ctx.proof.check("R624", "the New Chat accelerator (Ctrl/Cmd+N) does the same", bool(sid2), f"{before_key} -> {sid2}")
             except Exception as exc:
                 ctx.proof.check("R624", "the New Chat accelerator (Ctrl/Cmd+N) does the same", False, str(exc)[:300])
             before = len(s.notes())
@@ -1628,11 +1660,17 @@ def menus_and_restart_session(ctx: Ctx):
                 ctx.ui.focus(pid, ctx.proj.name)
                 time.sleep(1)
                 ctx.ui.click(pid, "View", "Toggle Full Screen", window=ctx.proj.name)
-                fs = wait_for(lambda: s.js_async("const d = arguments[arguments.length-1]; window.__TAURI__.window.getCurrentWindow().isFullscreen().then(d, () => d(null));") is True, 15)
-                ctx.proof.check("R624", "View > Toggle Full Screen puts the window in fullscreen", bool(fs), "")
+                # The item acts on the focused window; ask every window.
+                states = (
+                    "const d = arguments[arguments.length-1];"
+                    " Promise.all(window.__TAURI__.window.getAllWindows().map(w => w.isFullscreen().then(f => [w.label, f])))"
+                    " .then(d, (e) => d(String(e)));"
+                )
+                fs = wait_for(lambda: (lambda v: v if isinstance(v, list) and any(f for _, f in v) else None)(s.js_async(states)), 15)
+                ctx.proof.check("R624", "View > Toggle Full Screen puts the window in fullscreen", bool(fs), json.dumps(fs))
                 ctx.ui.click(pid, "View", "Toggle Full Screen", window=ctx.proj.name)
-                left = wait_for(lambda: s.js_async("const d = arguments[arguments.length-1]; window.__TAURI__.window.getCurrentWindow().isFullscreen().then(d, () => d(null));") is False, 15)
-                ctx.proof.check("R624", "View > Toggle Full Screen again leaves fullscreen", bool(left), "")
+                left = wait_for(lambda: (lambda v: v if isinstance(v, list) and not any(f for _, f in v) else None)(s.js_async(states)), 15)
+                ctx.proof.check("R624", "View > Toggle Full Screen again leaves fullscreen", bool(left), json.dumps(left))
         # R619: restart from the menu.
         leaf = backend_leaf(pid)
         if not leaf:
@@ -1647,7 +1685,8 @@ def menus_and_restart_session(ctx: Ctx):
             if main_handle:
                 s.driver.switch_to.window(main_handle)
             back = s.connected(180)
-            ctx.proof.check("R619", "the window comes back connected to the new backend", back and str(new_leaf[1] if new_leaf else "") in urllib.parse.unquote(s.url()), f"port {port1} -> {new_leaf[1] if new_leaf else None}")
+            q = urllib.parse.parse_qs(urllib.parse.urlsplit(s.url()).query)
+            ctx.proof.check("R619", "the window comes back connected to the new backend", back and str(new_leaf[1] if new_leaf else "") in urllib.parse.unquote(s.url()), f"port {port1} -> {new_leaf[1] if new_leaf else None}; window on {q.get('ws')} backend_source={q.get('backend_source')}")
             token = marker_token()
             s.send_chat(f"Reply with exactly {token}.")
             ctx.proof.check("R619", "after the restart the window chats again", s.assistant_said(token, 90), "")
