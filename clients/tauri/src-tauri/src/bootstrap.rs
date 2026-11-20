@@ -1,8 +1,11 @@
-//! Bringing the first window from the loading view to the chat UI.
+//! Bringing the first window from the loading view to the chat UI, and
+//! bringing it back when the backend this app started dies on its own.
+
+use std::time::{Duration, Instant};
 
 use tauri::{AppHandle, Manager};
 
-use crate::backend::{BackendConn, BackendSupervisor};
+use crate::backend::{BackendConn, BackendSupervisor, Liveness};
 use crate::error::{LogOnError, ShellError};
 use crate::events::ShellEvent;
 use crate::launch_args::LaunchArgs;
@@ -13,6 +16,15 @@ use crate::windows::{WindowLabel, WindowManager, WindowTitle};
 const REINSTALL_ROUTE: &str = "loading.html?msg=Reinstalling…";
 /// The loading view the main window shows while the backend restarts.
 const RESTART_ROUTE: &str = "loading.html?msg=Restarting the backend…";
+/// The loading view the main window shows while a backend that died on
+/// its own is replaced.
+const CRASH_ROUTE: &str = "loading.html?msg=The backend stopped unexpectedly. Starting it again…";
+/// The loading view left up when backends keep dying.
+const CRASH_GIVE_UP_ROUTE: &str =
+    "loading.html?msg=The igni backend keeps stopping, so it was not started again. \
+     Choose File > Restart Backend to try once more, or File > Diagnose Backend.";
+/// How often a crash watcher looks at its backend.
+const CRASH_POLL: Duration = Duration::from_millis(500);
 
 pub(crate) struct Bootstrap<'a> {
     app: &'a AppHandle,
@@ -38,10 +50,11 @@ impl<'a> Bootstrap<'a> {
                 ShellEvent::BootstrapProgress(msg.to_string()).emit_to(&main);
             }
         };
-        let conn = self
-            .app
-            .state::<BackendSupervisor>()
-            .connect(self.launch.project_dir(), &progress)?;
+        let supervisor = self.app.state::<BackendSupervisor>();
+        let conn = supervisor.connect(self.launch.project_dir(), &progress)?;
+        if let Some(generation) = supervisor.owned_generation() {
+            watch_for_crash(self.app, self.launch, generation);
+        }
 
         if let Some(main) = self.app.get_webview_window(WindowLabel::MAIN) {
             // The FE replaces this on its first status update; it covers a
@@ -137,6 +150,50 @@ pub(crate) fn restart_backend(app: AppHandle) -> Result<(), ShellError> {
     Ok(())
 }
 
+/// Watch backend number `generation`, which this app spawned. If it dies
+/// without being asked to (a crash, an OOM kill, someone's `kill -9`), the
+/// main window shows that, a new backend is spawned and every window is
+/// pointed at it, as Restart Backend does. Before this a crashed backend
+/// left every window on "Connecting…" until someone chose Restart Backend
+/// (R619). A backend that keeps dying is replaced three times in five
+/// minutes (`CrashBudget` in `backend/supervisor.rs`), then left for the
+/// person to restart.
+///
+/// The watcher ends as soon as its backend is no longer the app's current
+/// one: Restart, Reinstall and exit replace or release it themselves, and
+/// the bootstrap that spawns the next backend starts the next watcher.
+fn watch_for_crash(app: &AppHandle, launch: &LaunchArgs, generation: u64) {
+    let app = app.clone();
+    let launch = launch.clone();
+    std::thread::spawn(move || loop {
+        std::thread::sleep(CRASH_POLL);
+        let supervisor = app.state::<BackendSupervisor>();
+        match supervisor.liveness(generation) {
+            Liveness::Running => continue,
+            Liveness::Replaced => return,
+            Liveness::Exited => {
+                if !supervisor.release_crashed(generation) {
+                    return;
+                }
+                let main = app.get_webview_window(WindowLabel::MAIN);
+                if !supervisor.spend_crash(Instant::now()) {
+                    eprintln!("igni: the backend keeps stopping; not starting it again");
+                    if let Some(main) = main {
+                        WindowManager::navigate(&main, CRASH_GIVE_UP_ROUTE);
+                    }
+                    return;
+                }
+                eprintln!("igni: the backend stopped on its own; starting a new one");
+                if let Some(main) = main {
+                    WindowManager::navigate(&main, CRASH_ROUTE);
+                }
+                Bootstrap::spawn_in_background(&app, launch);
+                return;
+            }
+        }
+    });
+}
+
 /// Where a window opened onto a folder of its own (New Window) goes once
 /// the backend is back: the new backend's URL, on the same folder.
 fn rebound_route(current: &tauri::Url, conn: &BackendConn) -> String {
@@ -173,6 +230,28 @@ mod tests {
         let old = tauri::Url::parse("tauri://localhost/index.html?ws=x").unwrap();
         let conn = BackendConn::new(4200, None, BackendVersionInfo::discovered("1".into()));
         assert!(!rebound_route(&old, &conn).contains("dir="));
+    }
+
+    #[test]
+    fn every_backend_wait_is_a_loading_view_with_its_message() {
+        for route in [
+            REINSTALL_ROUTE,
+            RESTART_ROUTE,
+            CRASH_ROUTE,
+            CRASH_GIVE_UP_ROUTE,
+        ] {
+            let url = tauri::Url::parse(&format!("tauri://localhost/{route}")).unwrap();
+            assert_eq!(url.path(), "/loading.html", "{route}");
+            let msg = url
+                .query_pairs()
+                .find(|(k, _)| k == "msg")
+                .map(|(_, v)| v.into_owned());
+            assert!(msg.is_some_and(|m| !m.is_empty()), "{route}");
+            assert!(
+                url.fragment().is_none(),
+                "a '#' would cut the message: {route}"
+            );
+        }
     }
 
     #[test]
