@@ -3,6 +3,8 @@
 use tauri::{AppHandle, Manager};
 
 use crate::backend::{BackendConn, BackendSupervisor};
+use crate::cloud::controller::CloudController;
+use crate::cloud::switchboard::WindowTarget;
 use crate::error::{LogOnError, ShellError};
 use crate::events::ShellEvent;
 use crate::launch_args::LaunchArgs;
@@ -38,17 +40,34 @@ impl<'a> Bootstrap<'a> {
                 ShellEvent::BootstrapProgress(msg.to_string()).emit_to(&main);
             }
         };
-        let conn = self
-            .app
-            .state::<BackendSupervisor>()
-            .connect(self.launch.project_dir(), &progress)?;
+        let controller = self.app.state::<CloudController>().inner().clone();
+        // The relay starts with the app, idle on the local side. One that
+        // cannot bind leaves the app on this computer.
+        if let Err(e) = tauri::async_runtime::block_on(controller.start()) {
+            eprintln!("igni: the cloud relay could not start: {e}");
+        }
+        // `cloud` mode (from the verified pack): the account-only backend,
+        // never the full one (§6.3, §6.4).
+        let supervisor = self.app.state::<BackendSupervisor>();
+        let conn = if controller.starts_in_cloud_mode() {
+            progress("Starting igni's account service…");
+            supervisor.connect_account_only(&progress)?
+        } else {
+            supervisor.connect(self.launch.project_dir(), &progress)?
+        };
+        // The side the account last chose, if igni server still allows it.
+        controller.launch();
+        let cloud_url = match controller.target() {
+            WindowTarget::Relay => controller.window_url(None),
+            WindowTarget::Local | WindowTarget::SignIn => None,
+        };
 
         if let Some(main) = self.app.get_webview_window(WindowLabel::MAIN) {
             // The FE replaces this on its first status update; it covers a
             // backend that never connects.
             main.set_title(&WindowTitle::for_dir(self.launch.project_dir()))
                 .log_on_error("setting the main window title");
-            WindowManager::navigate(&main, &conn.app_url(None));
+            WindowManager::navigate(&main, cloud_url.as_deref().unwrap_or(&conn.app_url(None)));
         }
         // After a restart the other windows still point at the old port.
         // None exist on the first bootstrap.
@@ -56,9 +75,10 @@ impl<'a> Bootstrap<'a> {
             if label == WindowLabel::MAIN {
                 continue;
             }
-            match window.url() {
-                Ok(current) => WindowManager::navigate(&window, &rebound_route(&current, &conn)),
-                Err(e) => eprintln!("igni: reconnecting window {label}: {e}"),
+            match (window.url(), cloud_url.as_deref()) {
+                (_, Some(cloud)) => WindowManager::navigate(&window, cloud),
+                (Ok(current), None) => WindowManager::navigate(&window, &rebound_route(&current, &conn)),
+                (Err(e), None) => eprintln!("igni: reconnecting window {label}: {e}"),
             }
         }
         Ok(())

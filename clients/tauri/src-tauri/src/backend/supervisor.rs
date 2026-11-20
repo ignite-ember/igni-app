@@ -2,7 +2,7 @@
 
 use std::sync::{Mutex, MutexGuard};
 
-use crate::backend::{BackendConn, BackendProcess, BackendVersionInfo, WsToken, SHUTDOWN_GRACE};
+use crate::backend::{BackendConn, BackendKind, BackendProcess, BackendVersionInfo, WsToken, SHUTDOWN_GRACE};
 use crate::discovery::{self, Decision};
 use crate::error::ShellError;
 use crate::runtime::{self, ProgressFn};
@@ -67,17 +67,39 @@ impl BackendSupervisor {
                     ours: runtime::IGNI_CORE_VERSION.to_string(),
                 });
             }
-            Decision::Spawn => {
-                let token =
-                    WsToken::for_spawn(std::env::var(WsToken::DEV_DISABLE_ENV).ok().as_deref())?;
-                let process = BackendProcess::spawn(project_dir, token.as_ref(), progress)?;
-                let conn = BackendConn::new(process.port(), token, process.version().clone());
-                *Self::lock(&self.slot) = BackendSlot::Owned(process);
-                conn
-            }
+            Decision::Spawn => self.spawn(project_dir, BackendKind::Full, progress)?,
         };
         *Self::lock(&self.conn) = Some(conn.clone());
         Ok(conn)
+    }
+
+    /// Spawn the account-only backend (`cloud` mode, §6.4). It is never
+    /// attached to: it has no project, so no lockfile names it, and one
+    /// app's account backend is nobody else's.
+    pub fn connect_account_only(&self, progress: ProgressFn) -> Result<BackendConn, ShellError> {
+        let conn = self.spawn("", BackendKind::AccountOnly, progress)?;
+        *Self::lock(&self.conn) = Some(conn.clone());
+        Ok(conn)
+    }
+
+    fn spawn(&self, project_dir: &str, kind: BackendKind, progress: ProgressFn) -> Result<BackendConn, ShellError> {
+        let token = WsToken::for_spawn(std::env::var(WsToken::DEV_DISABLE_ENV).ok().as_deref())?;
+        let process = BackendProcess::spawn(project_dir, kind, token.as_ref(), progress)?;
+        let conn = BackendConn::new(process.port(), token, process.version().clone());
+        *Self::lock(&self.slot) = BackendSlot::Owned(process);
+        Ok(conn)
+    }
+
+    /// Stop the backend this app owns, whichever it is, so the other kind
+    /// can take its place (a live mode change, §6.6). Graceful, like a
+    /// restart, so it runs off the main thread. A backend another client
+    /// started is left alone and simply no longer used.
+    pub fn release_for_mode_change(&self) {
+        let slot = std::mem::replace(&mut *Self::lock(&self.slot), BackendSlot::Released);
+        if let BackendSlot::Owned(mut process) = slot {
+            process.shutdown(SHUTDOWN_GRACE);
+        }
+        *Self::lock(&self.conn) = None;
     }
 
     /// The connection bootstrap published, or `None` while it is starting.
@@ -290,6 +312,24 @@ mod tests {
             "the old backend should be gone"
         );
         assert!(s.current_conn().is_none());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_mode_change_stops_the_owned_backend_and_withdraws_its_connection() {
+        let (s, pid) = owned_sleep();
+        *BackendSupervisor::lock(&s.conn) = Some(BackendConn::new(1, None, BackendVersionInfo::discovered("0".into())));
+        s.release_for_mode_change();
+        assert!(is_released(&s));
+        assert!(!discovery::pid_alive(pid as i32));
+        assert!(s.current_conn().is_none());
+    }
+
+    #[test]
+    fn a_mode_change_leaves_an_attached_backend_running() {
+        let s = BackendSupervisor::with_slot(BackendSlot::Attached);
+        s.release_for_mode_change();
+        assert!(is_released(&s), "no longer used, though not stopped");
     }
 
     #[test]

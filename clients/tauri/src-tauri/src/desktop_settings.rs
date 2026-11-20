@@ -27,7 +27,8 @@
 
 use std::path::PathBuf;
 
-use crate::group_pack::{self, Jwks, PackState, Trust};
+use crate::cloud::mode::GroupMode;
+use crate::group_pack::{self, GroupPolicy, Jwks, PackState, Trust};
 
 /// The environment variable that turns air-gapped mode on.
 pub(crate) const AIR_GAPPED_ENV: &str = "IGNI_AIR_GAPPED";
@@ -117,24 +118,27 @@ impl DesktopSettings {
 
 /// The organisation's layer, from the signed pack under `home/.igni`, or
 /// nothing when there is no pack or it does not verify.
+fn verified_group_layer(home: &std::path::Path, managed: Option<&str>, user: Option<&str>) -> DesktopSettings {
+    verified_group_policy(home, managed, user)
+        .map(|policy| DesktopSettings::from_json(&policy.settings_json()))
+        .unwrap_or_default()
+}
+
+/// The pack under `home/.igni`, verified, or `None` when there is no pack
+/// or it does not verify (which is no group layer at all).
 ///
 /// `api_url` (the pack's issuer) is read from the managed file over the
 /// user's, as the backend reads it; the pinned keys from the environment or
 /// else the managed file only — a pin the user could write would let them
 /// sign their own policy.
-fn verified_group_layer(home: &std::path::Path, managed: Option<&str>, user: Option<&str>) -> DesktopSettings {
+fn verified_group_policy(home: &std::path::Path, managed: Option<&str>, user: Option<&str>) -> Option<GroupPolicy> {
     let dir = home.join(".igni/group-policy");
     let read = |name: &str| std::fs::read_to_string(dir.join(name)).ok();
-    let Some(compact) = read("pack.jws") else {
-        return DesktopSettings::default();
-    };
+    let compact = read("pack.jws")?;
     let jwks = read("jwks.json").map(|t| Jwks::from_text(&t)).unwrap_or_default();
-    let api_url = managed
-        .and_then(|t| top_level_string(t, "api_url"))
-        .or_else(|| user.and_then(|t| top_level_string(t, "api_url")));
     let env_pins = group_pack::pins_from_env(std::env::var(group_pack::TRUSTED_KEYS_ENV).ok().as_deref());
     let trust = Trust {
-        api_url,
+        api_url: api_url_in(managed, user),
         subject: std::fs::read_to_string(home.join(".igni/credentials.json"))
             .ok()
             .and_then(|t| group_pack::subject_from_credentials(&t)),
@@ -142,12 +146,84 @@ fn verified_group_layer(home: &std::path::Path, managed: Option<&str>, user: Opt
         min_version: read("pack_state.json").and_then(|t| PackState::min_version(&t)),
     };
     match group_pack::verify(&compact, &jwks, &trust) {
-        Ok(policy) => DesktopSettings::from_json(&policy.settings_json()),
+        Ok(policy) => Some(policy),
         Err(why) => {
             eprintln!("igni: group policy pack ignored ({why})");
-            DesktopSettings::default()
+            None
         }
     }
+}
+
+/// `api_url`, managed over user.
+fn api_url_in(managed: Option<&str>, user: Option<&str>) -> Option<String> {
+    managed
+        .and_then(|t| top_level_string(t, "api_url"))
+        .or_else(|| user.and_then(|t| top_level_string(t, "api_url")))
+}
+
+/// What the cloud switch reads from this machine's settings, before any
+/// backend: igni server's address, the group's mode from the verified
+/// pack, and a managed pin on the gateway.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct CloudSettings {
+    pub api_url: Option<String>,
+    pub pack_mode: GroupMode,
+    /// `fleet.gateway_url` from the managed file only: a pin the user
+    /// could write would pin nothing.
+    pub gateway_pin: Option<String>,
+}
+
+impl CloudSettings {
+    pub fn load() -> Self {
+        let text = |path: Option<PathBuf>| path.and_then(|p| std::fs::read_to_string(p).ok());
+        let home = dirs::home_dir();
+        let managed = text(managed_settings_path());
+        let user = text(home.as_ref().map(|h| h.join(".igni/config.yaml")));
+        Self::from_files(home.as_deref(), managed.as_deref(), user.as_deref())
+    }
+
+    pub fn from_files(home: Option<&std::path::Path>, managed: Option<&str>, user: Option<&str>) -> Self {
+        let policy = home.and_then(|h| verified_group_policy(h, managed, user));
+        CloudSettings {
+            api_url: api_url_in(managed, user),
+            pack_mode: GroupMode::from_pack(policy.as_ref().and_then(|p| p.mode.as_deref())),
+            gateway_pin: managed.and_then(fleet_gateway_pin_in),
+        }
+    }
+}
+
+/// `fleet.gateway_url` in a managed file's text, YAML or JSON.
+pub(crate) fn fleet_gateway_pin_in(text: &str) -> Option<String> {
+    if text.trim_start().starts_with('{') {
+        let value: serde_json::Value = serde_json::from_str(text).ok()?;
+        return value
+            .get("fleet")?
+            .get("gateway_url")?
+            .as_str()
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(str::to_string);
+    }
+    // A top-level `fleet:` line, then its indented children up to the next
+    // top-level key.
+    let mut in_fleet = false;
+    for line in text.lines() {
+        if line.trim().is_empty() || line.trim_start().starts_with('#') {
+            continue;
+        }
+        let indented = line.starts_with(' ') || line.starts_with('\t');
+        if !indented {
+            in_fleet = line.split('#').next().unwrap_or("").trim_end() == "fleet:";
+            continue;
+        }
+        if in_fleet {
+            if let Some(value) = line.trim_start().strip_prefix("gateway_url:") {
+                let value = value.trim().trim_matches('"').trim_matches('\'');
+                return (!value.is_empty()).then(|| value.to_string());
+            }
+        }
+    }
+    None
 }
 
 /// The managed-settings file, at the path the backend reads
@@ -252,6 +328,35 @@ mod tests {
         assert_eq!(verified_group_layer(&home, None, Some("api_url: https://igni.example.invalid\n")), DesktopSettings::default());
         std::fs::write(dir.join("pack.jws"), "e30.eyJydW50aW1lX3B5dGhvbiI6Ii9ldmlsIn0.").unwrap();
         assert_eq!(verified_group_layer(&home, None, Some("api_url: https://igni.example.invalid\n")), DesktopSettings::default());
+        let _ = std::fs::remove_dir_all(&home);
+    }
+
+    #[test]
+    fn the_gateway_pin_is_read_from_the_fleet_section_only() {
+        assert_eq!(
+            fleet_gateway_pin_in("api_url: https://igni.example\nfleet:\n  gateway_url: \"https://fleet.acme.example\"\n").as_deref(),
+            Some("https://fleet.acme.example")
+        );
+        assert_eq!(fleet_gateway_pin_in("gateway_url: https://top.example\n"), None, "not under fleet");
+        assert_eq!(fleet_gateway_pin_in("other:\n  gateway_url: https://x.example\nfleet:\n  # a comment\n  gateway_url: https://y.example\n").as_deref(), Some("https://y.example"));
+        assert_eq!(fleet_gateway_pin_in("fleet:\n  gateway_url:\n"), None);
+        assert_eq!(fleet_gateway_pin_in("{\"fleet\": {\"gateway_url\": \"https://j.example\"}}").as_deref(), Some("https://j.example"));
+        assert_eq!(fleet_gateway_pin_in("{\"fleet\": {}}"), None);
+    }
+
+    #[test]
+    fn without_a_verified_pack_the_mode_is_both() {
+        let home = std::env::temp_dir().join(format!("igni-cloud-settings-{}", std::process::id()));
+        let dir = home.join(".igni/group-policy");
+        std::fs::create_dir_all(&dir).unwrap();
+        let user = "api_url: https://igni.example.invalid\n";
+        assert_eq!(CloudSettings::from_files(Some(&home), None, Some(user)).pack_mode, GroupMode::LocalAndCloud);
+        // A tampered (unsigned) pack that says `cloud` is no pack at all.
+        std::fs::write(dir.join("pack.jws"), "e30.eyJwb2xpY3kiOnsibW9kZSI6ImNsb3VkIn19.").unwrap();
+        let settings = CloudSettings::from_files(Some(&home), Some("fleet:\n  gateway_url: https://p.example\n"), Some(user));
+        assert_eq!(settings.pack_mode, GroupMode::LocalAndCloud);
+        assert_eq!(settings.api_url.as_deref(), Some("https://igni.example.invalid"));
+        assert_eq!(settings.gateway_pin.as_deref(), Some("https://p.example"));
         let _ = std::fs::remove_dir_all(&home);
     }
 
