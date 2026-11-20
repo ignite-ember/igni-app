@@ -124,6 +124,18 @@ export const VIEW_STATE: Record<string, Partial<Record<Category, string[]>>> = {
     menu: ["accountMenu"],
     data: ["cloudName"],
   },
+  "cloud/useBackendState.ts": {
+    data: ["snapshot"],
+  },
+  "components/BackendSwitch.tsx": {
+    pending: ["busy", "error"],
+  },
+  "components/BackendBanner.tsx": {
+    pending: ["busy", "error"],
+  },
+  "components/WakingOverlay.tsx": {
+    animation: ["shown"],
+  },
   "extensions/useExtensions.ts": {
     data: ["extensions"],
   },

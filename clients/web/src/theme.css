@@ -10290,3 +10290,173 @@ button.mcp-server-head:focus-visible {
   font-size: 12.5px;
   margin-top: 22px;
 }
+
+/* ── The desktop's cloud switch (cloud/, design §4) ─────────────────── */
+
+/* This computer · Cloud, at the top of the account menu. */
+.account-menu .popup-item.backend-switch {
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--space-3);
+  cursor: default;
+}
+
+.account-menu .popup-item.backend-switch:hover {
+  background: transparent;
+}
+
+.backend-switch-control {
+  display: flex;
+  padding: var(--space-1);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-pill);
+  background: var(--bg-inset);
+}
+
+.backend-switch-option {
+  flex: 1;
+  padding: var(--space-2) var(--space-5);
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--fg-muted);
+  font: inherit;
+  font-size: var(--text-sm);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.backend-switch-option.active {
+  background: var(--bg-raised);
+  color: var(--fg);
+  font-weight: 500;
+}
+
+.backend-switch-option:disabled {
+  cursor: progress;
+}
+
+.backend-switch-badge {
+  align-self: flex-start;
+  padding: var(--space-1) var(--space-4);
+  border: 1px solid var(--warning);
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--fg);
+  font: inherit;
+  font-size: var(--text-xs);
+  cursor: pointer;
+}
+
+.backend-switch-error {
+  color: var(--danger-text);
+  font-size: var(--text-xs);
+}
+
+/* The project chip on the cloud: the VM's workspace, not a picker. */
+.chip.chip-readonly {
+  cursor: default;
+  opacity: 0.85;
+}
+
+/* One banner per error state, above the composer. */
+.backend-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-4) var(--space-6);
+  margin: 0 auto var(--space-4);
+  width: min(100% - 2 * var(--space-8), 760px);
+  padding: var(--space-4) var(--space-6);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent-blue);
+  border-radius: var(--radius-sm);
+  background: var(--bg-surface);
+  color: var(--fg);
+  font-size: var(--text-md);
+}
+
+.backend-banner.tone-warn {
+  border-left-color: var(--warning);
+}
+
+.backend-banner.tone-bad {
+  border-left-color: var(--danger);
+}
+
+.backend-banner-text {
+  flex: 1 1 260px;
+}
+
+.backend-banner-actions {
+  display: flex;
+  gap: var(--space-4);
+}
+
+.backend-banner-btn {
+  padding: var(--space-2) var(--space-6);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  background: var(--bg-raised);
+  color: var(--fg);
+  font: inherit;
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+
+.backend-banner-btn.primary {
+  border-color: transparent;
+  background: var(--igni-gradient);
+  color: #fff;
+}
+
+.backend-banner-btn:disabled {
+  cursor: progress;
+  opacity: 0.6;
+}
+
+.backend-banner-error {
+  flex-basis: 100%;
+  color: var(--danger-text);
+  font-size: var(--text-sm);
+}
+
+/* "Waking your cloud igni…": the chat stays, dimmed; typing goes on. */
+.waking-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: color-mix(in srgb, var(--bg) 55%, transparent);
+  pointer-events: none;
+}
+
+.waking-overlay-card {
+  display: flex;
+  align-items: center;
+  gap: var(--space-5);
+  padding: var(--space-6) var(--space-10);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-surface);
+  box-shadow: var(--shadow-pop);
+  color: var(--fg);
+  font-size: var(--text-lg);
+}
+
+.waking-overlay-spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--border);
+  border-top-color: var(--igni-orange);
+  border-radius: var(--radius-circle);
+  animation: waking-spin 0.9s linear infinite;
+}
+
+@keyframes waking-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

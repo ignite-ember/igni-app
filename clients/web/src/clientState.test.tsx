@@ -54,6 +54,7 @@ import { act, cleanup, render } from "@testing-library/react";
 import {
   WindowModel,
   ensureClientId,
+  storageKeyFor,
   references,
   useWindowField,
   type WindowChange,
@@ -81,9 +82,11 @@ describe("ensureClientId", () => {
     expect(id.length).toBeGreaterThan(0);
   });
 
-  it("persists the minted id to localStorage", () => {
+  it("persists the minted id to localStorage, under the local backend's key", () => {
     ensureClientId();
-    expect(localStorage.getItem("ember-code:client-id")).toBeTruthy();
+    expect(localStorage.getItem("igni:client-id:local")).toBeTruthy();
+    // A fresh install writes no legacy key.
+    expect(localStorage.getItem("ember-code:client-id")).toBeNull();
   });
 
   it("reads the existing id on subsequent calls", () => {
@@ -180,13 +183,13 @@ describe("ensureClientId", () => {
 
   it("stores a named view under a suffixed key", () => {
     ensureClientId("w-2");
-    expect(localStorage.getItem("ember-code:client-id:w-2")).toBeTruthy();
+    expect(localStorage.getItem("igni:client-id:local:w-2")).toBeTruthy();
     // The unsuffixed slot belongs to the main window — an extra
     // window must not write into it.
-    expect(localStorage.getItem("ember-code:client-id")).toBeNull();
+    expect(localStorage.getItem("igni:client-id:local")).toBeNull();
   });
 
-  it("keeps the main window on the legacy unsuffixed key", () => {
+  it("keeps the main window on its pre-multi-window id", () => {
     // Upgrade path: an install that predates multi-window has its
     // id (and therefore its bound session, drafts, sidebar state)
     // under the unsuffixed key. The first window is labelled
@@ -194,6 +197,47 @@ describe("ensureClientId", () => {
     localStorage.setItem("ember-code:client-id", "pre-existing-id");
     expect(ensureClientId("main")).toBe("pre-existing-id");
     expect(ensureClientId("")).toBe("pre-existing-id");
+  });
+
+  // ── Per-backend keys (design §4.4) ────────────────────────
+
+  it("migrates the local id once from the old key and keeps the old one", () => {
+    localStorage.setItem("ember-code:client-id", "old-main");
+    localStorage.setItem("ember-code:client-id:w-2", "old-w2");
+    expect(ensureClientId("main", "local")).toBe("old-main");
+    expect(ensureClientId("w-2", "local")).toBe("old-w2");
+    expect(localStorage.getItem("igni:client-id:local")).toBe("old-main");
+    expect(localStorage.getItem("igni:client-id:local:w-2")).toBe("old-w2");
+    // Kept for a release, so a downgrade still finds its windows.
+    expect(localStorage.getItem("ember-code:client-id")).toBe("old-main");
+    // Once migrated, the new key wins even if the old one changes.
+    localStorage.setItem("ember-code:client-id", "rewritten-by-an-old-build");
+    expect(ensureClientId("main", "local")).toBe("old-main");
+  });
+
+  it("gives the cloud its own ids and never takes the local one", () => {
+    localStorage.setItem("ember-code:client-id", "old-main");
+    const local = ensureClientId("main", "local");
+    const cloud = ensureClientId("main", "cloud-0123456789ab");
+    expect(cloud).not.toBe(local);
+    expect(cloud).not.toBe("old-main");
+    expect(localStorage.getItem("igni:client-id:cloud-0123456789ab")).toBe(cloud);
+    expect(ensureClientId("w-2", "cloud-0123456789ab")).not.toBe(cloud);
+    expect(localStorage.getItem("igni:client-id:cloud-0123456789ab:w-2")).toBeTruthy();
+  });
+
+  it("keeps two accounts' clouds apart", () => {
+    const a = ensureClientId("main", "cloud-aaaaaaaaaaaa");
+    const b = ensureClientId("main", "cloud-bbbbbbbbbbbb");
+    expect(a).not.toBe(b);
+    expect(ensureClientId("main", "cloud-aaaaaaaaaaaa")).toBe(a);
+  });
+
+  it("names the keys as the design does", () => {
+    expect(storageKeyFor("", "local")).toBe("igni:client-id:local");
+    expect(storageKeyFor("main", "local")).toBe("igni:client-id:local");
+    expect(storageKeyFor("w-3", "cloud-0123456789ab")).toBe("igni:client-id:cloud-0123456789ab:w-3");
+    expect(storageKeyFor("w-3")).toBe("igni:client-id:local:w-3");
   });
 });
 

@@ -11,6 +11,7 @@ import { createRef, useMemo, type RefObject } from "react";
 
 import { WindowModel, ensureClientId } from "../clientState";
 import type { ComposerHandle } from "../components/composer/composerContract";
+import { windowBackendKey } from "../cloud/backendState";
 import { host, type Host } from "../lib/host";
 import { Notifier } from "../notifications/notifier";
 import { IgniClient } from "../protocol/client";
@@ -78,10 +79,11 @@ export class WindowServices {
     const chatItems = new ChatItemFactory(new ChatItemIds());
     const composerRef = createRef<ComposerHandle>();
     // Keyed by ``host.viewKey`` so two Tauri windows, which share
-    // localStorage, are two distinct models.
+    // localStorage, are two distinct models, and by the backend the
+    // window is on (``?backend=``), whose model it is.
     const windowModel = new WindowModel(
       client,
-      ensureClientId(env.host.viewKey),
+      ensureClientId(env.host.viewKey, windowBackendKey(env.search)),
       WINDOW_MODEL_DEBOUNCE_MS,
       env.host.kind,
       { sidebar: SidebarLayout.initialFor(env.innerWidth) },

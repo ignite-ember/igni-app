@@ -1,10 +1,12 @@
 import type { PageRoute } from "../chat/pageStack";
+import type { BackendSnapshot } from "../cloud/backendState";
 import type { ExtensionSummary } from "../extensions/ExtensionPage";
 import { ExtensionIndicator } from "../extensions/ExtensionIndicator";
 import { unreadFor, type NotificationCounts } from "../notifications/model";
 import type { IgniClient } from "../protocol/client";
 import type { StatusUpdate } from "../protocol/messages";
 import type { UpdateInfo } from "../update/updateInfo";
+import { BackendChip } from "./BackendChip";
 import { GroupIndicator } from "./GroupIndicator";
 import { CtxMeter, SessionChip } from "./StatusBits";
 import { WatcherIndicator } from "./WatcherIndicator";
@@ -16,8 +18,8 @@ function contextPercent(status: StatusUpdate): number {
 
 /**
  * The footer under the composer: this session and its footprint, the
- * watcher and group chips, each installed extension's own chips, and
- * the update waiting.
+ * watcher and group chips, the side igni runs on (desktop), each
+ * installed extension's own chips, and the update waiting.
  */
 export function StatusLine({
   status,
@@ -28,6 +30,7 @@ export function StatusLine({
   pendingUpdate,
   onShowUpdate,
   onOpen,
+  backend = null,
 }: {
   status: StatusUpdate | null;
   sessionId: string;
@@ -37,6 +40,8 @@ export function StatusLine({
   pendingUpdate: UpdateInfo | null;
   onShowUpdate: (info: UpdateInfo) => void;
   onOpen: (route: PageRoute) => void;
+  /** The desktop's cloud switch, when the shell has one. */
+  backend?: BackendSnapshot | null;
 }) {
   return (
     <div className="statusline" style={{ marginTop: 0, paddingBottom: 8 }}>
@@ -47,6 +52,8 @@ export function StatusLine({
           <CtxMeter tokens={status.context_tokens} max={status.max_context} pct={contextPercent(status)} />
           <WatcherIndicator client={client} onOpen={() => onOpen({ kind: "watcher", label: "Watcher" })} />
           <GroupIndicator client={client} />
+          {/* Beside the group: the group decides where igni runs. */}
+          <BackendChip backend={backend} />
           {/* Extensions' chips are data, not frames: the extension says
               what it shows and the host draws it. */}
           {extensions.flatMap((extension) =>

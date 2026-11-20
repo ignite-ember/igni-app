@@ -9,6 +9,7 @@
  */
 
 import type { WindowModel } from "../clientState";
+import { host } from "../lib/host";
 import type { PageServices } from "../components/AppPages";
 import type { IgniClient } from "../protocol/client";
 import type { ComposerSeeder } from "./composerSeeder";
@@ -39,6 +40,8 @@ export class ShellActions {
 
   /** The native dialog when there is one; otherwise the in-app picker. */
   pickProject = async (): Promise<void> => {
+    // A folder on the cloud is the VM's; there is no dialog to open (§5).
+    if (host.onCloud) return;
     const { folderPicker, windowModel, controller } = this.deps;
     const pick = await folderPicker.pick(windowModel.get("project_dir"));
     if (pick.kind === "picked") void controller.sessions.attachFolder(pick.path);
@@ -52,7 +55,17 @@ export class ShellActions {
 
   newChat = (): void => this.runCommand("/clear");
 
-  logOut = (): void => this.runCommand("/logout");
+  /** Sign the desktop out. On the cloud side `/logout` would reach the
+   *  VM's igni, so the account call goes to this computer's backend; the
+   *  shell sees the credentials go and takes the windows to sign-in. */
+  logOut = (): void => {
+    const onCloud = host.onCloud && host.accountRpc("clear_cloud_credentials");
+    if (onCloud) {
+      void onCloud.catch((e: unknown) => this.deps.view.error(`Log out failed: ${e instanceof Error ? e.message : String(e)}`));
+      return;
+    }
+    this.runCommand("/logout");
+  };
 
   submit = (text: string): void => {
     void this.deps.controller.submitter.submit(text);

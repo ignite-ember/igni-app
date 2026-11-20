@@ -47,10 +47,19 @@ import { useCallback, useSyncExternalStore } from "react";
 import type { IgniClient } from "./protocol/client";
 import type { PageRoute } from "./chat/pageStack";
 
-const CLIENT_ID_KEY = "ember-code:client-id";
+/** The key every window used before client state was kept per backend. */
+const LEGACY_CLIENT_ID_KEY = "ember-code:client-id";
+/** `igni:client-id:<backend>[:<label>]` (design §4.4). */
+const CLIENT_ID_PREFIX = "igni:client-id";
+
+/** The label part of a key: none for the first window (`main`, which
+ *  predates multi-window) and for a host with a single view (`""`). */
+function labelSuffix(viewKey: string): string {
+  return !viewKey || viewKey === "main" ? "" : `:${viewKey}`;
+}
 
 /**
- * Which `localStorage` slot holds this view's id.
+ * Which `localStorage` slot holds this view's id on `backend`.
  *
  * `localStorage` is per-origin, so every Tauri window of one app
  * instance shares it. An unpartitioned key would hand all of them
@@ -60,18 +69,23 @@ const CLIENT_ID_KEY = "ember-code:client-id";
  * Partitioning by the host's view key (the Tauri window label) gives
  * each window its own identity while keeping the model on the BE.
  *
- * The first window is labelled `main` and predates multi-window, so
- * it keeps the unsuffixed key. A host with a single view (the
- * browser) passes `""` and lands on the same key.
+ * It is partitioned by backend too: `local`, or `cloud-<12 hex>` for one
+ * account on one gateway (the desktop shell hashes it, so a second
+ * account never collides and no address is written here in clear). The
+ * window model is kept by each backend, so a window has one id per side.
  *
  * Note for whoever wires up "New Window": labels must be stable
  * across app restarts, not minted fresh each launch. A random label
  * per launch means a window can never restore its model, and the
  * BE's store accrues a dead row set per window per run.
  */
-function storageKeyFor(viewKey: string): string {
-  if (!viewKey || viewKey === "main") return CLIENT_ID_KEY;
-  return `${CLIENT_ID_KEY}:${viewKey}`;
+export function storageKeyFor(viewKey: string, backend = "local"): string {
+  return `${CLIENT_ID_PREFIX}:${backend}${labelSuffix(viewKey)}`;
+}
+
+/** The key the same window used before the per-backend keys. */
+function legacyKeyFor(viewKey: string): string {
+  return `${LEGACY_CLIENT_ID_KEY}${labelSuffix(viewKey)}`;
 }
 
 /** localStorage adapter; swap for the host's API in IDE clients. */
@@ -99,15 +113,22 @@ function newClientId(): string {
 }
 
 /**
- * This view's stable `client_id` — the id its model is kept under —
- * minting one on first use.
+ * This view's stable `client_id` on `backend` — the id its model is kept
+ * under — minting one on first use.
  *
  * `viewKey` comes from `host.viewKey` — the Tauri window label, or
- * `""` on hosts that shell a single view.
+ * `""` on hosts that shell a single view. `backend` is the desktop
+ * shell's `?backend=` (`local` everywhere else). The local id migrates
+ * once from the key it was kept under before: it is copied, and the old
+ * key is left for a release, so a downgrade still finds its windows.
  */
-export function ensureClientId(viewKey = ""): string {
-  const storageKey = storageKeyFor(viewKey);
+export function ensureClientId(viewKey = "", backend = "local"): string {
+  const storageKey = storageKeyFor(viewKey, backend);
   let id = readClientId(storageKey);
+  if (!id && backend === "local") {
+    id = readClientId(legacyKeyFor(viewKey));
+    if (id) writeClientId(storageKey, id);
+  }
   if (!id) {
     id = newClientId();
     writeClientId(storageKey, id);
