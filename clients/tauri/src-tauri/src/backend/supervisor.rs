@@ -58,6 +58,25 @@ impl CrashBudget {
     }
 }
 
+/// How long the next bootstrap waits for a stopped backend's port to
+/// close before it looks for a backend to attach to.
+pub(crate) const PORT_RELEASE_WAIT: Duration = Duration::from_secs(10);
+
+/// Wait until nothing answers on `port`, at most `timeout`; `true` once
+/// it is closed.
+pub(crate) fn wait_port_closed(port: u16, timeout: Duration) -> bool {
+    let deadline = Instant::now() + timeout;
+    loop {
+        if !discovery::port_reachable(port) {
+            return true;
+        }
+        if Instant::now() >= deadline {
+            return false;
+        }
+        std::thread::sleep(Duration::from_millis(50));
+    }
+}
+
 /// Managed once in `setup`, before any window or bootstrap thread.
 pub(crate) struct BackendSupervisor {
     slot: Mutex<BackendSlot>,
@@ -66,6 +85,9 @@ pub(crate) struct BackendSupervisor {
     /// number of the one it watches, so it never acts on its successor.
     generation: Mutex<u64>,
     crashes: Mutex<CrashBudget>,
+    /// The port of the backend this app last stopped or lost. Discovery
+    /// must not find it still answering and attach to it.
+    released_port: Mutex<Option<u16>>,
 }
 
 impl Default for BackendSupervisor {
@@ -75,6 +97,7 @@ impl Default for BackendSupervisor {
             conn: Mutex::new(None),
             generation: Mutex::new(0),
             crashes: Mutex::new(CrashBudget::default()),
+            released_port: Mutex::new(None),
         }
     }
 }
@@ -91,6 +114,7 @@ impl BackendSupervisor {
         project_dir: &str,
         progress: ProgressFn,
     ) -> Result<BackendConn, ShellError> {
+        self.await_released_port();
         let conn = match discovery::discover(project_dir, runtime::IGNI_CORE_VERSION) {
             Decision::Attach {
                 port,
@@ -124,6 +148,28 @@ impl BackendSupervisor {
         };
         *Self::lock(&self.conn) = Some(conn.clone());
         Ok(conn)
+    }
+
+    /// Wait for the backend this app just stopped to stop answering.
+    ///
+    /// On Windows a backend is stopped by killing the venv launcher this
+    /// app spawned; the interpreter under it dies a moment later, when the
+    /// launcher's job closes. Discovery cannot tell a dying backend from a
+    /// live one there (it has no PID probe, only the port), so a restart
+    /// that looked straight away found the old backend still answering,
+    /// attached to it, and was left on a dead port when it went (R619,
+    /// desktop proof run 44799523100). Runs on the bootstrap thread.
+    fn await_released_port(&self) {
+        let port = Self::lock(&self.released_port).take();
+        if let Some(port) = port {
+            if !wait_port_closed(port, PORT_RELEASE_WAIT) {
+                eprintln!("igni: the stopped backend's port {port} is still answering");
+            }
+        }
+    }
+
+    fn remember_released(&self, process: &BackendProcess) {
+        *Self::lock(&self.released_port) = Some(process.port());
     }
 
     /// The number of the backend this app spawned and now runs, for a
@@ -163,6 +209,9 @@ impl BackendSupervisor {
         if *Self::lock(&self.generation) != generation || !matches!(*slot, BackendSlot::Owned(_)) {
             return false;
         }
+        if let BackendSlot::Owned(process) = &*slot {
+            self.remember_released(process);
+        }
         *slot = BackendSlot::Released;
         *Self::lock(&self.conn) = None;
         true
@@ -191,6 +240,7 @@ impl BackendSupervisor {
             BackendSlot::Starting | BackendSlot::Attached => Err(ShellError::AttachedNotOwned),
             BackendSlot::Owned(process) => {
                 process.kill_now();
+                self.remember_released(process);
                 *slot = BackendSlot::Released;
                 Ok(())
             }
@@ -218,6 +268,7 @@ impl BackendSupervisor {
         let slot = std::mem::replace(&mut *Self::lock(&self.slot), BackendSlot::Released);
         if let BackendSlot::Owned(mut process) = slot {
             process.shutdown(SHUTDOWN_GRACE);
+            self.remember_released(&process);
         }
         *Self::lock(&self.conn) = None;
         Ok(())
@@ -248,6 +299,7 @@ impl BackendSupervisor {
             conn: Mutex::new(None),
             generation: Mutex::new(generation),
             crashes: Mutex::new(CrashBudget::default()),
+            released_port: Mutex::new(None),
         }
     }
 }
@@ -470,6 +522,64 @@ mod tests {
         assert_eq!(s.owned_generation(), None);
         assert_eq!(s.liveness(0), Liveness::Replaced);
         assert!(!s.release_crashed(0));
+    }
+
+    /// A port that stops answering after `after`.
+    fn port_closing_after(after: Duration) -> u16 {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        std::thread::spawn(move || {
+            let started = Instant::now();
+            listener.set_nonblocking(true).unwrap();
+            while started.elapsed() < after {
+                let _ = listener.accept();
+                std::thread::sleep(Duration::from_millis(10));
+            }
+        });
+        port
+    }
+
+    // R619 on Windows: the restart's discovery found the stopped backend
+    // still answering and attached to it.
+    #[test]
+    fn the_next_bootstrap_waits_for_the_stopped_backend_s_port_to_close() {
+        let port = port_closing_after(Duration::from_millis(600));
+        assert!(discovery::port_reachable(port), "fixture is listening");
+        let s = BackendSupervisor::default();
+        *BackendSupervisor::lock(&s.released_port) = Some(port);
+        let started = Instant::now();
+        s.await_released_port();
+        assert!(
+            !discovery::port_reachable(port),
+            "returned while the old port still answered"
+        );
+        assert!(
+            started.elapsed() >= Duration::from_millis(400),
+            "it did not wait"
+        );
+        assert!(
+            BackendSupervisor::lock(&s.released_port).is_none(),
+            "waited for once"
+        );
+    }
+
+    #[test]
+    fn a_port_that_never_closes_is_waited_for_only_so_long() {
+        let port = port_closing_after(Duration::from_secs(30));
+        let started = Instant::now();
+        assert!(!wait_port_closed(port, Duration::from_millis(300)));
+        assert!(started.elapsed() < Duration::from_secs(5));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_restart_and_a_reinstall_remember_the_port_they_stopped() {
+        let (s, _) = owned_sleep();
+        s.release_for_restart().unwrap();
+        assert_eq!(*BackendSupervisor::lock(&s.released_port), Some(1));
+        let (s, _) = owned_sleep();
+        s.release_for_reinstall().unwrap();
+        assert_eq!(*BackendSupervisor::lock(&s.released_port), Some(1));
     }
 
     #[test]
