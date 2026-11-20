@@ -1,0 +1,330 @@
+name: Desktop E2E proof
+
+# A throwaway proof for the E2E campaign's desktop rows: the real, built
+# desktop app driven on real Linux, Windows and macOS runners. It lives on
+# its own branch only and is not meant for main.
+#
+#   R612  install on Windows (.msi), first launch on the managed runtime
+#   R613  install on Linux (.AppImage built on ubuntu-22.04; .deb too)
+#   R617  the developer backend override and its acknowledgement
+#   R618  Reinstall Backend (menu and --reinstall), refused when attached
+#   R619  Restart Backend from the menu, and a backend that crashes
+#   R620  Diagnose Backend: versions, interpreter, override, install marker
+#   R622  the per-launch WebSocket token
+#   R624  the native menu bar
+#   R628  the update policy (user, managed, environment; mirror)
+#   R632  the content security policy and the window capabilities
+#
+# clients/tauri/e2e/desktop_proof.py does the driving: WebDriver through
+# tauri-driver for the webview (WebKitWebDriver on Linux, msedgedriver on
+# Windows; macOS has none for WKWebView), the platform's accessibility API
+# for the native menu bar and dialogs, psutil for the processes. Every
+# check lands in proof/verdicts.json with its row; the artifact keeps it.
+#
+# igni-core is checked out at its v1.0.5 tag, the version the app pins
+# (igni-core.version), for the dev-override backend; the managed runtime
+# installs igni-core 1.0.5 from PyPI, as a user's first launch does.
+
+on:
+  push:
+    branches: [ci/desktop-e2e-proof]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: desktop-e2e-proof
+  cancel-in-progress: true
+
+env:
+  IGNI_CORE_REF: f17a26f865db80d8f932d16629a316202a445138 # v1.0.5
+  TAURI_CLI_VERSION: 2.12.6
+  TAURI_DRIVER_VERSION: 2.1.0
+  PYTHONUTF8: "1"
+  # Updater artifacts need the release signing key, which a proof run
+  # does not have; the app binary is the same either way.
+  TAURI_BUILD_CONFIG: '{"bundle":{"createUpdaterArtifacts":false}}'
+
+jobs:
+  linux:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: igni-app
+          persist-credentials: false
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ignite-ember/igni-sdk
+          path: igni-sdk
+          persist-credentials: false
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ignite-ember/igni-core
+          ref: ${{ env.IGNI_CORE_REF }}
+          path: igni-core
+          persist-credentials: false
+
+      - name: WebKitGTK, its WebDriver, a display, a window manager and the accessibility bus
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev libssl-dev libgtk-3-dev \
+            libayatana-appindicator3-dev librsvg2-dev \
+            webkit2gtk-driver xvfb dbus-x11 openbox xdotool imagemagick \
+            at-spi2-core libatk-adaptor python3-gi gir1.2-atspi-2.0 \
+            libfuse2 file
+
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version-file: igni-core/.python-version
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@38f3f104447c67c051c4a08e39b64a148898af3a # v4.2.0
+
+      - name: The dev-override backend's venv (igni-core v1.0.5)
+        working-directory: igni-core
+        run: uv sync
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24"
+          cache: "npm"
+          cache-dependency-path: igni-app/clients/web/package-lock.json
+
+      - name: The web client's dependencies
+        working-directory: igni-app/clients/web
+        run: npm ci
+
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable branch, 2026-10-16
+        with:
+          toolchain: stable
+
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          workspaces: igni-app/clients/tauri/src-tauri
+
+      - name: tauri-driver
+        run: cargo install tauri-driver --locked --version "$TAURI_DRIVER_VERSION"
+
+      - name: Build the release app, the .deb and the .AppImage
+        working-directory: igni-app/clients/tauri
+        env:
+          APPIMAGE_EXTRACT_AND_RUN: "1"
+        run: npx --yes "@tauri-apps/cli@${TAURI_CLI_VERSION}" build --bundles deb,appimage --config "$TAURI_BUILD_CONFIG"
+
+      - name: Drive the app
+        env:
+          WEBKIT_DISABLE_COMPOSITING_MODE: "1"
+          WEBKIT_DISABLE_DMABUF_RENDERER: "1"
+        run: |
+          T=igni-app/clients/tauri/src-tauri/target/release
+          APPIMAGE=$(ls "$T"/bundle/appimage/*.AppImage | head -1)
+          DEB=$(ls "$T"/bundle/deb/*.deb | head -1)
+          chmod +x "$APPIMAGE"
+          dbus-run-session -- xvfb-run -a -s "-screen 0 1440x1000x24" \
+            uv run --python 3.12 --script igni-app/clients/tauri/e2e/desktop_proof.py \
+              --platform linux \
+              --app "$T/igni-app" \
+              --appimage "$APPIMAGE" \
+              --deb "$DEB" \
+              --core igni-core \
+              --version-file igni-app/igni-core.version \
+              --tauri-driver "$HOME/.cargo/bin/tauri-driver" \
+              --out "$GITHUB_WORKSPACE/proof" \
+              --work "$RUNNER_TEMP/desktop-e2e"
+
+      - name: Keep the evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: desktop-e2e-linux
+          path: proof/
+          retention-days: 30
+
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 150
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: igni-app
+          persist-credentials: false
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ignite-ember/igni-sdk
+          path: igni-sdk
+          persist-credentials: false
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ignite-ember/igni-core
+          ref: ${{ env.IGNI_CORE_REF }}
+          path: igni-core
+          persist-credentials: false
+
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version-file: igni-core/.python-version
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@38f3f104447c67c051c4a08e39b64a148898af3a # v4.2.0
+
+      - name: The dev-override backend's venv (igni-core v1.0.5)
+        working-directory: igni-core
+        run: uv sync
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24"
+          cache: "npm"
+          cache-dependency-path: igni-app/clients/web/package-lock.json
+
+      - name: The web client's dependencies
+        working-directory: igni-app/clients/web
+        run: npm ci
+
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable branch, 2026-10-16
+        with:
+          toolchain: stable
+
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          workspaces: igni-app/clients/tauri/src-tauri
+
+      - name: tauri-driver
+        run: cargo install tauri-driver --locked --version "$env:TAURI_DRIVER_VERSION"
+
+      - name: Build the release app and the .msi
+        working-directory: igni-app/clients/tauri
+        run: npx --yes "@tauri-apps/cli@$env:TAURI_CLI_VERSION" build --bundles msi --config "$env:TAURI_BUILD_CONFIG"
+
+      # msedgedriver must match the WebView2 runtime the app runs on.
+      - name: msedgedriver for this machine's WebView2
+        run: |
+          $key = 'HKLM:\SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}'
+          $wv = (Get-ItemProperty $key -ErrorAction SilentlyContinue).pv
+          Write-Output "WebView2 runtime: $wv"
+          New-Item -ItemType Directory -Force -Path "$env:RUNNER_TEMP\edgedriver" | Out-Null
+          try {
+            Invoke-WebRequest "https://msedgedriver.microsoft.com/$wv/edgedriver_win64.zip" -OutFile "$env:RUNNER_TEMP\edgedriver.zip"
+            Expand-Archive "$env:RUNNER_TEMP\edgedriver.zip" -DestinationPath "$env:RUNNER_TEMP\edgedriver" -Force
+            $driver = "$env:RUNNER_TEMP\edgedriver\msedgedriver.exe"
+          } catch {
+            Write-Output "download failed ($_); using the image's driver"
+            $driver = Join-Path $env:EdgeWebDriver 'msedgedriver.exe'
+          }
+          & $driver --version
+          "EDGE_DRIVER=$driver" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+      - name: Install the .msi and drive the app
+        run: |
+          $T = 'igni-app\clients\tauri\src-tauri\target\release'
+          $msi = (Get-ChildItem "$T\bundle\msi\*.msi" | Select-Object -First 1).FullName
+          uv run --python 3.12 --script igni-app\clients\tauri\e2e\desktop_proof.py `
+            --platform windows `
+            --msi "$msi" `
+            --app "$T\igni-app.exe" `
+            --core igni-core `
+            --version-file igni-app\igni-core.version `
+            --tauri-driver "$env:USERPROFILE\.cargo\bin\tauri-driver.exe" `
+            --native-driver "$env:EDGE_DRIVER" `
+            --out "$env:GITHUB_WORKSPACE\proof" `
+            --work "$env:RUNNER_TEMP\desktop-e2e"
+          exit $LASTEXITCODE
+
+      - name: Keep the evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: desktop-e2e-windows
+          path: proof/
+          retention-days: 30
+
+  # macOS has no WebDriver for WKWebView, so this leg works the native
+  # menu bar and dialogs through System Events and checks processes and
+  # sockets; the webview-only checks (R632, the New Chat transcript) are
+  # Linux's and Windows's.
+  macos:
+    runs-on: macos-26
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: igni-app
+          persist-credentials: false
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ignite-ember/igni-sdk
+          path: igni-sdk
+          persist-credentials: false
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ignite-ember/igni-core
+          ref: ${{ env.IGNI_CORE_REF }}
+          path: igni-core
+          persist-credentials: false
+
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version-file: igni-core/.python-version
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@38f3f104447c67c051c4a08e39b64a148898af3a # v4.2.0
+
+      - name: The dev-override backend's venv (igni-core v1.0.5)
+        working-directory: igni-core
+        run: uv sync
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24"
+          cache: "npm"
+          cache-dependency-path: igni-app/clients/web/package-lock.json
+
+      - name: The web client's dependencies
+        working-directory: igni-app/clients/web
+        run: npm ci
+
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable branch, 2026-10-16
+        with:
+          toolchain: stable
+
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          workspaces: igni-app/clients/tauri/src-tauri
+
+      - name: Build the release .app
+        working-directory: igni-app/clients/tauri
+        run: npx --yes "@tauri-apps/cli@${TAURI_CLI_VERSION}" build --bundles app --config "$TAURI_BUILD_CONFIG"
+
+      - name: Drive the app
+        run: |
+          APP=$(find igni-app/clients/tauri/src-tauri/target/release/bundle/macos -maxdepth 1 -name '*.app' | head -1)
+          BIN=$(find "$APP/Contents/MacOS" -type f -perm -u+x | head -1)
+          uv run --python 3.12 --script igni-app/clients/tauri/e2e/desktop_proof.py \
+            --platform macos \
+            --app "$BIN" \
+            --core igni-core \
+            --version-file igni-app/igni-core.version \
+            --out "$GITHUB_WORKSPACE/proof" \
+            --work "$RUNNER_TEMP/desktop-e2e" \
+            --only r617-unack,r617-ack,override,menus,attached,provisioned,r628
+
+      - name: Keep the evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: desktop-e2e-macos
+          path: proof/
+          retention-days: 30
