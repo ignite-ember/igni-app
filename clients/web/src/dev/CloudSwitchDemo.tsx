@@ -107,7 +107,12 @@ const BANNERS: Array<[string, BackendSnapshot]> = [
 export function CloudSwitchDemo() {
   const live = useBackendState();
   return (
-    <div className="cloud-demo" style={{ padding: 24, display: "grid", gap: 24, maxWidth: 900 }}>
+    // A page of its own, like every other sandbox: one <main> and one
+    // <h1>, so the accessibility gate measures the switch's parts rather
+    // than a document with no landmark (axe landmark-one-main,
+    // page-has-heading-one).
+    <main className="cloud-demo" style={{ padding: 24, display: "grid", gap: 24, maxWidth: 900 }}>
+      <h1 style={{ margin: 0, fontSize: "var(--text-xl)" }}>Local / Cloud switch · UI sandbox</h1>
       <section aria-label="Live" data-testid="cloud-live" style={{ position: "relative", minHeight: 120, border: "1px dashed var(--border)", borderRadius: 12, padding: 12 }}>
         <div className="statusline">
           <BackendChip backend={live} />
@@ -147,6 +152,6 @@ export function CloudSwitchDemo() {
           <BackendBanner key={label} backend={s} actions={INERT} />
         ))}
       </section>
-    </div>
+    </main>
   );
 }
