@@ -59,14 +59,27 @@ class ElementFailure extends Component<BoundaryProps, { error: Error | null }> {
   /** The element failed: say so to whoever is drawing the card. The
    *  card cannot see this on its own — the boundary caught it. */
   componentDidCatch(error: Error) {
+    this.tell(error);
+  }
+
+  componentDidUpdate(previous: BoundaryProps) {
+    if (!this.state.error) return;
+    if (previous.props !== this.props.props) {
+      this.setState({ error: null });
+      return;
+    }
+    // Still failed, and a new draw of the card is listening. The
+    // renderer does not draw an unchanged element again, so nothing
+    // throws for the new draw: without this word it would say it drew
+    // everything over the failure still on the card (R666).
+    if (previous.onFailure !== this.props.onFailure) this.tell(this.state.error);
+  }
+
+  private tell(error: Error) {
     this.props.onFailure?.({
       type: this.props.type,
       message: String(error?.message ?? "").slice(0, 200),
     });
-  }
-
-  componentDidUpdate(previous: BoundaryProps) {
-    if (this.state.error && previous.props !== this.props.props) this.setState({ error: null });
   }
 
   render() {

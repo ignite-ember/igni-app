@@ -120,6 +120,54 @@ describe("a card in the chat", () => {
     );
   });
 
+  // R666, finding (a): when a card was drawn again, the draw before it
+  // spoke during the new draw — its verdict went out a second time,
+  // mid-draw, so the backend heard the old revision's numbers while the
+  // card showed the new one. A draw now speaks only for itself.
+  it("a new draw is not answered for by the draw before it", () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const reportVerdict = vi.fn();
+    const { rerender } = render(
+      <VisualizationCard item={card({ final: true, revision: 1 })} handlers={{ reportVerdict }} />,
+    );
+    reportVerdict.mockClear();
+
+    rerender(
+      <VisualizationCard
+        item={card({ spec: BROKEN_SPEC, final: true, revision: 2 })}
+        handlers={{ reportVerdict }}
+      />,
+    );
+
+    expect(reportVerdict.mock.calls.map((c) => c[0].revision)).not.toContain(1);
+    expect(reportVerdict).toHaveBeenLastCalledWith({
+      spec_id: "card-1",
+      revision: 2,
+      total: 2,
+      failed: [{ type: "BarGraph", message: "its data is not a list" }],
+      issues: [],
+    });
+  });
+
+  it("a redraw that still cannot draw an element says so", () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const reportVerdict = vi.fn();
+    const again = () => JSON.parse(JSON.stringify(BROKEN_SPEC)) as Spec;
+    const { rerender } = render(
+      <VisualizationCard item={card({ spec: again(), final: true, revision: 1 })} handlers={{ reportVerdict }} />,
+    );
+
+    rerender(
+      <VisualizationCard item={card({ spec: again(), final: true, revision: 2 })} handlers={{ reportVerdict }} />,
+    );
+
+    const revision2 = reportVerdict.mock.calls.map((c) => c[0]).filter((v) => v.revision === 2);
+    expect(revision2.length).toBeGreaterThan(0);
+    for (const verdict of revision2) {
+      expect(verdict.failed).toEqual([{ type: "BarGraph", message: "its data is not a list" }]);
+    }
+  });
+
   it("draws without a listener", () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
     expect(() => render_(card({ spec: BROKEN_SPEC, final: true, revision: 1 }))).not.toThrow();

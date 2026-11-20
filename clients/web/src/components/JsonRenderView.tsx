@@ -166,17 +166,20 @@ function JsonRenderViewInner({
   const collector = useCollector(drawable);
   // The report is said once the draw is on the screen: after the
   // commit, so the boundary has already caught what it could not draw.
-  const say = useRef<(() => void) | null>(null);
+  // A failure caught later is said again, but only by its own draw: a
+  // failure of a new draw lands before the new draw's report is set
+  // up, and the draw before it must not speak for it (R666).
+  const say = useRef<{ collector: DrawCollector; report: () => void } | null>(null);
   const onFailure = useCallback(
     (failure: ElementDrawFailure) => {
       collector.add(failure);
-      say.current?.();
+      if (say.current?.collector === collector) say.current.report();
     },
     [collector],
   );
   useEffect(() => {
     const report = () => onDrawResult?.({ total, failed: collector.list(), issues });
-    say.current = report;
+    say.current = { collector, report };
     report();
     return () => {
       say.current = null;
