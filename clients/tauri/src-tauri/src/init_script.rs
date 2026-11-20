@@ -69,6 +69,22 @@ mod tests {
     }
 
     #[test]
+    fn the_shell_event_listeners_wait_for_tauri_s_global_api() {
+        // A one-off check at load registered nothing on Windows, where the
+        // script can run before `window.__TAURI__` exists (R624). The
+        // behaviour is tested in clients/web/src/lib/initScript.test.ts.
+        let script = script_text();
+        assert!(!script.contains("if (window.__TAURI__ && window.__TAURI__.event) {"));
+        let wait = script
+            .find("whenTauriEvents(() => {")
+            .expect("listeners registered through the wait");
+        for name in ["igni-menu", "igni-open-link", "igni-fullscreen"] {
+            let at = script.find(&format!("listenHere('{name}'")).unwrap();
+            assert!(at > wait, "{name} is registered before the wait");
+        }
+    }
+
+    #[test]
     fn init_script_invokes_opener_open_url_command() {
         // The capability is useless if the JS calls another command name.
         assert!(script_text().contains("plugin:opener|open_url"));

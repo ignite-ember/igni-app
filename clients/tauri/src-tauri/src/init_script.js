@@ -116,7 +116,25 @@ function listenHere(name, handler) {
   return here ? here.listen(name, handler) : window.__TAURI__.event.listen(name, handler);
 }
 
-if (window.__TAURI__ && window.__TAURI__.event) {
+// Run ``cb`` once Tauri's global API is there. On Windows this script
+// can run before ``window.__TAURI__`` is set, and a check made once at
+// load then registered nothing: New Chat, Check for Updates and igni://
+// links never reached the page (desktop proof run 44810142993).
+function whenTauriEvents(cb) {
+  const ready = () => window.__TAURI__ && window.__TAURI__.event && window.__TAURI__.webviewWindow;
+  if (ready()) {
+    cb();
+    return;
+  }
+  const tries = setInterval(() => {
+    if (ready()) {
+      clearInterval(tries);
+      cb();
+    }
+  }, 20);
+}
+
+whenTauriEvents(() => {
   listenHere('igni-menu', (e) => {
     const id = e && e.payload;
     if (typeof id !== 'string') return;
@@ -138,7 +156,7 @@ if (window.__TAURI__ && window.__TAURI__.event) {
     const on = !!(e && e.payload);
     document.documentElement.dataset.fullscreen = on ? 'true' : 'false';
   });
-}
+});
 
 // Fullscreen-state mirror. Calls a custom Rust command that reads
 // ``NSWindow.styleMask`` — the source of truth — and stamps the
