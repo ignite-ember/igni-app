@@ -17,6 +17,7 @@ pub(crate) mod gateway;
 pub(crate) mod log;
 pub(crate) mod mode;
 pub(crate) mod net;
+pub(crate) mod pages;
 pub(crate) mod relay;
 pub(crate) mod session;
 pub(crate) mod shell;

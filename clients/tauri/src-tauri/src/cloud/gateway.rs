@@ -128,6 +128,12 @@ impl GatewayUrl {
         }
     }
 
+    /// A route's request target on the gateway, with any path prefix the
+    /// gateway is served under: `/fleet/v1/pages/…`.
+    pub fn target(&self, route: &str) -> String {
+        format!("{}{route}", self.path)
+    }
+
     /// An HTTP route on the gateway, e.g. `/v1/me`.
     pub fn http(&self, route: &str) -> String {
         format!("{}{route}", self.base())
@@ -184,6 +190,7 @@ mod tests {
         let gw = GatewayUrl::parse("https://gw.example:8443/fleet/", false).unwrap();
         assert_eq!(gw.connect_url(false), "wss://gw.example:8443/fleet/v1/connect?pages=1");
         assert_eq!(gw.authority(), "gw.example:8443");
+        assert_eq!(gw.target("/v1/pages/a.b/x"), "/fleet/v1/pages/a.b/x");
     }
 
     #[test]

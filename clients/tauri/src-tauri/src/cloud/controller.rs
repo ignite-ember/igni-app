@@ -21,10 +21,11 @@ use super::discovery::{DiscoveryClient, DiscoveryError, EventsOwner};
 use super::gateway::GatewayUrl;
 use super::log;
 use super::net::CloudHttp;
+use super::pages::PageOrigins;
 use super::relay::dial::DialError;
 use super::relay::{Relay, RelayEvent, RelayHooks};
 use super::session::{credentials_fingerprint, Session};
-use super::state::{Side, Unreachable};
+use super::state::{BackendState, Side, Unreachable};
 use super::switchboard::{Account, BackendSnapshot, Effect, Switchboard, WindowActivity, WindowTarget};
 use crate::backend::{cloud_app_url, BackendConn};
 use crate::desktop_settings::CloudSettings;
@@ -69,6 +70,9 @@ struct Inner {
     settings: Mutex<CloudSettings>,
     board: Mutex<Switchboard>,
     relay: OnceLock<Relay>,
+    /// The extension page origins of the cloud side (§15.4), beside the
+    /// relay and stopped with it.
+    pages: OnceLock<PageOrigins>,
     shell: Arc<dyn ShellPort>,
     effects: Mutex<Option<mpsc::Sender<Vec<Effect>>>>,
     launched: std::sync::atomic::AtomicBool,
@@ -131,6 +135,7 @@ impl CloudController {
                 settings: Mutex::new(settings),
                 board: Mutex::new(board),
                 relay: OnceLock::new(),
+                pages: OnceLock::new(),
                 shell,
                 effects: Mutex::new(None),
                 launched: std::sync::atomic::AtomicBool::new(false),
@@ -152,8 +157,10 @@ impl CloudController {
         if self.inner.relay.get().is_some() {
             return Ok(());
         }
-        let relay = Relay::start(Arc::new(Hooks(Arc::downgrade(&self.inner))), http).await?;
+        let hooks: Arc<dyn RelayHooks> = Arc::new(Hooks(Arc::downgrade(&self.inner)));
+        let relay = Relay::start(hooks.clone(), http.clone()).await?;
         let _ = self.inner.relay.set(relay);
+        let _ = self.inner.pages.set(PageOrigins::new(hooks, http));
         let (tx, rx) = mpsc::channel::<Vec<Effect>>();
         *lock(&self.inner.effects) = Some(tx);
         let runner = self.clone();
@@ -322,6 +329,34 @@ impl CloudController {
 
     pub fn report_activity(&self, label: &str, report: WindowActivity) {
         self.apply(|board| board.activity(label, report, Instant::now()));
+    }
+
+    /// `cloud_page_origin`: the loopback origin serving `extension_id`'s
+    /// page while the app is on the cloud (§15.4). Refused for a bad id,
+    /// off the cloud side, or when the listener cannot bind. Never takes
+    /// or returns a token.
+    pub async fn page_origin(&self, extension_id: &str) -> Result<String, String> {
+        if !super::pages::extension_id_ok(extension_id) {
+            return Err(format!("{extension_id:?} is not an extension id"));
+        }
+        let serving = {
+            let board = lock(&self.inner.board);
+            board.side == Side::Cloud
+                && matches!(
+                    board.state,
+                    BackendState::Dialing
+                        | BackendState::Waking
+                        | BackendState::CloudReady { .. }
+                        | BackendState::CloudNeedsSignIn
+                        | BackendState::CloudUnreachable(_)
+                )
+        };
+        if !serving {
+            return Err("not in cloud mode".into());
+        }
+        let pages = self.inner.pages.get().ok_or("not in cloud mode")?;
+        let port = pages.start_for(extension_id).await?;
+        Ok(format!("http://127.0.0.1:{port}"))
     }
 
     /// One allow-listed account call on this computer's backend.
@@ -512,7 +547,12 @@ impl CloudController {
                     relay.retry_now();
                 }
             }
-            Effect::StopPageOrigins => self.inner.shell.stop_page_origins(),
+            Effect::StopPageOrigins => {
+                if let Some(pages) = self.inner.pages.get() {
+                    pages.stop_all();
+                }
+                self.inner.shell.stop_page_origins();
+            }
             Effect::LabelMenu(side) => self.inner.shell.label_menu(side),
         }
     }

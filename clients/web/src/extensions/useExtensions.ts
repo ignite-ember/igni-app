@@ -6,15 +6,24 @@
  * share one. The list is held in state as well, because the nav needs
  * only the labels and an extension's page needs the rest: the origin to
  * frame, the grants, its state and why.
+ *
+ * On the desktop's cloud side every list is localised before it is
+ * stored (`cloudPageOrigins.ts`): the backend's origin is a VM-internal
+ * address, so it is cleared at once and replaced by the shell's own
+ * origin for that extension. That holds for the list fetched on connect
+ * and for every `setExtensions` the settings panel makes; no path stores
+ * the backend's origin.
  */
 
-import { useEffect, useMemo, useState, type Dispatch, type SetStateAction } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
 
 import { PageRegistry } from "../chat/pageStack";
 import type { WindowModel } from "../clientState";
 import type { IgniClient } from "../protocol/client";
 import { ListExtensionsResult } from "../protocol/rpcResults";
+import { windowSide, type Side } from "../cloud/backendState";
 import { BASE_SIDEBAR_LINKS, BASE_TOOLS_MENU } from "./baseNavigation";
+import { localiseOrigins, withoutOrigins, type PageOriginResolver } from "./cloudPageOrigins";
 import { Contributions } from "./contributions";
 import type { ExtensionSummary } from "./ExtensionPage";
 
@@ -30,12 +39,35 @@ export function useExtensions(
   client: Pick<IgniClient, "rpc">,
   connected: boolean,
   windowModel: Pick<WindowModel, "get" | "write">,
+  side: Side = windowSide(),
+  resolveOrigin?: PageOriginResolver,
 ): Extensions {
   const contributions = useMemo(
     () => new Contributions(BASE_SIDEBAR_LINKS, BASE_TOOLS_MENU, new PageRegistry()),
     [],
   );
-  const [extensions, setExtensions] = useState<ExtensionSummary[]>([]);
+  const [extensions, store] = useState<ExtensionSummary[]>([]);
+  const latest = useRef<ExtensionSummary[]>([]);
+  const generation = useRef(0);
+  const setExtensions = useCallback<Dispatch<SetStateAction<ExtensionSummary[]>>>(
+    (next) => {
+      const value = typeof next === "function" ? next(latest.current) : next;
+      const mine = ++generation.current;
+      const keep = (list: ExtensionSummary[]) => {
+        latest.current = list;
+        store(list);
+      };
+      if (side !== "cloud") {
+        keep(value);
+        return;
+      }
+      keep(withoutOrigins(value));
+      void localiseOrigins(value, side, resolveOrigin).then((localised) => {
+        if (mine === generation.current) keep(localised);
+      });
+    },
+    [side, resolveOrigin],
+  );
   const extensionNames = useMemo(
     () => new Map(extensions.map((e) => [e.id, e.name])),
     [extensions],
@@ -79,7 +111,7 @@ export function useExtensions(
       alive = false;
       for (const owner of owners) contributions.uninstall(owner);
     };
-  }, [client, connected, windowModel, contributions]);
+  }, [client, connected, windowModel, contributions, setExtensions]);
 
   return { contributions, extensions, setExtensions, extensionNames };
 }

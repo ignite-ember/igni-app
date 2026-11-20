@@ -283,3 +283,33 @@ async fn account_rpc_forwards_only_account_calls() {
     // The fake local backend on port 1 is not there: the call is tried.
     assert!(w.controller.account_rpc("get_cloud_plan", Value::Null).await.unwrap_err().contains("not reachable"));
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn cloud_page_origin_answers_only_on_the_cloud_and_keeps_its_port() {
+    let w = world("pageorigin", GroupMode::LocalAndCloud, None).await;
+    let c = w.controller.clone();
+    blocking(move || c.launch()).await;
+    assert_eq!(w.controller.page_origin("acme.reviewer").await.unwrap_err(), "not in cloud mode");
+    assert!(w.controller.page_origin("../etc").await.unwrap_err().contains("is not an extension id"));
+
+    let c = w.controller.clone();
+    blocking(move || c.switch(Side::Cloud)).await.unwrap();
+    let origin = w.controller.page_origin("acme.reviewer").await.unwrap();
+    assert!(origin.starts_with("http://127.0.0.1:"), "{origin}");
+    assert!(!origin.contains(SECRET));
+    assert_eq!(w.controller.page_origin("acme.reviewer").await.unwrap(), origin, "the same port twice");
+    let port: u16 = origin.rsplit(':').next().unwrap().parse().unwrap();
+    assert!(tokio::net::TcpStream::connect(("127.0.0.1", port)).await.is_ok());
+
+    // A node move (a second welcome) keeps it.
+    w.controller.apply(|board| board.relay(RelayEvent::Welcome));
+    assert_eq!(w.controller.page_origin("acme.reviewer").await.unwrap(), origin);
+
+    // Back to this computer: every page port closes.
+    let c = w.controller.clone();
+    blocking(move || c.switch(Side::Local)).await.unwrap();
+    until("the page port closed", || std::net::TcpStream::connect(("127.0.0.1", port)).is_err()).await;
+    assert_eq!(w.controller.page_origin("acme.reviewer").await.unwrap_err(), "not in cloud mode");
+}
+
+mod live;

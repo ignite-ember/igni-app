@@ -126,3 +126,48 @@ test('cloud mode shows Cloud with no control, and local mode nothing', async ({ 
   await expect(live.locator('.backend-chip')).toHaveCount(0)
   await expect(live.getByRole('radiogroup')).toHaveCount(0)
 })
+
+test('a cloud extension is framed from the shell origin, never the VM one, and its indicator shows', async ({ page }) => {
+  const shellOrigin = 'http://127.0.0.1:59111'
+  // The shell's page origin, as the frame would reach it.
+  await page.route(`${shellOrigin}/**`, (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'text/html',
+      headers: { 'Content-Security-Policy': "default-src 'self'" },
+      body: '<!doctype html><title>Reviews</title><h1 id="from-the-cloud">Reviews from the cloud</h1>',
+    }),
+  )
+  await page.addInitScript(({ first, origin }) => {
+    const calls: Array<[string, unknown]> = []
+    ;(window as unknown as { __shellCalls: typeof calls }).__shellCalls = calls
+    ;(window as unknown as { __TAURI__: unknown }).__TAURI__ = {
+      core: {
+        invoke: async (cmd: string, args?: unknown) => {
+          calls.push([cmd, args ?? null])
+          if (cmd === 'backend_state') return first
+          if (cmd === 'cloud_page_origin') return origin
+          return null
+        },
+      },
+    }
+  }, { first: snapshot({ side: 'cloud', state: 'waking' }), origin: shellOrigin })
+  await page.goto('/?demo=cloud&side=cloud&backend=cloud-0123456789ab&extension=1')
+  const panel = page.getByTestId('cloud-extension')
+
+  // Not ready: no frame loads against a VM that cannot answer.
+  await expect(panel.getByText('Reviewer opens once your cloud igni is ready.')).toBeVisible()
+  await expect(panel.locator('iframe')).toHaveCount(0)
+
+  await push(page, { side: 'cloud', state: 'cloud_ready', backend_key: 'cloud-0123456789ab' })
+  const frame = panel.locator('iframe')
+  await expect(frame).toHaveAttribute('src', `${shellOrigin}/index.html`)
+  await expect(page.frameLocator('[data-testid="cloud-extension"] iframe').locator('#from-the-cloud')).toHaveText(
+    'Reviews from the cloud',
+  )
+  expect(await frame.getAttribute('src')).not.toContain('41234')
+  await expect(panel.getByText('3 waiting')).toBeVisible()
+  expect((await calls(page)).filter(([c]) => c === 'cloud_page_origin')).toEqual([
+    ['cloud_page_origin', { extensionId: 'acme.reviewer' }],
+  ])
+})

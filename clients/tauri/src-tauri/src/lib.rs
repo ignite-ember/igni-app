@@ -73,6 +73,7 @@ pub fn run() {
             cloud::commands::dismiss_backend_notice,
             cloud::commands::report_local_activity,
             cloud::commands::account_rpc,
+            cloud::commands::cloud_page_origin,
         ])
         .setup(|app| {
             let handle = app.handle();

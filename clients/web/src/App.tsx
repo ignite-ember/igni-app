@@ -13,6 +13,7 @@ import { useTranscriptScroll } from "./chat/useTranscriptScroll";
 import { useVisiblePages } from "./chat/windowNavigator";
 import { useWindowPlace } from "./chat/useWindowPlace";
 import { useWindowServices } from "./chat/windowServices";
+import { BackendStateContext } from "./cloud/backendContext";
 import { useBackendState } from "./cloud/useBackendState";
 import { useLocalActivity } from "./cloud/useLocalActivity";
 import { ExtensionNamesContext } from "./extensions/extensionNames";
@@ -152,6 +153,7 @@ export default function App() {
 
   return (
     <ExtensionNamesContext.Provider value={extensionNames}>
+    <BackendStateContext.Provider value={backend}>
     <div className="shell" style={SidebarLayout.styleFor(sidebar)}>
       {/* Live FPS overlay, hidden by default: Ctrl/Cmd+Alt+Shift+F. */}
       <FPSCounterOverlay />
@@ -281,6 +283,7 @@ export default function App() {
         onLoginFailed={actions.loginFailed}
       />
     </div>
+    </BackendStateContext.Provider>
     </ExtensionNamesContext.Provider>
   );
 }

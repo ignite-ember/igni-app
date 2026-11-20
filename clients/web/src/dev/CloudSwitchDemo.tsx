@@ -8,8 +8,16 @@
  * shell would push (``igni-host`` / ``igni:backend-state``), through the
  * same hook the app uses, so the browser suite can walk the states the
  * way the shell does.
+ *
+ * The "Extension" panel lists one extension through ``useExtensions``
+ * from a stand-in backend that reports a VM-internal origin, so the
+ * suite can see the page framed from the shell's origin instead
+ * (``cloud_page_origin``) and the extension's indicator drawn (§15).
  */
 
+import { useMemo } from "react";
+
+import { BackendStateContext } from "../cloud/backendContext";
 import { BackendSnapshot } from "../cloud/backendState";
 import { shellSnapshot } from "../cloud/testing";
 import { useBackendState } from "../cloud/useBackendState";
@@ -17,6 +25,52 @@ import { BackendBanner, type BackendActions } from "../components/BackendBanner"
 import { BackendChip } from "../components/BackendChip";
 import { BackendSwitch } from "../components/BackendSwitch";
 import { WakingOverlay } from "../components/WakingOverlay";
+import { ExtensionIndicator } from "../extensions/ExtensionIndicator";
+import { ExtensionPage, type ExtensionSummary } from "../extensions/ExtensionPage";
+import { useExtensions } from "../extensions/useExtensions";
+
+/** What the VM's igni lists: its origin is an address inside the VM. */
+const VM_EXTENSION: ExtensionSummary = {
+  id: "acme.reviewer",
+  name: "Reviewer",
+  version: "1.0.0",
+  state: "READY",
+  reason: "",
+  origin: "http://127.0.0.1:41234",
+  allow: [],
+  pages: [{ kind: "acme.reviewer.page", label: "Reviews", sidebar: true, entry: "index.html" }],
+  menu: [],
+  indicators: [{ id: "queue", label: "Reviews", source: "queue_size", opens: "acme.reviewer.page", intervalSeconds: 0 }],
+  settings: [],
+  values: {},
+};
+
+/** The stand-in backend: lists the extension, answers its indicator. */
+const DEMO_BACKEND = {
+  rpc: async (method: string) =>
+    method === "list_extensions" ? { extensions: [VM_EXTENSION] } : { label: "3 waiting", tone: "warning", detail: "" },
+};
+const NO_MODEL = { get: () => [], write: () => undefined };
+
+function ExtensionPanel() {
+  const backend = useBackendState();
+  const { extensions } = useExtensions(DEMO_BACKEND as never, true, NO_MODEL as never);
+  const extension = extensions[0];
+  const onCall = useMemo(() => async () => ({ label: "3 waiting", tone: "warning", detail: "" }), []);
+  if (!extension) return null;
+  return (
+    <BackendStateContext.Provider value={backend}>
+      <div className="statusline">
+        {extension.indicators.map((indicator) => (
+          <ExtensionIndicator key={indicator.id} extensionId={extension.id} indicator={indicator} unread={0} onCall={onCall} onOpen={() => undefined} />
+        ))}
+      </div>
+      <div style={{ height: 160 }}>
+        <ExtensionPage extension={extension} kind="acme.reviewer.page" onCall={async () => null} />
+      </div>
+    </BackendStateContext.Provider>
+  );
+}
 
 const snap = (o: Record<string, unknown>) => BackendSnapshot.parse(shellSnapshot(o))!;
 
@@ -66,6 +120,12 @@ export function CloudSwitchDemo() {
         <BackendBanner backend={live} />
         <WakingOverlay backend={live} />
       </section>
+
+      {new URLSearchParams(window.location.search).has("extension") && (
+        <section aria-label="Extension" data-testid="cloud-extension">
+          <ExtensionPanel />
+        </section>
+      )}
 
       <section aria-label="Switch">
         <div className="dropdown account-menu" style={{ position: "static", width: 280 }}>

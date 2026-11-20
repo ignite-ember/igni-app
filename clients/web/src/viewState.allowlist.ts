@@ -127,6 +127,9 @@ export const VIEW_STATE: Record<string, Partial<Record<Category, string[]>>> = {
   "cloud/useBackendState.ts": {
     data: ["snapshot"],
   },
+  "cloud/useConnectionGeneration.ts": {
+    data: ["generation"],
+  },
   "components/BackendSwitch.tsx": {
     pending: ["busy", "error"],
   },

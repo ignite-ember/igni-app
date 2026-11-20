@@ -3,7 +3,7 @@
 
 mod conn;
 mod process;
-mod ready_line;
+pub(crate) mod ready_line;
 mod stderr_tail;
 mod supervisor;
 mod ws_token;

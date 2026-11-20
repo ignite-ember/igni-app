@@ -67,6 +67,15 @@ pub(crate) fn report_local_activity(window: WebviewWindow, controller: State<'_,
     );
 }
 
+/// The loopback origin an extension's page is framed from on the cloud
+/// side (§15.4): `http://127.0.0.1:<port>`, the same for the life of the
+/// cloud side.
+#[tauri::command]
+pub(crate) async fn cloud_page_origin(controller: State<'_, CloudController>, extension_id: String) -> Result<String, String> {
+    let controller = controller.inner().clone();
+    controller.page_origin(&extension_id).await
+}
+
 /// An account call on this computer's backend (allow-listed).
 #[tauri::command]
 pub(crate) async fn account_rpc(controller: State<'_, CloudController>, method: String, args: Option<Value>) -> Result<Value, String> {

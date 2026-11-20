@@ -23,12 +23,14 @@ use tokio_tungstenite::tungstenite::Message;
 use crate::backend::BackendConn;
 
 /// The methods `account_rpc` forwards: the account menu's, and the
-/// server address the sign-in wall may set.
+/// server address the sign-in wall may set. Each is one the account-only
+/// backend serves (igni-core's `ACCOUNT_RPCS`), so the call is the same
+/// whether this computer runs the full backend or that one.
 pub(crate) const ACCOUNT_METHODS: [&str; 6] = [
     "get_cloud_plan",
     "clear_cloud_credentials",
     "reload_cloud_credentials",
-    "get_group_policy",
+    "get_status",
     "discover_server",
     "set_server",
 ];
@@ -179,7 +181,7 @@ mod tests {
         for ok in ACCOUNT_METHODS {
             assert!(allowed(ok));
         }
-        for refused in ["user_message", "run_shell", "login", "host_model", "attach_session", "window_model", ""] {
+        for refused in ["user_message", "run_shell", "login", "host_model", "attach_session", "window_model", "get_group_policy", ""] {
             assert!(!allowed(refused), "{refused}");
         }
     }
