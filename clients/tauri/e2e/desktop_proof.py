@@ -667,7 +667,14 @@ class WindowsUI(NativeUI):
         raise RuntimeError("no folder picker appeared")
 
     def focus(self, pid, window):
-        self._main(pid, window).set_focus()
+        # As a person does it: a click on the window's title bar, which
+        # makes it the active window (set_focus alone left the app's own
+        # idea of the focused window on the first one, run 44881308306).
+        w = self._main(pid, window)
+        w.set_focus()
+        r = w.rectangle()
+        w.click_input(coords=(r.left + (r.right - r.left) // 2, r.top + 12), absolute=True)
+        time.sleep(0.5)
 
     def key(self, pid, combo, window=None):
         from pywinauto.keyboard import send_keys
@@ -1602,6 +1609,8 @@ def menus_and_restart_session(ctx: Ctx):
             ctx.proof.check("R624", "File > New Chat starts a new session (new id, empty transcript)", bool(sid1) and bool(empty), f"{sid0} -> {sid1}")
             try:
                 ctx.ui.key(pid, "ctrl+n" if not IS_MAC else "cmd+n", window=ctx.proj.name)
+                # A person presses it while typing: focus in the page.
+                s.js("const c = document.querySelector('.composer-editable'); if (c) c.focus();")
                 before_key = s.session_id()
                 sid2 = wait_for(lambda: (lambda v: v if v and v != before_key else None)(s.session_id()), 15)
                 if not sid2:
