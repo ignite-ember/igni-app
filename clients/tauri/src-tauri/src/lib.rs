@@ -74,6 +74,7 @@ pub fn run() {
             cloud::commands::report_local_activity,
             cloud::commands::account_rpc,
             cloud::commands::cloud_page_origin,
+            menu::igni_menu_shortcut,
         ])
         .setup(|app| {
             let handle = app.handle();
@@ -134,6 +135,15 @@ pub fn run() {
             )?;
             Bootstrap::spawn_in_background(handle, launch);
             Ok(())
+        })
+        .on_window_event(|window, event| match event {
+            tauri::WindowEvent::Focused(focused) => {
+                WindowManager::note_focus(window.app_handle(), window.label(), *focused)
+            }
+            tauri::WindowEvent::Destroyed => {
+                WindowManager::forget(window.app_handle(), window.label())
+            }
+            _ => {}
         })
         .on_menu_event(|app, event| {
             let id = event.id().as_ref();

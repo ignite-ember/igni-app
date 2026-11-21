@@ -1,6 +1,7 @@
 //! Which backend this app is using, and whether it is this app's to stop.
 
 use std::sync::{Mutex, MutexGuard};
+use std::time::{Duration, Instant};
 
 use crate::backend::{BackendConn, BackendKind, BackendProcess, BackendVersionInfo, WsToken, SHUTDOWN_GRACE};
 use crate::discovery::{self, Decision};
@@ -20,10 +21,73 @@ enum BackendSlot {
     Released,
 }
 
+/// What a look at a spawned backend found, for the watcher that asked.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Liveness {
+    /// Still running.
+    Running,
+    /// Exited without this app asking it to: it crashed or was killed.
+    Exited,
+    /// No longer the backend the watcher was started for: restarted,
+    /// reinstalled, shut down, or attached to another client's.
+    Replaced,
+}
+
+/// How many backends that died on their own are replaced before the app
+/// stops trying: a backend that dies at every start would otherwise be
+/// respawned for as long as the window is open.
+#[derive(Debug, Default)]
+pub(crate) struct CrashBudget {
+    recent: Vec<Instant>,
+}
+
+impl CrashBudget {
+    /// Replacements allowed within [`CrashBudget::WINDOW`].
+    pub const LIMIT: usize = 3;
+    pub const WINDOW: Duration = Duration::from_secs(300);
+
+    /// Count a crash at `now`; `true` if it may still be replaced.
+    pub fn spend(&mut self, now: Instant) -> bool {
+        self.recent
+            .retain(|at| now.saturating_duration_since(*at) < Self::WINDOW);
+        if self.recent.len() >= Self::LIMIT {
+            return false;
+        }
+        self.recent.push(now);
+        true
+    }
+}
+
+/// How long the next bootstrap waits for a stopped backend's port to
+/// close before it looks for a backend to attach to.
+pub(crate) const PORT_RELEASE_WAIT: Duration = Duration::from_secs(10);
+
+/// Wait until nothing answers on `port`, at most `timeout`; `true` once
+/// it is closed.
+pub(crate) fn wait_port_closed(port: u16, timeout: Duration) -> bool {
+    let deadline = Instant::now() + timeout;
+    loop {
+        if !discovery::port_reachable(port) {
+            return true;
+        }
+        if Instant::now() >= deadline {
+            return false;
+        }
+        std::thread::sleep(Duration::from_millis(50));
+    }
+}
+
 /// Managed once in `setup`, before any window or bootstrap thread.
 pub(crate) struct BackendSupervisor {
     slot: Mutex<BackendSlot>,
     conn: Mutex<Option<BackendConn>>,
+    /// Counts the backends this app has spawned; a crash watcher holds the
+    /// number of the one it watches, so it never acts on its successor.
+    generation: Mutex<u64>,
+    crashes: Mutex<CrashBudget>,
+    /// The port of the backend this app last stopped or lost. Discovery
+    /// must not find it still answering and attach to it.
+    released_port: Mutex<Option<u16>>,
 }
 
 impl Default for BackendSupervisor {
@@ -31,6 +95,9 @@ impl Default for BackendSupervisor {
         BackendSupervisor {
             slot: Mutex::new(BackendSlot::Starting),
             conn: Mutex::new(None),
+            generation: Mutex::new(0),
+            crashes: Mutex::new(CrashBudget::default()),
+            released_port: Mutex::new(None),
         }
     }
 }
@@ -47,6 +114,7 @@ impl BackendSupervisor {
         project_dir: &str,
         progress: ProgressFn,
     ) -> Result<BackendConn, ShellError> {
+        self.await_released_port();
         let conn = match discovery::discover(project_dir, runtime::IGNI_CORE_VERSION) {
             Decision::Attach {
                 port,
@@ -86,7 +154,9 @@ impl BackendSupervisor {
         let token = WsToken::for_spawn(std::env::var(WsToken::DEV_DISABLE_ENV).ok().as_deref())?;
         let process = BackendProcess::spawn(project_dir, kind, token.as_ref(), progress)?;
         let conn = BackendConn::new(process.port(), token, process.version().clone());
-        *Self::lock(&self.slot) = BackendSlot::Owned(process);
+        let mut slot = Self::lock(&self.slot);
+        *Self::lock(&self.generation) += 1;
+        *slot = BackendSlot::Owned(process);
         Ok(conn)
     }
 
@@ -98,8 +168,81 @@ impl BackendSupervisor {
         let slot = std::mem::replace(&mut *Self::lock(&self.slot), BackendSlot::Released);
         if let BackendSlot::Owned(mut process) = slot {
             process.shutdown(SHUTDOWN_GRACE);
+            self.remember_released(&process);
         }
         *Self::lock(&self.conn) = None;
+    }
+
+    /// Wait for the backend this app just stopped to stop answering.
+    ///
+    /// On Windows a backend is stopped by killing the venv launcher this
+    /// app spawned; the interpreter under it dies a moment later, when the
+    /// launcher's job closes. Discovery cannot tell a dying backend from a
+    /// live one there (it has no PID probe, only the port), so a restart
+    /// that looked straight away found the old backend still answering,
+    /// attached to it, and was left on a dead port when it went (R619,
+    /// desktop proof run 44799523100). Runs on the bootstrap thread.
+    fn await_released_port(&self) {
+        let port = Self::lock(&self.released_port).take();
+        if let Some(port) = port {
+            if !wait_port_closed(port, PORT_RELEASE_WAIT) {
+                eprintln!("igni: the stopped backend's port {port} is still answering");
+            }
+        }
+    }
+
+    fn remember_released(&self, process: &BackendProcess) {
+        *Self::lock(&self.released_port) = Some(process.port());
+    }
+
+    /// The number of the backend this app spawned and now runs, for a
+    /// crash watcher to hold; `None` when it runs none of its own.
+    pub fn owned_generation(&self) -> Option<u64> {
+        let slot = Self::lock(&self.slot);
+        matches!(*slot, BackendSlot::Owned(_)).then(|| *Self::lock(&self.generation))
+    }
+
+    /// Whether backend number `generation` is still running.
+    pub fn liveness(&self, generation: u64) -> Liveness {
+        let mut slot = Self::lock(&self.slot);
+        if *Self::lock(&self.generation) != generation {
+            return Liveness::Replaced;
+        }
+        match &mut *slot {
+            BackendSlot::Owned(process) => {
+                if process.has_exited() {
+                    Liveness::Exited
+                } else {
+                    Liveness::Running
+                }
+            }
+            _ => Liveness::Replaced,
+        }
+    }
+
+    /// Take backend number `generation`, which exited on its own, out of
+    /// the slot so a fresh one can be spawned, and withdraw its connection.
+    /// `false` when it is not that backend, or not dead: the watcher then
+    /// does nothing, and whoever replaced it owns the new one.
+    pub fn release_crashed(&self, generation: u64) -> bool {
+        if self.liveness(generation) != Liveness::Exited {
+            return false;
+        }
+        let mut slot = Self::lock(&self.slot);
+        if *Self::lock(&self.generation) != generation || !matches!(*slot, BackendSlot::Owned(_)) {
+            return false;
+        }
+        if let BackendSlot::Owned(process) = &*slot {
+            self.remember_released(process);
+        }
+        *slot = BackendSlot::Released;
+        *Self::lock(&self.conn) = None;
+        true
+    }
+
+    /// Count a crash; `true` if the app may start another backend for it.
+    pub fn spend_crash(&self, now: Instant) -> bool {
+        Self::lock(&self.crashes).spend(now)
     }
 
     /// The connection bootstrap published, or `None` while it is starting.
@@ -120,6 +263,7 @@ impl BackendSupervisor {
             BackendSlot::Starting | BackendSlot::Attached => Err(ShellError::AttachedNotOwned),
             BackendSlot::Owned(process) => {
                 process.kill_now();
+                self.remember_released(process);
                 *slot = BackendSlot::Released;
                 Ok(())
             }
@@ -147,6 +291,7 @@ impl BackendSupervisor {
         let slot = std::mem::replace(&mut *Self::lock(&self.slot), BackendSlot::Released);
         if let BackendSlot::Owned(mut process) = slot {
             process.shutdown(SHUTDOWN_GRACE);
+            self.remember_released(&process);
         }
         *Self::lock(&self.conn) = None;
         Ok(())
@@ -171,9 +316,13 @@ impl BackendSupervisor {
 
     #[cfg(test)]
     fn with_slot(slot: BackendSlot) -> Self {
+        let generation = u64::from(matches!(slot, BackendSlot::Owned(_)));
         BackendSupervisor {
             slot: Mutex::new(slot),
             conn: Mutex::new(None),
+            generation: Mutex::new(generation),
+            crashes: Mutex::new(CrashBudget::default()),
+            released_port: Mutex::new(None),
         }
     }
 }
@@ -336,4 +485,159 @@ mod tests {
     fn nothing_is_published_until_connect() {
         assert!(BackendSupervisor::default().current_conn().is_none());
     }
+
+    fn owned(child: std::process::Child) -> BackendSupervisor {
+        let version = BackendVersionInfo {
+            actual: None,
+            expected: "0".into(),
+            source: "managed_venv",
+        };
+        BackendSupervisor::with_slot(BackendSlot::Owned(BackendProcess::adopt(child, 1, version)))
+    }
+
+    // R619: a backend that crashed was left in the slot as if it ran. The
+    // window sat on "Connecting…" until someone chose Restart Backend.
+    #[cfg(unix)]
+    #[test]
+    fn a_backend_that_dies_on_its_own_is_seen_and_released_for_a_new_one() {
+        let s = owned(Command::new("sh").args(["-c", "exit 3"]).spawn().unwrap());
+        *BackendSupervisor::lock(&s.conn) = Some(BackendConn::new(
+            1,
+            None,
+            BackendVersionInfo::discovered("0".into()),
+        ));
+        let generation = s.owned_generation().expect("an owned backend has a number");
+        let seen = (0..100).find_map(|_| {
+            std::thread::sleep(Duration::from_millis(20));
+            (s.liveness(generation) == Liveness::Exited).then_some(())
+        });
+        assert!(seen.is_some(), "the exit was never seen");
+        assert!(s.release_crashed(generation));
+        assert!(is_released(&s));
+        assert!(
+            s.current_conn().is_none(),
+            "no window may be pointed at the dead port"
+        );
+        assert!(
+            s.check_restartable().is_ok(),
+            "the next bootstrap may spawn"
+        );
+        assert!(!s.release_crashed(generation), "released once only");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_running_backend_is_not_released_as_crashed() {
+        let (s, pid) = owned_sleep();
+        let generation = s.owned_generation().unwrap();
+        assert_eq!(s.liveness(generation), Liveness::Running);
+        assert!(!s.release_crashed(generation));
+        assert!(discovery::pid_alive(pid as i32));
+        s.shutdown_on_exit();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_watcher_stops_once_its_backend_was_restarted_or_shut_down() {
+        let (s, _) = owned_sleep();
+        let generation = s.owned_generation().unwrap();
+        s.release_for_restart().unwrap();
+        assert_eq!(s.liveness(generation), Liveness::Replaced);
+        assert!(!s.release_crashed(generation));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_watcher_never_acts_on_the_backend_that_replaced_its_own() {
+        let (s, _) = owned_sleep();
+        let old = s.owned_generation().unwrap();
+        *BackendSupervisor::lock(&s.generation) += 1;
+        assert_eq!(s.liveness(old), Liveness::Replaced);
+        assert!(!s.release_crashed(old));
+        s.shutdown_on_exit();
+    }
+
+    #[test]
+    fn an_attached_backend_is_never_watched() {
+        let s = BackendSupervisor::with_slot(BackendSlot::Attached);
+        assert_eq!(s.owned_generation(), None);
+        assert_eq!(s.liveness(0), Liveness::Replaced);
+        assert!(!s.release_crashed(0));
+    }
+
+    /// A port that stops answering after `after`.
+    fn port_closing_after(after: Duration) -> u16 {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        std::thread::spawn(move || {
+            let started = Instant::now();
+            listener.set_nonblocking(true).unwrap();
+            while started.elapsed() < after {
+                let _ = listener.accept();
+                std::thread::sleep(Duration::from_millis(10));
+            }
+        });
+        port
+    }
+
+    // R619 on Windows: the restart's discovery found the stopped backend
+    // still answering and attached to it.
+    #[test]
+    fn the_next_bootstrap_waits_for_the_stopped_backend_s_port_to_close() {
+        let port = port_closing_after(Duration::from_millis(600));
+        assert!(discovery::port_reachable(port), "fixture is listening");
+        let s = BackendSupervisor::default();
+        *BackendSupervisor::lock(&s.released_port) = Some(port);
+        let started = Instant::now();
+        s.await_released_port();
+        assert!(
+            !discovery::port_reachable(port),
+            "returned while the old port still answered"
+        );
+        assert!(
+            started.elapsed() >= Duration::from_millis(400),
+            "it did not wait"
+        );
+        assert!(
+            BackendSupervisor::lock(&s.released_port).is_none(),
+            "waited for once"
+        );
+    }
+
+    #[test]
+    fn a_port_that_never_closes_is_waited_for_only_so_long() {
+        let port = port_closing_after(Duration::from_secs(30));
+        let started = Instant::now();
+        assert!(!wait_port_closed(port, Duration::from_millis(300)));
+        assert!(started.elapsed() < Duration::from_secs(5));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_restart_and_a_reinstall_remember_the_port_they_stopped() {
+        let (s, _) = owned_sleep();
+        s.release_for_restart().unwrap();
+        assert_eq!(*BackendSupervisor::lock(&s.released_port), Some(1));
+        let (s, _) = owned_sleep();
+        s.release_for_reinstall().unwrap();
+        assert_eq!(*BackendSupervisor::lock(&s.released_port), Some(1));
+    }
+
+    #[test]
+    fn crashes_are_replaced_up_to_the_limit_and_again_once_the_window_passes() {
+        let mut budget = CrashBudget::default();
+        let start = Instant::now();
+        for i in 0..CrashBudget::LIMIT {
+            assert!(
+                budget.spend(start + Duration::from_secs(i as u64)),
+                "crash {i}"
+            );
+        }
+        assert!(
+            !budget.spend(start + Duration::from_secs(10)),
+            "one too many"
+        );
+        assert!(budget.spend(start + CrashBudget::WINDOW + Duration::from_secs(1)));
+    }
 }
+

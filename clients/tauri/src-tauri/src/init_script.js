@@ -1,8 +1,22 @@
 
+// WebView2 runs this script when the document is created, before it has
+// an <html> element; touching ``document.documentElement`` then threw and
+// stopped the whole script, so on Windows none of what follows existed:
+// no host bridges and no menu listeners (desktop proof run 44822074202).
 (function () {
-  const html = document.documentElement;
-  html.dataset.host = 'tauri';
-  html.dataset.platform = '__PLATFORM__';
+  const stamp = () => {
+    const html = document.documentElement;
+    if (!html) return false;
+    html.dataset.host = 'tauri';
+    html.dataset.platform = '__PLATFORM__';
+    return true;
+  };
+  if (!stamp()) {
+    document.addEventListener('readystatechange', function again() {
+      if (stamp()) document.removeEventListener('readystatechange', again);
+    });
+    document.addEventListener('DOMContentLoaded', stamp, { once: true });
+  }
 })();
 
 window.__IGNI_PICK_DIR__ = (start) =>
@@ -107,6 +121,35 @@ window.__IGNI_HOST__ = Object.assign(window.__IGNI_HOST__ || {}, {
   };
 })();
 
+// Windows: the webview takes keystrokes before the window's menu sees
+// them, so the menu's shortcuts (muda accelerators) never fire while the
+// page has focus; Ctrl+N did nothing (desktop proof run 44881308306). The
+// page catches the menu's own shortcuts and asks the shell to run them
+// (``igni_menu_shortcut``). macOS and Linux deliver them to the menu.
+(function () {
+  if ('__PLATFORM__' !== 'win') return;
+  document.addEventListener(
+    'keydown',
+    (e) => {
+      let id = null;
+      if (e.key === 'F11' && !e.ctrlKey && !e.altKey && !e.metaKey && !e.shiftKey) {
+        id = 'toggle_fullscreen';
+      } else if (e.ctrlKey && !e.altKey && !e.metaKey) {
+        const key = (e.key || '').toLowerCase();
+        if (key === 'n') id = e.shiftKey ? 'new_window' : 'new_chat';
+        else if (key === 'q' && !e.shiftKey) id = 'quit_app';
+      }
+      if (!id) return;
+      const invoke = window.__TAURI__ && window.__TAURI__.core && window.__TAURI__.core.invoke;
+      if (!invoke) return;
+      e.preventDefault();
+      e.stopPropagation();
+      invoke('igni_menu_shortcut', { id }).catch((err) => console.warn('[igni] shortcut failed:', err));
+    },
+    true
+  );
+})();
+
 // The shell sends menu, link and fullscreen events to one window
 // (events.rs ``ShellEvent::target``). A global ``event.listen`` hears
 // events sent to every window, so each window listens on its own.
@@ -116,7 +159,25 @@ function listenHere(name, handler) {
   return here ? here.listen(name, handler) : window.__TAURI__.event.listen(name, handler);
 }
 
-if (window.__TAURI__ && window.__TAURI__.event) {
+// Run ``cb`` once Tauri's global API is there. On Windows this script
+// can run before ``window.__TAURI__`` is set, and a check made once at
+// load then registered nothing: New Chat, Check for Updates and igni://
+// links never reached the page (desktop proof run 44810142993).
+function whenTauriEvents(cb) {
+  const ready = () => window.__TAURI__ && window.__TAURI__.event && window.__TAURI__.webviewWindow;
+  if (ready()) {
+    cb();
+    return;
+  }
+  const tries = setInterval(() => {
+    if (ready()) {
+      clearInterval(tries);
+      cb();
+    }
+  }, 20);
+}
+
+whenTauriEvents(() => {
   // The cloud switch's side and state (cloud/switchboard.rs) is the app's,
   // not one window's: it is broadcast, so it is heard globally.
   window.__TAURI__.event.listen('igni-backend-state', (e) => {
@@ -143,9 +204,9 @@ if (window.__TAURI__ && window.__TAURI__.event) {
   // OS hides our traffic-light cluster behind the slide-down panel.
   listenHere('igni-fullscreen', (e) => {
     const on = !!(e && e.payload);
-    document.documentElement.dataset.fullscreen = on ? 'true' : 'false';
+    if (document.documentElement) document.documentElement.dataset.fullscreen = on ? 'true' : 'false';
   });
-}
+});
 
 // Fullscreen-state mirror. Calls a custom Rust command that reads
 // ``NSWindow.styleMask`` — the source of truth — and stamps the
@@ -169,6 +230,7 @@ if (window.__TAURI__ && window.__TAURI__.event) {
     const sync = async () => {
       try {
         const fs = await invoke('igni_is_fullscreen');
+        if (!document.documentElement) return;
         const prev = document.documentElement.dataset.fullscreen === 'true';
         if (!!fs !== prev) {
           document.documentElement.dataset.fullscreen = fs ? 'true' : 'false';

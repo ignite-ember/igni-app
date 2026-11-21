@@ -181,6 +181,11 @@ impl BackendProcess {
         &self.version
     }
 
+    /// Whether the process has exited (and is reaped). Never blocks.
+    pub fn has_exited(&mut self) -> bool {
+        matches!(self.child.try_wait(), Ok(Some(_)))
+    }
+
     /// Stop the backend, giving it `grace` to exit cleanly.
     ///
     /// SIGTERM lets the backend drain its session pool and remove its
