@@ -388,3 +388,23 @@ async fn an_upgrade_that_closes_before_welcome_is_still_backed_off() {
     next_text(&mut ws).await;
     assert!(relay.retry_in().is_none(), "a welcome clears it");
 }
+
+#[tokio::test]
+async fn a_second_welcome_on_the_same_upstream_reaches_the_window_and_is_reported() {
+    // A node move as the gateway makes it: the cut-off answer to a call in
+    // flight, then the new igni's welcome, with no new connection.
+    let cut_off = r#"{"type":"rpc_response","id":"7","error":"igni's connection was moved; retry"}"#;
+    let gateway = FakeGateway::start(Script::Frames(vec![
+        r#"{"type":"welcome","client_id":"vm-1"}"#.into(),
+        cut_off.into(),
+        r#"{"type":"welcome","client_id":"vm-2"}"#.into(),
+    ]))
+    .await;
+    let (relay, hooks) = relay_for(&gateway, home_with("TOKEN-M")).await;
+    let mut ws = window(&relay, None, Some("relay-token")).await.unwrap();
+    assert_eq!(next_text(&mut ws).await, r#"{"type":"welcome","client_id":"vm-1"}"#);
+    assert_eq!(next_text(&mut ws).await, cut_off);
+    assert_eq!(next_text(&mut ws).await, r#"{"type":"welcome","client_id":"vm-2"}"#);
+    eventually(&hooks, |e| e.iter().filter(|ev| **ev == RelayEvent::Welcome).count() == 2).await;
+    assert_eq!(gateway.seen().len(), 1, "one upstream: the move happened behind it");
+}
