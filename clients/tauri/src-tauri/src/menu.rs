@@ -76,6 +76,15 @@ impl MenuAction {
         Self::ALL.into_iter().find(|action| action.as_id() == id)
     }
 
+    /// The action a keyboard shortcut runs, for `igni_menu_shortcut`: only
+    /// an action the menu binds to a shortcut, and never the developer
+    /// tools, which a release build does not have.
+    pub fn for_shortcut(id: &str) -> Option<Self> {
+        Self::from_id(id).filter(|action| {
+            action.accelerator().is_some() && *action != MenuAction::ToggleDevtools
+        })
+    }
+
     pub fn label(self) -> &'static str {
         match self {
             MenuAction::CheckUpdate => "Check for Updates…",
@@ -212,6 +221,18 @@ impl MenuAction {
             }
         }
     }
+}
+
+/// A menu shortcut the page caught (`init_script.js`, Windows only): the
+/// webview takes keystrokes before the window's menu sees them, so muda's
+/// accelerators never fire there and Ctrl+N did nothing (R624, desktop
+/// proof run 44881308306). Refused for anything but a shortcut's action.
+#[tauri::command]
+pub(crate) fn igni_menu_shortcut(app: AppHandle, id: String) -> Result<(), String> {
+    let action =
+        MenuAction::for_shortcut(&id).ok_or_else(|| format!("{id} is not a menu shortcut"))?;
+    action.handle(&app);
+    Ok(())
 }
 
 /// One entry of the igni menu or the View menu, before it is built.
@@ -554,6 +575,38 @@ mod tests {
             assert!(!layout
                 .window_menu()
                 .contains(&Slot::Action(MenuAction::CloseWindow)));
+        }
+    }
+
+    #[test]
+    fn a_shortcut_runs_only_what_the_menu_binds_to_a_key() {
+        for id in ["new_chat", "new_window", "quit_app", "toggle_fullscreen"] {
+            assert!(MenuAction::for_shortcut(id).is_some(), "{id}");
+        }
+        for id in [
+            "restart_backend",
+            "reinstall_backend",
+            "diagnose_backend",
+            "check_update",
+            "toggle_devtools",
+            "anything",
+        ] {
+            assert_eq!(MenuAction::for_shortcut(id), None, "{id}");
+        }
+    }
+
+    /// The keys init_script.js sends on Windows are the menu's own.
+    #[test]
+    fn the_page_s_shortcuts_are_the_menu_s_accelerators() {
+        let script = include_str!("init_script.js");
+        for (action, key) in [
+            (MenuAction::NewChat, "CmdOrCtrl+N"),
+            (MenuAction::NewWindow, "CmdOrCtrl+Shift+N"),
+            (MenuAction::Quit, "CmdOrCtrl+Q"),
+            (MenuAction::ToggleFullscreen, "F11"),
+        ] {
+            assert_eq!(action.accelerator(), Some(key));
+            assert!(script.contains(&format!("'{}'", action.as_id())), "{key}");
         }
     }
 

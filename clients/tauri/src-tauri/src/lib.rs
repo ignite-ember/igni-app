@@ -59,6 +59,7 @@ pub fn run() {
             updater::igni_check_update,
             updater::igni_install_update,
             deep_link::igni_take_open_link,
+            menu::igni_menu_shortcut,
         ])
         .setup(|app| {
             let handle = app.handle();

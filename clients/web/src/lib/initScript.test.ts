@@ -13,10 +13,11 @@ import { resolve } from "node:path";
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const SCRIPT = readFileSync(
+const TEMPLATE = readFileSync(
   resolve(__dirname, "../../../tauri/src-tauri/src/init_script.js"),
   "utf8",
-).replace("__PLATFORM__", "win");
+);
+const SCRIPT = TEMPLATE.replaceAll("__PLATFORM__", "win");
 
 type Listener = (e: { payload: unknown }) => void;
 
@@ -85,13 +86,24 @@ function runScriptIn(doc: Document) {
   new Function("document", SCRIPT)(doc);
 }
 
+// Each test runs the script afresh; what one run added to the document
+// is taken off again so the next starts clean.
+const added: Array<[string, EventListenerOrEventListenerObject, boolean | AddEventListenerOptions | undefined]> = [];
+const addToDocument = document.addEventListener.bind(document);
+
 describe("the desktop shell's init script", () => {
   beforeEach(() => {
     vi.useFakeTimers();
     delete (window as { __TAURI__?: unknown }).__TAURI__;
+    vi.spyOn(document, "addEventListener").mockImplementation((name, handler, options) => {
+      added.push([name, handler, options]);
+      addToDocument(name, handler, options);
+    });
   });
 
   afterEach(() => {
+    vi.restoreAllMocks();
+    for (const [name, handler, options] of added.splice(0)) document.removeEventListener(name, handler, options);
     vi.clearAllTimers();
     vi.useRealTimers();
     delete (window as { __TAURI__?: unknown }).__TAURI__;
@@ -128,6 +140,35 @@ describe("the desktop shell's init script", () => {
     const html = early.parse();
     expect(html.dataset.host).toBe("tauri");
     expect(html.dataset.platform).toBe("win");
+  });
+
+  it("on Windows runs the menu's shortcuts through the shell", () => {
+    const tauri = fakeTauri();
+    (window as { __TAURI__?: unknown }).__TAURI__ = tauri.api;
+    runScript();
+    const press = (init: KeyboardEventInit) => {
+      const e = new KeyboardEvent("keydown", { bubbles: true, cancelable: true, ...init });
+      document.body.dispatchEvent(e);
+      return e.defaultPrevented;
+    };
+    expect(press({ key: "n", ctrlKey: true })).toBe(true);
+    expect(press({ key: "N", ctrlKey: true, shiftKey: true })).toBe(true);
+    expect(press({ key: "q", ctrlKey: true })).toBe(true);
+    expect(press({ key: "F11" })).toBe(true);
+    expect(press({ key: "n" })).toBe(false);
+    expect(press({ key: "c", ctrlKey: true })).toBe(false);
+    const sent = tauri.api.core.invoke.mock.calls.filter((c) => c[0] === "igni_menu_shortcut").map((c) => c[1]);
+    expect(sent).toEqual([{ id: "new_chat" }, { id: "new_window" }, { id: "quit_app" }, { id: "toggle_fullscreen" }]);
+  });
+
+  it("leaves shortcuts to the menu on macOS and Linux", () => {
+    const tauri = fakeTauri();
+    (window as { __TAURI__?: unknown }).__TAURI__ = tauri.api;
+    new Function(TEMPLATE.replaceAll("__PLATFORM__", "linux"))();
+    const e = new KeyboardEvent("keydown", { key: "n", ctrlKey: true, bubbles: true, cancelable: true });
+    document.body.dispatchEvent(e);
+    expect(e.defaultPrevented).toBe(false);
+    expect(tauri.api.core.invoke.mock.calls.some((c) => c[0] === "igni_menu_shortcut")).toBe(false);
   });
 
   it("registers at once when the API is already there", () => {
