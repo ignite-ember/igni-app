@@ -13,6 +13,9 @@ import { useTranscriptScroll } from "./chat/useTranscriptScroll";
 import { useVisiblePages } from "./chat/windowNavigator";
 import { useWindowPlace } from "./chat/useWindowPlace";
 import { useWindowServices } from "./chat/windowServices";
+import { BackendStateContext } from "./cloud/backendContext";
+import { useBackendState } from "./cloud/useBackendState";
+import { useLocalActivity } from "./cloud/useLocalActivity";
 import { ExtensionNamesContext } from "./extensions/extensionNames";
 import { useDocumentTheme } from "./extensions/useDocumentTheme";
 import { useExtensions } from "./extensions/useExtensions";
@@ -27,12 +30,14 @@ import { AppHeader } from "./components/AppHeader";
 import { AppOverlays } from "./components/AppOverlays";
 import { AppPages } from "./components/AppPages";
 import { AppSidebar } from "./components/AppSidebar";
+import { BackendBanner } from "./components/BackendBanner";
 import { ChatSearchBar } from "./components/ChatSearchBar";
 import { ConversationFrame } from "./components/ConversationFrame";
 import { FPSCounterOverlay } from "./components/FPSCounter";
 import { ScrollIndicator } from "./components/ScrollIndicator";
 import { SignedOutApp } from "./components/SignedOutApp";
 import { StatusLine } from "./components/StatusLine";
+import { WakingOverlay } from "./components/WakingOverlay";
 
 /**
  * The window: it builds the collaborators that live as long as it does,
@@ -85,7 +90,11 @@ export default function App() {
     onBound: startup.run,
   });
   const connected = conn === "connected";
-  const composerReady = connected && sessionBound;
+  // The desktop's cloud switch (null elsewhere). A cloud igni that needs
+  // its person to sign in again takes no message until they have.
+  const backend = useBackendState();
+  const composerReady = connected && sessionBound && backend?.state !== "cloud_needs_sign_in";
+  useLocalActivity(sessionId, run.processing, hitl.pending?.length ?? 0);
 
   const { groupName, groupMark } = useGroupBranding(status?.theme);
 
@@ -144,6 +153,7 @@ export default function App() {
 
   return (
     <ExtensionNamesContext.Provider value={extensionNames}>
+    <BackendStateContext.Provider value={backend}>
     <div className="shell" style={SidebarLayout.styleFor(sidebar)}>
       {/* Live FPS overlay, hidden by default: Ctrl/Cmd+Alt+Shift+F. */}
       <FPSCounterOverlay />
@@ -179,6 +189,7 @@ export default function App() {
           client={client}
           onLogIn={actions.openLogin}
           onLogOut={actions.logOut}
+          backend={backend}
         />
 
         {/* The scroll indicator stands in for the hidden native
@@ -226,6 +237,10 @@ export default function App() {
           />
         )}
 
+        {/* Waking the VM dims the chat but keeps the composer: the
+            gateway buffers what is typed meanwhile. */}
+        <WakingOverlay backend={backend} />
+        <BackendBanner backend={backend} />
         <AppComposer
           composerRef={composerRef}
           client={client}
@@ -250,6 +265,7 @@ export default function App() {
           pendingUpdate={updateCheck.pendingUpdate}
           onShowUpdate={updateCheck.showUpdate}
           onOpen={navigator.openPage}
+          backend={backend}
         />
       </main>
 
@@ -267,6 +283,7 @@ export default function App() {
         onLoginFailed={actions.loginFailed}
       />
     </div>
+    </BackendStateContext.Provider>
     </ExtensionNamesContext.Provider>
   );
 }

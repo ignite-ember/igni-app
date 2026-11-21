@@ -69,6 +69,16 @@ mod tests {
     }
 
     #[test]
+    fn the_backend_state_is_heard_globally_and_handed_to_the_web_ui() {
+        // The switch's side is the app's: every window hears the one
+        // broadcast, as an `igni-host` event the web UI listens for.
+        let script = script_text();
+        assert!(script.contains("event.listen('igni-backend-state'"));
+        assert!(!script.contains("listenHere('igni-backend-state'"));
+        assert!(script.contains("type: 'igni:backend-state', payload: e && e.payload"));
+    }
+
+    #[test]
     fn init_script_invokes_opener_open_url_command() {
         // The capability is useless if the JS calls another command name.
         assert!(script_text().contains("plugin:opener|open_url"));

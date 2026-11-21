@@ -22,6 +22,25 @@ import { RPC_TIMEOUT_MS, type RpcCaller } from "./rpcCaller";
 import { TypingThrottle } from "./typingThrottle";
 import { resolveWsToken, resolveWsUrl, wsProtocols } from "./wsEndpoint";
 
+/**
+ * An RPC the cloud gateway answered while it moved this window's session
+ * to another node ("igni's connection was moved…"). Nothing failed: the
+ * gateway reconnected behind the socket and the call can be made again
+ * (design §4.3).
+ */
+export class ConnectionMovedError extends Error {
+  readonly retryable = true;
+  constructor(readonly detail: string) {
+    super("igni's connection moved while this was in flight. Try again.");
+    this.name = "ConnectionMovedError";
+  }
+
+  /** Whether an RPC error is the gateway's "moved" answer. */
+  static matches(error: string): boolean {
+    return /connection was moved/i.test(error);
+  }
+}
+
 export type ConnectionState =
   | "connecting"
   | "connected"
@@ -58,6 +77,14 @@ export class IgniClient implements RpcCaller {
   /** Bound session: stamped on outgoing messages, filters incoming events. Empty = BE default. */
   sessionId = "";
 
+  /** How many times this client has become `connected`, counting each
+   *  resync on the same socket (a second `welcome`). A frame keyed by it
+   *  remounts after a node move, as after a reconnect. */
+  generation = 0;
+
+  /** Whether the current socket has had its `welcome`. */
+  private welcomed = false;
+
   constructor(
     private readonly url: string = resolveWsUrl(),
     private readonly token: string = resolveWsToken(),
@@ -87,6 +114,7 @@ export class IgniClient implements RpcCaller {
     ws.onopen = () => {
       if (this.ws !== ws) return;
       this.reconnectDelay = 500;
+      this.welcomed = false;
       this.emitState("connected");
     };
     ws.onmessage = (ev) => {
@@ -211,7 +239,10 @@ export class IgniClient implements RpcCaller {
       `RPC ${method} timed out`,
     );
     if (reply.type !== "rpc_response") return reply as T;
-    if (reply.error) throw new Error(reply.error);
+    if (reply.error) {
+      if (ConnectionMovedError.matches(reply.error)) throw new ConnectionMovedError(reply.error);
+      throw new Error(reply.error);
+    }
     return reply.result as T;
   }
 
@@ -261,6 +292,12 @@ export class IgniClient implements RpcCaller {
   private dispatch(msg: ServerMessage): void {
     if (msg.type === "welcome") {
       this.clientId = msg.client_id;
+      // A second welcome on the same socket is a resync: the cloud
+      // gateway moved the session to another node and reconnected behind
+      // this socket, and igni greeted it with a new client id. The window
+      // re-binds and hydrates exactly as on a new connection (§4.3).
+      if (this.welcomed) this.emitState("connected");
+      this.welcomed = true;
     }
 
     // Replies to our requests win over the session filter.
@@ -282,6 +319,7 @@ export class IgniClient implements RpcCaller {
   }
 
   private emitState(s: ConnectionState): void {
+    if (s === "connected") this.generation += 1;
     for (const fn of this.stateListeners) fn(s);
   }
 }

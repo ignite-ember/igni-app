@@ -10,6 +10,11 @@ use super::lenient;
 pub(crate) struct GroupPolicy {
     #[serde(default, deserialize_with = "lenient::list")]
     pub entries: Vec<PolicyEntry>,
+    /// Where igni runs for the group (`org_groups.mode`), the top-level
+    /// field igni server appends after `theme`. Absent from an older
+    /// server's pack; read by `cloud::mode::GroupMode::from_pack`.
+    #[serde(default, deserialize_with = "lenient::field")]
+    pub mode: Option<String>,
 }
 
 /// One entry of a pack. Every field is read leniently: a field of the wrong
@@ -89,6 +94,7 @@ mod tests {
                 entry("not json", None),
                 PolicyEntry { kind: Some("prompt".into()), ..entry("{\"b\": 8}", None) },
             ],
+            mode: None,
         };
         let merged: Value = serde_json::from_str(&policy.settings_json()).unwrap();
         assert_eq!(merged, serde_json::json!({"a": {"x": 1, "y": 2}, "b": 1}));
@@ -107,5 +113,13 @@ mod tests {
         assert_eq!(merged, serde_json::json!({"air_gapped": true}));
         let odd: GroupPolicy = serde_json::from_value(serde_json::json!({"entries": {"x": 1}})).expect("parses");
         assert!(odd.entries.is_empty(), "entries that are not an array are none");
+    }
+
+    #[test]
+    fn the_mode_is_read_leniently() {
+        let read = |v: serde_json::Value| serde_json::from_value::<GroupPolicy>(v).expect("parses").mode;
+        assert_eq!(read(serde_json::json!({"entries": [], "theme": null, "mode": "cloud"})).as_deref(), Some("cloud"));
+        assert_eq!(read(serde_json::json!({"entries": []})), None, "an older server's pack");
+        assert_eq!(read(serde_json::json!({"entries": [], "mode": 3})), None, "the wrong type is absent");
     }
 }

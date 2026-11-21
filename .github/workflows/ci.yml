@@ -360,3 +360,13 @@ jobs:
           cd igni-app/clients/tauri/src-tauri
           dbus-run-session -- xvfb-run -a \
             cargo test --no-default-features --test spawn_smoke -- --ignored --nocapture
+
+      # The Local / Cloud switch's desktop step (igni-core's
+      # docs/design/local-cloud-switch.md §12.1): two real backends from
+      # the venv above, one behind a stand-in gateway, the switch made as
+      # `switch_backend` makes it, and igni's welcome and an RPC answer
+      # through the shell's relay while the local backend keeps running.
+      - name: The cloud relay against a real igni
+        run: |
+          cd igni-app/clients/tauri/src-tauri
+          cargo test --no-default-features --lib cloud::controller::tests::live -- --ignored --nocapture

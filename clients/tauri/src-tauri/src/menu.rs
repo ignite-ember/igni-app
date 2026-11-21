@@ -97,6 +97,27 @@ impl MenuAction {
         }
     }
 
+    /// The label on the cloud side: the backend items act on this
+    /// computer's backend, which keeps running (§5).
+    pub fn label_on_side(self, cloud: bool) -> String {
+        match self {
+            MenuAction::RestartBackend | MenuAction::ReinstallBackend if cloud => {
+                format!("{} (this computer)", self.label())
+            }
+            _ => self.label().to_string(),
+        }
+    }
+
+    /// Relabel the backend items for the side the app is on.
+    pub fn relabel_for_side(app: &AppHandle, cloud: bool) {
+        let Some(menu) = app.menu() else { return };
+        for action in [MenuAction::RestartBackend, MenuAction::ReinstallBackend] {
+            if let Some(item) = menu.get(action.as_id()).and_then(|kind| kind.as_menuitem().cloned()) {
+                item.set_text(action.label_on_side(cloud)).log_on_error("relabelling the backend menu");
+            }
+        }
+    }
+
     fn item(self, app: &AppHandle) -> tauri::Result<MenuItem<Wry>> {
         MenuItem::with_id(app, self.as_id(), self.label(), true, self.accelerator())
     }
@@ -347,6 +368,14 @@ mod tests {
         for action in MenuAction::ALL {
             assert_eq!(MenuAction::from_id(action.as_id()), Some(action));
         }
+    }
+
+    #[test]
+    fn the_backend_items_say_this_computer_on_the_cloud_side() {
+        assert_eq!(MenuAction::RestartBackend.label_on_side(true), "Restart Backend (this computer)");
+        assert_eq!(MenuAction::ReinstallBackend.label_on_side(true), "Reinstall Backend (Clean) (this computer)");
+        assert_eq!(MenuAction::RestartBackend.label_on_side(false), "Restart Backend");
+        assert_eq!(MenuAction::NewChat.label_on_side(true), MenuAction::NewChat.label());
     }
 
     #[test]

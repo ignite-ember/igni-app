@@ -72,11 +72,12 @@ export function FilePill({ path }: { path: string }) {
             onClick={() => {
               setMenuOpen(false);
               // Route through the host bridge — Tauri opens it via
-              // the OS shell, a browser tab in the preview.
+              // the OS shell, a browser tab (or a window on the cloud,
+              // whose paths are the VM's) in the preview.
               void host.openFile(path);
             }}
           >
-            {host.kind === "web" ? "Preview" : "Open"}
+            {host.canOpenNatively ? "Open" : "Preview"}
           </button>
         </span>
       )}

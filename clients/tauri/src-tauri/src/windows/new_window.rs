@@ -1,9 +1,13 @@
-//! File › New Window: pick a folder, then open a window bound to it.
+//! File › New Window: pick a folder, then open a window bound to it. On
+//! the cloud side there is no folder to pick: the window opens on the VM's
+//! workspace.
 
 use tauri::{AppHandle, Manager};
 use tauri_plugin_dialog::DialogExt;
 
 use crate::backend::BackendSupervisor;
+use crate::cloud::controller::CloudController;
+use crate::cloud::switchboard::WindowTarget;
 use crate::error::LogOnError;
 use crate::windows::{WindowLabel, WindowManager, WindowSpec, WindowTitle};
 
@@ -35,14 +39,24 @@ impl WindowManager {
                     .blocking_show();
                 return;
             };
-            let Some(folder) = app.dialog().file().blocking_pick_folder() else {
-                return;
+            // On the cloud there is no folder to pick: the window opens on
+            // the VM's workspace (§5).
+            let cloud = app
+                .try_state::<CloudController>()
+                .filter(|c| c.target() == WindowTarget::Relay)
+                .and_then(|c| c.window_url(None));
+            let (route, title) = match cloud {
+                Some(url) => (url, WindowTitle::FALLBACK.to_string()),
+                None => {
+                    let Some(folder) = app.dialog().file().blocking_pick_folder() else {
+                        return;
+                    };
+                    let Ok(path) = folder.into_path() else {
+                        return;
+                    };
+                    (conn.app_url(Some(&path.to_string_lossy())), WindowTitle::of_path(&path))
+                }
             };
-            let Ok(path) = folder.into_path() else {
-                return;
-            };
-            let route = conn.app_url(Some(&path.to_string_lossy()));
-            let title = WindowTitle::of_path(&path);
             let builder_app = app.clone();
             app.run_on_main_thread(move || {
                 let existing: Vec<String> = builder_app.webview_windows().into_keys().collect();
