@@ -511,6 +511,80 @@ describe("WindowModel — the session and its draft", () => {
   });
 });
 
+describe("WindowModel — two tabs of one window (F5, CHAT-027)", () => {
+  // Every tab of one browser profile keeps the same id in localStorage,
+  // so two tabs are two views of one window model, each writing to it.
+  // The owner's word: both follow the same session and both work.
+
+  /** Two tabs on one backend: each push reaches both, as the backend
+   *  broadcasts `window_model_changed` to every connection. */
+  async function twoTabs() {
+    const backend = new FakeBackend();
+    const a = new WindowModel(backend.client(), "w-1");
+    const b = new WindowModel(backend.client(), "w-1");
+    await a.hydrate();
+    await b.hydrate();
+    const deliver = () => {
+      for (const change of backend.pushes.splice(0)) {
+        a.applyPush(change);
+        b.applyPush(change);
+      }
+    };
+    return { backend, a, b, deliver };
+  }
+
+  it("the other tab's move to a new chat is news to this one, said to come from a sibling", async () => {
+    const { a, b, deliver } = await twoTabs();
+    const heardA: Array<[string, unknown, string]> = [];
+    const heardB: string[] = [];
+    a.onRemote((c, origin) => heardA.push([c.field, c.value, origin]));
+    b.onRemote((c) => heardB.push(c.field));
+
+    b.write("session", "s-new");
+    deliver();
+
+    // Tab A follows: it is told, so its view picks the session up.
+    expect(heardA).toEqual([["session", "s-new", "sibling"]]);
+    expect(a.get("session")).toBe("s-new");
+    // Tab B wrote it: its own echo is not news.
+    expect(heardB).toEqual([]);
+    expect(b.get("session")).toBe("s-new");
+  });
+
+  it("two tabs' write tokens are never alike, though each counts from 1", async () => {
+    const { backend, a, b } = await twoTabs();
+    a.write("panel", { kind: "search" });
+    b.write("panel", { kind: "notifications" });
+    const [ta, tb] = backend.writes().map((w) => String(w.args.token));
+    expect(ta).toMatch(/^w-1#/);
+    expect(tb).toMatch(/^w-1#/);
+    expect(ta).not.toBe(tb);
+  });
+
+  it("the other tab's write does not settle this tab's write still on its way", async () => {
+    const { backend, a, b } = await twoTabs();
+    a.write("panel", { kind: "search" });
+    b.write("panel", { kind: "notifications" });
+    const [ours, theirs] = backend.pushes.splice(0);
+    // The backend applied A's first, B's after; B's push reaches A
+    // before A's own echo does. Staged the other way round: B's arrives
+    // first at A — A's write was sent, so it stays on screen until its
+    // echo, which the backend necessarily ordered after.
+    a.applyPush({ ...theirs, rev: 1 });
+    expect(a.get("panel")).toEqual({ kind: "search" });
+    a.applyPush({ ...ours, rev: 2 });
+    expect(a.get("panel")).toEqual({ kind: "search" });
+  });
+
+  it("an extension's change is still from elsewhere", async () => {
+    const { backend, a } = await twoTabs();
+    const origins: string[] = [];
+    a.onRemote((_c, origin) => origins.push(origin));
+    a.applyPush(backend.extensionWrites("route", [{ kind: "mcp", label: "MCP" }]));
+    expect(origins).toEqual(["elsewhere"]);
+  });
+});
+
 describe("WindowModel — toasts and dialogs", () => {
   it("a toast goes to the model, and arrives in the list by its push", async () => {
     const backend = new FakeBackend();
