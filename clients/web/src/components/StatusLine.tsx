@@ -19,7 +19,8 @@ function contextPercent(status: StatusUpdate): number {
 /**
  * The footer under the composer: this session and its footprint, the
  * watcher and group chips, the side igni runs on (desktop), each
- * installed extension's own chips, and the update waiting.
+ * installed extension's own chips, and the update waiting. The side is
+ * drawn with or without a status: the shell knows it, not the backend.
  */
 export function StatusLine({
   status,
@@ -73,6 +74,10 @@ export function StatusLine({
           )}
         </>
       )}
+      {/* With no status there is no session to show, but the side still
+          is: a cloud window whose cloud cannot be reached has no status
+          at all, and that is when "Cloud · offline" matters most. */}
+      {!status && <BackendChip backend={backend} />}
       {pendingUpdate && (
         <button
           type="button"

@@ -1,11 +1,14 @@
 // @vitest-environment jsdom
 /**
- * The header's account chip in the whole window on the desktop's cloud
- * side (R691, G).
+ * The header's account chip and the footer's backend chip in the whole
+ * window on the desktop's cloud side (R691, G and H1).
  *
  * G: right after a switch to cloud mode, the VM's igni names nobody and
  * this computer's account-only backend has not answered yet; the header
- * said "Log in" for those seconds.
+ * said "Log in" for those seconds. H1: a cloud-mode app started while
+ * its cloud cannot be reached has no status from the window's socket,
+ * and the footer drew no "Cloud · offline" chip for as long as that
+ * lasted.
  *
  * Its own file because it installs `window.__TAURI__`, and `host` keeps
  * a Tauri kind once it has seen one.
@@ -129,6 +132,29 @@ describe("the desktop's cloud side, in the whole window", () => {
 
     await act(async () => answer({ cloud_email: "ada@acme.example", cloud_connected: true }));
     await waitFor(() => expect(screen.getByRole("button", { name: /ada@acme\.example/ })).toBeTruthy());
+    expect(screen.queryByText("Log in")).toBeNull();
+  });
+
+  it("shows Cloud · offline while the cloud window has no connection", async () => {
+    // Nothing listens: the gateway is unreachable, the window never connects.
+    const nobody = await startFixtureBackend({ clientId: "gone" });
+    const deadUrl = nobody.url;
+    await nobody.close();
+    desktop(
+      shellSnapshot({
+        side: "cloud",
+        state: "cloud_unreachable",
+        reason: "network",
+        mode: "cloud",
+        switch_visible: false,
+        can_use_local: false,
+        backend_key: "cloud-0123456789ab",
+      }),
+      () => new Promise(() => {}),
+    );
+    openWindow(deadUrl);
+
+    await waitFor(() => expect(document.querySelector(".backend-chip")?.textContent).toBe("Cloud · offline"));
     expect(screen.queryByText("Log in")).toBeNull();
   });
 });
