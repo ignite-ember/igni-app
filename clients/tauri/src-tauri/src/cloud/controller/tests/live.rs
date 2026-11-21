@@ -7,7 +7,11 @@
 //! node) sits in front of the second. The controller switches to the
 //! cloud as `switch_backend` does, a window connects through the relay
 //! with the URL the shell gives it, igni's own `welcome` and an RPC
-//! answer come back through it, the local backend's process is still
+//! answer come back through it, and then one whole chat turn: the
+//! message goes through the relay, the VM's igni asks a scripted model
+//! (a deterministic OpenAI-compatible server in the test, see
+//! [`ScriptedModel`]), its reply streams back as `content_delta`s and the
+//! run ends with `run_completed`. The local backend's process is still
 //! alive, and the switch back closes the cloud window.
 //!
 //! Ignored by default: it needs igni-core's venv (`IGNI_CORE_DIR`, or
@@ -55,6 +59,125 @@ fn venv_python() -> PathBuf {
     let python = igni_core().join(".venv/bin/python");
     assert!(python.is_file(), "expected igni-core's venv at {} (IGNI_CORE_DIR)", python.display());
     python
+}
+
+/// A deterministic, OpenAI-compatible model for the VM's igni: igni-core's
+/// `openai_like` provider posts `/v1/chat/completions` here, and every
+/// answer is [`ScriptedModel::REPLY`]. A streamed request gets it in
+/// [`ScriptedModel::PIECES`], one server-sent event each and a pause
+/// between them, so the reply really streams; any other request gets it
+/// whole (igni names the session with one). Every request body is kept,
+/// so the test can say what igni asked.
+struct ScriptedModel {
+    url: String,
+    requests: Arc<std::sync::Mutex<Vec<serde_json::Value>>>,
+}
+
+impl ScriptedModel {
+    const PIECES: [&'static str; 3] = ["The relay ", "carried this ", "turn."];
+    const REPLY: &'static str = "The relay carried this turn.";
+    const MODEL: &'static str = "scripted";
+
+    async fn start() -> Self {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let url = format!("http://127.0.0.1:{}/v1", listener.local_addr().unwrap().port());
+        let requests = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let kept = requests.clone();
+        tokio::spawn(async move {
+            while let Ok((mut stream, _)) = listener.accept().await {
+                let kept = kept.clone();
+                tokio::spawn(async move {
+                    let mut head = Vec::new();
+                    let mut byte = [0u8; 1];
+                    while !head.ends_with(b"\r\n\r\n") {
+                        if stream.read(&mut byte).await.unwrap_or(0) == 0 {
+                            return;
+                        }
+                        head.push(byte[0]);
+                    }
+                    let head = String::from_utf8_lossy(&head).into_owned();
+                    let length = head
+                        .lines()
+                        .find_map(|l| l.to_ascii_lowercase().strip_prefix("content-length:").map(|v| v.trim().parse::<usize>().unwrap_or(0)))
+                        .unwrap_or(0);
+                    let mut body = vec![0u8; length];
+                    if stream.read_exact(&mut body).await.is_err() {
+                        return;
+                    }
+                    if !head.starts_with("POST ") || !head.split(' ').nth(1).unwrap_or("").ends_with("/chat/completions") {
+                        let _ = stream.write_all(b"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n").await;
+                        return;
+                    }
+                    let request: serde_json::Value = serde_json::from_slice(&body).unwrap_or_default();
+                    let streamed = request["stream"] == true;
+                    kept.lock().unwrap().push(request);
+                    let usage = serde_json::json!({"prompt_tokens": 1, "completion_tokens": 3, "total_tokens": 4});
+                    if !streamed {
+                        let answer = serde_json::json!({
+                            "id": "chatcmpl-scripted", "object": "chat.completion", "created": 1, "model": Self::MODEL,
+                            "choices": [{"index": 0, "finish_reason": "stop", "message": {"role": "assistant", "content": Self::REPLY}}],
+                            "usage": usage,
+                        })
+                        .to_string();
+                        let _ = stream
+                            .write_all(format!("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{answer}", answer.len()).as_bytes())
+                            .await;
+                        return;
+                    }
+                    let chunk = |delta: serde_json::Value, finish: serde_json::Value| {
+                        let mut chunk = serde_json::json!({
+                            "id": "chatcmpl-scripted", "object": "chat.completion.chunk", "created": 1, "model": Self::MODEL,
+                            "choices": [{"index": 0, "delta": delta, "finish_reason": finish}],
+                        });
+                        if !finish.is_null() {
+                            chunk["usage"] = usage.clone();
+                        }
+                        format!("data: {chunk}\n\n")
+                    };
+                    if stream.write_all(b"HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nCache-Control: no-cache\r\nConnection: close\r\n\r\n").await.is_err() {
+                        return;
+                    }
+                    for piece in Self::PIECES {
+                        let event = chunk(serde_json::json!({"role": "assistant", "content": piece}), serde_json::Value::Null);
+                        if stream.write_all(event.as_bytes()).await.is_err() {
+                            return;
+                        }
+                        let _ = stream.flush().await;
+                        tokio::time::sleep(Duration::from_millis(40)).await;
+                    }
+                    let end = chunk(serde_json::json!({}), serde_json::Value::from("stop"));
+                    let _ = stream.write_all(format!("{end}data: [DONE]\n\n").as_bytes()).await;
+                    let _ = stream.shutdown().await;
+                });
+            }
+        });
+        Self { url, requests }
+    }
+
+    /// The VM's igni configuration: this model is its only one.
+    fn config(&self) -> String {
+        format!(
+            "update_check_ttl: 0\nplugins:\n  default_marketplace: false\nmodels:\n  default: {m}\n  registry:\n    {m}:\n      provider: openai_like\n      model_id: {m}\n      url: {url}\n      api_key: scripted-key\n      context_window: 8192\n      vision: false\n",
+            m = Self::MODEL,
+            url = self.url
+        )
+    }
+
+    fn requests(&self) -> Vec<serde_json::Value> {
+        self.requests.lock().unwrap().clone()
+    }
+}
+
+/// The text of the last `user` message in a chat-completions request.
+fn last_user_text(request: &serde_json::Value) -> String {
+    let Some(messages) = request["messages"].as_array() else { return String::new() };
+    let Some(user) = messages.iter().rev().find(|m| m["role"] == "user") else { return String::new() };
+    match &user["content"] {
+        serde_json::Value::String(text) => text.clone(),
+        serde_json::Value::Array(parts) => parts.iter().filter_map(|p| p["text"].as_str()).collect::<Vec<_>>().join("\n"),
+        _ => String::new(),
+    }
 }
 
 fn start_backend(name: &str, home: &std::path::Path) -> Backend {
@@ -161,11 +284,18 @@ async fn next_frame(window: &mut tokio_tungstenite::WebSocketStream<tokio::net::
 
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "needs igni-core's venv (IGNI_CORE_DIR); run with `cargo test -- --ignored` (CI: tauri-smoke)"]
-async fn a_real_igni_answers_through_the_relay_and_the_local_backend_keeps_running() {
+async fn a_real_igni_runs_a_chat_turn_through_the_relay_and_the_local_backend_keeps_running() {
     let home = std::env::temp_dir().join(format!("igni-live-home-{}", std::process::id()));
-    std::fs::create_dir_all(home.join(".igni")).unwrap();
+    let vm_home = std::env::temp_dir().join(format!("igni-live-vm-home-{}", std::process::id()));
+    for dir in [&home, &vm_home] {
+        let _ = std::fs::remove_dir_all(dir);
+        std::fs::create_dir_all(dir.join(".igni")).unwrap();
+    }
+    // The VM's igni has a home of its own, whose only model is scripted.
+    let model = ScriptedModel::start().await;
+    std::fs::write(vm_home.join(".igni/config.yaml"), model.config()).unwrap();
     let local = start_backend("local", &home);
-    let vm = start_backend("vm", &home);
+    let vm = start_backend("vm", &vm_home);
     let gateway = stand_in_gateway((vm.port, vm.token.clone()), "LIVE-SESSION").await;
 
     std::fs::write(home.join(".igni/credentials.json"), credentials("https://igni.example", "o1", "p1", "LIVE-SESSION")).unwrap();
@@ -195,6 +325,49 @@ async fn a_real_igni_answers_through_the_relay_and_the_local_backend_keeps_runni
     assert!(reply["error"].is_null(), "{reply}");
     until("cloud_ready", || controller.snapshot().state == "cloud_ready").await;
 
+    // One chat turn, through the relay: the message out, the reply
+    // streamed back in pieces, the run's end.
+    let asked = "Say something through the relay.";
+    window
+        .send(Message::text(serde_json::json!({"type": "user_message", "id": "turn-1", "text": asked}).to_string()))
+        .await
+        .unwrap();
+    let mut deltas = Vec::new();
+    let mut seen = Vec::new();
+    let completed = loop {
+        let message = tokio::time::timeout(Duration::from_secs(60), window.next()).await.expect("the turn's frames in time");
+        let Some(Ok(Message::Text(text))) = message else { continue };
+        let frame: serde_json::Value = serde_json::from_str(text.as_str()).unwrap();
+        let kind = frame["type"].as_str().unwrap_or("").to_string();
+        assert!(kind != "error" && kind != "run_error", "the turn failed: {frame}");
+        if frame["id"] == "turn-1" {
+            seen.push(kind.clone());
+        }
+        match kind.as_str() {
+            "content_delta" if frame["id"] == "turn-1" && frame["is_thinking"] != true => {
+                deltas.push(frame["text"].as_str().unwrap_or("").to_string());
+            }
+            "run_completed" if frame["id"] == "turn-1" => break frame,
+            _ => {}
+        }
+    };
+    assert_eq!(deltas.concat(), ScriptedModel::REPLY, "the reply, as the model said it: {seen:?}");
+    assert!(deltas.len() >= ScriptedModel::PIECES.len(), "the reply streamed, piece by piece: {deltas:?}");
+    let started = seen.iter().position(|k| k == "run_started").expect("run_started came through the relay");
+    let first_delta = seen.iter().position(|k| k == "content_delta").unwrap();
+    assert!(started < first_delta, "the run started before its reply: {seen:?}");
+    assert!(!completed["run_id"].as_str().unwrap_or("").is_empty(), "{completed}");
+    assert_eq!(completed["output_tokens"], 3, "the model's own count: {completed}");
+    let end = next_frame(&mut window, "stream_end").await;
+    assert_eq!(end["id"], "turn-1");
+    // It was the VM's igni that asked the model, with the person's words.
+    let requests = model.requests();
+    let turn = requests.iter().find(|r| r["stream"] == true).expect("a streamed request reached the model");
+    // igni puts its own context (the date) before the person's words.
+    let said = last_user_text(turn);
+    assert!(said.ends_with(asked), "the model was asked: {said:?}");
+    assert_eq!(turn["model"], ScriptedModel::MODEL);
+
     // The local backend was never touched.
     #[cfg(unix)]
     assert!(crate::discovery::pid_alive(local.child.id() as i32), "the local backend keeps running");
@@ -204,7 +377,9 @@ async fn a_real_igni_answers_through_the_relay_and_the_local_backend_keeps_runni
     until("the windows went back", || shell.pointed.lock().unwrap().last().map(|(t, _)| *t) == Some(WindowTarget::Local)).await;
     #[cfg(unix)]
     assert!(crate::discovery::pid_alive(local.child.id() as i32));
+    drop(vm);
     let _ = std::fs::remove_dir_all(&home);
+    let _ = std::fs::remove_dir_all(&vm_home);
 }
 
 

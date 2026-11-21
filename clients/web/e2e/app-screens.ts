@@ -55,7 +55,58 @@ export type AppScreen = {
    * there is. Waiting for the thing itself removes the class.
    */
   ready?: { selector: string; count?: number }
+  /**
+   * The desktop shell to stand in for, on a screen drawn as a desktop
+   * window sees it: `invoke("backend_state")` answers `snapshot` (the
+   * shell's wire names), and an extension page asked of the shell
+   * (`cloud_page_origin`) is served at `pages.origin` with `pages.html`.
+   */
+  desktop?: {
+    snapshot: Record<string, unknown>
+    pages?: { origin: string; html: string; ready: string }
+  }
+  /**
+   * Checked by axe in the light theme too, not only the dark (the
+   * accessibility spec's default). The Local / Cloud switch's screens
+   * are: §12.1 asks for both.
+   */
+  axeBothThemes?: boolean
 }
+
+/** A snapshot as the desktop shell pushes it (`cloud/switchboard.rs`). */
+function shellSnapshot(overrides: Record<string, unknown>): Record<string, unknown> {
+  return {
+    side: 'local',
+    state: 'local',
+    reason: null,
+    detail: null,
+    credential_warning: false,
+    mode: 'local_and_cloud',
+    cloud: 'available',
+    cloud_reason: null,
+    switch_visible: true,
+    chip_visible: true,
+    can_use_local: true,
+    can_use_cloud: true,
+    backend_key: 'local',
+    local_activity: { runs: 0, approvals: 0 },
+    notice: null,
+    vm: null,
+    group_name: 'Engineering',
+    retry_in_ms: null,
+    ...overrides,
+  }
+}
+
+/** The extension's own page, as the shell's origin for it serves it. */
+const CLOUD_EXTENSION_PAGE = [
+  '<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Reviews</title>',
+  '<style>body{margin:0;font:14px/1.5 system-ui,sans-serif;background:#ffffff;color:#1f1f1f}',
+  'main{padding:16px}h1{font-size:18px;margin:0 0 8px}</style></head>',
+  // Named, so its landmark is told apart from the window's own <main>.
+  '<body><main aria-label="Reviews"><h1 id="from-the-cloud">Reviews from the cloud</h1>',
+  '<p>Three changes are waiting for a review.</p></main></body></html>',
+].join('')
 
 export const APP_SCREENS: readonly AppScreen[] = [
   // The chat surface, in the states that exercise its renderers.
@@ -136,5 +187,53 @@ export const APP_SCREENS: readonly AppScreen[] = [
     name: '18-cloud-switch',
     demo: 'cloud',
     ready: { selector: '.backend-banner', count: 9 },
+  },
+  // And each piece alone (design §12.1, §15.7), in both themes for axe.
+  {
+    name: '19-cloud-switch-in-account-menu',
+    demo: 'cloud&part=switch',
+    click: /maya@acme\.example/,
+    ready: { selector: '.account-menu .backend-switch-badge' },
+    axeBothThemes: true,
+  },
+  {
+    name: '20-cloud-chip-states',
+    demo: 'cloud&part=chips',
+    ready: { selector: '.backend-chip', count: 4 },
+    axeBothThemes: true,
+  },
+  {
+    name: '21-cloud-banner-needs-sign-in',
+    demo: 'cloud&part=banner-sign-in',
+    ready: { selector: '.backend-banner' },
+    axeBothThemes: true,
+  },
+  {
+    name: '22-cloud-banner-unreachable',
+    demo: 'cloud&part=banner-unreachable',
+    ready: { selector: '.backend-banner' },
+    axeBothThemes: true,
+  },
+  {
+    name: '23-cloud-banner-refused',
+    demo: 'cloud&part=banner-refused',
+    ready: { selector: '.backend-banner' },
+    axeBothThemes: true,
+  },
+  {
+    name: '24-cloud-banner-mode-change',
+    demo: 'cloud&part=banner-mode-change',
+    ready: { selector: '.backend-banner', count: 3 },
+    axeBothThemes: true,
+  },
+  {
+    name: '25-cloud-extension-page',
+    demo: 'cloud&part=extension&side=cloud&backend=cloud-0123456789ab',
+    desktop: {
+      snapshot: shellSnapshot({ side: 'cloud', state: 'cloud_ready', backend_key: 'cloud-0123456789ab' }),
+      pages: { origin: 'http://127.0.0.1:59111', html: CLOUD_EXTENSION_PAGE, ready: '#from-the-cloud' },
+    },
+    ready: { selector: '[data-testid="cloud-extension"] iframe' },
+    axeBothThemes: true,
   },
 ]

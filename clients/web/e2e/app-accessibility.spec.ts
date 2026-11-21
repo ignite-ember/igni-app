@@ -10,7 +10,8 @@
  * Dark theme, because that is where the app's own palette lives and
  * where the failures were. The light theme's `--fg-faint` was worse
  * (2.57:1 against 3.08), and the token fix covers both — a per-theme
- * sweep is `IGNI_E2E_A11Y_BOTH=1`.
+ * sweep is `IGNI_E2E_A11Y_BOTH=1`. A screen with `axeBothThemes` is
+ * checked in the light theme on every run.
  *
  * These are the `?demo=` sandboxes, which mount pieces of the chat
  * without the window around them. The window itself — the shell, the
@@ -26,15 +27,16 @@ import { openScreen } from './fixtures/screens'
 /** WCAG 2.0/2.1 A and AA, plus axe's best-practice set. */
 const TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'best-practice']
 
-const THEMES = process.env.IGNI_E2E_A11Y_BOTH === '1'
-  ? (['dark', 'light'] as const)
-  : (['dark'] as const)
+const BOTH = process.env.IGNI_E2E_A11Y_BOTH === '1'
 
-for (const theme of THEMES) {
+for (const theme of ['dark', 'light'] as const) {
+  // The light theme: every screen when asked, and always the ones that
+  // say so (`axeBothThemes`).
+  const screens = APP_SCREENS.filter((s) => theme === 'dark' || BOTH || s.axeBothThemes)
   test.describe(`accessibility — ${theme}`, () => {
     test.use({ viewport: { width: 1440, height: 900 } })
 
-    for (const screen of APP_SCREENS) {
+    for (const screen of screens) {
       test(`${screen.name} has no axe violations`, async ({ page }) => {
         const trouble = await openScreen(page, screen, theme)
         expect(trouble, trouble ?? '').toBeNull()

@@ -13,14 +13,20 @@
  * from a stand-in backend that reports a VM-internal origin, so the
  * suite can see the page framed from the shell's origin instead
  * (``cloud_page_origin``) and the extension's indicator drawn (§15).
+ *
+ * ``&part=`` draws one piece alone, on a page of its own, for a visual
+ * baseline each (design §12.1, §15.7): the switch in the account menu,
+ * the chip's cloud states, each banner, and an extension page framed on
+ * the cloud side. See ``PARTS``.
  */
 
-import { useMemo } from "react";
+import { useMemo, type ReactNode } from "react";
 
 import { BackendStateContext } from "../cloud/backendContext";
 import { BackendSnapshot } from "../cloud/backendState";
 import { shellSnapshot } from "../cloud/testing";
 import { useBackendState } from "../cloud/useBackendState";
+import { AccountMenu } from "../components/AccountMenu";
 import { BackendBanner, type BackendActions } from "../components/BackendBanner";
 import { BackendChip } from "../components/BackendChip";
 import { BackendSwitch } from "../components/BackendSwitch";
@@ -104,7 +110,139 @@ const BANNERS: Array<[string, BackendSnapshot]> = [
   ["Moved to this computer", snap({ notice: { kind: "moved_to_local" } })],
 ];
 
+/** Who the account menu says is signed in. The address's monogram hue
+ *  (218) keeps white initials above 4.5:1: igni-sdk's `Monogram` draws
+ *  `hsl(hue 42% 42%)`, and about half the hues fall below it in the light
+ *  theme (an igni-sdk finding, not this sandbox's). */
+const SIGNED_IN = { cloud_email: "maya@acme.example", cloud_connected: true, cloud_org: "Acme" };
+/** The menu asks for the person's name as it opens; offline here, so it
+ *  keeps the address, the same on every run. */
+const NO_SERVER = { rpc: () => Promise.reject(new Error("offline")) };
+
+/**
+ * The account menu as the header draws it, on the cloud side with a run
+ * still going on this computer: both choices, Cloud chosen, and the badge
+ * that switches back. Opened by its chip (the screen clicks it).
+ */
+function SwitchInMenu() {
+  const backend = snap({ side: "cloud", state: "cloud_ready", local_activity: { runs: 1, approvals: 1 } });
+  return (
+    <div className="statusline" style={{ position: "relative", justifyContent: "flex-end", minHeight: 320 }}>
+      <AccountMenu status={SIGNED_IN as never} client={NO_SERVER as never} backend={backend} onLogIn={() => undefined} onLogOut={() => undefined} />
+    </div>
+  );
+}
+
+/** The chip in each of the cloud side's states. */
+const CHIP_STATES: Array<[string, string, BackendSnapshot]> = [
+  ["Cloud", "Connected to your cloud igni.", snap({ side: "cloud", state: "cloud_ready" })],
+  ["Waking", "Your cloud igni is starting.", snap({ side: "cloud", state: "waking" })],
+  ["Sign in", "Your cloud igni needs you to sign in again.", snap({ side: "cloud", state: "cloud_needs_sign_in" })],
+  ["Offline", "Your cloud igni cannot be reached.", snap({ side: "cloud", state: "cloud_unreachable", reason: "network" })],
+];
+
+function Chips() {
+  return (
+    <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: 16 }}>
+      {CHIP_STATES.map(([label, meaning, s]) => (
+        <li key={label} style={{ display: "grid", gridTemplateColumns: "96px 200px 1fr", alignItems: "center" }}>
+          <span>{label}</span>
+          <span>
+            <BackendChip backend={s} />
+          </span>
+          <span style={{ color: "var(--fg-muted)" }}>{meaning}</span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/** One banner, where the chat shows it: above the composer. */
+function OneBanner({ snapshots }: { snapshots: BackendSnapshot[] }) {
+  return (
+    <div style={{ display: "grid", gap: 4, maxWidth: 760 }}>
+      {snapshots.map((s, i) => (
+        <BackendBanner key={i} backend={s} actions={INERT} />
+      ))}
+    </div>
+  );
+}
+
+/** The extension's page on the cloud side, with the chip saying where. */
+function CloudExtension() {
+  const backend = useBackendState();
+  return (
+    <section aria-label="Extension" data-testid="cloud-extension" style={{ display: "grid", gap: 8 }}>
+      <BackendChip backend={backend} />
+      <ExtensionPanel />
+    </section>
+  );
+}
+
+/** Each piece alone: its heading, a line saying what it shows, the piece. */
+const PARTS: Record<string, { title: string; caption: string; body: () => ReactNode }> = {
+  switch: {
+    title: "The switch in the account menu",
+    caption: "Cloud is chosen, and a run and an approval are still going on this computer.",
+    body: () => <SwitchInMenu />,
+  },
+  chips: {
+    title: "The backend chip",
+    caption: "The chip in the status line, in each state of the cloud side.",
+    body: () => <Chips />,
+  },
+  "banner-sign-in": {
+    title: "Banner: needs sign-in",
+    caption: "The cloud igni's session ended, and the person signs in again.",
+    body: () => <OneBanner snapshots={[snap({ side: "cloud", state: "cloud_needs_sign_in" })]} />,
+  },
+  "banner-unreachable": {
+    title: "Banner: unreachable",
+    caption: "The cloud igni cannot be reached; the shell retries, or the person uses this computer.",
+    body: () => <OneBanner snapshots={[snap({ side: "cloud", state: "cloud_unreachable", reason: "network", retry_in_ms: 4000 })]} />,
+  },
+  "banner-refused": {
+    title: "Banner: refused",
+    caption: "The gateway refused the person, and the windows went back to this computer.",
+    body: () => <OneBanner snapshots={[snap({ side: "local", state: "refused", reason: "inactive" })]} />,
+  },
+  "banner-mode-change": {
+    title: "Banner: the organisation changed the mode",
+    caption: "The notices the shell shows when an administrator moves the group between sides.",
+    body: () => (
+      <OneBanner
+        snapshots={[
+          snap({ notice: { kind: "moving_to_cloud", approvals: 1 } }),
+          snap({ side: "cloud", state: "cloud_ready", notice: { kind: "moved_to_cloud" } }),
+          snap({ notice: { kind: "moved_to_local" } }),
+        ]}
+      />
+    ),
+  },
+  extension: {
+    title: "An extension page in the cloud",
+    caption: "Framed from the shell's own origin for the extension, never the address inside the VM.",
+    body: () => <CloudExtension />,
+  },
+};
+
+function Part({ name }: { name: string }) {
+  const part = PARTS[name];
+  return (
+    <main className="cloud-demo" style={{ padding: 24, display: "grid", gap: 16, maxWidth: 900 }}>
+      <h1 style={{ margin: 0, fontSize: "var(--text-xl)" }}>{part ? part.title : `No part called "${name}"`}</h1>
+      {part && <p style={{ margin: 0, color: "var(--fg-muted)" }}>{part.caption}</p>}
+      {part && <div data-testid="cloud-part">{part.body()}</div>}
+    </main>
+  );
+}
+
 export function CloudSwitchDemo() {
+  const part = new URLSearchParams(window.location.search).get("part");
+  return part === null ? <Gallery /> : <Part name={part} />;
+}
+
+function Gallery() {
   const live = useBackendState();
   return (
     // A page of its own, like every other sandbox: one <main> and one

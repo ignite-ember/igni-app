@@ -383,8 +383,10 @@ jobs:
       # The Local / Cloud switch's desktop step (igni-core's
       # docs/design/local-cloud-switch.md §12.1): two real backends from
       # the venv above, one behind a stand-in gateway, the switch made as
-      # `switch_backend` makes it, and igni's welcome and an RPC answer
-      # through the shell's relay while the local backend keeps running.
+      # `switch_backend` makes it, and igni's welcome, an RPC answer and
+      # one whole chat turn (the message out, the reply streamed back from
+      # a scripted model, `run_completed`) through the shell's relay while
+      # the local backend keeps running.
       - name: The cloud relay against a real igni
         run: |
           cd igni-app/clients/tauri/src-tauri
