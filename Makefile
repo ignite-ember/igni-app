@@ -1,4 +1,4 @@
-.PHONY: help install check typecheck test e2e tauri-test dmg-script-test version
+.PHONY: help install check typecheck test e2e tauri-test dmg-script-test release-scripts-test version
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | \
@@ -14,7 +14,7 @@ TAURI := clients/tauri/src-tauri
 install: ## Install the web client's dependencies
 	cd $(WEB) && npm ci
 
-check: typecheck test tauri-test ## Everything CI runs, but the browser suite
+check: typecheck test tauri-test release-scripts-test ## Everything CI runs, but the browser suite
 
 typecheck: ## Type-check the web client
 	cd $(WEB) && npx tsc -b --noEmit
@@ -27,6 +27,9 @@ e2e: ## The browser suite (spawns igni-core's backend when its venv exists)
 
 tauri-test: ## The desktop shell's Rust tests
 	cd $(TAURI) && cargo test --no-default-features
+
+release-scripts-test: ## The release's latest.json assembly and signature stash
+	node --test scripts/latest-json.test.mjs
 
 dmg-script-test: ## The release's .dmg finishing script (macOS only)
 	clients/tauri/scripts/strip-dmg-volume-icon.test.sh

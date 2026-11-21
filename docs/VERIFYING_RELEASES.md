@@ -14,10 +14,11 @@ general version, with the air-gapped procedure and the signing details, is
 
 | File | What it is |
 |---|---|
-| the installers | `.dmg` (macOS), `.msi` (Windows), `.AppImage` (Linux) |
+| the installers | `.dmg` (macOS), `.msi` and `-setup.exe` (Windows), `.AppImage` (Linux) |
 | `igni_aarch64.app.tar.gz` | the macOS updater payload — the signed, notarized `.app`, as the installed app downloads it |
 | `igni_aarch64.app.tar.gz.sig` | the minisign signature over that payload |
-| `latest.json` | what the updater reads: the payload's URL, its signature and the version |
+| `*.AppImage.sig`, `*.msi.sig`, `*-setup.exe.sig` | the minisign signatures over the Linux and Windows installers, which are their own updater payloads |
+| `latest.json` | what the updater reads: for each installer kind (macOS app, AppImage, .msi, NSIS setup), the payload's URL and its signature, and the version |
 | `SHA256SUMS` | the SHA-256 of every other file on the release, SBOMs included |
 | `SHA256SUMS.sig` | a cosign signature over `SHA256SUMS`. **Absent until the key ceremony has happened** |
 | `igni-1.0.5.provenance.sigstore.json` | the build-provenance attestation for every file in `SHA256SUMS`, as a Sigstore bundle, for offline verification |
@@ -138,8 +139,11 @@ These are separate from the evidence above and predate it:
 
 * **macOS** — the `.app` is signed with Ignite Ember's Apple Developer ID and
   notarised, and the ticket is stapled, so Gatekeeper checks it offline.
-* **The macOS updater** — `latest.json` points at `igni_aarch64.app.tar.gz`
-  with a minisign signature the installed app checks against the public key it
-  ships with.
+* **The updater** — `latest.json` points the macOS app at
+  `igni_aarch64.app.tar.gz`, an AppImage at the new `.AppImage`, and a Windows
+  install at the new `.msi` or NSIS setup, whichever it was installed from,
+  each with a minisign signature the installed app checks against the public
+  key it ships with. A `.deb` or `.rpm` install is not offered an update; it is
+  updated by installing the new package.
 * **Windows and Linux installers** carry no platform code signature;
   provenance and, later, the cosign signature are what vouch for them.

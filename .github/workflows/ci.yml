@@ -42,6 +42,25 @@ jobs:
       - name: cargo audit (desktop shell)
         run: uv run --no-project --with 'cvss>=3,<4' python scripts/dependency_audit.py cargo clients/tauri/src-tauri
 
+  # The release's own scripts, which only ever run on a tag: the
+  # latest.json every installed app polls for updates, and the stash of
+  # each build leg's updater signature it is assembled from. A mistake
+  # there ships an update channel that strands a platform, and nothing
+  # else would see it before a release.
+  release-scripts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24"
+
+      - name: latest.json and the updater signature stash
+        run: node --test scripts/latest-json.test.mjs
+
   web:
     runs-on: ${{ matrix.os }}
     strategy:
