@@ -81,8 +81,7 @@ export function useExtensions(
     if (!connected) return;
     let alive = true;
     const owners: string[] = [];
-    void client
-      .rpc<unknown>("list_extensions")
+    void listExtensions(client, () => alive)
       .then((raw) => {
         if (!alive) return;
         const listed = ListExtensionsResult.parse(raw).extensions;
@@ -114,6 +113,29 @@ export function useExtensions(
   }, [client, connected, windowModel, contributions, setExtensions]);
 
   return { contributions, extensions, setExtensions, extensionNames };
+}
+
+/** How often, and how far apart, a list the cloud's gateway cut off by a
+ *  node move is asked for again. */
+export const LIST_RETRIES = 5;
+export const LIST_RETRY_MS = 500;
+
+/** ``list_extensions``, asked again while the answer is a retryable
+ *  error: on the desktop's cloud side a node move answers the call in
+ *  flight with "igni's connection was moved" (``ConnectionMovedError``),
+ *  and the connection is good again a moment later. Taken as "none
+ *  installed", it emptied the nav and closed the open extension page
+ *  until the next reconnect. */
+async function listExtensions(client: Pick<IgniClient, "rpc">, alive: () => boolean): Promise<unknown> {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await client.rpc<unknown>("list_extensions");
+    } catch (error) {
+      const retryable = (error as { retryable?: unknown } | null)?.retryable === true;
+      if (!retryable || attempt >= LIST_RETRIES || !alive()) throw error;
+      await new Promise((resolve) => setTimeout(resolve, LIST_RETRY_MS));
+    }
+  }
 }
 
 /** A page a link opened before its extension was listed carries its
