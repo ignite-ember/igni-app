@@ -33,6 +33,11 @@ serde = { version = "1", features = ["derive"] }
 # already in the build through rustls/ureq, so neither adds a crate.
 ring = "0.17"
 base64 = "0.23"
+# The updater's TLS errors are read as rustls's (``src/error.rs``,
+# ``UpdaterFailure``). main takes rustls directly for the cloud relay;
+# this branch predates that, so it names the same crate the updater
+# already builds, with main's features.
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
 
 # ── Bootstrap runtime (see ``src/runtime.rs``) ─────────────────────
 # Sync HTTP client — ``ureq`` pulls in a fraction of what ``reqwest``
