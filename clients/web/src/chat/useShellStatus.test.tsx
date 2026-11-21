@@ -17,9 +17,9 @@ function client(answers: Record<string, unknown>) {
   };
 }
 
-function mount(answers: Record<string, unknown>) {
+function mount(answers: Record<string, unknown>, account?: () => Promise<unknown> | null) {
   const windowModel = { write: vi.fn() };
-  const source = new StatusSource(client(answers) as never);
+  const source = new StatusSource(client(answers) as never, account);
   const hook = renderHook(() => useShellStatus(source, windowModel as never));
   return { hook, windowModel };
 }
@@ -58,6 +58,61 @@ describe("useShellStatus", () => {
     hook.rerender();
     expect(hook.result.current.refreshStatus).toBe(first.refreshStatus);
     expect(hook.result.current.refreshSessions).toBe(first.refreshSessions);
+  });
+});
+
+describe("useShellStatus on the desktop's cloud side", () => {
+  // The VM's igni runs on its own credential and names nobody: its
+  // status has an empty cloud_email. Who is signed in is this computer's.
+  const vm = { cloud_email: "", cloud_org: "", cloud_connected: false, model: "gemini" };
+  const mine = { cloud_email: "rita@acme.test", cloud_name: "Rita", cloud_org: "Acme", cloud_connected: true, model: "local" };
+
+  it("lays this computer's account over the VM's status, so the wall stays down", async () => {
+    const { hook } = mount({ get_status: vm, get_project_dir: "/workspace" }, async () => mine);
+    expect(hook.result.current.auth).toBe("unknown");
+    await act(() => hook.result.current.refreshStatus());
+    expect(hook.result.current.auth).toBe("signed-in");
+    expect(hook.result.current.status).toEqual({
+      cloud_email: "rita@acme.test",
+      cloud_name: "Rita",
+      cloud_org: "Acme",
+      cloud_connected: true,
+      model: "gemini",
+    });
+  });
+
+  it("keeps this computer's account over a status the VM pushes later", async () => {
+    const { hook } = mount({ get_status: vm, get_project_dir: "/workspace" }, async () => mine);
+    await act(() => hook.result.current.refreshStatus());
+    act(() => hook.result.current.setStatus({ ...vm, model: "pushed" } as never));
+    expect(hook.result.current.auth).toBe("signed-in");
+    expect(hook.result.current.status?.cloud_email).toBe("rita@acme.test");
+    expect(hook.result.current.status?.model).toBe("pushed");
+  });
+
+  it("shows the wall when this computer is signed out, whatever the VM says", async () => {
+    const { hook } = mount({ get_status: { ...vm, cloud_email: "vm@x" } }, async () => ({ cloud_email: "" }));
+    await act(() => hook.result.current.refreshStatus());
+    expect(hook.result.current.auth).toBe("signed-out");
+  });
+
+  it("is not signed out while this computer has not answered", async () => {
+    const { hook } = mount({ get_status: vm }, async () => {
+      throw new Error("not reachable");
+    });
+    await act(() => hook.result.current.refreshStatus());
+    expect(hook.result.current.status?.cloud_email).toBe("");
+    expect(hook.result.current.auth).toBe("unknown");
+  });
+
+  it("reads only the account's fields from this computer", async () => {
+    const source = new StatusSource(client({}) as never, async () => mine);
+    expect(await source.account()).toEqual({
+      ok: true,
+      account: { cloud_email: "rita@acme.test", cloud_name: "Rita", cloud_org: "Acme", cloud_connected: true },
+    });
+    expect(await new StatusSource(client({}) as never).account()).toBeNull();
+    expect(await new StatusSource(client({}) as never, () => null).account()).toBeNull();
   });
 });
 

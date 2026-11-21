@@ -30,7 +30,7 @@ import { WorkflowLauncher } from "./workflowLauncher";
 
 /** What a window is opened into. */
 export interface WindowEnvironment {
-  host: Pick<Host, "viewKey" | "kind" | "notify">;
+  host: Pick<Host, "viewKey" | "kind" | "notify" | "onCloud" | "accountRpc">;
   /** The query string the window was opened with. */
   search: string;
   innerWidth: number;
@@ -98,7 +98,8 @@ export class WindowServices {
         opening: WindowServices.openingFrom(env.search),
       },
       {
-        statusSource: new StatusSource(client),
+        // On the cloud side the account is this computer's (design §6.4).
+        statusSource: new StatusSource(client, env.host.onCloud ? () => env.host.accountRpc("get_status") : undefined),
         navigator: new WindowNavigator(windowModel),
         layout: new SidebarLayout(windowModel),
         composerRef,

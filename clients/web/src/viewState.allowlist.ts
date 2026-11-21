@@ -97,7 +97,7 @@ export const VIEW_STATE: Record<string, Partial<Record<Category, string[]>>> = {
     menu: ["modelMenuSignal"],
   },
   "chat/useShellStatus.ts": {
-    data: ["status", "sessions"],
+    data: ["backendStatus", "account", "sessions"],
   },
   "chat/useHitl.ts": {
     data: ["pending"],
