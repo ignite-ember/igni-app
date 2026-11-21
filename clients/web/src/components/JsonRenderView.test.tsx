@@ -492,6 +492,75 @@ describe("JsonRenderView", () => {
       expect(result.issues).toEqual(["its root is not an element key"]);
     });
 
+    // R666, live on Gemini: the model wrote a "ColumnGraph", the card
+    // drew "Unknown component ColumnGraph", and the agent was told
+    // "The card drew all 2 elements." A type the catalog does not know
+    // is drawn as a placeholder rather than thrown, so the boundary
+    // never saw it; the placeholder now says it itself.
+    it("names an element whose type the catalog does not know", () => {
+      const say = vi.fn();
+      const spec: Spec = {
+        root: "root",
+        elements: {
+          root: { type: "Card", props: { title: "2025 Quarterly Revenue" }, children: ["chart"] },
+          chart: { type: "ColumnGraph", props: { data: [{ x: "Q1", y: 100 }] }, children: [] },
+        },
+      } as unknown as Spec;
+
+      render(<JsonRenderView spec={spec} onDrawResult={say} />);
+
+      const result = last(say);
+      expect(result.total).toBe(2);
+      expect(result.failed).toEqual([
+        { type: "ColumnGraph", message: "it is not a type the catalog knows" },
+      ]);
+    });
+
+    // R666: a redraw whose failing element is unchanged keeps the
+    // element's "Could not draw" on the card — the renderer does not
+    // draw an unchanged element again, so nothing threw — and the
+    // redraw was reported as having drawn everything. The card and
+    // what it said it drew diverged.
+    it("says again what it still could not draw when the card is drawn again", () => {
+      quiet();
+      const say = vi.fn();
+      const broken = (): Spec =>
+        ({
+          root: "root",
+          elements: {
+            root: { type: "Card", props: { title: "Monthly Sales 2026" }, children: ["bar"] },
+            bar: { type: "BarGraph", props: { data: 42 }, children: [] },
+          },
+        }) as unknown as Spec;
+
+      const { container, rerender } = render(<JsonRenderView spec={broken()} onDrawResult={say} />);
+      rerender(<JsonRenderView spec={broken()} onDrawResult={say} />);
+
+      expect(container.querySelector(".jr-element-error")).not.toBeNull();
+      expect(last(say).failed).toEqual([
+        { type: "BarGraph", message: "its data is not a list" },
+      ]);
+    });
+
+    it("an unknown element is named again when the card is drawn again", () => {
+      const say = vi.fn();
+      const spec = (): Spec =>
+        ({
+          root: "root",
+          elements: {
+            root: { type: "Card", props: { title: "Revenue" }, children: ["chart"] },
+            chart: { type: "ColumnGraph", props: {}, children: [] },
+          },
+        }) as unknown as Spec;
+
+      const { rerender } = render(<JsonRenderView spec={spec()} onDrawResult={say} />);
+      rerender(<JsonRenderView spec={spec()} onDrawResult={say} />);
+
+      expect(last(say).failed).toEqual([
+        { type: "ColumnGraph", message: "it is not a type the catalog knows" },
+      ]);
+    });
+
     it("says nothing when nobody is listening", () => {
       quiet();
       const spec: Spec = {
