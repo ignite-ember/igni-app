@@ -45,6 +45,35 @@ describe("useHitl", () => {
     expect(hook.result.current.pending).toBeNull();
   });
 
+  it("Stop does what Escape does while approvals wait: one batch of rejections, then cancel", () => {
+    const { hook, client, run } = mount("awaiting_approval");
+    act(() => hook.result.current.requests.show(REQUESTS));
+    act(() => hook.result.current.stop());
+    expect(client.resolveHitlBatch).toHaveBeenCalledTimes(1);
+    expect((client.resolveHitlBatch.mock.calls[0] as unknown[])[0]).toEqual([
+      { requirement_id: "q1", action: "reject", choice: "" },
+      { requirement_id: "q2", action: "reject", choice: "" },
+    ]);
+    expect(run.cancel).toHaveBeenCalledTimes(1);
+    expect(hook.result.current.pending).toBeNull();
+  });
+
+  it("Stop with nothing waiting only cancels", () => {
+    const { hook, client, run } = mount("streaming");
+    act(() => hook.result.current.stop());
+    expect(run.cancel).toHaveBeenCalledTimes(1);
+    expect(client.resolveHitlBatch).not.toHaveBeenCalled();
+  });
+
+  it("Escape answers a paused run's approvals even though nothing is streaming", () => {
+    const { hook, client, run } = mount("awaiting_approval");
+    act(() => hook.result.current.requests.show(REQUESTS));
+    const e = pressEscape();
+    expect(e.defaultPrevented).toBe(true);
+    expect(client.resolveHitlBatch).toHaveBeenCalledTimes(1);
+    expect(run.cancel).toHaveBeenCalledTimes(1);
+  });
+
   it("cancels a run on Escape when nothing is waiting for approval", () => {
     const { client, run } = mount("streaming");
     pressEscape();

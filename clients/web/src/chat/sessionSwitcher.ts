@@ -18,6 +18,7 @@ import { planSessionBinding, type SessionBindingPlan } from "./sessionBinding";
 import { SidebarLayout } from "./sidebarLayout";
 import type { ShellPort } from "./shellPort";
 import type { TranscriptView } from "./transcriptView";
+import type { RunControls } from "./useRunPhase";
 
 export interface SessionSwitcherDeps {
   client: Pick<IgniClient, "rpc" | "sessionId">;
@@ -28,6 +29,9 @@ export interface SessionSwitcherDeps {
   /** The open approvals, so a switch can drop the ones asked in the
    *  session this window is leaving. */
   hitl: Pick<HitlRequests, "clear">;
+  /** The run phase, so a run left waiting on an approval in that
+   *  session stops reading as this window's. */
+  run: Pick<RunControls, "runPhaseRef" | "setRunPhase">;
 }
 
 /** Where a window is opened from: its ``?dir=`` and a link's page. */
@@ -71,7 +75,7 @@ export class SessionSwitcher {
       // leaving; answering it here would answer it in the wrong
       // session. The one asked in the session picked comes back with
       // the attach below.
-      if (leaving && leaving !== id) this.deps.hitl.clear();
+      if (leaving && leaving !== id) this.leavePause();
       await this.attachTo(id);
       view.showHistory(await historyLoader.load(id), [view.chatItems.info(`Resumed session ${short}.`)]);
       void shell.refreshStatus();
@@ -180,6 +184,15 @@ export class SessionSwitcher {
     } catch {
       // The history is worth showing even when the attach is refused.
     }
+  }
+
+  /** The approval on screen, and the paused run it belongs to, stay
+   *  with the session being left: here the window goes idle, until the
+   *  attach brings back a pause of the session picked. */
+  private leavePause(): void {
+    const { hitl, run } = this.deps;
+    hitl.clear();
+    if (run.runPhaseRef.current === "awaiting_approval") run.setRunPhase("idle");
   }
 
   /** The backend's default session, attached rather than only named:

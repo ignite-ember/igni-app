@@ -1,7 +1,7 @@
 /**
  * Run lifecycle — single source of truth for what phase the current
  * assistant turn is in. Every UI derivation (spinner visible,
- * composer enabled, "Finalizing…" label) reads from `RunPhase` via
+ * composer enabled, "Finalizing…" / "Waiting for your approval" label) reads from `RunPhase` via
  * the derived getters here.
  *
  * Why this exists: before this file, `App.tsx` had TWO independent
@@ -27,6 +27,7 @@ export type RunPhase =
   | "starting"    // user just submitted; awaiting first run_started event
   | "streaming"   // model is producing content; deltas flowing
   | "finalizing"  // streaming_done fired; BE tail draining (memory / stats)
+  | "awaiting_approval" // run_paused fired; the run waits on the person's answer
   | "cancelled"   // user hit STOP; local terminal state, don't wait for BE
   | "errored"     // run_error fired; local terminal state
   | "done";       // run_completed fired for a top-level run
@@ -42,6 +43,7 @@ export const ACTIVE_PHASES: ReadonlySet<RunPhase> = new Set<RunPhase>([
   "starting",
   "streaming",
   "finalizing",
+  "awaiting_approval",
 ]);
 
 /**
@@ -76,6 +78,26 @@ export function isFinalizing(phase: RunPhase): boolean {
 }
 
 /**
+ * True while the run stands paused on an approval. The backend's stream
+ * of the run has ended (``streaming_done`` comes before ``run_paused``),
+ * so this is not "processing": a message typed now goes out as a new run
+ * — which drops the waiting approvals — rather than queueing behind one
+ * that will never end by itself.
+ */
+export function isAwaitingApproval(phase: RunPhase): boolean {
+  return phase === "awaiting_approval";
+}
+
+/**
+ * True while the person can stop the run: the model is replying, or the
+ * run waits on an approval (Stop there rejects it and cancels, as Escape
+ * does). Not while finalizing: the reply is complete by then.
+ */
+export function canStop(phase: RunPhase): boolean {
+  return isProcessing(phase) || isAwaitingApproval(phase);
+}
+
+/**
  * True while the spinner should be visible for any reason —
  * processing OR finalizing. Cheaper than computing both.
  */
@@ -93,6 +115,8 @@ export function phaseLabel(phase: RunPhase): string {
       return "igni is replying…";
     case "finalizing":
       return "Finalizing…";
+    case "awaiting_approval":
+      return "Waiting for your approval";
     default:
       return "";
   }
@@ -134,6 +158,10 @@ export function phaseToProcFinalizing(phase: RunPhase): ProcFinalizing {
  *   distinguishes "starting" from "streaming"; safe default).
  * - Both false when we were already terminal → stay in the current
  *   terminal phase (don't downgrade "cancelled"/"errored" to "done").
+ * - Both false while awaiting an approval → stay: the flag shape has no
+ *   word for a paused run, and the ``stream_end`` that closes a paused
+ *   stream must not read as the run being over. The next ``run_started``
+ *   (``proc=true``) still moves on.
  */
 export function phaseFromProcFinalizing(
   next: ProcFinalizing,
@@ -142,6 +170,6 @@ export function phaseFromProcFinalizing(
   if (next.finalizing) return "finalizing";
   if (next.proc) return "streaming";
   // Both false. Preserve terminal phases; otherwise resolve to done.
-  if (TERMINAL_PHASES.has(currentPhase)) return currentPhase;
+  if (TERMINAL_PHASES.has(currentPhase) || isAwaitingApproval(currentPhase)) return currentPhase;
   return "done";
 }

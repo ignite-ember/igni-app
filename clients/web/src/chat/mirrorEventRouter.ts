@@ -12,7 +12,14 @@
  */
 
 import type { IgniClient } from "../protocol/client";
-import type { PushNotification, ServerMessage, UserMessageReceived } from "../protocol/messages";
+import type {
+  PushNotification,
+  RequirementResolved,
+  RunPaused,
+  RunStarted,
+  ServerMessage,
+  UserMessageReceived,
+} from "../protocol/messages";
 import { parsePushChannel } from "../protocol/pushChannels";
 import { nextObserverBusyState } from "./observerBusy";
 import type { HitlRequests } from "./hitlRequests";
@@ -44,9 +51,10 @@ export class MirrorEventRouter {
     // No remote-typing indicator.
     typing: () => {},
     user_message_received: (m) => this.onUserMessage(m),
-    requirement_resolved: (m) => this.deps.hitl.resolved(m.requirement_id),
+    requirement_resolved: (m) => this.onResolved(m),
     requirement_details: (m) => this.deps.hitl.addDetails(m),
-    run_paused: (m) => this.deps.hitl.show(m.requirements),
+    run_paused: (m) => this.onPaused(m),
+    run_started: (m) => this.onRunStarted(m),
     status_update: (m) => this.deps.shell.setStatus(m),
     push_notification: (m) => this.onPush(m),
   };
@@ -74,6 +82,29 @@ export class MirrorEventRouter {
       view.update((t) => t.settleQueued());
       view.append(view.chatItems.user(m.text, ext));
     }
+  }
+
+  /** A run of this session paused on an approval — this view's after a
+   *  reload (the attach re-sends the pause), or another view's. */
+  private onPaused(m: RunPaused): void {
+    this.deps.hitl.show(m.requirements);
+    this.deps.run.setRunPhase("awaiting_approval");
+  }
+
+  /** Another view answered: once nothing is left to answer, the run
+   *  resumes on that answer and this view follows it as busy. */
+  private onResolved(m: RequirementResolved): void {
+    const { hitl, run } = this.deps;
+    hitl.resolved(m.requirement_id);
+    if (!hitl.open && run.runPhaseRef.current === "awaiting_approval") run.setRunPhase("streaming");
+  }
+
+  /** A top-level run starting drops every approval left waiting (a new
+   *  message closes the paused run first), so a dialog still open here
+   *  is stale: its answers would fail with "Unknown requirement". */
+  private onRunStarted(m: RunStarted): void {
+    if (!m.parent_run_id) this.deps.hitl.clear();
+    this.observe(m);
   }
 
   private onPush(m: PushNotification): void {
