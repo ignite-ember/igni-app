@@ -18,6 +18,8 @@ mod launch_args;
 mod macos;
 mod menu;
 mod runtime;
+#[cfg(test)]
+mod tls_testing;
 mod update_policy;
 mod updater;
 mod windows;

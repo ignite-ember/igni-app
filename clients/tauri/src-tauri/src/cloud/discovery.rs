@@ -12,6 +12,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use super::gateway::GatewayUrl;
+use crate::error::CauseChain;
 use super::mode::{CloudAvailability, GroupMode};
 use super::net;
 use super::session::Session;
@@ -172,7 +173,16 @@ fn from_ureq(error: ureq::Error) -> DiscoveryError {
                 other => DiscoveryError::Status(other),
             }
         }
-        ureq::Error::Transport(t) => DiscoveryError::Network(t.kind().to_string()),
+        ureq::Error::Transport(t) => {
+            // A refused certificate must not read like a server that is
+            // down: say it, and what to do when it is a company CA's.
+            let chain = CauseChain::new(&t, CauseChain::IGNI_SERVER);
+            if chain.tls_error().is_some() {
+                DiscoveryError::Network(chain.to_string())
+            } else {
+                DiscoveryError::Network(t.kind().to_string())
+            }
+        }
     }
 }
 
@@ -188,17 +198,23 @@ impl DiscoveryClient {
         }
     }
 
-    fn agent_for(url: &str) -> ureq::Agent {
+    fn agent_for(url: &str) -> Result<ureq::Agent, DiscoveryError> {
         let parsed = tauri::Url::parse(url).ok();
         let host = parsed.as_ref().and_then(|u| u.host_str()).unwrap_or("").to_string();
         let tls = parsed.as_ref().map(|u| u.scheme() == "https").unwrap_or(true);
-        net::http_agent(&host, tls)
+        Self::agent(&host, tls)
+    }
+
+    /// The platform-TLS agent, or why there is none.
+    fn agent(host: &str, tls: bool) -> Result<ureq::Agent, DiscoveryError> {
+        net::http_agent(host, tls)
+            .map_err(|e| DiscoveryError::Network(format!("the system's certificate roots are unavailable: {e}")))
     }
 
     /// `GET /v1/me/cloud`.
     pub fn cloud(&self, session: &Session) -> Result<CloudDiscovery, DiscoveryError> {
         let url = format!("{}/v1/me/cloud", self.api_url);
-        let response = Self::agent_for(&url)
+        let response = Self::agent_for(&url)?
             .get(&url)
             .set("Authorization", &session.token.bearer())
             .set("Accept", "application/json")
@@ -210,7 +226,7 @@ impl DiscoveryClient {
     /// `PUT /v1/me/cloud/events-owner {owner}`; answers like `GET`.
     pub fn set_events_owner(&self, session: &Session, owner: EventsOwner) -> Result<CloudDiscovery, DiscoveryError> {
         let url = format!("{}/v1/me/cloud/events-owner", self.api_url);
-        let response = Self::agent_for(&url)
+        let response = Self::agent_for(&url)?
             .put(&url)
             .set("Authorization", &session.token.bearer())
             .set("Content-Type", "application/json")
@@ -222,7 +238,7 @@ impl DiscoveryClient {
     /// The gateway's `GET /v1/me`. Never wakes the VM.
     pub fn vm_status(gateway: &GatewayUrl, session: &Session) -> Result<VmStatus, DiscoveryError> {
         let url = gateway.http("/v1/me");
-        let response = net::http_agent(gateway.host(), gateway.tls())
+        let response = Self::agent(gateway.host(), gateway.tls())?
             .get(&url)
             .set("Authorization", &session.token.bearer())
             .call()
@@ -234,7 +250,7 @@ impl DiscoveryClient {
     /// session to exchange for its credential again.
     pub fn vm_sign_in(gateway: &GatewayUrl, session: &Session) -> Result<(), DiscoveryError> {
         let url = gateway.http("/v1/sign-in");
-        net::http_agent(gateway.host(), gateway.tls())
+        Self::agent(gateway.host(), gateway.tls())?
             .post(&url)
             .set("Authorization", &session.token.bearer())
             .call()
@@ -248,6 +264,26 @@ mod tests {
     use super::super::session::tests::credentials;
     use super::super::testing::FakeHttp;
     use super::*;
+
+    #[test]
+    fn a_refused_certificate_reads_as_one_not_as_a_server_that_is_down() {
+        let mirror = crate::tls_testing::TestMirror::start("{}");
+        let url = mirror.url("/v1/me/cloud");
+        let err = from_ureq(DiscoveryClient::agent("127.0.0.1", true).unwrap().get(&url).call().unwrap_err());
+        let text = err.to_string();
+        assert!(text.starts_with("Can't reach igni server ("), "{text}");
+        assert!(text.contains("invalid peer certificate"), "{text}");
+        #[cfg(not(target_os = "macos"))]
+        assert!(text.contains(CauseChain::IGNI_SERVER), "{text}");
+    }
+
+    #[test]
+    fn a_server_that_is_down_still_reads_as_the_kind_alone() {
+        let port = std::net::TcpListener::bind("127.0.0.1:0").unwrap().local_addr().unwrap().port();
+        let url = format!("https://127.0.0.1:{port}/v1/me/cloud");
+        let err = from_ureq(DiscoveryClient::agent("127.0.0.1", true).unwrap().get(&url).call().unwrap_err());
+        assert!(matches!(&err, DiscoveryError::Network(why) if why == "Connection Failed"), "{err:?}");
+    }
 
     fn session() -> Session {
         Session::from_text(&credentials("https://igni.example", "o1", "p1", "SECRETSIG")).unwrap()

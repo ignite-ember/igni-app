@@ -1,7 +1,8 @@
-//! Pins on the shell's config files: the capability grant, the CSP and the
-//! updater endpoint. They are read from disk because `tauri-build` parses
-//! `tauri.conf.json` against a strict schema that rejects comment keys, so
-//! the reasoning lives here instead of beside the values.
+//! Pins on the shell's config files: the capability grant, the CSP, the
+//! updater endpoint and the updater's TLS roots. They are read from disk
+//! because `tauri-build` parses `tauri.conf.json` against a strict schema
+//! that rejects comment keys, so the reasoning lives here instead of beside
+//! the values.
 
 use std::path::PathBuf;
 
@@ -204,4 +205,157 @@ fn open_path_is_granted_with_a_scope() {
         !allowed.iter().any(|p| *p == "**" || *p == "/**"),
         "the scope must not open every path on the disk: {allowed:?}"
     );
+}
+
+/// The `[[package]]` entry for `name` in Cargo.lock: its version and the
+/// names it depends on (a `name version` pair keeps only the name).
+fn locked(name: &str) -> Vec<(String, Vec<String>)> {
+    let lock = read("Cargo.lock");
+    lock.split("[[package]]")
+        .filter(|entry| entry.lines().any(|l| l.trim() == format!("name = \"{name}\"")))
+        .map(|entry| {
+            let version = entry
+                .lines()
+                .find_map(|l| l.trim().strip_prefix("version = "))
+                .unwrap_or_default()
+                .trim_matches('"')
+                .to_string();
+            let deps = entry
+                .split_once("dependencies = [")
+                .map(|(_, rest)| rest.split(']').next().unwrap_or_default())
+                .unwrap_or_default()
+                .split(',')
+                .filter_map(|d| d.trim().trim_matches('"').split(' ').next().map(str::to_string))
+                .filter(|d| !d.is_empty())
+                .collect();
+            (version, deps)
+        })
+        .collect()
+}
+
+#[test]
+fn the_updater_trusts_the_operating_systems_certificate_roots() {
+    // An enterprise mirror (`update_endpoint`) is usually served with a
+    // certificate from the company's own CA, which IT installs in the OS
+    // trust store, not in a list compiled into the app (F13). The updater
+    // plugin's HTTP client is reqwest on rustls; with the plugin's default
+    // `rustls-tls` feature reqwest verifies through rustls-platform-verifier
+    // (Security.framework on macOS, CryptoAPI on Windows, the system bundle
+    // via rustls-native-certs on Linux). Two changes would swap that for
+    // Mozilla's list compiled in, and the company CA would stop working with
+    // no other symptom: reqwest built with webpki-roots, or the plugin with
+    // its default features off.
+    let manifest = read("Cargo.toml");
+    let updater_line = manifest
+        .lines()
+        .find(|l| l.starts_with("tauri-plugin-updater"))
+        .expect("Cargo.toml must depend on tauri-plugin-updater");
+    assert!(
+        !updater_line.contains("default-features") && !updater_line.contains("features"),
+        "tauri-plugin-updater must keep its default features (rustls-tls): {updater_line}"
+    );
+    let reqwests = locked("reqwest");
+    let updaters = locked("tauri-plugin-updater");
+    assert_eq!(updaters.len(), 1, "one tauri-plugin-updater in Cargo.lock");
+    assert!(updaters[0].1.contains(&"reqwest".to_string()), "the updater's HTTP client is reqwest");
+    assert!(!reqwests.is_empty(), "reqwest must be in Cargo.lock");
+    for (version, deps) in &reqwests {
+        assert!(
+            deps.contains(&"rustls-platform-verifier".to_string()),
+            "reqwest {version} must verify through rustls-platform-verifier: {deps:?}"
+        );
+        for bundled in ["webpki-roots", "native-tls", "hyper-tls"] {
+            assert!(
+                !deps.contains(&bundled.to_string()),
+                "reqwest {version} must not be built with {bundled}: {deps:?}"
+            );
+        }
+    }
+}
+
+/// Every `.rs` file under `src/`, with its path relative to the crate.
+fn sources() -> Vec<(String, String)> {
+    fn walk(dir: &std::path::Path, out: &mut Vec<(String, String)>) {
+        for entry in std::fs::read_dir(dir).unwrap().flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                walk(&path, out);
+            } else if path.extension().is_some_and(|e| e == "rs") {
+                let rel = path
+                    .strip_prefix(env!("CARGO_MANIFEST_DIR"))
+                    .unwrap()
+                    .to_string_lossy()
+                    .replace('\\', "/");
+                out.push((rel, std::fs::read_to_string(&path).unwrap()));
+            }
+        }
+    }
+    let mut out = Vec::new();
+    walk(&PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src"), &mut out);
+    out
+}
+
+#[test]
+fn no_https_client_in_the_shell_falls_back_to_a_compiled_in_root_list() {
+    // ureq's `tls` feature carries webpki-roots, Mozilla's list compiled in,
+    // and every ureq agent that is not handed a TLS config uses it. That is
+    // how uv's download refused a company proxy's CA the system trusted.
+    // Every ureq agent is made by `cloud::net::agent_builder`, which hands
+    // it rustls with the platform verifier and has no fallback; nothing
+    // else builds a root store or names a bundled list.
+    let forbidden = [
+        "ureq::get(", "ureq::post(", "ureq::put(", "ureq::delete(", "ureq::head(",
+        "ureq::patch(", "ureq::request(", "ureq::request_url(", "ureq::agent(", "ureq::builder(",
+        "webpki_roots", "webpki_root_certs", "rustls_native_certs", "RootCertStore",
+        "with_root_certificates", "danger_accept_invalid_certs", ".dangerous()",
+        "native_tls", "add_root_certificate", "tls_built_in_root_certs",
+    ];
+    let mut builders = Vec::new();
+    for (path, text) in sources() {
+        if path == "src/tls_testing.rs" {
+            continue; // the test server's own config, not a client
+        }
+        for f in forbidden {
+            assert!(!text.contains(f), "{path} uses {f}: HTTPS clients must use cloud::net's platform-TLS agent");
+        }
+        for (i, _) in text.match_indices("AgentBuilder::new()") {
+            builders.push((path.clone(), text[i..].lines().next().unwrap_or_default().to_string()));
+        }
+        if path != "src/cloud/net.rs" {
+            assert!(!text.contains("ClientConfig::builder"), "{path} builds its own rustls ClientConfig; use cloud::net::tls_config");
+        }
+    }
+    assert_eq!(
+        builders,
+        vec![("src/cloud/net.rs".to_string(), "AgentBuilder::new().tls_config(tls_config(false)?);".to_string())],
+        "one ureq AgentBuilder, in cloud::net, handed the platform TLS config with no fallback"
+    );
+    let net = read("src/cloud/net.rs");
+    assert!(net.contains(".with_platform_verifier()?"), "cloud::net's TLS config must use the platform verifier");
+    assert!(!net.contains("bundled"), "cloud::net must not fall back to ureq's bundled roots");
+}
+
+#[test]
+fn a_compiled_in_root_list_reaches_the_build_only_through_ureq() {
+    // webpki-roots stays in Cargo.lock because ureq 2's `tls` feature
+    // always pulls it (ureq has no rustls feature without it), and the test
+    // above keeps every agent off it. A new dependency that brings a
+    // bundled list in, and would use it, shows up here first.
+    let lock = read("Cargo.lock");
+    let users = |root: &str| -> Vec<String> {
+        lock.split("[[package]]")
+            .filter(|entry| entry.split_once("dependencies = [").is_some_and(|(_, d)| {
+                d.split(']').next().unwrap_or_default().split(',').any(|x| {
+                    x.trim().trim_matches('"').split(' ').next() == Some(root)
+                })
+            }))
+            .filter_map(|entry| entry.lines().find_map(|l| l.trim().strip_prefix("name = ")).map(|n| n.trim_matches('"').to_string()))
+            .collect()
+    };
+    let mut roots = users("webpki-roots");
+    roots.sort();
+    roots.dedup();
+    assert_eq!(roots, vec!["ureq", "webpki-roots"], "what depends on webpki-roots");
+    // rustls-platform-verifier uses webpki-root-certs on wasm32 only.
+    assert_eq!(users("webpki-root-certs"), vec!["rustls-platform-verifier"], "what depends on webpki-root-certs");
 }
