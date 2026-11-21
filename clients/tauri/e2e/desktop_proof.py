@@ -1573,6 +1573,11 @@ def menus_and_restart_session(ctx: Ctx):
         main_handle = second_handle = None
         ok2 = False
         if web:
+            # The init script defines __IGNI_PICK_DIR__ near its top and the
+            # host bridges after it: both there means it ran to the end of
+            # its first part in this page.
+            ran = s.js("return {pickDir: typeof window.__IGNI_PICK_DIR__, setAppTitle: typeof (window.__IGNI_HOST__ || {}).setAppTitle};")
+            ctx.proof.check("R624", "the shell's init script ran in the page (its host bridges are there)", (ran or {}).get("pickDir") == "function" and (ran or {}).get("setAppTitle") == "function", json.dumps(ran))
             s.hook_notify()
             token = marker_token()
             s.send_chat(f"Remember the codeword {token}. Reply with exactly {token}.")
