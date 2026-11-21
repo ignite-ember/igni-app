@@ -72,10 +72,12 @@ export function useTranscriptScroll(windowModel: WindowModel, items: ChatItem[])
   }, [items.length, scrollToBottom]);
 
   // An extension's ``scroll_to``: the model says where, this window goes.
+  // Another tab of this window scrolling is that tab's reading position,
+  // not a request: this tab stays where its reader is.
   useEffect(
     () =>
-      windowModel.onRemote((change) => {
-        if (change.field !== "scroll") return;
+      windowModel.onRemote((change, origin) => {
+        if (change.field !== "scroll" || origin === "sibling") return;
         const where = change.value as Scroll;
         if (where.at_bottom) {
           virtuosoRef.current?.scrollToIndex({ index: "LAST", behavior: "auto" });

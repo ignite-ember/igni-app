@@ -28,7 +28,8 @@
  *
  * - **Our own echo** clears the pending write; the pushed value is now
  *   the confirmed one.
- * - **Somebody else's change** (an extension, another window) becomes
+ * - **Somebody else's change** (an extension, another window, another
+ *   browser tab showing this same window) becomes
  *   the confirmed value. A pending write *not yet sent* — typing inside
  *   the pause — is dropped in its favour: what the model was told last
  *   wins. A pending write already sent stays on screen until its echo,
@@ -62,7 +63,10 @@ const CLIENT_ID_KEY = "ember-code:client-id";
  *
  * The first window is labelled `main` and predates multi-window, so
  * it keeps the unsuffixed key. A host with a single view (the
- * browser) passes `""` and lands on the same key.
+ * browser) passes `""` and lands on the same key — so every tab of
+ * one browser profile is one window: they show the same session and
+ * follow each other, each with its own write tokens
+ * ({@link WindowModel}).
  *
  * Note for whoever wires up "New Window": labels must be stable
  * across app restarts, not minted fresh each launch. A random label
@@ -96,6 +100,14 @@ function newClientId(): string {
   const cr = (globalThis as { crypto?: Crypto }).crypto;
   if (cr && typeof cr.randomUUID === "function") return cr.randomUUID();
   return `c-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+/** A nonce of this view's, for its write tokens: unique per tab, so two
+ *  tabs of one window never share one. */
+function viewNonce(): string {
+  const cr = (globalThis as { crypto?: Crypto }).crypto;
+  if (cr && typeof cr.randomUUID === "function") return cr.randomUUID().slice(0, 8);
+  return Math.random().toString(36).slice(2, 10);
 }
 
 /**
@@ -266,7 +278,13 @@ interface Pending {
   send?: () => void;
 }
 
-type RemoteListener = (change: WindowChange) => void;
+/** Who made a change this window did not: another view of this same
+ *  window (a second browser tab — every tab of a profile keeps the one
+ *  id in `localStorage`), or somebody else (an extension, another
+ *  window). */
+export type ChangeOrigin = "sibling" | "elsewhere";
+
+type RemoteListener = (change: WindowChange, origin: ChangeOrigin) => void;
 
 export interface WriteOptions {
   /** Hold the network write for the store's pause, collapsing a burst
@@ -295,6 +313,17 @@ export class WindowModel {
   private counts = new Map<WindowField, number>();
   private seq = 0;
   private localToast = 0;
+  /**
+   * This view's own prefix for the tokens its writes carry: the window's
+   * id and a nonce of this view's. Two browser tabs share the window id
+   * (and so the model), and each counts its writes from 1, so a token of
+   * the id and the count alone named both tabs' writes alike: a tab took
+   * the other's change for its own echo — it never followed the other
+   * onto a new chat, and dropped every event of it — and a pending write
+   * was cleared by the other tab's write that happened to share its
+   * count. F5 (igni-app #96, CHAT-027).
+   */
+  private readonly writer: string;
 
   constructor(
     private client: IgniClient,
@@ -307,6 +336,7 @@ export class WindowModel {
   ) {
     this.confirmed = { ...emptyWindowState(), ...initial };
     this.view = this.confirmed;
+    this.writer = `${clientId}#${viewNonce()}`;
   }
 
   // ── Reading ───────────────────────────────────────────────────
@@ -344,8 +374,9 @@ export class WindowModel {
   }
 
   /** Be told of each change somebody else made — an extension, another
-   *  window — after it is applied. For what a change *asks* of a view
-   *  beyond rendering it: scroll there, switch to that session. */
+   *  window, another tab of this one (`origin`) — after it is applied.
+   *  For what a change *asks* of a view beyond rendering it: scroll
+   *  there, switch to that session. */
   onRemote(fn: RemoteListener): () => void {
     this.remoteListeners.add(fn);
     return () => this.remoteListeners.delete(fn);
@@ -387,7 +418,7 @@ export class WindowModel {
    *  are ignored. */
   applyPush(change: WindowChange): void {
     if (change.window !== this.clientId) return;
-    const own = Boolean(change.token) && change.token.startsWith(`${this.clientId}#`);
+    const own = Boolean(change.token) && change.token.startsWith(`${this.writer}#`);
     const fresh = change.rev > (this.revs.get(change.field) ?? -1);
     if (fresh) {
       this.confirmed = { ...this.confirmed, [change.field]: change.value };
@@ -407,7 +438,10 @@ export class WindowModel {
     // Our own echo is not news: the write already counted.
     if (!own && fresh) this.bump(change.field);
     this.recompute();
-    if (!own && fresh) for (const fn of this.remoteListeners) fn(change);
+    if (!own && fresh) {
+      const origin: ChangeOrigin = change.token.startsWith(`${this.clientId}#`) ? "sibling" : "elsewhere";
+      for (const fn of this.remoteListeners) fn(change, origin);
+    }
   }
 
   // ── Writing ───────────────────────────────────────────────────
@@ -433,7 +467,7 @@ export class WindowModel {
     }
     const previous = this.pending.get(field);
     if (previous?.timer) clearTimeout(previous.timer);
-    const token = `${this.clientId}#${++this.seq}`;
+    const token = `${this.writer}#${++this.seq}`;
     const entry: Pending = { value: next, token, sent: false, timer: null };
     this.pending.set(field, entry);
     this.bump(field);
@@ -487,7 +521,7 @@ export class WindowModel {
         op: "toast",
         window: this.clientId,
         value: toast,
-        token: `${this.clientId}#${++this.seq}`,
+        token: `${this.writer}#${++this.seq}`,
       })
       .catch((error) => {
         if (isRefusal(error)) return;
@@ -508,7 +542,7 @@ export class WindowModel {
         op: "dismiss_toast",
         window: this.clientId,
         value: id,
-        token: `${this.clientId}#${++this.seq}`,
+        token: `${this.writer}#${++this.seq}`,
       })
       .catch((error) => {
         if (!isRefusal(error)) this.local("toasts", remaining);
@@ -522,7 +556,7 @@ export class WindowModel {
         op: "open_dialog",
         window: this.clientId,
         value: spec,
-        token: `${this.clientId}#${++this.seq}`,
+        token: `${this.writer}#${++this.seq}`,
       })
       .catch((error) => {
         if (!isRefusal(error)) this.local("dialog", { id: `local-${++this.localToast}`, spec, source: null });
@@ -542,7 +576,7 @@ export class WindowModel {
         window: this.clientId,
         dialog_id: id,
         value: answer,
-        token: `${this.clientId}#${++this.seq}`,
+        token: `${this.writer}#${++this.seq}`,
       })
       .catch((error) => {
         if (!isRefusal(error)) this.local("dialog", null);
