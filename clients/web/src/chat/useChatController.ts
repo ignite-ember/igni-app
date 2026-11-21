@@ -74,7 +74,7 @@ function wireChatController(deps: ChatControllerDeps): ChatController {
   });
   const onEvent = streamEvents.route.bind(streamEvents);
   const streamer = new RunStreamer({ client, view, run, shell, notifier, onEvent });
-  const sessions = new SessionSwitcher({ client, windowModel, view, historyLoader, shell, hitl });
+  const sessions = new SessionSwitcher({ client, windowModel, view, historyLoader, shell, hitl, run });
   const commands = new SlashCommandRouter({
     client,
     view,

@@ -60,6 +60,37 @@ describe("StreamEventRouter", () => {
     expect(s.hitl.open()).toEqual([{ requirement_id: "a", details: "why", details_pending: false }]);
   });
 
+  it("a run that pauses is waiting for the person, not finalizing", () => {
+    // The core ends a paused stream with streaming_done first, then
+    // run_paused (runStreamer / igni-core's pause path).
+    const s = setup();
+    s.router.route({ type: "streaming_done", run_id: "r" } as ServerMessage);
+    s.router.route({ type: "run_paused", run_id: "r", requirements: [req("a")] } as ServerMessage);
+    expect(s.run.runPhaseRef.current).toBe("awaiting_approval");
+  });
+
+  it("a streaming_done after the pause leaves it paused", () => {
+    const s = setup();
+    s.router.route({ type: "run_paused", run_id: "r", requirements: [req("a")] } as ServerMessage);
+    s.router.route({ type: "streaming_done", run_id: "r" } as ServerMessage);
+    expect(s.run.runPhaseRef.current).toBe("awaiting_approval");
+  });
+
+  it("a new top-level run clears the approvals the backend dropped to start it", () => {
+    const s = setup();
+    s.router.route({ type: "run_paused", run_id: "r1", requirements: [req("a"), req("b")] } as ServerMessage);
+    s.router.route({ type: "run_started", run_id: "r2", parent_run_id: null } as ServerMessage);
+    expect(s.hitl.open()).toBeNull();
+    expect(s.run.runPhaseRef.current).toBe("streaming");
+  });
+
+  it("a sub-agent's run starting leaves the approvals open", () => {
+    const s = setup();
+    s.router.route({ type: "run_paused", run_id: "r1", requirements: [req("a")] } as ServerMessage);
+    s.router.route({ type: "run_started", run_id: "r2", parent_run_id: "r1" } as ServerMessage);
+    expect(s.hitl.open()).toEqual([req("a")]);
+  });
+
   it("shows a command's result, as an error when it is one", () => {
     const s = setup();
     s.router.route({ type: "command_result", kind: "error", content: "bad", display_content: "" } as ServerMessage);
@@ -129,6 +160,46 @@ describe("MirrorEventRouter", () => {
     expect(s.hitl.open()).toEqual([req("b")]);
     s.router.route({ type: "requirement_resolved", requirement_id: "b" } as ServerMessage);
     expect(s.hitl.open()).toBeNull();
+  });
+
+  it("a pause it hears of (an attach's replay, another view's run) is waiting for the person", () => {
+    const s = setup();
+    s.router.route({ type: "streaming_done", run_id: "r" } as ServerMessage);
+    s.router.route({ type: "run_paused", run_id: "r", requirements: [req("a")] } as ServerMessage);
+    expect(s.run.runPhaseRef.current).toBe("awaiting_approval");
+    // The paused stream's terminator is not the run ending.
+    s.router.route({ type: "stream_end" } as ServerMessage);
+    expect(s.run.runPhaseRef.current).toBe("awaiting_approval");
+  });
+
+  it("follows the run again once another view answered the last approval", () => {
+    const s = setup();
+    s.router.route({ type: "run_paused", run_id: "r", requirements: [req("a"), req("b")] } as ServerMessage);
+    s.router.route({ type: "requirement_resolved", requirement_id: "a" } as ServerMessage);
+    expect(s.run.runPhaseRef.current).toBe("awaiting_approval");
+    s.router.route({ type: "requirement_resolved", requirement_id: "b" } as ServerMessage);
+    expect(s.run.runPhaseRef.current).toBe("streaming");
+  });
+
+  it("an answer elsewhere leaves a phase that was not paused alone", () => {
+    const s = setup();
+    s.router.route({ type: "requirement_resolved", requirement_id: "a" } as ServerMessage);
+    expect(s.run.setRunPhase).not.toHaveBeenCalled();
+  });
+
+  it("a new top-level run clears an approval the backend dropped to start it", () => {
+    const s = setup();
+    s.router.route({ type: "run_paused", run_id: "r1", requirements: [req("a")] } as ServerMessage);
+    s.router.route({ type: "run_started", run_id: "r2", parent_run_id: null, agent_name: "a", model: "m" } as ServerMessage);
+    expect(s.hitl.open()).toBeNull();
+    expect(s.run.runPhaseRef.current).toBe("streaming");
+  });
+
+  it("a sub-agent's run starting leaves the approval open", () => {
+    const s = setup();
+    s.router.route({ type: "run_paused", run_id: "r1", requirements: [req("a")] } as ServerMessage);
+    s.router.route({ type: "run_started", run_id: "r2", parent_run_id: "r1", agent_name: "a", model: "m" } as ServerMessage);
+    expect(s.hitl.open()).toEqual([req("a")]);
   });
 
   it("ignores welcome and typing, and routes pushes", () => {

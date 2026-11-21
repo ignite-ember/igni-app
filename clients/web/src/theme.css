@@ -6726,6 +6726,16 @@ button {
   flex-shrink: 0;
 }
 
+/* Under the answer buttons, aligned with them (col-2 of
+   ``.hitl-args``, as the action rows' 86px indent). */
+.hitl-esc-hint {
+  flex-shrink: 0;
+  padding-left: 86px;
+  margin-top: var(--space-3);
+  font-size: var(--text-xs);
+  color: var(--fg-faint);
+}
+
 /* ── HITL: pretty argument rendering ───────────────────────────── */
 
 .hitl-args {

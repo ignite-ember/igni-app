@@ -252,6 +252,9 @@ export function HitlDialog({
             </button>
           </div>
         )}
+        {/* Escape is global (``useHitl``) and does more than close the
+            dialog, so it is said where the answer is given. */}
+        <div className="hitl-esc-hint">Esc rejects all and stops</div>
       </div>
     </div>
   );

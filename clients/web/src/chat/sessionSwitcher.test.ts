@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { SessionEntry } from "../components/Sidebar";
 import type { HistoryLoad } from "./historyLoader";
+import type { RunPhase } from "./runPhase";
 import { SessionSwitcher } from "./sessionSwitcher";
 import { ArrayTranscript } from "./transcriptView.test.util";
 
@@ -32,7 +33,9 @@ function fakeWindowModel(initial: Record<string, unknown> = {}) {
   };
 }
 
-function setup(opts: { rpc?: Rpc; model?: Record<string, unknown>; history?: HistoryLoad } = {}) {
+function setup(
+  opts: { rpc?: Rpc; model?: Record<string, unknown>; history?: HistoryLoad; phase?: RunPhase } = {},
+) {
   const t = new ArrayTranscript();
   const client = { sessionId: "", rpc: vi.fn<Rpc>(opts.rpc ?? (async () => undefined)) };
   const windowModel = fakeWindowModel(opts.model);
@@ -47,6 +50,13 @@ function setup(opts: { rpc?: Rpc; model?: Record<string, unknown>; history?: His
     refreshSessions: vi.fn(async () => {}),
   };
   const hitl = { clear: vi.fn() };
+  const runPhaseRef = { current: opts.phase ?? ("idle" as RunPhase) };
+  const run = {
+    runPhaseRef,
+    setRunPhase: vi.fn((p: RunPhase) => {
+      runPhaseRef.current = p;
+    }),
+  };
   const switcher = new SessionSwitcher({
     client: client as never,
     windowModel: windowModel as never,
@@ -54,8 +64,9 @@ function setup(opts: { rpc?: Rpc; model?: Record<string, unknown>; history?: His
     historyLoader,
     shell,
     hitl,
+    run,
   });
-  return { t, client, windowModel, historyLoader, shell, hitl, switcher, sessions: () => sessions };
+  return { t, client, windowModel, historyLoader, shell, hitl, run, switcher, sessions: () => sessions };
 }
 
 afterEach(() => vi.restoreAllMocks());
@@ -215,6 +226,29 @@ describe("SessionSwitcher#pick", () => {
     s.client.sessionId = "s-old";
     await s.switcher.pick("s-new");
     expect(s.hitl.clear).toHaveBeenCalled();
+  });
+
+  it("leaves the paused run with the session it is leaving: the window goes idle", async () => {
+    // Otherwise Stop and "Waiting for your approval" stay up over a
+    // session that waits on nothing.
+    const s = setup({ phase: "awaiting_approval" });
+    s.client.sessionId = "s-old";
+    await s.switcher.pick("s-new");
+    expect(s.run.runPhaseRef.current).toBe("idle");
+  });
+
+  it("a switch leaves a run of its own phase alone when nothing was paused", async () => {
+    const s = setup({ phase: "streaming" });
+    s.client.sessionId = "s-old";
+    await s.switcher.pick("s-new");
+    expect(s.run.setRunPhase).not.toHaveBeenCalled();
+  });
+
+  it("picking the session it is in keeps the paused run", async () => {
+    const s = setup({ phase: "awaiting_approval" });
+    s.client.sessionId = "s-same";
+    await s.switcher.pick("s-same");
+    expect(s.run.runPhaseRef.current).toBe("awaiting_approval");
   });
 
   it("keeps the approval of the session it picks", async () => {
