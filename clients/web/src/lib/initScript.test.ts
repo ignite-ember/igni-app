@@ -31,7 +31,7 @@ function fakeTauri() {
   return {
     listeners,
     api: {
-      core: { invoke: vi.fn(() => Promise.resolve(false)) },
+      core: { invoke: vi.fn((_cmd: string, _args?: unknown) => Promise.resolve<unknown>(false)) },
       event: { listen },
       webviewWindow: { getCurrentWebviewWindow: () => ({ label: "main", listen }) },
     },
