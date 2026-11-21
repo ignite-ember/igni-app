@@ -74,6 +74,7 @@ pub fn run() {
             cloud::commands::report_local_activity,
             cloud::commands::account_rpc,
             cloud::commands::cloud_page_origin,
+            menu::igni_menu_shortcut,
         ])
         .setup(|app| {
             let handle = app.handle();

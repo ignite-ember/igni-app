@@ -121,6 +121,35 @@ window.__IGNI_HOST__ = Object.assign(window.__IGNI_HOST__ || {}, {
   };
 })();
 
+// Windows: the webview takes keystrokes before the window's menu sees
+// them, so the menu's shortcuts (muda accelerators) never fire while the
+// page has focus; Ctrl+N did nothing (desktop proof run 44881308306). The
+// page catches the menu's own shortcuts and asks the shell to run them
+// (``igni_menu_shortcut``). macOS and Linux deliver them to the menu.
+(function () {
+  if ('__PLATFORM__' !== 'win') return;
+  document.addEventListener(
+    'keydown',
+    (e) => {
+      let id = null;
+      if (e.key === 'F11' && !e.ctrlKey && !e.altKey && !e.metaKey && !e.shiftKey) {
+        id = 'toggle_fullscreen';
+      } else if (e.ctrlKey && !e.altKey && !e.metaKey) {
+        const key = (e.key || '').toLowerCase();
+        if (key === 'n') id = e.shiftKey ? 'new_window' : 'new_chat';
+        else if (key === 'q' && !e.shiftKey) id = 'quit_app';
+      }
+      if (!id) return;
+      const invoke = window.__TAURI__ && window.__TAURI__.core && window.__TAURI__.core.invoke;
+      if (!invoke) return;
+      e.preventDefault();
+      e.stopPropagation();
+      invoke('igni_menu_shortcut', { id }).catch((err) => console.warn('[igni] shortcut failed:', err));
+    },
+    true
+  );
+})();
+
 // The shell sends menu, link and fullscreen events to one window
 // (events.rs ``ShellEvent::target``). A global ``event.listen`` hears
 // events sent to every window, so each window listens on its own.
