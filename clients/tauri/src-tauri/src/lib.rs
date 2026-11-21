@@ -136,6 +136,15 @@ pub fn run() {
             Bootstrap::spawn_in_background(handle, launch);
             Ok(())
         })
+        .on_window_event(|window, event| match event {
+            tauri::WindowEvent::Focused(focused) => {
+                WindowManager::note_focus(window.app_handle(), window.label(), *focused)
+            }
+            tauri::WindowEvent::Destroyed => {
+                WindowManager::forget(window.app_handle(), window.label())
+            }
+            _ => {}
+        })
         .on_menu_event(|app, event| {
             let id = event.id().as_ref();
             match MenuAction::from_id(id) {
