@@ -10,7 +10,10 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, fireEvent, render, renderHook, screen, waitFor } from "@testing-library/react";
 
 import { ShellActions, type ShellActionsDeps } from "../chat/shellActions";
+import { StatusSource } from "../chat/statusSource";
+import { useShellStatus } from "../chat/useShellStatus";
 import { AccountMenu } from "../components/AccountMenu";
+import { AppHeader } from "../components/AppHeader";
 import { ProjectChip } from "../components/ProjectChip";
 import { BackendVersionChip } from "../components/StatusBits";
 import { BackendSnapshot } from "./backendState";
@@ -87,6 +90,84 @@ describe("the account menu", () => {
     render(<AccountMenu status={status} client={{ rpc: rpc as never }} onLogIn={() => {}} onLogOut={() => {}} />);
     fireEvent.click(screen.getByRole("button", { name: /ada@acme\.example/ }));
     await waitFor(() => expect(rpc).toHaveBeenCalledWith("get_cloud_plan"));
+  });
+});
+
+describe("the account chip right after a switch to the cloud", () => {
+  // R691 G: the VM's igni names nobody (its status has no address), and
+  // this computer's account-only backend answers a few seconds after the
+  // switch. For those seconds the header said "Log in" to a person who
+  // was signed in all along.
+  function header(status: unknown, auth: "unknown" | "signed-in" | "signed-out") {
+    return (
+      <AppHeader
+        conn="connected"
+        groupName="igni"
+        groupMark={null}
+        onToggleSidebar={() => {}}
+        canSearch={false}
+        searchOpen={false}
+        onToggleSearch={() => {}}
+        projectDir="/workspace"
+        onPickProject={() => {}}
+        status={status as never}
+        auth={auth}
+        waiting={0}
+        onToggleNotifications={() => {}}
+        client={{ rpc: vi.fn(async () => ({})), connect: vi.fn() } as never}
+        onLogIn={() => {}}
+        onLogOut={() => {}}
+      />
+    );
+  }
+
+  it("is neutral until this computer says who is signed in, then names them", async () => {
+    let answer: (v: unknown) => void = () => {};
+    const vm = { rpc: vi.fn(async (m: string) => (m === "get_status" ? { cloud_email: "", context_tokens: 0 } : null)) };
+    const source = new StatusSource(vm as never, () => new Promise((resolve) => (answer = resolve)));
+    const { result } = renderHook(() => useShellStatus(source, { write: vi.fn() } as never));
+    let refresh!: Promise<void>;
+    act(() => {
+      refresh = result.current.refreshStatus();
+    });
+    await waitFor(() => expect(result.current.status).not.toBeNull());
+
+    const { rerender } = render(header(result.current.status, result.current.auth));
+    expect(result.current.auth).toBe("unknown");
+    expect(screen.queryByText("Log in")).toBeNull();
+    expect(screen.getByRole("button", { name: "Account" }).getAttribute("aria-busy")).toBe("true");
+
+    await act(async () => {
+      answer({ cloud_email: "ada@acme.example", cloud_connected: true });
+      await refresh;
+    });
+    rerender(header(result.current.status, result.current.auth));
+    expect(screen.getByRole("button", { name: /ada@acme\.example/ })).toBeTruthy();
+    expect(screen.queryByText("Log in")).toBeNull();
+  });
+
+  it("stays neutral, not Log in, while this computer cannot be asked yet", async () => {
+    const vm = { rpc: vi.fn(async (m: string) => (m === "get_status" ? { cloud_email: "" } : null)) };
+    const source = new StatusSource(vm as never, () => Promise.reject(new Error("account backend starting")));
+    const { result } = renderHook(() => useShellStatus(source, { write: vi.fn() } as never));
+    await act(() => result.current.refreshStatus());
+    render(header(result.current.status, result.current.auth));
+    expect(screen.queryByText("Log in")).toBeNull();
+    expect(screen.getByRole("button", { name: "Account" })).toBeTruthy();
+  });
+
+  it("still offers Log in once this computer says nobody is signed in", async () => {
+    const vm = { rpc: vi.fn(async (m: string) => (m === "get_status" ? { cloud_email: "" } : null)) };
+    const source = new StatusSource(vm as never, async () => ({ cloud_email: "", cloud_connected: false }));
+    const { result } = renderHook(() => useShellStatus(source, { write: vi.fn() } as never));
+    await act(() => result.current.refreshStatus());
+    render(header(result.current.status, result.current.auth));
+    expect(screen.getByText("Log in")).toBeTruthy();
+  });
+
+  it("goes by the status alone where the window's own backend names the account", () => {
+    render(header({ cloud_email: "" }, "signed-out"));
+    expect(screen.getByText("Log in")).toBeTruthy();
   });
 });
 

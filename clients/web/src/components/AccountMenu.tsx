@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { authPhaseOf, type AuthPhase } from "../chat/useShellStatus";
 import type { BackendSnapshot } from "../cloud/backendState";
 import { host } from "../lib/host";
 import type { IgniClient } from "../protocol/client";
@@ -26,12 +27,16 @@ export function AccountMenu({
   status,
   client,
   backend = null,
+  auth = authPhaseOf(status),
   onLogIn,
   onLogOut,
 }: {
   status: StatusUpdate | null;
   client: Pick<IgniClient, "rpc">;
   backend?: BackendSnapshot | null;
+  /** Whether anybody is known to be signed in; ``unknown`` on the cloud
+   *  side until this computer has said who. */
+  auth?: AuthPhase;
   onLogIn: () => void;
   onLogOut: () => void;
 }) {
@@ -77,6 +82,7 @@ export function AccountMenu({
         onLogIn={onLogIn}
         onOpenAccount={toggle}
         buttonRef={chipRef}
+        pending={auth === "unknown"}
       />
       {accountMenu && (
         <>

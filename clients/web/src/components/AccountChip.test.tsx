@@ -93,6 +93,40 @@ describe("the account chip", () => {
     expect(screen.getByText("Log in")).toBeTruthy();
   });
 
+  it("is a neutral, inert chip while who is signed in is not known yet", () => {
+    // The desktop's cloud side, just after the switch: the VM's status
+    // names nobody, and this computer has not said who is signed in.
+    const onLogIn = vi.fn();
+    render(
+      <AccountChip
+        status={{ cloud_email: "", cloud_connected: false }}
+        name="Account"
+        pending
+        onOpenAccount={() => {}}
+        onLogIn={onLogIn}
+      />,
+    );
+    expect(screen.queryByText("Log in")).toBeNull();
+    const button = screen.getByRole("button", { name: "Account" }) as HTMLButtonElement;
+    expect(button.disabled).toBe(true);
+    expect(button.getAttribute("aria-busy")).toBe("true");
+    fireEvent.click(button);
+    expect(onLogIn).not.toHaveBeenCalled();
+  });
+
+  it("names the person a pending status already names", () => {
+    render(
+      <AccountChip
+        status={{ cloud_email: "ann@acme.example", cloud_connected: true }}
+        name="ann@acme.example"
+        pending
+        onOpenAccount={() => {}}
+        onLogIn={() => {}}
+      />,
+    );
+    expect(screen.getByText("ann@acme.example")).toBeTruthy();
+  });
+
   it("shows neither before the first status arrives", () => {
     const { container } = render(
       <AccountChip status={null} name="Account" onOpenAccount={() => {}} onLogIn={() => {}} />,

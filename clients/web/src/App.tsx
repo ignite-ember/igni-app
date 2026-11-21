@@ -184,6 +184,7 @@ export default function App() {
           projectDir={projectDir}
           onPickProject={() => void actions.pickProject()}
           status={status}
+          auth={auth}
           waiting={notificationCounts.unread}
           onToggleNotifications={() => windowModel.togglePanel("notifications")}
           client={client}
