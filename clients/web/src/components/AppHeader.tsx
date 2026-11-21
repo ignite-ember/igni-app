@@ -3,6 +3,7 @@ import { useEffect, useRef } from "react";
 // hamburger. This is the glyph set the panels draw from.
 import { MenuIcon as Glyph } from "@ignite-ember/ui-react";
 
+import type { AuthPhase } from "../chat/useShellStatus";
 import type { BackendSnapshot } from "../cloud/backendState";
 import { host } from "../lib/host";
 import type { ConnectionState, IgniClient } from "../protocol/client";
@@ -28,6 +29,9 @@ export interface AppHeaderProps {
   projectDir: string;
   onPickProject: () => void;
   status: StatusUpdate | null;
+  /** Whether anybody is known to be signed in (the account chip's
+   *  question); derived from ``status`` when not given. */
+  auth?: AuthPhase;
   /** Unread notifications: the bell's count. */
   waiting: number;
   onToggleNotifications: () => void;
@@ -125,6 +129,7 @@ export function AppHeader(props: AppHeaderProps) {
         status={status}
         client={props.client}
         backend={props.backend ?? null}
+        auth={props.auth}
         onLogIn={props.onLogIn}
         onLogOut={props.onLogOut}
       />

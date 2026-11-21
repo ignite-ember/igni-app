@@ -14,13 +14,19 @@ import { ChevronIcon } from "./Icons";
  *  chip's title instead — and said plainly, because "not connected"
  *  reads like "you are not signed in", which is a different thing.
  *  Nothing is shown until the first status arrives, rather than "Log
- *  in" flashing at somebody signed in. */
+ *  in" flashing at somebody signed in.
+ *
+ *  ``pending`` is a status that cannot say who is signed in yet: on the
+ *  desktop's cloud side the VM's igni names nobody, and this computer's
+ *  account-only backend answers a few seconds after the switch. Until it
+ *  has, the chip is a neutral, inert "Account" — never "Log in". */
 export function AccountChip({
   status,
   name,
   onOpenAccount,
   onLogIn,
   buttonRef,
+  pending = false,
 }: {
   status: Pick<StatusUpdate, "cloud_email" | "cloud_connected"> | null;
   name: string;
@@ -28,8 +34,17 @@ export function AccountChip({
   onLogIn: () => void;
   /** The account button, for the menu to hand focus back to. */
   buttonRef?: Ref<HTMLButtonElement>;
+  /** Who is signed in is not known yet (see above). */
+  pending?: boolean;
 }) {
   if (status === null) return null;
+  if (pending && !status.cloud_email) {
+    return (
+      <button className="chip chip-account-pending" title="Checking who is signed in" aria-busy="true" disabled>
+        Account
+      </button>
+    );
+  }
   if (status.cloud_email) {
     // Signed in, and the igni server answered the last request.
     const serverAnswers = status.cloud_connected;
