@@ -14,9 +14,14 @@ Run by ``.github/workflows/updater-e2e-proof.yml`` after
 ``updater_builds.sh`` built version A and version B with a throwaway
 updater key. It:
 
-1. makes a local certificate authority, trusts it in the OS store, and
-   serves ``latest.json`` and B's payload over HTTPS on 127.0.0.1 (the
-   updater plugin refuses plain HTTP, and the build keeps that);
+1. makes a throwaway "corporate" certificate authority and serves
+   ``latest.json`` and B's payload over HTTPS as ``mirror.igni.test`` (a
+   hosts-file name for 127.0.0.1) with a certificate only that CA signed:
+   the updater plugin refuses plain HTTP, and the build keeps that. First
+   with the CA in no trust store, where the app must refuse the mirror
+   (F13); then with the CA in the OS store (update-ca-certificates,
+   certutil, the System keychain), as IT installs a company CA, for
+   everything below;
 2. installs A the way a user does (the AppImage in a folder, the .msi, the
    NSIS setup, the .app in an Applications folder);
 3. points A at the local endpoint through ``update_endpoint`` in
@@ -25,6 +30,10 @@ updater key. It:
 4. launches A on a signed-in, trusted project folder (the developer backend
    override, igni-core at the app's version), waits for the update banner
    the startup check shows, and clicks its "Install & restart" button:
+   - with the CA untrusted: no banner, no HTTP request reaches the mirror,
+     the app's TLS aborts the handshake with ``unknown_ca``, and (where
+     WebDriver can ask) the check and the install fail naming the mirror,
+     the certificate and what to do about it;
    - with ``update_check_ttl: 0`` no request reaches the endpoint at all;
    - a payload signed by a different key is refused, A stays installed;
    - a tampered payload is refused, A stays installed;
@@ -72,6 +81,10 @@ IS_MAC = sys.platform == "darwin"
 IS_LINUX = sys.platform.startswith("linux")
 
 ROW = "R627"
+CA_ROW = "F13"
+# The enterprise mirror's name: a hosts-file entry for 127.0.0.1, so the
+# certificate is checked against a DNS name, as a real mirror's is.
+MIRROR_HOST = "mirror.igni.test"
 APP_NAMES = {"igni-app", "igni", "igni-app.exe", "igni.exe"}
 STUB_MODEL = "e2e-updater-stub"
 INSTALL_BUTTON = "Install & restart"
@@ -79,6 +92,12 @@ INSTALL_BUTTON = "Install & restart"
 # returns them (ShellError serializes as its message).
 WRONG_KEY_ERROR = r"created with a different key"
 TAMPERED_ERROR = r"signature verification failed"
+# What the shell says when the mirror's certificate comes from a CA the
+# system does not trust (src/error.rs, UpdaterFailure).
+UNTRUSTED_CA_ERROR = r"invalid peer certificate: UnknownIssuer\. The update server's certificate is not signed by an authority this computer trusts"
+# The alert the app's rustls sends when it refuses the issuer, as the
+# mirror's OpenSSL reports it.
+UNKNOWN_CA_ALERT = r"ALERT_UNKNOWN_CA|unknown ca"
 COMPOSER_READY_JS = (
     "const e = document.querySelector('.composer-editable');"
     "return !!(e && /Message (Ember|igni)/.test(e.dataset.placeholder || ''));"
@@ -176,7 +195,8 @@ def sha256(path: Path) -> str:
 
 
 def make_tls(work: Path) -> tuple[Path, Path, Path]:
-    """A throwaway CA and a 127.0.0.1/localhost server certificate it signed."""
+    """A throwaway "corporate" CA and the mirror's certificate it signed,
+    for mirror.igni.test (and 127.0.0.1/localhost)."""
     from cryptography import x509
     from cryptography.hazmat.primitives import hashes, serialization
     from cryptography.hazmat.primitives.asymmetric import ec
@@ -184,7 +204,7 @@ def make_tls(work: Path) -> tuple[Path, Path, Path]:
 
     now = dt.datetime.now(dt.timezone.utc)
     ca_key = ec.generate_private_key(ec.SECP256R1())
-    ca_name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "igni updater e2e throwaway CA")])
+    ca_name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "igni updater e2e throwaway corporate CA")])
     ca = (
         x509.CertificateBuilder()
         .subject_name(ca_name)
@@ -208,14 +228,18 @@ def make_tls(work: Path) -> tuple[Path, Path, Path]:
     key = ec.generate_private_key(ec.SECP256R1())
     leaf = (
         x509.CertificateBuilder()
-        .subject_name(x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "127.0.0.1")]))
+        .subject_name(x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, MIRROR_HOST)]))
         .issuer_name(ca_name)
         .public_key(key.public_key())
         .serial_number(x509.random_serial_number())
         .not_valid_before(now - dt.timedelta(hours=1))
         .not_valid_after(now + dt.timedelta(days=2))
         .add_extension(
-            x509.SubjectAlternativeName([x509.IPAddress(ipaddress.ip_address("127.0.0.1")), x509.DNSName("localhost")]),
+            x509.SubjectAlternativeName([
+                x509.DNSName(MIRROR_HOST),
+                x509.IPAddress(ipaddress.ip_address("127.0.0.1")),
+                x509.DNSName("localhost"),
+            ]),
             critical=False,
         )
         .add_extension(x509.BasicConstraints(ca=False, path_length=None), critical=True)
@@ -240,6 +264,21 @@ def make_tls(work: Path) -> tuple[Path, Path, Path]:
         key.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8, serialization.NoEncryption())
     )
     return ca_pem, cert_pem, key_pem
+
+
+def map_mirror_name() -> None:
+    """``mirror.igni.test`` → 127.0.0.1 in the hosts file, for the run."""
+    line = f"127.0.0.1 {MIRROR_HOST}"
+    if IS_WIN:
+        hosts = Path(os.environ.get("SystemRoot", r"C:\Windows")) / "System32" / "drivers" / "etc" / "hosts"
+        with open(hosts, "a", encoding="ascii") as f:
+            f.write(f"\r\n{line}\r\n")
+        subprocess.run(["ipconfig", "/flushdns"], check=False, stdout=subprocess.DEVNULL)
+    else:
+        subprocess.run(["sudo", "sh", "-c", f"printf '\\n%s\\n' '{line}' >> /etc/hosts"], check=True)
+        if IS_MAC:
+            subprocess.run(["sudo", "dscacheutil", "-flushcache"], check=False)
+            subprocess.run(["sudo", "killall", "-HUP", "mDNSResponder"], check=False)
 
 
 def trust_ca(ca: Path) -> None:
@@ -288,7 +327,7 @@ class UpdateServer:
     def __init__(self, ctx: "Ctx", cert: Path, key: Path):
         self.ctx = ctx
         self.port = free_port()
-        self.base = f"https://127.0.0.1:{self.port}"
+        self.base = f"https://{MIRROR_HOST}:{self.port}"
         self.work = ctx.work / "endpoint"
         self.legs: dict[str, dict] = {}
         self.served: dict[str, Path] = {}
@@ -316,6 +355,9 @@ class UpdateServer:
             (ctx.out / f"latest-{mode}.json").write_text(json.dumps(m, indent=2), encoding="utf-8")
         self.mode = "good"
         self.hits: list[dict] = []
+        # Handshakes that failed, with the reason OpenSSL gives (for a
+        # client that refused our certificate, the alert it sent).
+        self.tls_failures: list[dict] = []
         self.log_to: Path | None = None
         self.lock = threading.Lock()
         server = self
@@ -353,10 +395,27 @@ class UpdateServer:
                 with open(path, "rb") as f:
                     shutil.copyfileobj(f, self.wfile, 1 << 20)
 
-        self.httpd = http.server.ThreadingHTTPServer(("127.0.0.1", self.port), Handler)
         tls = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
         tls.load_cert_chain(str(cert), str(key))
-        self.httpd.socket = tls.wrap_socket(self.httpd.socket, server_side=True)
+
+        class MirrorServer(http.server.ThreadingHTTPServer):
+            """Runs each handshake itself, so a client that refuses the
+            certificate is recorded rather than lost in serve_forever."""
+
+            def get_request(self):
+                sock, addr = self.socket.accept()
+                sock.settimeout(30)
+                try:
+                    conn = tls.wrap_socket(sock, server_side=True)
+                except OSError as e:  # ssl.SSLError included
+                    with server.lock:
+                        server.tls_failures.append({"t": time.time(), "peer": addr[0], "reason": str(e)})
+                    sock.close()
+                    raise
+                conn.settimeout(None)
+                return conn, addr
+
+        self.httpd = MirrorServer(("127.0.0.1", self.port), Handler)
         threading.Thread(target=self.httpd.serve_forever, daemon=True).start()
 
     def _assemble(self, mode: str) -> dict:
@@ -402,8 +461,17 @@ class UpdateServer:
         with self.lock:
             return list(self.hits[mark:])
 
+    def tls_mark(self) -> int:
+        with self.lock:
+            return len(self.tls_failures)
+
+    def tls_failures_since(self, mark: int) -> list[dict]:
+        with self.lock:
+            return list(self.tls_failures[mark:])
+
     def save(self, out: Path) -> None:
         (out / "endpoint-requests.json").write_text(json.dumps(self.hits, indent=2), encoding="utf-8")
+        (out / "endpoint-tls-failures.json").write_text(json.dumps(self.tls_failures, indent=2), encoding="utf-8")
 
 
 def downloads(hits: list[dict]) -> list[dict]:
@@ -650,7 +718,7 @@ class Session:
             env.pop(k, None)
         env["IGNI_DEV_BACKEND"] = str(self.ctx.core_py)
         env["IGNITE_EMBER_DEV"] = "1"
-        env["NO_PROXY"] = env["no_proxy"] = "127.0.0.1,localhost,::1"
+        env["NO_PROXY"] = env["no_proxy"] = f"127.0.0.1,localhost,::1,{MIRROR_HOST}"
         return env
 
     def __enter__(self):
@@ -1029,6 +1097,72 @@ class Ctx:
 # ─── the scenarios ────────────────────────────────────────────────────
 
 
+def mirror_name_and_certificate(ctx: Ctx, ca: Path) -> None:
+    """The name resolves to the local mirror, and its certificate is good
+    for that name but chains to the throwaway CA alone: no public root
+    vouches for it, so whatever trusts it later trusts the CA."""
+    srv = ctx.server
+    try:
+        addrs = sorted({a[4][0] for a in socket.getaddrinfo(MIRROR_HOST, srv.port, proto=socket.IPPROTO_TCP)})
+    except OSError as e:
+        addrs = [f"{type(e).__name__}: {e}"]
+    ctx.proof.check(f"corporate CA mirror: {MIRROR_HOST} resolves to the local mirror", "127.0.0.1" in addrs,
+                    json.dumps(addrs), row=CA_ROW)
+
+    def handshake(context: ssl.SSLContext) -> str:
+        try:
+            with socket.create_connection((MIRROR_HOST, srv.port), timeout=15) as raw:
+                with context.wrap_socket(raw, server_hostname=MIRROR_HOST) as t:
+                    return f"verified: {t.version()}"
+        except ssl.SSLCertVerificationError as e:
+            return f"refused: {e.verify_message}"
+        except OSError as e:
+            return f"error: {type(e).__name__}: {e}"
+
+    public = handshake(ssl.create_default_context())
+    ctx.proof.check("corporate CA mirror: the public roots refuse the mirror's certificate", public.startswith("refused"),
+                    public, row=CA_ROW)
+    own = handshake(ssl.create_default_context(cafile=str(ca)))
+    ctx.proof.check(f"corporate CA mirror: the corporate CA verifies it for {MIRROR_HOST}", own.startswith("verified"),
+                    own, row=CA_ROW)
+
+
+def untrusted_mirror(ctx: Ctx) -> None:
+    """The CA in no trust store: the app asks the mirror and refuses it at
+    the handshake. No banner, nothing fetched, and the answer says why."""
+    srv = ctx.server
+    srv.set_mode("good")
+    mark, tls_mark = srv.mark(), srv.tls_mark()
+    label = "corporate CA not trusted"
+    with Session(ctx, "untrusted-ca") as s:
+        if not s.connected(300):
+            ctx.proof.check(f"{label}: the app connects to its backend", False, s.loading_error()[:400], row=CA_ROW)
+            return
+        refused = wait_for(lambda: srv.tls_failures_since(tls_mark), 90, 1) or []
+        time.sleep(10)  # a banner, had the check gone through
+        prompt = s.prompt()
+        if s.driver is not None:
+            chk = s.invoke("igni_check_update")
+            error = chk.get("error", "")
+            ctx.proof.check(f"{label}: igni_check_update fails, naming the mirror, the certificate and what to do",
+                            not chk.get("ok") and srv.endpoint in error and re.search(UNTRUSTED_CA_ERROR, error) is not None,
+                            f"{json.dumps(chk)[:600]} expected /{UNTRUSTED_CA_ERROR}/", row=CA_ROW)
+            inst = s.invoke("igni_install_update")
+            error = inst.get("error", "")
+            ctx.proof.check(f"{label}: igni_install_update is refused the same way",
+                            not inst.get("ok") and re.search(UNTRUSTED_CA_ERROR, error) is not None,
+                            json.dumps(inst)[:600], row=CA_ROW)
+            prompt = prompt or s.prompt()
+        s.shot("untrusted-ca")
+        refused = srv.tls_failures_since(tls_mark)
+        hits = srv.since(mark)
+    ctx.proof.check(f"{label}: the app tried the mirror and its TLS refused the issuer (unknown_ca)",
+                    bool(refused) and all(re.search(UNKNOWN_CA_ALERT, r["reason"], re.I) for r in refused),
+                    json.dumps(refused)[:600], row=CA_ROW)
+    ctx.proof.check(f"{label}: no HTTP request got through to the mirror", not hits, json.dumps(hits)[:300], row=CA_ROW)
+    ctx.proof.check(f"{label}: no update banner", not prompt, json.dumps(prompt)[:300], row=CA_ROW)
+
+
 def refused_install(ctx: Ctx, s: Session, mode: str, label: str, expect: str) -> None:
     """The banner offers B; Install is pressed; the payload is refused, and
     A stays installed and running."""
@@ -1202,7 +1336,7 @@ def verify_b_runs(ctx: Ctx) -> None:
 def run(ctx: Ctx) -> None:
     proof = ctx.proof
     ca, cert, key = make_tls(ctx.work)
-    trust_ca(ca)
+    map_mirror_name()
     b = ctx.stage / ctx.files["b"]
     ctx.server = UpdateServer(ctx, cert, key)
     ctx.server.log_to = ctx.out / "endpoint-requests.json"
@@ -1218,10 +1352,20 @@ def run(ctx: Ctx) -> None:
 
     ctx.installed.install_a()
     proof.info("A installed", f"{ctx.installed.exe}: {json.dumps(ctx.installed.state())[:300]}")
+    endpoint_cfg = f"update_endpoint: {ctx.server.endpoint}\n"
+
+    # 0. The corporate CA mirror, its CA in no trust store yet (F13); then
+    #    the CA goes into the OS store, as IT installs a company CA, and
+    #    every step below goes through that trust.
+    mirror_name_and_certificate(ctx, ca)
+    ctx.write_user_config(endpoint_cfg)
+    untrusted_mirror(ctx)
+    trust_ca(ca)
+    proof.info("corporate CA trusted", f"{ca.name} added to the OS trust store; the mirror stays {ctx.server.endpoint}",
+               row=CA_ROW)
 
     # 1. Policy off, the endpoint configured all the same.
     ctx.write_user_config(f"update_check_ttl: 0\nupdate_endpoint: {ctx.server.endpoint}\n")
-    endpoint_cfg = f"update_endpoint: {ctx.server.endpoint}\n"
     if ctx.webdriver:
         s = Session(ctx, "as-version-a")
         try:
