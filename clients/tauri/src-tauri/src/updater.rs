@@ -10,7 +10,7 @@
 //! refuses non-HTTPS endpoints at the builder.
 
 use serde::Serialize;
-use tauri::AppHandle;
+use tauri::{AppHandle, Runtime, Wry};
 use tauri_plugin_updater::{Updater, UpdaterExt};
 
 use crate::error::ShellError;
@@ -81,15 +81,17 @@ impl UpdateGate {
     }
 }
 
-pub(crate) struct AppUpdater<'a> {
-    app: &'a AppHandle,
+/// Generic over the runtime so a test can drive it on Tauri's mock one;
+/// the app itself only ever has the webview runtime, the default.
+pub(crate) struct AppUpdater<'a, R: Runtime = Wry> {
+    app: &'a AppHandle<R>,
     gate: UpdateGate,
 }
 
-impl<'a> AppUpdater<'a> {
+impl<'a, R: Runtime> AppUpdater<'a, R> {
     const CURRENT_VERSION: &'static str = env!("CARGO_PKG_VERSION");
 
-    pub fn load(app: &'a AppHandle) -> Self {
+    pub fn load(app: &'a AppHandle<R>) -> Self {
         AppUpdater {
             app,
             gate: UpdateGate::from_source(UpdatePolicy::load().source()),
@@ -183,6 +185,100 @@ pub(crate) async fn igni_install_update(app: AppHandle) -> Result<(), ShellError
 mod tests {
     use super::*;
     use serde_json::json;
+    use std::io::{Read, Write};
+    use std::net::TcpListener;
+    use std::sync::Arc;
+    use std::time::Duration;
+    use tauri::test::{mock_builder, mock_context, noop_assets, MockRuntime};
+
+    /// An HTTPS update mirror whose certificate no trust store holds: the
+    /// leaf in `tests/fixtures/untrusted-tls/` is signed by a throwaway CA
+    /// whose key was discarded, so nothing can make it trusted. Each
+    /// connection runs the TLS handshake and nothing else.
+    struct UntrustedMirror {
+        port: u16,
+    }
+
+    impl UntrustedMirror {
+        fn start() -> Self {
+            let fixtures = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/untrusted-tls");
+            let cert = std::fs::read(format!("{fixtures}/leaf.der")).unwrap();
+            let key = std::fs::read(format!("{fixtures}/leaf.key.der")).unwrap();
+            let config = rustls::ServerConfig::builder_with_provider(Arc::new(
+                rustls::crypto::ring::default_provider(),
+            ))
+            .with_safe_default_protocol_versions()
+            .unwrap()
+            .with_no_client_auth()
+            .with_single_cert(
+                vec![rustls::pki_types::CertificateDer::from(cert)],
+                rustls::pki_types::PrivateKeyDer::Pkcs8(key.into()),
+            )
+            .unwrap();
+            let config = Arc::new(config);
+            let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+            let port = listener.local_addr().unwrap().port();
+            std::thread::spawn(move || {
+                for stream in listener.incoming().flatten() {
+                    let config = config.clone();
+                    std::thread::spawn(move || {
+                        let mut stream = stream;
+                        stream.set_read_timeout(Some(Duration::from_secs(10))).ok();
+                        let mut conn = rustls::ServerConnection::new(config).unwrap();
+                        let mut tls = rustls::Stream::new(&mut conn, &mut stream);
+                        // The client aborts the handshake; were it to go on,
+                        // there is no HTTP answer to wait for.
+                        let mut buf = [0u8; 1];
+                        let _ = tls.read(&mut buf);
+                        let _ = tls.flush();
+                    });
+                }
+            });
+            UntrustedMirror { port }
+        }
+
+        fn endpoint(&self) -> String {
+            format!("https://127.0.0.1:{}/latest.json", self.port)
+        }
+    }
+
+    /// The app on Tauri's mock runtime with the real updater plugin, as
+    /// `run()` registers it (any public key: no payload gets that far).
+    fn app() -> tauri::App<MockRuntime> {
+        let mut context = mock_context(noop_assets());
+        context
+            .config_mut()
+            .plugins
+            .0
+            .insert("updater".into(), json!({ "pubkey": "unused", "endpoints": [] }));
+        mock_builder()
+            .plugin(tauri_plugin_updater::Builder::new().build())
+            .build(context)
+            .unwrap()
+    }
+
+    #[test]
+    fn a_mirror_with_a_certificate_this_computer_does_not_trust_is_refused_and_says_why() {
+        let mirror = UntrustedMirror::start();
+        let app = app();
+        let updater = AppUpdater {
+            app: app.handle(),
+            gate: UpdateGate::Endpoint(Some(mirror.endpoint())),
+        };
+        let message = tauri::async_runtime::block_on(updater.check()).unwrap_err().to_string();
+        assert!(message.contains(&mirror.endpoint()), "{message}");
+        // The cause, not only "error sending request": a refused
+        // certificate must not read like a mirror that is down.
+        assert!(message.contains("invalid peer certificate"), "{message}");
+        // macOS refuses this leaf first for its 100-year lifetime (the
+        // fixture must outlive the suite), so the issuer verdict and its
+        // advice are asserted where the verdict is the issuer's.
+        #[cfg(not(target_os = "macos"))]
+        assert!(message.ends_with(crate::error::UpdaterFailure::UNTRUSTED_ISSUER), "{message}");
+
+        let message = tauri::async_runtime::block_on(updater.install()).unwrap_err().to_string();
+        assert!(message.contains("invalid peer certificate"), "{message}");
+    }
 
     #[test]
     fn a_disabled_check_serializes_as_before() {

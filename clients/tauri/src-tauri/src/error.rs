@@ -95,15 +95,87 @@ impl fmt::Display for ShellError {
                 )
             }
             ShellError::UpdateEndpointRefused { endpoint, source } => {
-                write!(f, "update_endpoint was refused ({endpoint}): {source}")
+                write!(
+                    f,
+                    "update_endpoint was refused ({endpoint}): {}",
+                    UpdaterFailure(source)
+                )
             }
-            ShellError::Updater(e) => write!(f, "{e}"),
+            ShellError::Updater(e) => write!(f, "{}", UpdaterFailure(e)),
             ShellError::Window(e) => write!(f, "{e}"),
         }
     }
 }
 
 impl std::error::Error for ShellError {}
+
+/// An updater error with what caused it.
+///
+/// The plugin's errors print only their top line, so a mirror whose
+/// certificate this computer refuses read "error sending request for url
+/// (…)", exactly like a mirror that is down or a name that does not
+/// resolve. The causes underneath follow it, and a certificate from an
+/// authority the system does not trust says so in words, with what an
+/// administrator does about it (F13): the updater checks certificates
+/// against the operating system's roots, so a company CA installed there
+/// is trusted, and one that is not is refused.
+pub(crate) struct UpdaterFailure<'a>(pub &'a tauri_plugin_updater::Error);
+
+impl UpdaterFailure<'_> {
+    pub const UNTRUSTED_ISSUER: &'static str =
+        "The update server's certificate is not signed by an authority this computer trusts. \
+         If it is your organisation's own certificate authority, add that CA to the operating \
+         system's trust store: the updater checks certificates against the system's roots.";
+
+    /// Every error under the top one, nearest first.
+    fn causes(&self) -> impl Iterator<Item = &(dyn std::error::Error + 'static)> {
+        std::iter::successors(std::error::Error::source(self.0), |e| e.source())
+    }
+
+    /// The TLS failure in the chain, if any.
+    fn tls_error(&self) -> Option<&rustls::Error> {
+        self.causes().find_map(Self::rustls_in)
+    }
+
+    /// `e` as rustls's error. An `io::Error` hides the error it wraps from
+    /// `source()`, and the refusal arrives as one `io::Error` inside
+    /// another (hyper-util's connector around tokio-rustls's), so each is
+    /// opened in turn.
+    fn rustls_in<'e>(e: &'e (dyn std::error::Error + 'static)) -> Option<&'e rustls::Error> {
+        if let Some(tls) = e.downcast_ref::<rustls::Error>() {
+            return Some(tls);
+        }
+        let inner = e.downcast_ref::<io::Error>()?.get_ref()?;
+        Self::rustls_in(inner)
+    }
+
+    fn untrusted_issuer(&self) -> bool {
+        matches!(
+            self.tls_error(),
+            Some(rustls::Error::InvalidCertificate(
+                rustls::CertificateError::UnknownIssuer
+            ))
+        )
+    }
+}
+
+impl fmt::Display for UpdaterFailure<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut text = self.0.to_string();
+        for cause in self.causes() {
+            let line = cause.to_string();
+            if !text.contains(&line) {
+                text.push_str(": ");
+                text.push_str(&line);
+            }
+        }
+        if self.untrusted_issuer() {
+            text.push_str(". ");
+            text.push_str(Self::UNTRUSTED_ISSUER);
+        }
+        f.write_str(&text)
+    }
+}
 
 /// Commands send the FE the message text, exactly as they did as strings.
 impl Serialize for ShellError {
@@ -231,6 +303,95 @@ mod tests {
             .to_string(),
             "update_endpoint is not a valid URL (x): relative URL without a base"
         );
+    }
+
+    /// An error that prints one line and points at the next, as hyper's
+    /// connect error sits between reqwest's and the TLS one.
+    #[derive(Debug)]
+    struct Layer {
+        line: &'static str,
+        source: Option<io::Error>,
+    }
+
+    impl fmt::Display for Layer {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            f.write_str(self.line)
+        }
+    }
+
+    impl std::error::Error for Layer {
+        fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+            self.source.as_ref().map(|e| e as _)
+        }
+    }
+
+    /// The shape a refused certificate reaches the shell in (read off a
+    /// real refusal): reqwest's line, hyper-util's connect error, then
+    /// rustls's error inside an `io::Error` inside another.
+    fn refused(tls: rustls::Error) -> tauri_plugin_updater::Error {
+        let connect = Layer {
+            line: "client error (Connect)",
+            source: Some(io::Error::other(io::Error::new(io::ErrorKind::InvalidData, tls))),
+        };
+        let request = Layer {
+            line: "error sending request for url (https://mirror.igni.test/latest.json)",
+            source: Some(io::Error::other(connect)),
+        };
+        tauri_plugin_updater::Error::Io(io::Error::other(request))
+    }
+
+    #[test]
+    fn an_untrusted_mirror_certificate_says_so_and_what_to_do() {
+        let e = ShellError::Updater(refused(rustls::Error::InvalidCertificate(
+            rustls::CertificateError::UnknownIssuer,
+        )));
+        assert_eq!(
+            e.to_string(),
+            format!(
+                "error sending request for url (https://mirror.igni.test/latest.json): \
+                 client error (Connect): invalid peer certificate: UnknownIssuer. {}",
+                UpdaterFailure::UNTRUSTED_ISSUER
+            )
+        );
+    }
+
+    #[test]
+    fn another_certificate_failure_names_itself_without_the_ca_advice() {
+        let e = ShellError::Updater(refused(rustls::Error::InvalidCertificate(
+            rustls::CertificateError::NotValidForName,
+        )));
+        let text = e.to_string();
+        assert!(text.ends_with("client error (Connect): invalid peer certificate: NotValidForName"), "{text}");
+        assert!(!text.contains(UpdaterFailure::UNTRUSTED_ISSUER), "{text}");
+    }
+
+    #[test]
+    fn an_updater_error_with_no_cause_reads_as_before() {
+        assert_eq!(
+            ShellError::Updater(tauri_plugin_updater::Error::ReleaseNotFound).to_string(),
+            "Could not fetch a valid release JSON from the remote"
+        );
+    }
+
+    #[test]
+    fn a_cause_already_in_the_message_is_not_repeated() {
+        let inner = io::Error::other("connection refused");
+        let outer = Layer { line: "connect: connection refused", source: Some(inner) };
+        let e = ShellError::Updater(tauri_plugin_updater::Error::Io(io::Error::other(outer)));
+        assert_eq!(e.to_string(), "connect: connection refused");
+    }
+
+    #[test]
+    fn a_refused_endpoint_carries_the_causes_too() {
+        let e = ShellError::UpdateEndpointRefused {
+            endpoint: "https://mirror.igni.test/latest.json".into(),
+            source: refused(rustls::Error::InvalidCertificate(
+                rustls::CertificateError::UnknownIssuer,
+            )),
+        };
+        let text = e.to_string();
+        assert!(text.starts_with("update_endpoint was refused (https://mirror.igni.test/latest.json): error sending"), "{text}");
+        assert!(text.ends_with(UpdaterFailure::UNTRUSTED_ISSUER), "{text}");
     }
 
     #[test]
