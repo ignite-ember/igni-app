@@ -1,0 +1,413 @@
+name: Desktop E2E
+
+# The desktop app, built, installed and run on each OS it ships for, the
+# way a customer and a fleet tool meet it. Scenario ids are
+# docs/ENTERPRISE_TEST_PLAN.md's; each step names the ones it covers.
+#
+# The model is scripts/e2e/scripted_model.py, a deterministic
+# OpenAI-compatible server: there is no API key in this workflow, and none
+# is needed. The first-launch runtime install is pointed at a package index
+# this job builds (igni-core from its main branch and its dependencies), so
+# it is the same install every run and it proves the installer honours an
+# organisation's own mirror.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+# Read-only: nothing here writes to the repository.
+permissions:
+  contents: read
+
+concurrency:
+  group: desktop-e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  linux:
+    name: Desktop E2E (Linux, .deb)
+    # The release builds the .deb on 22.04 (release.yml); test what ships.
+    runs-on: ubuntu-22.04
+    timeout-minutes: 120
+    env:
+      # Where uv keeps the CPython it installs, for the job and the app alike,
+      # so the app's `uv python install 3.12` finds the one installed below.
+      UV_PYTHON_INSTALL_DIR: ${{ github.workspace }}/uv-python
+      IGNI_E2E_OUT: ${{ github.workspace }}/desktop-e2e-out
+    steps:
+      # igni-app, igni-sdk and igni-core side by side, as in ci.yml.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: igni-app
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ignite-ember/igni-sdk
+          path: igni-sdk
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ignite-ember/igni-core
+          path: igni-core
+          persist-credentials: false
+
+      - name: Build deps, WebKitWebDriver, a virtual display and xdg-utils
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf \
+            webkit2gtk-driver xvfb dbus-x11 xdg-utils desktop-file-utils
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24"
+          cache: "npm"
+          cache-dependency-path: igni-app/clients/web/package-lock.json
+
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable branch, 2026-10-16
+        with:
+          toolchain: stable
+
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          workspaces: igni-app/clients/tauri/src-tauri
+
+      - name: tauri-driver
+        run: cargo install tauri-driver --locked
+
+      - name: Web bundle
+        working-directory: igni-app/clients/web
+        run: |
+          npm ci
+          npm run build
+
+      # No updater artifacts: they need the release signing key, which a PR
+      # never sees. Everything else is the release's configuration.
+      - name: Build the .deb
+        working-directory: igni-app/clients/tauri
+        run: >
+          npx --yes @tauri-apps/cli@2 build --bundles deb
+          --config '{"bundle":{"createUpdaterArtifacts":false},"build":{"beforeBuildCommand":""}}'
+
+      - name: ENT-022 install the .deb
+        run: |
+          sudo apt-get install -y ./igni-app/clients/tauri/src-tauri/target/release/bundle/deb/*.deb
+          sudo update-desktop-database
+          bin=$(dpkg -L igni | grep -E '^/usr/bin/' | head -1)
+          test -x "$bin"
+          grep -l 'x-scheme-handler/igni' /usr/share/applications/*.desktop
+          echo "IGNI_APP=$bin" >> "$GITHUB_ENV"
+
+      # The provisioned runtime (ENT-015), the igni CLI for the development
+      # extension, and the Python the scripted model runs on.
+      - name: igni-core's venv
+        working-directory: igni-core
+        run: |
+          uv sync --all-extras
+          echo "IGNI_E2E_PYTHON=$PWD/.venv/bin/python" >> "$GITHUB_ENV"
+
+      # The organisation's package mirror: igni-core built from main and
+      # every wheel `igni-core[decisions]` needs (CPU torch), as a PEP 503
+      # index served from loopback.
+      #
+      # ripgrep is built here from its sdist (this runner has Rust): PyPI's
+      # only Linux wheel of ripgrep 15.1.0 is manylinux_2_39, which needs
+      # glibc 2.39 (Ubuntu 24.04+), and igni-core requires it on every
+      # x86_64 Linux. On Ubuntu 22.04 — where the .deb is built — a
+      # customer's first launch would have to compile it. An igni-core
+      # packaging bug, reported with this suite; an organisation's mirror
+      # carries the built wheel, as this one does.
+      - name: A local package index for the first-launch install
+        run: |
+          set -euo pipefail
+          wh="$RUNNER_TEMP/wheelhouse"
+          (cd igni-core && uv build --wheel --out-dir "$wh")
+          core=$(ls "$wh"/igni_core-*.whl)
+          python -m pip wheel --quiet --no-deps --wheel-dir "$wh" "ripgrep==15.1.0"
+          python -m pip download --quiet --dest "$wh" --only-binary=:all: --find-links "$wh" \
+            --extra-index-url https://download.pytorch.org/whl/cpu "${core}[decisions]"
+          python igni-app/scripts/e2e/make_simple_index.py "$wh" "$RUNNER_TEMP/index"
+          nohup python -m http.server 8899 --bind 127.0.0.1 --directory "$RUNNER_TEMP/index" \
+            > "$RUNNER_TEMP/index-server.log" 2>&1 &
+          echo "IGNI_E2E_INDEX=http://127.0.0.1:8899/simple" >> "$GITHUB_ENV"
+
+      # The CPython the app's pinned uv (0.5.7) installs, put there by the
+      # same uv, so the app's install finds it instead of downloading it.
+      - name: CPython 3.12 for the app's uv
+        run: |
+          python -m venv "$RUNNER_TEMP/uv057"
+          "$RUNNER_TEMP/uv057/bin/pip" install --quiet uv==0.5.7
+          "$RUNNER_TEMP/uv057/bin/uv" python install 3.12
+
+      - name: ENT-016 air-gapped with no runtime
+        if: success() || failure()
+        run: dbus-run-session -- xvfb-run -a node igni-app/clients/tauri/e2e/desktop-e2e.mjs --suite air-gapped
+
+      - name: PLAT-012 first launch, chat, approval, extension, igni:// link, CSP, quit
+        if: success() || failure()
+        run: dbus-run-session -- xvfb-run -a node igni-app/clients/tauri/e2e/desktop-e2e.mjs --suite first-launch
+
+      - name: Only the local index served the install (no PyPI)
+        if: success() || failure()
+        run: |
+          cat "$RUNNER_TEMP/index-server.log" | tail -20
+          grep -q 'GET /simple/igni-core/' "$RUNNER_TEMP/index-server.log"
+
+      - name: ENT-015 ENT-024 managed settings (runtime_python, an http update_endpoint, air-gapped)
+        if: success() || failure()
+        env:
+          IGNI_E2E_UPDATE_PORT: "8898"
+        run: |
+          sudo mkdir -p /etc/igni
+          printf 'air_gapped: true\nruntime_python: %s\nupdate_endpoint: http://127.0.0.1:8898/latest.json\n' \
+            "$IGNI_E2E_PYTHON" | sudo tee /etc/igni/managed-settings.yaml
+          dbus-run-session -- xvfb-run -a node igni-app/clients/tauri/e2e/desktop-e2e.mjs --suite provisioned
+          sudo rm -f /etc/igni/managed-settings.yaml
+
+      - name: Upload screenshots and logs
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: desktop-e2e-linux
+          path: |
+            desktop-e2e-out/
+            ${{ runner.temp }}/index-server.log
+          if-no-files-found: warn
+          retention-days: 14
+
+  windows:
+    name: Desktop E2E (Windows, MSI and NSIS)
+    runs-on: windows-latest
+    timeout-minutes: 150
+    defaults:
+      run:
+        shell: bash
+    env:
+      UV_PYTHON_INSTALL_DIR: ${{ github.workspace }}\uv-python
+      IGNI_E2E_OUT: ${{ github.workspace }}\desktop-e2e-out
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: igni-app
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ignite-ember/igni-sdk
+          path: igni-sdk
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ignite-ember/igni-core
+          path: igni-core
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24"
+          cache: "npm"
+          cache-dependency-path: igni-app/clients/web/package-lock.json
+
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable branch, 2026-10-16
+        with:
+          toolchain: stable
+
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          workspaces: igni-app/clients/tauri/src-tauri
+
+      # msedgedriver must match the WebView2 runtime's version, which follows
+      # Edge stable; the image's preinstalled driver is used when it matches.
+      # It attaches to the app the runner starts (desktop-e2e.mjs explains
+      # why tauri-driver's launch does not work for a Tauri app on Windows).
+      - name: msedgedriver for the WebView2 runtime
+        shell: pwsh
+        run: |
+          $key = "HKLM:\SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}"
+          $wv2 = (Get-ItemProperty -Path $key -ErrorAction SilentlyContinue).pv
+          Write-Host "WebView2 runtime: $wv2"
+          $dest = "$env:RUNNER_TEMP\edgedriver"
+          New-Item -ItemType Directory -Force -Path $dest | Out-Null
+          $ok = $false
+          if ($wv2) {
+            try {
+              Invoke-WebRequest "https://msedgedriver.microsoft.com/$wv2/edgedriver_win64.zip" -OutFile "$dest\d.zip"
+              Expand-Archive "$dest\d.zip" -DestinationPath $dest -Force
+              $ok = $true
+            } catch { Write-Host "no driver download for $wv2 ($_), using the image's" }
+          }
+          if (-not $ok) { Copy-Item "$env:EDGEWEBDRIVER\msedgedriver.exe" $dest }
+          & "$dest\msedgedriver.exe" --version
+          "NATIVE_DRIVER=$dest\msedgedriver.exe" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+      - name: Web bundle
+        working-directory: igni-app/clients/web
+        run: |
+          npm ci
+          npm run build
+
+      - name: Build the MSI and the NSIS installer
+        working-directory: igni-app/clients/tauri
+        run: >
+          npx --yes @tauri-apps/cli@2 build --bundles msi,nsis
+          --config '{"bundle":{"createUpdaterArtifacts":false},"build":{"beforeBuildCommand":""}}'
+
+      - name: ENT-021 NSIS installer, silent install and uninstall
+        shell: pwsh
+        run: igni-app/clients/tauri/e2e/windows-install.ps1 -Action nsis -Bundle igni-app/clients/tauri/src-tauri/target/release/bundle -Out $env:IGNI_E2E_OUT
+
+      - name: ENT-021 PLAT-008 MSI, silent install
+        shell: pwsh
+        run: igni-app/clients/tauri/e2e/windows-install.ps1 -Action install-msi -Bundle igni-app/clients/tauri/src-tauri/target/release/bundle -Out $env:IGNI_E2E_OUT
+
+      - name: igni-core's venv
+        working-directory: igni-core
+        run: |
+          uv sync --all-extras
+          echo "IGNI_E2E_PYTHON=$(cygpath -w "$PWD/.venv/Scripts/python.exe")" >> "$GITHUB_ENV"
+
+      - name: A local package index for the first-launch install
+        run: |
+          set -euo pipefail
+          wh="$RUNNER_TEMP/wheelhouse"
+          (cd igni-core && uv build --wheel --out-dir "$wh")
+          core=$(ls "$wh"/igni_core-*.whl)
+          python -m pip download --quiet --dest "$wh" --only-binary=:all: \
+            --extra-index-url https://download.pytorch.org/whl/cpu "${core}[decisions]"
+          python igni-app/scripts/e2e/make_simple_index.py "$wh" "$RUNNER_TEMP/index"
+          nohup python -m http.server 8899 --bind 127.0.0.1 --directory "$RUNNER_TEMP/index" \
+            > "$RUNNER_TEMP/index-server.log" 2>&1 &
+          echo "IGNI_E2E_INDEX=http://127.0.0.1:8899/simple" >> "$GITHUB_ENV"
+
+      - name: CPython 3.12 for the app's uv
+        run: |
+          python -m venv "$RUNNER_TEMP/uv057"
+          "$RUNNER_TEMP/uv057/Scripts/pip" install --quiet uv==0.5.7
+          "$RUNNER_TEMP/uv057/Scripts/uv" python install 3.12
+
+      - name: PLAT-008 ENT-033 the installed app starts and stops its backend (no WebDriver)
+        if: success() || failure()
+        shell: pwsh
+        run: igni-app/clients/tauri/e2e/windows-install.ps1 -Action smoke -Bundle igni-app/clients/tauri/src-tauri/target/release/bundle -Out $env:IGNI_E2E_OUT
+
+      - name: ENT-016 air-gapped with no runtime
+        if: success() || failure()
+        run: node igni-app/clients/tauri/e2e/desktop-e2e.mjs --suite air-gapped
+
+      - name: PLAT-008 first launch, chat, approval, extension, igni:// link, CSP, quit
+        if: success() || failure()
+        run: node igni-app/clients/tauri/e2e/desktop-e2e.mjs --suite first-launch
+
+      - name: ENT-003 ENT-015 ENT-024 managed settings in %PROGRAMDATA%
+        if: success() || failure()
+        env:
+          IGNI_E2E_UPDATE_PORT: "8898"
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path "$env:ProgramData\igni" | Out-Null
+          @("air_gapped: true", "runtime_python: $env:IGNI_E2E_PYTHON", "update_endpoint: http://127.0.0.1:8898/latest.json") |
+            Set-Content -Path "$env:ProgramData\igni\managed-settings.yaml" -Encoding utf8
+          node igni-app/clients/tauri/e2e/desktop-e2e.mjs --suite provisioned
+          $code = $LASTEXITCODE
+          Remove-Item "$env:ProgramData\igni\managed-settings.yaml"
+          exit $code
+
+      - name: ENT-033 MSI, silent uninstall leaves no backend
+        if: success() || failure()
+        shell: pwsh
+        run: igni-app/clients/tauri/e2e/windows-install.ps1 -Action uninstall-msi -Bundle igni-app/clients/tauri/src-tauri/target/release/bundle -Out $env:IGNI_E2E_OUT
+
+      - name: Upload screenshots and logs
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: desktop-e2e-windows
+          path: |
+            desktop-e2e-out/
+            ${{ runner.temp }}/index-server.log
+          if-no-files-found: warn
+          retention-days: 14
+
+  macos:
+    name: Desktop E2E (macOS, .app)
+    # The release builds on macos-26 (minimum system 26.0, release.yml).
+    runs-on: macos-26
+    timeout-minutes: 90
+    env:
+      IGNI_E2E_OUT: ${{ github.workspace }}/desktop-e2e-out
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: igni-app
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ignite-ember/igni-sdk
+          path: igni-sdk
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ignite-ember/igni-core
+          path: igni-core
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24"
+          cache: "npm"
+          cache-dependency-path: igni-app/clients/web/package-lock.json
+
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable branch, 2026-10-16
+        with:
+          toolchain: stable
+
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          workspaces: igni-app/clients/tauri/src-tauri
+
+      - name: Web bundle
+        working-directory: igni-app/clients/web
+        run: |
+          npm ci
+          npm run build
+
+      # Ad-hoc signed ("-"): a PR has no Developer ID, and an unsigned bundle
+      # cannot carry the entitlements PLAT-004 checks.
+      - name: Build the .app
+        working-directory: igni-app/clients/tauri
+        run: >
+          npx --yes @tauri-apps/cli@2 build --bundles app
+          --config '{"bundle":{"createUpdaterArtifacts":false,"macOS":{"signingIdentity":"-"}},"build":{"beforeBuildCommand":""}}'
+
+      - name: igni-core's venv (the provisioned runtime)
+        working-directory: igni-core
+        run: uv sync --all-extras
+
+      - name: PLAT-001..004 SEC-020 EXT-006 ENT-015 ENT-032 bundle checks and a headless run
+        run: |
+          app=$(ls -d igni-app/clients/tauri/src-tauri/target/release/bundle/macos/*.app | head -1)
+          bash igni-app/clients/tauri/e2e/macos-checks.sh "$PWD/$app" "$PWD/igni-core/.venv/bin/python"
+
+      - name: Upload screenshots and logs
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: desktop-e2e-macos
+          path: desktop-e2e-out/
+          if-no-files-found: warn
+          retention-days: 14

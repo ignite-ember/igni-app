@@ -82,6 +82,17 @@ libc = "0.2"
 # platform — see ``runtime::extract_uv``.
 zip = { version = "9", default-features = false, features = ["deflate"] }
 
+# The Windows uv extraction is plain logic over a .zip; its tests build a
+# zip and run on every platform, so a zip API change cannot again break
+# only the Windows build, which no other CI job compiles.
+[dev-dependencies]
+zip = { version = "9", default-features = false, features = ["deflate"] }
+# Tauri's own mock runtime, so a test can build a real app and a real
+# window and ask what a listener of a given kind hears (``events.rs``:
+# Tauri matches the kind of an address exactly, so a listener of one
+# kind never hears an address of another).
+tauri = { version = "2", features = ["test"] }
+
 [lib]
 name = "igni_app_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]

@@ -1,8 +1,94 @@
 
+// The shell sends menu, link and fullscreen events to one window
+// (events.rs ``ShellEvent::target``). A global ``event.listen`` hears
+// events sent to every window, so each window listens on its own.
+//
+// The listeners are registered first, and they need no DOM: Windows
+// injects this script at document start, where the document's root
+// element does not exist yet. An unguarded ``document.documentElement``
+// throws there, and the throw aborts the whole script — so the window
+// would never register its listeners and would never hear the shell's
+// link.
+//
+// What was registered, and for which label, is kept on the window: a
+// step that fails on the way a link takes has to say whether the
+// listener was heard at all.
 (function () {
-  const html = document.documentElement;
-  html.dataset.host = 'tauri';
-  html.dataset.platform = '__PLATFORM__';
+  const trace = { label: null, registered: [], failed: [], fired: [] };
+  window.__igniListen = trace;
+
+  function listenHere(name, handler) {
+    const ww = window.__TAURI__.webviewWindow;
+    const here = ww && ww.getCurrentWebviewWindow ? ww.getCurrentWebviewWindow() : null;
+    trace.label = here ? here.label : null;
+    const promise = here
+      ? here.listen(name, handler)
+      : window.__TAURI__.event.listen(name, handler);
+    promise.then(
+      () => trace.registered.push(name),
+      (e) => trace.failed.push(`${name}: ${e}`),
+    );
+    return promise;
+  }
+
+  function listenToTheShell() {
+    if (!window.__TAURI__ || !window.__TAURI__.event) return false;
+    listenHere('igni-menu', (e) => {
+      trace.fired.push('igni-menu');
+      const id = e && e.payload;
+      if (typeof id !== 'string') return;
+      window.dispatchEvent(new CustomEvent('igni-host', {
+        detail: { type: 'igni:menu', payload: { id } }
+      }));
+    });
+    // An igni:// link is waiting for this window (deep_link.rs); the web
+    // UI takes it with ``igni_take_open_link``.
+    listenHere('igni-open-link', () => {
+      trace.fired.push('igni-open-link');
+      window.dispatchEvent(new CustomEvent('igni-host', {
+        detail: { type: 'igni:open-link' }
+      }));
+    });
+    // Mirror native fullscreen state into a ``data-fullscreen`` attr
+    // on ``<html>`` so CSS can collapse the header gutter when the
+    // OS hides our traffic-light cluster behind the slide-down panel.
+    listenHere('igni-fullscreen', (e) => {
+      trace.fired.push('igni-fullscreen');
+      const on = !!(e && e.payload);
+      const html = document.documentElement;
+      if (html) html.dataset.fullscreen = on ? 'true' : 'false';
+    });
+    return true;
+  }
+
+  if (!listenToTheShell()) {
+    // The API is not there yet: wait for it rather than leaving the
+    // window deaf.
+    let tries = 0;
+    const timer = setInterval(() => {
+      if (listenToTheShell() || ++tries > 200) clearInterval(timer);
+    }, 50);
+  }
+})();
+
+// Stamp `data-host` and `data-platform` on `<html>` for the
+// host-aware CSS. The root element does not exist yet when the script
+// runs at document start (Windows), so the stamp waits for it rather
+// than insisting on it: a throw here would abort everything below.
+(function () {
+  function stamp() {
+    const html = document.documentElement;
+    if (!html) return false;
+    html.dataset.host = 'tauri';
+    html.dataset.platform = '__PLATFORM__';
+    return true;
+  }
+  if (stamp()) return;
+  document.addEventListener('DOMContentLoaded', stamp, { once: true });
+  let tries = 0;
+  const timer = setInterval(() => {
+    if (stamp() || ++tries > 100) clearInterval(timer);
+  }, 50);
 })();
 
 window.__IGNI_PICK_DIR__ = (start) =>
@@ -107,39 +193,6 @@ window.__IGNI_HOST__ = Object.assign(window.__IGNI_HOST__ || {}, {
   };
 })();
 
-// The shell sends menu, link and fullscreen events to one window
-// (events.rs ``ShellEvent::target``). A global ``event.listen`` hears
-// events sent to every window, so each window listens on its own.
-function listenHere(name, handler) {
-  const ww = window.__TAURI__.webviewWindow;
-  const here = ww && ww.getCurrentWebviewWindow ? ww.getCurrentWebviewWindow() : null;
-  return here ? here.listen(name, handler) : window.__TAURI__.event.listen(name, handler);
-}
-
-if (window.__TAURI__ && window.__TAURI__.event) {
-  listenHere('igni-menu', (e) => {
-    const id = e && e.payload;
-    if (typeof id !== 'string') return;
-    window.dispatchEvent(new CustomEvent('igni-host', {
-      detail: { type: 'igni:menu', payload: { id } }
-    }));
-  });
-  // An igni:// link is waiting for this window (deep_link.rs); the web
-  // UI takes it with ``igni_take_open_link``.
-  listenHere('igni-open-link', () => {
-    window.dispatchEvent(new CustomEvent('igni-host', {
-      detail: { type: 'igni:open-link' }
-    }));
-  });
-  // Mirror native fullscreen state into a ``data-fullscreen`` attr
-  // on ``<html>`` so CSS can collapse the header gutter when the
-  // OS hides our traffic-light cluster behind the slide-down panel.
-  listenHere('igni-fullscreen', (e) => {
-    const on = !!(e && e.payload);
-    document.documentElement.dataset.fullscreen = on ? 'true' : 'false';
-  });
-}
-
 // Fullscreen-state mirror. Calls a custom Rust command that reads
 // ``NSWindow.styleMask`` — the source of truth — and stamps the
 // result onto ``<html data-fullscreen="true|false">``. Polls on
@@ -162,9 +215,11 @@ if (window.__TAURI__ && window.__TAURI__.event) {
     const sync = async () => {
       try {
         const fs = await invoke('igni_is_fullscreen');
-        const prev = document.documentElement.dataset.fullscreen === 'true';
+        const html = document.documentElement;
+        if (!html) return;
+        const prev = html.dataset.fullscreen === 'true';
         if (!!fs !== prev) {
-          document.documentElement.dataset.fullscreen = fs ? 'true' : 'false';
+          html.dataset.fullscreen = fs ? 'true' : 'false';
           console.log('[igni] fullscreen ->', fs);
         }
       } catch (e) {

@@ -1,5 +1,7 @@
 //! App windows: building them, finding the focused one, opening more.
 
+#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
+mod browser_args;
 pub(crate) mod fullscreen;
 mod label;
 mod new_window;
@@ -60,6 +62,13 @@ impl WindowManager {
                 TrafficLights::DEFAULT.x,
                 TrafficLights::DEFAULT.y,
             ));
+
+        // WebView2's switches: wry's defaults plus the environment's
+        // (`browser_args.rs` says why the environment was being ignored).
+        #[cfg(target_os = "windows")]
+        let builder = builder.additional_browser_args(&browser_args::browser_args(
+            std::env::var(browser_args::ENV).ok().as_deref(),
+        ));
 
         let window = builder
             .initialization_script(InitScript::for_platform())
