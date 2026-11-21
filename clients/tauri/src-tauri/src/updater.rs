@@ -185,62 +185,8 @@ pub(crate) async fn igni_install_update(app: AppHandle) -> Result<(), ShellError
 mod tests {
     use super::*;
     use serde_json::json;
-    use std::io::{Read, Write};
-    use std::net::TcpListener;
-    use std::sync::Arc;
-    use std::time::Duration;
+    use crate::tls_testing::TestMirror;
     use tauri::test::{mock_builder, mock_context, noop_assets, MockRuntime};
-
-    /// An HTTPS update mirror whose certificate no trust store holds: the
-    /// leaf in `tests/fixtures/untrusted-tls/` is signed by a throwaway CA
-    /// whose key was discarded, so nothing can make it trusted. Each
-    /// connection runs the TLS handshake and nothing else.
-    struct UntrustedMirror {
-        port: u16,
-    }
-
-    impl UntrustedMirror {
-        fn start() -> Self {
-            let fixtures = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/untrusted-tls");
-            let cert = std::fs::read(format!("{fixtures}/leaf.der")).unwrap();
-            let key = std::fs::read(format!("{fixtures}/leaf.key.der")).unwrap();
-            let config = rustls::ServerConfig::builder_with_provider(Arc::new(
-                rustls::crypto::ring::default_provider(),
-            ))
-            .with_safe_default_protocol_versions()
-            .unwrap()
-            .with_no_client_auth()
-            .with_single_cert(
-                vec![rustls::pki_types::CertificateDer::from(cert)],
-                rustls::pki_types::PrivateKeyDer::Pkcs8(key.into()),
-            )
-            .unwrap();
-            let config = Arc::new(config);
-            let listener = TcpListener::bind("127.0.0.1:0").unwrap();
-            let port = listener.local_addr().unwrap().port();
-            std::thread::spawn(move || {
-                for stream in listener.incoming().flatten() {
-                    let config = config.clone();
-                    std::thread::spawn(move || {
-                        let mut stream = stream;
-                        stream.set_read_timeout(Some(Duration::from_secs(10))).ok();
-                        let mut conn = rustls::ServerConnection::new(config).unwrap();
-                        let mut tls = rustls::Stream::new(&mut conn, &mut stream);
-                        // The client aborts the handshake; were it to go on,
-                        // there is no HTTP answer to wait for.
-                        let mut buf = [0u8; 1];
-                        let _ = tls.read(&mut buf);
-                        let _ = tls.flush();
-                    });
-                }
-            });
-            UntrustedMirror { port }
-        }
-
-        fn endpoint(&self) -> String {
-            format!("https://127.0.0.1:{}/latest.json", self.port)
-        }
-    }
 
     /// The app on Tauri's mock runtime with the real updater plugin, as
     /// `run()` registers it (any public key: no payload gets that far).
@@ -257,16 +203,50 @@ mod tests {
             .unwrap()
     }
 
+    /// A release newer than any build, for every target the plugin asks
+    /// about (its signature is never reached: no test downloads).
+    const LATEST: &str = r#"{"version":"999.0.0","notes":"","pub_date":"2026-11-21T00:00:00Z","platforms":{
+        "darwin-aarch64":{"url":"https://127.0.0.1/p","signature":"x"},
+        "darwin-x86_64":{"url":"https://127.0.0.1/p","signature":"x"},
+        "linux-x86_64":{"url":"https://127.0.0.1/p","signature":"x"},
+        "linux-aarch64":{"url":"https://127.0.0.1/p","signature":"x"},
+        "windows-x86_64":{"url":"https://127.0.0.1/p","signature":"x"}}}"#;
+
+    /// A company mirror once IT has its CA in the system's store: the
+    /// check goes through and offers the release. Linux only, where the
+    /// store can be swapped for one process (`SSL_CERT_FILE`); the
+    /// updater-e2e proof covers all three with the real OS stores.
+    #[cfg(target_os = "linux")]
     #[test]
-    fn a_mirror_with_a_certificate_this_computer_does_not_trust_is_refused_and_says_why() {
-        let mirror = UntrustedMirror::start();
+    fn a_mirror_whose_ca_the_system_trusts_offers_its_update() {
+        crate::tls_testing::passes_trusting_the_test_ca("updater::tests::check_with_the_test_ca_in_the_system_bundle");
+    }
+
+    #[test]
+    #[ignore = "run by a_mirror_whose_ca_the_system_trusts_offers_its_update, with SSL_CERT_FILE"]
+    fn check_with_the_test_ca_in_the_system_bundle() {
+        let mirror = TestMirror::start(LATEST);
         let app = app();
         let updater = AppUpdater {
             app: app.handle(),
-            gate: UpdateGate::Endpoint(Some(mirror.endpoint())),
+            gate: UpdateGate::Endpoint(Some(mirror.url("/latest.json"))),
+        };
+        let result = tauri::async_runtime::block_on(updater.check()).unwrap();
+        assert_eq!(serde_json::to_value(&result).unwrap()["latest_version"], json!("999.0.0"));
+        assert_eq!(serde_json::to_value(&result).unwrap()["available"], json!(true));
+    }
+
+    #[test]
+    fn a_mirror_with_a_certificate_this_computer_does_not_trust_is_refused_and_says_why() {
+        let mirror = TestMirror::start(LATEST);
+        let endpoint = mirror.url("/latest.json");
+        let app = app();
+        let updater = AppUpdater {
+            app: app.handle(),
+            gate: UpdateGate::Endpoint(Some(endpoint.clone())),
         };
         let message = tauri::async_runtime::block_on(updater.check()).unwrap_err().to_string();
-        assert!(message.contains(&mirror.endpoint()), "{message}");
+        assert!(message.contains(&endpoint), "{message}");
         // The cause, not only "error sending request": a refused
         // certificate must not read like a mirror that is down.
         assert!(message.contains("invalid peer certificate"), "{message}");
@@ -274,7 +254,7 @@ mod tests {
         // fixture must outlive the suite), so the issuer verdict and its
         // advice are asserted where the verdict is the issuer's.
         #[cfg(not(target_os = "macos"))]
-        assert!(message.ends_with(crate::error::UpdaterFailure::UNTRUSTED_ISSUER), "{message}");
+        assert!(message.ends_with(crate::error::CauseChain::UPDATE_SERVER), "{message}");
 
         let message = tauri::async_runtime::block_on(updater.install()).unwrap_err().to_string();
         assert!(message.contains("invalid peer certificate"), "{message}");

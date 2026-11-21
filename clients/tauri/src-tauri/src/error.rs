@@ -98,10 +98,10 @@ impl fmt::Display for ShellError {
                 write!(
                     f,
                     "update_endpoint was refused ({endpoint}): {}",
-                    UpdaterFailure(source)
+                    CauseChain::new(source, CauseChain::UPDATE_SERVER)
                 )
             }
-            ShellError::Updater(e) => write!(f, "{}", UpdaterFailure(e)),
+            ShellError::Updater(e) => write!(f, "{}", CauseChain::new(e, CauseChain::UPDATE_SERVER)),
             ShellError::Window(e) => write!(f, "{e}"),
         }
     }
@@ -109,32 +109,54 @@ impl fmt::Display for ShellError {
 
 impl std::error::Error for ShellError {}
 
-/// An updater error with what caused it.
+/// An error with everything that caused it, on one line.
 ///
-/// The plugin's errors print only their top line, so a mirror whose
-/// certificate this computer refuses read "error sending request for url
-/// (…)", exactly like a mirror that is down or a name that does not
-/// resolve. The causes underneath follow it, and a certificate from an
-/// authority the system does not trust says so in words, with what an
-/// administrator does about it (F13): the updater checks certificates
-/// against the operating system's roots, so a company CA installed there
-/// is trusted, and one that is not is refused.
-pub(crate) struct UpdaterFailure<'a>(pub &'a tauri_plugin_updater::Error);
+/// Many errors print only their top line: the updater's read "error
+/// sending request for url (…)" for a certificate this computer refused,
+/// exactly like a server that is down or a name that does not resolve.
+/// The causes underneath follow it, and a certificate from an authority
+/// the system does not trust says so in words, with what an administrator
+/// does about it (F13). Every HTTPS client in the shell checks
+/// certificates against the operating system's roots, so a company CA
+/// installed there is trusted and one that is not is refused; the advice
+/// names the server the caller was talking to.
+pub(crate) struct CauseChain<'a> {
+    error: &'a (dyn std::error::Error + 'static),
+    advice: &'static str,
+}
 
-impl UpdaterFailure<'_> {
-    pub const UNTRUSTED_ISSUER: &'static str =
+impl<'a> CauseChain<'a> {
+    /// For a mirror that `update_endpoint` names, or the release host.
+    pub const UPDATE_SERVER: &'static str =
         "The update server's certificate is not signed by an authority this computer trusts. \
          If it is your organisation's own certificate authority, add that CA to the operating \
          system's trust store: the updater checks certificates against the system's roots.";
 
-    /// Every error under the top one, nearest first.
-    fn causes(&self) -> impl Iterator<Item = &(dyn std::error::Error + 'static)> {
-        std::iter::successors(std::error::Error::source(self.0), |e| e.source())
+    /// For a download from the public internet (uv's release), which a
+    /// proxy that inspects TLS re-signs with its own CA.
+    pub const DOWNLOAD: &'static str =
+        "The download's certificate is not signed by an authority this computer trusts. \
+         Behind a proxy that inspects TLS, add the proxy's certificate authority to the \
+         operating system's trust store: igni checks certificates against the system's roots.";
+
+    /// For igni server and the gateway.
+    pub const IGNI_SERVER: &'static str =
+        "igni server's certificate is not signed by an authority this computer trusts. \
+         If it is your organisation's own certificate authority, add that CA to the operating \
+         system's trust store: igni checks certificates against the system's roots.";
+
+    pub fn new(error: &'a (dyn std::error::Error + 'static), advice: &'static str) -> Self {
+        CauseChain { error, advice }
+    }
+
+    /// The error itself and every error under it, nearest first.
+    fn chain(&self) -> impl Iterator<Item = &'a (dyn std::error::Error + 'static)> {
+        std::iter::successors(Some(self.error), |e| e.source())
     }
 
     /// The TLS failure in the chain, if any.
-    fn tls_error(&self) -> Option<&rustls::Error> {
-        self.causes().find_map(Self::rustls_in)
+    pub fn tls_error(&self) -> Option<&'a rustls::Error> {
+        self.chain().find_map(Self::rustls_in)
     }
 
     /// `e` as rustls's error. An `io::Error` hides the error it wraps from
@@ -149,7 +171,7 @@ impl UpdaterFailure<'_> {
         Self::rustls_in(inner)
     }
 
-    fn untrusted_issuer(&self) -> bool {
+    pub fn untrusted_issuer(&self) -> bool {
         matches!(
             self.tls_error(),
             Some(rustls::Error::InvalidCertificate(
@@ -159,19 +181,21 @@ impl UpdaterFailure<'_> {
     }
 }
 
-impl fmt::Display for UpdaterFailure<'_> {
+impl fmt::Display for CauseChain<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let mut text = self.0.to_string();
-        for cause in self.causes() {
-            let line = cause.to_string();
-            if !text.contains(&line) {
+        let mut text = String::new();
+        for e in self.chain() {
+            let line = e.to_string();
+            if text.is_empty() {
+                text = line;
+            } else if !text.contains(&line) {
                 text.push_str(": ");
                 text.push_str(&line);
             }
         }
         if self.untrusted_issuer() {
             text.push_str(". ");
-            text.push_str(Self::UNTRUSTED_ISSUER);
+            text.push_str(self.advice);
         }
         f.write_str(&text)
     }
@@ -350,7 +374,7 @@ mod tests {
             format!(
                 "error sending request for url (https://mirror.igni.test/latest.json): \
                  client error (Connect): invalid peer certificate: UnknownIssuer. {}",
-                UpdaterFailure::UNTRUSTED_ISSUER
+                CauseChain::UPDATE_SERVER
             )
         );
     }
@@ -362,7 +386,7 @@ mod tests {
         )));
         let text = e.to_string();
         assert!(text.ends_with("client error (Connect): invalid peer certificate: NotValidForName"), "{text}");
-        assert!(!text.contains(UpdaterFailure::UNTRUSTED_ISSUER), "{text}");
+        assert!(!text.contains(CauseChain::UPDATE_SERVER), "{text}");
     }
 
     #[test]
@@ -391,7 +415,7 @@ mod tests {
         };
         let text = e.to_string();
         assert!(text.starts_with("update_endpoint was refused (https://mirror.igni.test/latest.json): error sending"), "{text}");
-        assert!(text.ends_with(UpdaterFailure::UNTRUSTED_ISSUER), "{text}");
+        assert!(text.ends_with(CauseChain::UPDATE_SERVER), "{text}");
     }
 
     #[test]

@@ -1,6 +1,6 @@
-//! How the shell reaches igni server and the gateway over the network:
-//! TLS that trusts what the system trusts, and the proxy the environment
-//! names.
+//! How the shell reaches the network (igni server, the gateway, uv's
+//! download): TLS that trusts what the system trusts, and the proxy the
+//! environment names.
 //!
 //! TLS is rustls with the platform verifier, so a certificate an
 //! enterprise CA issued is accepted exactly where the system accepts it,
@@ -141,28 +141,64 @@ fn parse_proxy(value: &str) -> Option<ProxyTarget> {
     })
 }
 
-/// A ureq agent for igni server and the gateway's HTTP routes: platform
-/// TLS, the environment's proxy for `host`, and a bounded wait.
-pub(crate) fn http_agent(host: &str, tls: bool) -> ureq::Agent {
-    let mut builder = ureq::AgentBuilder::new()
-        .timeout_connect(std::time::Duration::from_secs(10))
-        .timeout(std::time::Duration::from_secs(20))
-        .https_only(false);
-    match tls_config(false) {
-        Ok(config) => builder = builder.tls_config(config),
-        Err(e) => eprintln!("igni: the platform's TLS roots are unavailable ({e}); using the bundled ones"),
-    }
+/// The one way the shell makes a ureq agent: rustls with the platform's
+/// roots, and the environment's proxy for `host`. Every ureq request in
+/// the shell (igni server, the gateway's HTTP routes, uv's download)
+/// starts here. There is no fallback to ureq's compiled-in root list
+/// (webpki-roots): it would refuse a company CA the system trusts, so
+/// when the platform's roots cannot be had the request fails instead
+/// (`tests/config_contracts.rs` holds every client to this).
+pub(crate) fn agent_builder(host: &str, tls: bool) -> Result<ureq::AgentBuilder, rustls::Error> {
+    let mut builder = ureq::AgentBuilder::new().tls_config(tls_config(false)?);
     if let Some(proxy) = ProxyConfig::from_env().for_host(host, tls) {
         if let Ok(proxy) = ureq::Proxy::new(proxy.url()) {
             builder = builder.proxy(proxy);
         }
     }
-    builder.build()
+    Ok(builder)
+}
+
+/// A ureq agent for igni server and the gateway's HTTP routes: platform
+/// TLS, the environment's proxy for `host`, and a bounded wait.
+pub(crate) fn http_agent(host: &str, tls: bool) -> Result<ureq::Agent, rustls::Error> {
+    Ok(agent_builder(host, tls)?
+        .timeout_connect(std::time::Duration::from_secs(10))
+        .timeout(std::time::Duration::from_secs(20))
+        .https_only(false)
+        .build())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::error::CauseChain;
+    use crate::tls_testing::TestMirror;
+
+    #[test]
+    fn the_agent_refuses_a_certificate_from_an_authority_in_no_store() {
+        let mirror = TestMirror::start("{}");
+        let err = http_agent("127.0.0.1", true).unwrap().get(&mirror.url("/v1/me")).call().unwrap_err();
+        let chain = CauseChain::new(&err, CauseChain::IGNI_SERVER);
+        assert!(chain.tls_error().is_some(), "{chain}");
+        #[cfg(not(target_os = "macos"))]
+        assert!(chain.untrusted_issuer(), "{chain}");
+    }
+
+    /// The agent reads the system's roots: with the CA in the system
+    /// bundle it is trusted, where ureq's compiled-in list would refuse it.
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn the_agent_trusts_a_ca_the_system_trusts() {
+        crate::tls_testing::passes_trusting_the_test_ca("cloud::net::tests::agent_with_the_test_ca_in_the_system_bundle");
+    }
+
+    #[test]
+    #[ignore = "run by the_agent_trusts_a_ca_the_system_trusts, with SSL_CERT_FILE"]
+    fn agent_with_the_test_ca_in_the_system_bundle() {
+        let mirror = TestMirror::start(r#"{"ok":true}"#);
+        let body = http_agent("127.0.0.1", true).unwrap().get(&mirror.url("/v1/me")).call().unwrap().into_string().unwrap();
+        assert_eq!(body, r#"{"ok":true}"#);
+    }
 
     #[test]
     fn the_https_proxy_is_used_for_tls_and_the_http_one_otherwise() {
