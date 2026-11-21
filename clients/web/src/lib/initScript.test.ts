@@ -42,6 +42,49 @@ function runScript() {
   new Function(SCRIPT)();
 }
 
+/**
+ * The document as WebView2 hands it to a script that runs when the
+ * document is created: no <html> element yet. Listeners added to it are
+ * kept so the test can fire them once the element exists.
+ */
+function documentBeforeHtml() {
+  const handlers: Record<string, Array<() => void>> = {};
+  let html: HTMLElement | null = null;
+  const doc = new Proxy(document, {
+    get(target, key) {
+      if (key === "documentElement") return html;
+      if (key === "addEventListener") {
+        return (name: string, handler: () => void) => {
+          if (name === "readystatechange" || name === "DOMContentLoaded") {
+            (handlers[name] ??= []).push(handler);
+            return;
+          }
+          target.addEventListener(name, handler as EventListener, true);
+        };
+      }
+      if (key === "removeEventListener") {
+        return (name: string, handler: () => void) => {
+          handlers[name] = (handlers[name] ?? []).filter((h) => h !== handler);
+        };
+      }
+      const value = Reflect.get(target, key, target);
+      return typeof value === "function" ? value.bind(target) : value;
+    },
+  });
+  return {
+    doc,
+    parse() {
+      html = document.createElement("html");
+      for (const handler of [...(handlers.readystatechange ?? []), ...(handlers.DOMContentLoaded ?? [])]) handler();
+      return html;
+    },
+  };
+}
+
+function runScriptIn(doc: Document) {
+  new Function("document", SCRIPT)(doc);
+}
+
 describe("the desktop shell's init script", () => {
   beforeEach(() => {
     vi.useFakeTimers();
@@ -78,6 +121,18 @@ describe("the desktop shell's init script", () => {
     tauri.listeners.get("igni-menu")?.({ payload: "new_chat" });
     window.removeEventListener("igni-host", on);
     expect(seen).toEqual([{ type: "igni:menu", payload: { id: "new_chat" } }]);
+  });
+
+  it("runs to the end in a document that has no <html> element yet (WebView2)", () => {
+    const tauri = fakeTauri();
+    (window as { __TAURI__?: unknown }).__TAURI__ = tauri.api;
+    const early = documentBeforeHtml();
+    expect(() => runScriptIn(early.doc)).not.toThrow();
+    expect(tauri.listeners.has("igni-menu")).toBe(true);
+    expect(typeof (window as { __IGNI_PICK_DIR__?: unknown }).__IGNI_PICK_DIR__).toBe("function");
+    const html = early.parse();
+    expect(html.dataset.host).toBe("tauri");
+    expect(html.dataset.platform).toBe("win");
   });
 
   it("registers at once when the API is already there", () => {
