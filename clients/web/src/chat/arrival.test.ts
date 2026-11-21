@@ -59,6 +59,26 @@ describe("a link that opens a page", () => {
   });
 });
 
+describe("the desktop's cloud side survives the address bar", () => {
+  const cloud = "?ws=ws%3A%2F%2F127.0.0.1%3A4&host=tauri&side=cloud&backend=cloud-0123456789ab";
+
+  it("keeps side and backend when a page is opened and when it is closed", () => {
+    const placed = Arrivals.placeSearch(cloud, { kind: "acme.notes", label: "Notes", params: { id: "7" } });
+    const query = new URLSearchParams(placed);
+    expect(query.get("side")).toBe("cloud");
+    expect(query.get("backend")).toBe("cloud-0123456789ab");
+    expect(query.get("open")).toBe("acme.notes");
+    const closed = new URLSearchParams(Arrivals.placeSearch(placed, null));
+    expect(closed.get("side")).toBe("cloud");
+    expect(closed.get("backend")).toBe("cloud-0123456789ab");
+    expect(closed.get("open")).toBeNull();
+  });
+
+  it("never reads side or backend as a page's own params", () => {
+    expect(Arrivals.fromSearch(`${cloud}&open=acme.notes&id=7`)).toEqual({ page: "acme.notes", params: { id: "7" } });
+  });
+});
+
 describe("the address bar shows where the window is", () => {
   // The bridge promises the host folds a page's setLocation into its own
   // URL. Kept only in the window's saved route, the address never
