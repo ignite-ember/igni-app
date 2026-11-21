@@ -1,8 +1,22 @@
 
+// WebView2 runs this script when the document is created, before it has
+// an <html> element; touching ``document.documentElement`` then threw and
+// stopped the whole script, so on Windows none of what follows existed:
+// no host bridges and no menu listeners (desktop proof run 44822074202).
 (function () {
-  const html = document.documentElement;
-  html.dataset.host = 'tauri';
-  html.dataset.platform = '__PLATFORM__';
+  const stamp = () => {
+    const html = document.documentElement;
+    if (!html) return false;
+    html.dataset.host = 'tauri';
+    html.dataset.platform = '__PLATFORM__';
+    return true;
+  };
+  if (!stamp()) {
+    document.addEventListener('readystatechange', function again() {
+      if (stamp()) document.removeEventListener('readystatechange', again);
+    });
+    document.addEventListener('DOMContentLoaded', stamp, { once: true });
+  }
 })();
 
 window.__IGNI_PICK_DIR__ = (start) =>
@@ -154,7 +168,7 @@ whenTauriEvents(() => {
   // OS hides our traffic-light cluster behind the slide-down panel.
   listenHere('igni-fullscreen', (e) => {
     const on = !!(e && e.payload);
-    document.documentElement.dataset.fullscreen = on ? 'true' : 'false';
+    if (document.documentElement) document.documentElement.dataset.fullscreen = on ? 'true' : 'false';
   });
 });
 
@@ -180,6 +194,7 @@ whenTauriEvents(() => {
     const sync = async () => {
       try {
         const fs = await invoke('igni_is_fullscreen');
+        if (!document.documentElement) return;
         const prev = document.documentElement.dataset.fullscreen === 'true';
         if (!!fs !== prev) {
           document.documentElement.dataset.fullscreen = fs ? 'true' : 'false';
