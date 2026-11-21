@@ -2,6 +2,7 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import App from "./App";
 import { ChatScrollDemo } from "./dev/ChatScrollDemo";
+import { CloudSwitchDemo } from "./dev/CloudSwitchDemo";
 import { HitlDemo } from "./dev/HitlDemo";
 import { InterruptedBannerDemo } from "./dev/InterruptedBannerDemo";
 import { OrchestrateDemo } from "./dev/OrchestrateDemo";
@@ -32,6 +33,10 @@ document.documentElement.dataset.host = host.kind;
 //                          control) with click + keyboard event
 //                          logging — see
 //                          ``dev/InterruptedBannerDemo.tsx``.
+//   ?demo=cloud          — the desktop's cloud switch: the control,
+//                          the backend chip and every banner, plus a
+//                          live panel the shell's pushes drive — see
+//                          ``dev/CloudSwitchDemo.tsx``.
 //   ?demo=app            — force-load the real app (otherwise
 //                          the dev Tauri shell, which has no
 //                          address bar to type a query into,
@@ -48,6 +53,7 @@ function pickRoot() {
   if (demo === "viz-stream") return <VisualizerStreamDemo />;
   if (demo === "workflow") return <WorkflowDemo />;
   if (demo === "interrupted") return <InterruptedBannerDemo />;
+  if (demo === "cloud") return <CloudSwitchDemo />;
   return <App />;
 }
 

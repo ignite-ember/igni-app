@@ -16,11 +16,22 @@ describe("WindowServices", () => {
   });
 
   it("builds a window whose sidebar follows its width until the model answers", () => {
-    const host = { viewKey: "test-window", kind: "web" as const, notify: vi.fn() };
+    const host = { viewKey: "test-window", kind: "web" as const, notify: vi.fn(), onCloud: false, accountRpc: vi.fn() };
     const wide = WindowServices.create({ host, search: "?dir=/a", innerWidth: 1200 });
     expect(wide.core.windowModel.get("sidebar").open).toBe(true);
     expect(wide.chat.opening.wantedDir).toBe("/a");
     const narrow = WindowServices.create({ host, search: "", innerWidth: 400 });
     expect(narrow.core.windowModel.get("sidebar").open).toBe(false);
+    expect(wide.shell.statusSource.accountElsewhere).toBe(false);
+    expect(host.accountRpc).not.toHaveBeenCalled();
+  });
+
+  it("on the cloud side asks this computer's backend who is signed in", async () => {
+    const accountRpc = vi.fn(async () => ({ cloud_email: "rita@acme.test" }));
+    const host = { viewKey: "test-window", kind: "tauri" as const, notify: vi.fn(), onCloud: true, accountRpc };
+    const services = WindowServices.create({ host, search: "", innerWidth: 1200 });
+    expect(services.shell.statusSource.accountElsewhere).toBe(true);
+    expect(await services.shell.statusSource.account()).toEqual({ ok: true, account: { cloud_email: "rita@acme.test" } });
+    expect(accountRpc).toHaveBeenCalledWith("get_status");
   });
 });

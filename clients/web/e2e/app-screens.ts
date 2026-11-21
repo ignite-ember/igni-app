@@ -131,4 +131,10 @@ export const APP_SCREENS: readonly AppScreen[] = [
     click: /One-shot/i,
     ready: { selector: '[data-status="done"]' },
   },
+  // The desktop's cloud switch: the control, the chip, every banner.
+  {
+    name: '18-cloud-switch',
+    demo: 'cloud',
+    ready: { selector: '.backend-banner', count: 9 },
+  },
 ]

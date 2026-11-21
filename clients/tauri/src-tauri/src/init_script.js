@@ -117,6 +117,13 @@ function listenHere(name, handler) {
 }
 
 if (window.__TAURI__ && window.__TAURI__.event) {
+  // The cloud switch's side and state (cloud/switchboard.rs) is the app's,
+  // not one window's: it is broadcast, so it is heard globally.
+  window.__TAURI__.event.listen('igni-backend-state', (e) => {
+    window.dispatchEvent(new CustomEvent('igni-host', {
+      detail: { type: 'igni:backend-state', payload: e && e.payload }
+    }));
+  });
   listenHere('igni-menu', (e) => {
     const id = e && e.payload;
     if (typeof id !== 'string') return;

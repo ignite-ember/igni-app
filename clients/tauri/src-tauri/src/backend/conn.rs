@@ -57,6 +57,19 @@ impl BackendConn {
         &self.version
     }
 
+    pub fn port(&self) -> u16 {
+        self.port
+    }
+
+    pub fn ws_token(&self) -> Option<&WsToken> {
+        self.ws_token.as_ref()
+    }
+
+    /// `ws://127.0.0.1:<port>`, for the shell's own connections.
+    pub fn ws_url(&self) -> String {
+        format!("ws://127.0.0.1:{}", self.port)
+    }
+
     /// The URL a window loads to reach the backend.
     ///
     /// `project_dir` is set only for a window opened onto a folder of its
@@ -68,7 +81,7 @@ impl BackendConn {
         let ws = percent_encode(&format!("ws://127.0.0.1:{}", self.port));
         let actual = self.version.actual.as_deref().unwrap_or("unknown");
         let mut url = format!(
-            "index.html?ws={ws}&host=tauri&expected_cli={}&actual_cli={actual}&backend_source={}",
+            "index.html?ws={ws}&host=tauri&expected_cli={}&actual_cli={actual}&backend_source={}&side=local&backend=local",
             self.version.expected, self.version.source
         );
         if let Some(dir) = project_dir {
@@ -82,6 +95,21 @@ impl BackendConn {
         }
         url
     }
+}
+
+/// The URL a window loads to reach the cloud igni through the relay: the
+/// same shape as a local backend's, with the relay's port and token, the
+/// cloud's storage key (§4.4) and `side=cloud`. No folder: a window on the
+/// cloud opens on the VM's workspace. The version chip says `cloud`, since
+/// igni's `welcome` carries no version (§5, Q6).
+pub(crate) fn cloud_app_url(relay_port: u16, relay_token: &WsToken, backend_key: &str) -> String {
+    let ws = percent_encode(&format!("ws://127.0.0.1:{relay_port}"));
+    format!(
+        "index.html?ws={ws}&host=tauri&expected_cli={}&actual_cli=cloud&backend_source=cloud&side=cloud&backend={}#igni_ws_token={}",
+        IGNI_CORE_VERSION,
+        percent_encode(backend_key),
+        percent_encode(relay_token.as_str())
+    )
 }
 
 /// Percent-encode one query-string value: RFC 3986 unreserved characters
@@ -126,6 +154,7 @@ mod tests {
         assert!(url.contains("&expected_cli=1.0.3"));
         assert!(url.contains("&actual_cli=1.0.3"));
         assert!(url.contains("&backend_source=managed_venv"));
+        assert!(url.contains("&side=local&backend=local"), "the window's client state is the local backend's");
     }
 
     #[test]
@@ -169,6 +198,18 @@ mod tests {
     fn encoding_leaves_unreserved_characters_alone() {
         assert_eq!(percent_encode("Az0-_.~"), "Az0-_.~");
         assert_eq!(percent_encode("é"), "%C3%A9");
+    }
+
+    #[test]
+    fn a_cloud_window_points_at_the_relay_with_its_own_key_and_no_folder() {
+        let url = cloud_app_url(40000, &WsToken::from("relay-tok".to_string()), "cloud-0123456789ab");
+        let (query, fragment) = url.split_once('#').unwrap();
+        assert!(query.contains("ws=ws%3A%2F%2F127.0.0.1%3A40000"), "{url}");
+        assert!(query.contains("&side=cloud&backend=cloud-0123456789ab"), "{url}");
+        assert!(query.contains("&backend_source=cloud"), "{url}");
+        assert!(!query.contains("dir="), "{url}");
+        assert!(!query.contains("relay-tok"), "{url}");
+        assert_eq!(fragment, "igni_ws_token=relay-tok");
     }
 
     #[test]

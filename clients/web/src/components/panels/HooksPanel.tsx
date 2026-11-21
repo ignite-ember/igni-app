@@ -200,7 +200,9 @@ function HookRow({ hook }: { hook: HookEntry }) {
   // Webhook URLs aren't files — open externally if at all. Script
   // commands go through the host bridge: the OS in Tauri,
   // preview modal in plain web.
-  if (isWebhook) {
+  // On the desktop's cloud side a script's path is on the VM: nothing on
+  // this computer opens it (design §5).
+  if (isWebhook || host.onCloud) {
     return <div className="hooks-row">{Inner}</div>;
   }
   return (
