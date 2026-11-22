@@ -13,7 +13,7 @@ use super::install_plan::ComponentVersions;
 
 const FILE_NAME: &str = "igni-install.json";
 /// The marker's name before the rename, read when there is no [`FILE_NAME`].
-const LEGACY_FILE_NAME: &str = "ember-install.json";
+pub(super) const LEGACY_FILE_NAME: &str = "ember-install.json";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct InstallMarker {

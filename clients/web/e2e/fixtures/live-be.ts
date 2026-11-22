@@ -23,7 +23,7 @@
  * ``reporters/skips.ts`` enforces.
  */
 
-import { test as base, type Page } from "@playwright/test";
+import { test as base, type BrowserContext, type Page } from "@playwright/test";
 import {
   ChildProcessWithoutNullStreams,
   execFile,
@@ -35,6 +35,7 @@ import * as os from "node:os";
 import * as fs from "node:fs";
 import * as fsp from "node:fs/promises";
 import { fileURLToPath } from "node:url";
+import { randomBytes } from "node:crypto";
 
 export type LiveBe = {
   /** ``ws://127.0.0.1:PORT`` — what the FE takes as ``?ws=``. */
@@ -55,6 +56,19 @@ export type LiveBe = {
    * refused and the app waits at "Connecting to backend…" forever.
    */
   wsToken: string | null;
+  /**
+   * The window token the backend requires (``IGNI_WS_TOKEN``), or "" for a
+   * borrowed backend started without one. The fixture hands it to every
+   * page of the test's browser context as ``window.__IGNI_WS_TOKEN__``, the
+   * way an embedder does, so ``?ws=`` alone connects.
+   */
+  token: string;
+  /** The backend's own HOME (``~/.igni`` lives there), or null if borrowed. */
+  home: string | null;
+  /** SIGKILL the spawned backend (a crash). */
+  kill(): Promise<void>;
+  /** Start it again on the same port, home, project and token. */
+  restart(): Promise<void>;
 };
 
 // Project root: walk up from clients/web/e2e/fixtures to the repo root.
@@ -94,9 +108,31 @@ export function whyNoBackend(
  * makes this independent of both the developer's config and of
  * whatever the built-in default is currently called.
  *
- * The URL is never dialled. None of these specs drive the agent loop.
+ * The URL is the worker's scripted model (``scriptedModel`` below), so
+ * the specs that drive the agent loop get a deterministic answer.
  */
-const STUB_MODEL = "e2e-wire-format-stub";
+const STUB_MODEL = "e2e-scripted";
+
+/** ``scripts/e2e/scripted_model.py``: the deterministic model every spawned
+ *  backend talks to. See its docstring for the script a message can carry. */
+export const SCRIPTED_MODEL = path.join(REPO_ROOT, "scripts", "e2e", "scripted_model.py");
+
+export type ScriptedModel = {
+  /** ``http://127.0.0.1:PORT/v1`` — the registry entry's ``url``. */
+  url: string;
+  /** Every request the backend made of the model, newest last. */
+  requests(sinceMs?: number): ModelRequest[];
+};
+
+export type ModelRequest = {
+  at: number;
+  model: string;
+  stream: boolean;
+  messages: { role: string; content: unknown; tool_calls?: unknown[] }[];
+  tools: string[];
+  plan: Record<string, unknown>;
+  headers: Record<string, string>;
+};
 
 /** A handful of real files, so the ``@`` picker has something to narrow.
  *
@@ -182,7 +218,20 @@ async function writeFixtureCredentials(projectDir: string): Promise<string> {
   return file;
 }
 
-async function writeStubConfig(projectDir: string): Promise<void> {
+async function writeStubConfig(
+  projectDir: string,
+  modelUrl: string,
+  extraConfig = "",
+  extraModels: string[] = [],
+): Promise<void> {
+  const entry = (id: string) => [
+    `    ${id}:`,
+    "      provider: openai_like",
+    `      model_id: ${id}`,
+    `      url: ${modelUrl}`,
+    "      context_window: 8192",
+    "      vision: false",
+  ];
   await fsp.mkdir(path.join(projectDir, ".igni"), { recursive: true });
   const credentials = await writeFixtureCredentials(projectDir);
   await fsp.writeFile(
@@ -193,12 +242,9 @@ async function writeStubConfig(projectDir: string): Promise<void> {
       "models:",
       `  default: ${STUB_MODEL}`,
       "  registry:",
-      `    ${STUB_MODEL}:`,
-      "      provider: openai_like",
-      `      model_id: ${STUB_MODEL}`,
-      "      url: http://127.0.0.1:9/v1",
-      "      context_window: 8192",
-      "      vision: false",
+      ...entry(STUB_MODEL),
+      ...extraModels.flatMap(entry),
+      extraConfig,
       "",
     ].join("\n"),
     "utf8",
@@ -285,7 +331,10 @@ async function offerToken(page: Page, token: string | null): Promise<void> {
   }, token);
 }
 
-function ready(proc: ChildProcessWithoutNullStreams): Promise<{
+function ready(
+  proc: ChildProcessWithoutNullStreams,
+  token: string | null,
+): Promise<{
   wsUrl: string;
   wsToken: string | null;
 }> {
@@ -322,6 +371,13 @@ function ready(proc: ChildProcessWithoutNullStreams): Promise<{
               // moment rather than racing it — and say so plainly if it
               // never arrives, instead of letting every spec time out
               // on "Connecting to backend…".
+              // The fixture is the launcher: it put the token in the
+              // child's environment, so there is nothing to wait for on
+              // stderr.
+              if (token) {
+                resolve({ wsUrl: String(parsed.ws_url), wsToken: token });
+                return;
+              }
               const found = tokenIn(stderrBuf);
               if (found) {
                 resolve({ wsUrl: String(parsed.ws_url), wsToken: found });
@@ -392,6 +448,13 @@ async function stop(proc: ChildProcessWithoutNullStreams): Promise<void> {
 
 const run = promisify(execFile);
 
+/** Every page this context opens gets the token before its scripts run. */
+async function giveToken(context: BrowserContext, token: string): Promise<void> {
+  await context.addInitScript((t) => {
+    (window as unknown as { __IGNI_WS_TOKEN__?: string }).__IGNI_WS_TOKEN__ = t;
+  }, token);
+}
+
 /**
  * The three watcher specs need an orphan: a row in the project's
  * ``state.db`` naming a pid, and a live OS process at that pid, both in
@@ -412,6 +475,33 @@ const run = promisify(execFile);
  * fail the next one.
  */
 export type OrphanScenario = "sleep" | "dev_server";
+
+export type DevExtension = "hello" | "broken";
+
+export type LateEnv = { get(): Record<string, string> };
+export type LateUrl = { from(scriptedUrl: string): string };
+
+/** The igni CLI beside the venv's python. */
+const IGNI_CLI = path.join(IGNI_CORE, ".venv", "bin", "igni");
+
+async function installDevExtensions(home: string, which: DevExtension[]): Promise<void> {
+  const env = { ...process.env, ...homeEnv(home), IGNI_DEV_EXTENSIONS: "1" };
+  const src = await fsp.mkdtemp(path.join(os.tmpdir(), "igni-ext-src-"));
+  try {
+    for (const ext of which) {
+      if (ext === "hello") {
+        await run(IGNI_CLI, ["ext", "init", "--id", "acme.hello", "hello"], { cwd: src, env });
+        await run(IGNI_CLI, ["ext", "install", "hello"], { cwd: src, env });
+      } else {
+        const dir = path.join(home, ".igni", "extensions", "acme.broken");
+        await fsp.mkdir(dir, { recursive: true });
+        await fsp.writeFile(path.join(dir, "manifest.json"), '{"id": "acme.broken", "version": ', "utf8");
+      }
+    }
+  } finally {
+    await fsp.rm(src, { recursive: true, force: true });
+  }
+}
 
 const SEED_SCRIPT = path.join(
   REPO_ROOT,
@@ -456,39 +546,72 @@ async function cleanupOrphans(projectDir: string, home: string): Promise<void> {
 /**
  * Why this run has no model that answers, or null if it has one.
  *
- * A backend is not a model. When we spawn one we write ``STUB_MODEL``
- * above, whose registry entry points at ``http://127.0.0.1:9`` — a
- * port chosen because nothing listens on it. That is exactly right for
- * the wire-format specs and useless for anything that waits on a
- * reply: those tests do not fail slowly, they fail *wrongly*, reporting
- * a missing assistant bubble when the truth is that no model was ever
- * dialled.
+ * A spawned backend talks to ``scripts/e2e/scripted_model.py``, a
+ * deterministic OpenAI-compatible server started by the worker fixture
+ * below, so whenever a backend can be spawned a model answers — in CI too,
+ * with no API key anywhere. It used to point at ``http://127.0.0.1:9``, where
+ * nothing listens, and every model-driven spec skipped in CI.
  *
- * Only a borrowed backend (``IGNI_LIVE_WS``) is running against the
- * developer's real config, so only that counts. This is the same shape
- * as ``whyNoBackend``: a declared skip that ``reporters/skips.ts``
- * surfaces, rather than a red test blaming the app.
- *
- * The consequence is worth stating plainly: CI runs ``npx playwright
- * test`` with no ``IGNI_LIVE_WS``, so every model-driven spec skips
- * there. Their evidence is produced on a developer's machine. Making
- * CI hold a model key is a separate decision — see
- * ``docs/APP_TEST_MATRIX.md``.
+ * A borrowed backend (``IGNI_LIVE_WS``) answers with whatever model its own
+ * config names. So the only run without a model is one without a backend.
  */
 export function whyNoModel(
   env: NodeJS.ProcessEnv = process.env,
 ): string | null {
-  if (env.IGNI_LIVE_WS) return null;
-  return (
-    `no model that answers: this spec drives a real turn, and without ` +
-    `IGNI_LIVE_WS the fixture spawns a backend configured with the ` +
-    `'${STUB_MODEL}' registry entry, which points at http://127.0.0.1:9. ` +
-    `Start a backend against your own config and export ` +
-    `IGNI_LIVE_WS=ws://127.0.0.1:PORT.`
-  );
+  return whyNoBackend(env);
 }
 
-export const test = base.extend<{
+/**
+ * Start one of ``scripts/e2e``'s helper servers (the scripted model, the
+ * forward proxy) and resolve with its port once it says it is listening.
+ */
+export async function startReadyServer(
+  script: string,
+  args: string[],
+): Promise<{ proc: ChildProcessWithoutNullStreams; port: number; stop: () => void }> {
+  const python = fs.existsSync(VENV_PYTHON) ? VENV_PYTHON : "python3";
+  const proc = spawn(python, [script, ...args], {
+    cwd: REPO_ROOT,
+  }) as ChildProcessWithoutNullStreams;
+  const port = await new Promise<number>((resolve, reject) => {
+    let out = "";
+    let err = "";
+    const timer = setTimeout(() => reject(new Error(`${script} did not start:\n${err}`)), 15_000);
+    proc.stderr.on("data", (c) => (err += c.toString()));
+    proc.stdout.on("data", (c) => {
+      out += c.toString();
+      const m = out.match(/"port":\s*(\d+)/);
+      if (m) {
+        clearTimeout(timer);
+        resolve(Number(m[1]));
+      }
+    });
+    proc.on("exit", (code) => {
+      clearTimeout(timer);
+      reject(new Error(`${script} exited (${code}):\n${err}`));
+    });
+  });
+  return { proc, port, stop: () => proc.kill("SIGTERM") };
+}
+
+export const FORWARD_PROXY = path.join(REPO_ROOT, "scripts", "e2e", "forward_proxy.py");
+
+function readRequests(logPath: string, sinceMs = 0): ModelRequest[] {
+  let text = "";
+  try {
+    text = fs.readFileSync(logPath, "utf8");
+  } catch {
+    return [];
+  }
+  return text
+    .split("\n")
+    .filter(Boolean)
+    .map((line) => JSON.parse(line) as ModelRequest)
+    .filter((r) => r.at * 1000 >= sinceMs);
+}
+
+export const test = base.extend<
+  {
   /**
    * Set with ``test.use({ orphanScenario: "sleep" })`` by the specs that
    * need one. Seeding requires owning the project directory, so asking
@@ -496,24 +619,96 @@ export const test = base.extend<{
    * whose project we did not create.
    */
   orphanScenario: OrphanScenario | null;
+  /**
+   * Extensions installed for development into the backend's HOME before it
+   * starts (``igni ext install`` with ``IGNI_DEV_EXTENSIONS=1``):
+   * ``"hello"`` is ``igni ext init --id acme.hello``'s scaffold, a page
+   * whose script calls its own backend method; ``"broken"`` is a directory
+   * with an unparseable manifest, the faulty extension a backend must
+   * survive.
+   */
+  devExtensions: DevExtension[];
+  /** Extra environment for the spawned backend (proxies, CA bundles…).
+   *  ``{ get }`` is read when the backend is spawned, for values a
+   *  ``beforeAll`` only knows then (a helper server's port). Playwright
+   *  takes a bare function in ``test.use`` for a fixture, hence the box. */
+  backendEnv: Record<string, string> | LateEnv;
+  /** Where the registry points the default model, from the scripted
+   *  model's own URL; null keeps that URL. Read at spawn time. */
+  modelUrl: LateUrl | null;
+  /** Extra top-level YAML for the project's ``.igni/config.local.yaml``. */
+  extraConfig: string;
+  /** More registry entries on the same scripted model, by id. */
+  extraModels: string[];
   liveBe: LiveBe;
   liveWsUrl: string;
-}>({
-  orphanScenario: [null, { option: true }],
+  },
+  { scriptedModel: ScriptedModel }
+>({
+  scriptedModel: [
+    async ({}, use, workerInfo) => {
+      const logPath = path.join(
+        os.tmpdir(),
+        `igni-scripted-model-${process.pid}-${workerInfo.workerIndex}.jsonl`,
+      );
+      await fsp.rm(logPath, { force: true });
+      const { proc, port } = await startReadyServer(SCRIPTED_MODEL, ["--port", "0", "--log", logPath]);
+      try {
+        await use({
+          url: `http://127.0.0.1:${port}/v1`,
+          requests: (sinceMs?: number) => readRequests(logPath, sinceMs),
+        });
+      } finally {
+        proc.kill("SIGTERM");
+        await fsp.rm(logPath, { force: true });
+      }
+    },
+    { scope: "worker" },
+  ],
 
-  liveBe: async ({ page, orphanScenario }, use) => {
+  orphanScenario: [null, { option: true }],
+  devExtensions: [[], { option: true }],
+  backendEnv: [{}, { option: true }],
+  extraConfig: ["", { option: true }],
+  extraModels: [[], { option: true }],
+  modelUrl: [null, { option: true }],
+
+  liveBe: async (
+    {
+      page,
+      orphanScenario,
+      devExtensions,
+      backendEnv,
+      extraConfig,
+      extraModels,
+      modelUrl,
+      context,
+      scriptedModel,
+    },
+    use,
+  ) => {
     const borrowed = process.env.IGNI_LIVE_WS;
     if (borrowed && !orphanScenario) {
       // A borrowed backend may want a token of its own. The person
       // running it knows it — it is the line its launcher printed, or
       // the one igni-client's ``Local(url=..., token=...)`` takes.
-      const token = process.env.IGNI_LIVE_WS_TOKEN ?? null;
-      await offerToken(page, token);
+      const token = (process.env.IGNI_LIVE_WS_TOKEN ?? "").trim();
+      if (token) {
+        await offerToken(page, token);
+        await giveToken(context, token);
+      }
+      const cannot = async () => {
+        throw new Error("a borrowed backend (IGNI_LIVE_WS) cannot be killed or restarted");
+      };
       await use({
         wsUrl: borrowed,
         projectDir: null,
+        home: null,
         origin: "IGNI_LIVE_WS",
-        wsToken: token,
+        wsToken: token || null,
+        token,
+        kill: cannot,
+        restart: cannot,
       });
       return;
     }
@@ -524,40 +719,70 @@ export const test = base.extend<{
     const projectDir = await fsp.mkdtemp(
       path.join(os.tmpdir(), "igni-live-be-"),
     );
-    await writeStubConfig(projectDir);
+    const url = modelUrl ? modelUrl.from(scriptedModel.url) : scriptedModel.url;
+    await writeStubConfig(projectDir, url, extraConfig, extraModels);
     await writeProjectFiles(projectDir);
     // Before the backend starts, or its rehydrate pass has nothing to
     // find and the orphan never appears.
     const home = await trustedHome(projectDir);
     if (orphanScenario) await seedOrphan(projectDir, orphanScenario, home);
+    if (devExtensions.length) await installDevExtensions(home, devExtensions);
 
-    const proc: ChildProcessWithoutNullStreams = spawn(
-      VENV_PYTHON,
-      [
-        "-m",
-        "igni_core.backend",
-        "--ws-port",
-        "0",
-        "--project-dir",
-        projectDir,
-      ],
-      {
-        cwd: REPO_ROOT,
-        env: {
-          ...process.env,
-          ...homeEnv(home),
-          // ``_watch_parent`` self-terminates the backend when our PID
-          // disappears — no orphaned backends even if Playwright dies
-          // mid-test.
-          IGNI_PARENT_PID: String(process.pid),
-        },
-      },
-    );
+    // The backend requires a window token from every browser connection
+    // (igni-core's ``transport/ws_auth.py``). A backend started without
+    // one mints its own and prints it once to stderr, which a test cannot
+    // reliably read — so the fixture is the launcher here, exactly as the
+    // desktop shell is: a per-launch secret in the child's environment.
+    // Without this every live spec sat at "Connecting to backend…".
+    const token = randomBytes(32).toString("base64url");
+    await giveToken(context, token);
 
+    const env = {
+      ...process.env,
+      ...homeEnv(home),
+      // ``_watch_parent`` self-terminates the backend when our PID
+      // disappears — no orphaned backends even if Playwright dies
+      // mid-test.
+      IGNI_PARENT_PID: String(process.pid),
+      IGNI_WS_TOKEN: token,
+      ...(devExtensions.length ? { IGNI_DEV_EXTENSIONS: "1" } : {}),
+      ...(typeof (backendEnv as LateEnv).get === "function"
+        ? (backendEnv as LateEnv).get()
+        : (backendEnv as Record<string, string>)),
+    };
+    const start = (port: string) =>
+      spawn(
+        VENV_PYTHON,
+        ["-m", "igni_core.backend", "--ws-port", port, "--project-dir", projectDir],
+        { cwd: REPO_ROOT, env },
+      ) as ChildProcessWithoutNullStreams;
+
+    let proc = start("0");
     try {
-      const { wsUrl, wsToken } = await ready(proc);
+      const { wsUrl, wsToken } = await ready(proc, token);
+      const port = new URL(wsUrl).port;
       await offerToken(page, wsToken);
-      await use({ wsUrl, projectDir, origin: "spawned", wsToken });
+      await use({
+        wsUrl,
+        projectDir,
+        home,
+        origin: "spawned",
+        wsToken,
+        token,
+        // The backend dying under the app: SIGKILL, no shutdown path.
+        kill: async () => {
+          proc.kill("SIGKILL");
+          await new Promise<void>((resolve) =>
+            proc.exitCode !== null || proc.signalCode !== null ? resolve() : proc.on("exit", () => resolve()),
+          );
+        },
+        // A backend again on the same port, home, project and token — what
+        // the desktop shell's Restart Backend does.
+        restart: async () => {
+          proc = start(port);
+          await ready(proc, token);
+        },
+      });
     } finally {
       await stop(proc);
       // Order matters: the seeded processes outlive the backend by

@@ -70,13 +70,16 @@ async function sessionId(page: Page): Promise<string> {
  * unattended after the test that started it has finished.
  */
 async function leaveIdle(page: Page) {
+  // Short, forgiving clicks: with the scripted model a turn ends in
+  // milliseconds, so a button seen a moment ago can be gone by the click,
+  // and a click on a vanished button waits out the whole test timeout.
   const reject = page.getByRole("button", { name: /^Reject$/i }).first();
   if (await reject.isVisible().catch(() => false)) {
-    await reject.click();
+    await reject.click({ timeout: 2_000 }).catch(() => undefined);
   }
   const stop = page.getByRole("button", { name: /stop|cancel/i }).first();
   if (await stop.isVisible().catch(() => false)) {
-    await stop.click();
+    await stop.click({ timeout: 2_000 }).catch(() => undefined);
   }
   await expect(page.locator(".composer-editable")).toHaveAttribute(
     "data-placeholder",

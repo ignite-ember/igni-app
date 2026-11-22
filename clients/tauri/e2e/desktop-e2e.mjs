@@ -1,0 +1,874 @@
+#!/usr/bin/env node
+// Desktop end-to-end scenarios for igni's Tauri app, driven through
+// tauri-driver (WebKitWebDriver on Linux, msedgedriver on Windows).
+//
+// Every scenario id is docs/ENTERPRISE_TEST_PLAN.md's. The model is
+// scripts/e2e/scripted_model.py — no API key anywhere — and the app runs
+// with a HOME of its own, so nothing on the runner's account is read or
+// written.
+//
+//   node desktop-e2e.mjs --suite first-launch   # managed runtime from a local index, chat,
+//                                               # approval, extension page, igni:// link, CSP, quit
+//   node desktop-e2e.mjs --suite air-gapped     # no runtime and IGNI_AIR_GAPPED=1: a refusal, no download
+//   node desktop-e2e.mjs --suite provisioned    # a managed-settings file names runtime_python and an
+//                                               # update_endpoint; the app starts on it and asks only it
+//
+// Environment:
+//   IGNI_APP          the installed app's binary (required)
+//   IGNI_E2E_PYTHON   a Python with igni-core installed (the provisioned runtime, the igni CLI
+//                     for the dev extension, and the scripted model)
+//   IGNI_E2E_INDEX    first-launch only: the local package index (UV_INDEX_URL) the runtime
+//                     installs igni-core from
+//   IGNI_E2E_OUT      where screenshots and results.json go (default ./desktop-e2e-out)
+//   TAURI_DRIVER      the tauri-driver binary (default: on PATH)
+//   NATIVE_DRIVER     the native WebDriver (msedgedriver on Windows), passed to tauri-driver
+
+import { spawn, execFileSync } from "node:child_process";
+import * as fs from "node:fs";
+import * as os from "node:os";
+import * as path from "node:path";
+import { fileURLToPath } from "node:url";
+import * as http from "node:http";
+
+import { Session } from "./webdriver.mjs";
+
+const HERE = path.dirname(fileURLToPath(import.meta.url));
+const REPO = path.resolve(HERE, "..", "..", "..");
+const SCRIPTED_MODEL = path.join(REPO, "scripts", "e2e", "scripted_model.py");
+const WIN = process.platform === "win32";
+const READY = /Message (Ember|igni)/;
+
+const suite = process.argv[process.argv.indexOf("--suite") + 1] || "first-launch";
+const APP = must("IGNI_APP");
+const PYTHON = process.env.IGNI_E2E_PYTHON || (WIN ? "python" : "python3");
+const OUT = path.resolve(process.env.IGNI_E2E_OUT || "desktop-e2e-out", suite);
+fs.mkdirSync(OUT, { recursive: true });
+
+function must(name) {
+  const v = process.env[name];
+  if (!v) {
+    console.error(`${name} is required`);
+    process.exit(2);
+  }
+  return v;
+}
+
+// ── results ────────────────────────────────────────────────────────────
+
+const results = [];
+let session = null;
+
+async function step(id, title, fn) {
+  const started = Date.now();
+  process.stdout.write(`\n▶ ${id} ${title}\n`);
+  try {
+    await fn();
+    results.push({ id, title, ok: true, ms: Date.now() - started });
+    process.stdout.write(`  ✓ ${id} (${Date.now() - started} ms)\n`);
+  } catch (err) {
+    results.push({ id, title, ok: false, ms: Date.now() - started, error: String(err?.stack || err) });
+    process.stdout.write(`  ✗ ${id}: ${err?.message || err}\n`);
+    await shot(`${id}-FAILED`).catch(() => undefined);
+    if (session) {
+      const text = await session.bodyText().catch(() => "");
+      fs.writeFileSync(path.join(OUT, `${id}-FAILED.txt`), String(text));
+    }
+    throw err;
+  }
+}
+
+async function shot(name) {
+  if (!session) return;
+  const png = await session.screenshot();
+  fs.writeFileSync(path.join(OUT, `${name}.png`), Buffer.from(png, "base64"));
+}
+
+function finish(code) {
+  fs.writeFileSync(path.join(OUT, "results.json"), JSON.stringify({ suite, results }, null, 2));
+  const lines = [`### Desktop E2E — ${suite} (${process.platform})`, "", "| Scenario | Result | Time |", "|---|---|---|"];
+  for (const r of results) lines.push(`| ${r.id} ${r.title} | ${r.ok ? "pass" : "**FAIL**"} | ${(r.ms / 1000).toFixed(1)} s |`);
+  if (process.env.GITHUB_STEP_SUMMARY) fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, lines.join("\n") + "\n\n");
+  console.log("\n" + lines.join("\n"));
+  process.exit(code);
+}
+
+// ── helpers ────────────────────────────────────────────────────────────
+
+/** A helper server from scripts/e2e that prints {"port": N} when ready. */
+function startServer(script, args, env = {}) {
+  return new Promise((resolve, reject) => {
+    const proc = spawn(PYTHON, [script, ...args], { env: { ...process.env, ...env } });
+    let out = "";
+    let err = "";
+    const t = setTimeout(() => reject(new Error(`${script} did not start: ${err}`)), 20_000);
+    proc.stderr.on("data", (c) => (err += c));
+    proc.stdout.on("data", (c) => {
+      out += c;
+      const m = out.match(/"port":\s*(\d+)/);
+      if (m) {
+        clearTimeout(t);
+        resolve({ proc, port: Number(m[1]) });
+      }
+    });
+    proc.on("exit", (code) => reject(new Error(`${script} exited ${code}: ${err}`)));
+  });
+}
+
+/** A throwaway HOME with a project, the scripted model and a signed-in user. */
+function makeHome(modelPort) {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), `igni-desktop-${suite}-`));
+  // On Windows the shell finds the profile through the known-folder API,
+  // not USERPROFILE, so a HOME of its own is not possible there: the
+  // runner's (throwaway) profile is used, and the backend agrees with it.
+  const home = WIN ? os.homedir() : path.join(root, "home");
+  const project = path.join(root, "project");
+  fs.mkdirSync(path.join(home, ".igni"), { recursive: true });
+  fs.mkdirSync(project, { recursive: true });
+  fs.writeFileSync(path.join(project, "README.md"), "# desktop e2e project\n");
+  fs.writeFileSync(path.join(project, "calc.py"), "def add(a, b):\n    return a + b\n");
+  fs.writeFileSync(
+    path.join(home, ".igni", "config.yaml"),
+    [
+      "models:",
+      "  default: e2e-scripted",
+      "  registry:",
+      "    e2e-scripted:",
+      "      provider: openai_like",
+      "      model_id: e2e-scripted",
+      `      url: http://127.0.0.1:${modelPort}/v1`,
+      "      context_window: 8192",
+      "      vision: false",
+      "",
+    ].join("\n"),
+  );
+  // Signed in: the app gates everything behind organisation sign-in, and
+  // the backend reads the e-mail straight from this file. Not a real token.
+  const year = 365 * 24 * 3600 * 1000;
+  fs.writeFileSync(
+    path.join(home, ".igni", "credentials.json"),
+    JSON.stringify({
+      access_token: "desktop-e2e-fixture-token",
+      token_type: "bearer",
+      email: "desktop@example.com",
+      created_at: new Date().toISOString(),
+      expires_at: new Date(Date.now() + year).toISOString(),
+    }),
+  );
+  return { root, home, project };
+}
+
+/** The environment the app (through tauri-driver) runs in. */
+function appEnv(home, extra = {}) {
+  const env = { ...process.env, ...extra };
+  if (!WIN) {
+    env.HOME = home;
+    env.XDG_CONFIG_HOME = path.join(home, ".config");
+    env.XDG_DATA_HOME = path.join(home, ".local", "share");
+    env.XDG_CACHE_HOME = path.join(home, ".cache");
+  }
+  return env;
+}
+
+/** The managed runtime's cache, as the shell resolves it. */
+function managedCache(home) {
+  if (WIN) return path.join(process.env.LOCALAPPDATA || path.join(home, "AppData", "Local"), "igni");
+  if (process.platform === "darwin") return path.join(home, "Library", "Caches", "igni");
+  return path.join(home, ".cache", "igni");
+}
+
+let driver = null;
+let driverEnv = process.env;
+let app = null; // Windows: the app process this runner started itself
+
+/**
+ * Linux: tauri-driver in front of WebKitWebDriver, which launches the app.
+ *
+ * Windows: msedgedriver *attached* to an app this runner starts, with
+ * WebView2's remote-debugging port switched on through
+ * WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS and `debuggerAddress`, the
+ * documented way to drive a running WebView2. Launched by msedgedriver
+ * (what tauri-driver asks for) the session never started: the driver
+ * passes its switches in that same variable, which the app ignored until
+ * `windows/browser_args.rs`, and it hands the app's arguments over as
+ * `--<arg>`, so the project folder is lost.
+ */
+async function startDriver(env) {
+  driverEnv = env;
+  const log = fs.createWriteStream(path.join(OUT, WIN ? "msedgedriver.log" : "tauri-driver.log"));
+  if (WIN) {
+    driver = spawn(must("NATIVE_DRIVER"), ["--port=4444", "--verbose"], { env, stdio: ["ignore", "pipe", "pipe"] });
+  } else {
+    const bin = process.env.TAURI_DRIVER || "tauri-driver";
+    const args = ["--port", "4444"];
+    if (process.env.NATIVE_DRIVER) args.push("--native-driver", process.env.NATIVE_DRIVER);
+    driver = spawn(bin, args, { env, stdio: ["ignore", "pipe", "pipe"] });
+  }
+  driver.stdout.pipe(log);
+  driver.stderr.pipe(log);
+  const end = Date.now() + 30_000;
+  for (;;) {
+    try {
+      const r = await fetch("http://127.0.0.1:4444/status");
+      if (r.ok) return;
+    } catch {
+      /* not yet */
+    }
+    if (Date.now() > end) throw new Error("the WebDriver server did not come up on :4444");
+    await sleep(500);
+  }
+}
+
+async function stopDriver() {
+  if (session) await session.quit();
+  session = null;
+  if (app) {
+    // A window close, as a person quits: taskkill without /F sends WM_CLOSE.
+    try {
+      execFileSync("taskkill", ["/PID", String(app.pid)]);
+    } catch {
+      /* already gone */
+    }
+    const end = Date.now() + 15_000;
+    while (app.exitCode === null && Date.now() < end) await sleep(500);
+    if (app.exitCode === null) app.kill();
+    app = null;
+  }
+  if (driver) {
+    driver.kill();
+    driver = null;
+  }
+  await sleep(2_000);
+}
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const DEVTOOLS_PORT = 9222;
+
+async function launch(project) {
+  if (!WIN) {
+    session = await Session.start("http://127.0.0.1:4444", APP, { args: [project] });
+    return;
+  }
+  app = spawn(APP, [project], {
+    env: { ...driverEnv, WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: `--remote-debugging-port=${DEVTOOLS_PORT}` },
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  // The app's own output is kept. It was thrown away (`stdio: "ignore"`),
+  // and then a step that failed had nothing to say about what the app
+  // thought happened: the single-instance plugin's warnings go to
+  // `tracing`, which the app has no subscriber for, so they are lost
+  // either way — but anything the app prints is worth having.
+  const appLog = fs.createWriteStream(path.join(OUT, "app-output.log"));
+  app.stdout?.pipe(appLog, { end: false });
+  app.stderr?.pipe(appLog, { end: false });
+  const end = Date.now() + 60_000;
+  for (;;) {
+    try {
+      const r = await fetch(`http://127.0.0.1:${DEVTOOLS_PORT}/json/version`);
+      if (r.ok) break;
+    } catch {
+      /* not yet */
+    }
+    if (app.exitCode !== null) throw new Error(`the app exited at start (${app.exitCode})`);
+    if (Date.now() > end) throw new Error(`WebView2's DevTools port ${DEVTOOLS_PORT} did not open`);
+    await sleep(500);
+  }
+  session = await Session.startWith("http://127.0.0.1:4444", {
+    browserName: "webview2",
+    "ms:edgeOptions": { debuggerAddress: `127.0.0.1:${DEVTOOLS_PORT}` },
+  });
+}
+
+/** Wait for the chat: the composer's placeholder leaves "Connecting…". */
+async function waitForChat(timeout) {
+  await session.waitFor(
+    "the chat to be ready",
+    async () => {
+      // A first-run "Trust this folder?" dialog sits over the composer.
+      await session.exec(
+        "const b=[...document.querySelectorAll('button')].find(b=>b.textContent.trim()==='Trust'); if(b) b.click();",
+      );
+      const failed = await session.exec(
+        "const e=document.querySelector('.igni-loading-error'); return e ? e.textContent : null",
+      );
+      if (failed) throw new Error(`bootstrap failed in the window: ${failed}`);
+      const ph = await session.exec(
+        "const e=document.querySelector('.composer-editable'); return e ? e.getAttribute('data-placeholder') : null",
+      );
+      return ph && READY.test(ph);
+    },
+    { timeout, interval: 1_000 },
+  );
+}
+
+/** The composer, ready to be typed into — the page's own words. */
+const COMPOSER_USABLE = `
+  const e = document.querySelector('.composer-editable');
+  if (!e) return false;
+  if (document.querySelector('section.page')) return false;
+  const r = e.getBoundingClientRect();
+  if (!(r.width > 0 && r.height > 0)) return false;
+  const ph = e.getAttribute('data-placeholder');
+  if (!ph || !(new RegExp(${JSON.stringify(READY.source)})).test(ph)) return false;
+  const t = [...document.querySelectorAll('button')].find(b => b.textContent.trim() === 'Trust');
+  return !t;
+`;
+
+/** Is the first-run "Trust this folder?" prompt up? */
+const TRUST_PROMPT_UP = `
+  const b = [...document.querySelectorAll('button')].find(b => b.textContent.trim() === 'Trust');
+  return !!b;
+`;
+
+/**
+ * The first-run "Trust this folder?" prompt, answered when it is up.
+ *
+ * It sits over the composer, and the composer is not interactable
+ * while it is there. It appears a moment after the window opens, so a
+ * step that waits only for the chat can reach its click while the
+ * prompt is still on its way in — which is what the provisioned suite
+ * hit on Windows, where the managed runtime makes the chat ready at
+ * once and the prompt arrives after it.
+ *
+ * Answers the prompt when it is up; says whether it was. It is waited
+ * for only when `wait` says so: the prompt is either there or it is
+ * not, and a step that does not need it should not sit on it.
+ */
+async function answerTrustPrompt({ wait = 0 } = {}) {
+  const end = Date.now() + wait;
+  for (;;) {
+    if (await session.exec(TRUST_PROMPT_UP)) {
+      await session.exec(
+        "const b=[...document.querySelectorAll('button')].find(b=>b.textContent.trim()==='Trust'); if(b) b.click();",
+      );
+      await session.waitFor(
+        "the trust prompt to close",
+        async () => !(await session.exec(TRUST_PROMPT_UP)),
+        { timeout: 10_000, interval: 200 },
+      );
+      return true;
+    }
+    if (Date.now() >= end) return false;
+    await sleep(250);
+  }
+}
+
+/**
+ * Back to the chat, when the app is showing a page instead.
+ *
+ * The app restores the window's last page, and the window's model is
+ * kept in the global database — under the user's home. On Windows the
+ * runner's profile is shared by every suite (there is no HOME of its
+ * own there), so the suite that follows the deep-link one opens on
+ * the Plugins page with the chat behind it: the composer is mounted
+ * but not on screen, and the driver says so as "element not
+ * interactable".
+ *
+ * The breadcrumb's "Chat" is the way back.
+ */
+async function backToChat() {
+  await session.exec(
+    "const b=[...document.querySelectorAll('button.page-crumb')].find(b=>b.textContent.trim()==='Chat'); if(b) b.click();",
+  );
+}
+
+/**
+ * The composer, ready to be typed into.
+ *
+ * Two things stand between a fresh window and the composer: the trust
+ * prompt, and a page the app restored. Both are answered here, and
+ * the composer is found again after each, because the page behind it
+ * changes the DOM.
+ */
+async function readyToType() {
+  for (let attempt = 0; attempt < 12; attempt++) {
+    if (await session.exec(COMPOSER_USABLE)) return await session.find(".composer-editable");
+    await answerTrustPrompt({ wait: attempt === 0 ? 0 : 5_000 });
+    await backToChat();
+    await sleep(250);
+  }
+  throw new Error("the composer never became usable");
+}
+
+async function send(text) {
+  for (let attempt = 0; ; attempt++) {
+    const editor = await readyToType();
+    try {
+      await editor.click();
+      await editor.type(text);
+      await editor.type(""); // Enter
+      return;
+    } catch (err) {
+      // The prompt can be on its way in between the check and the click.
+      if (attempt >= 4 || !/not interactable|stale element/i.test(String(err?.message))) throw err;
+    }
+  }
+}
+
+async function assistantSaid(text, timeout = 60_000) {
+  await session.waitFor(`the reply "${text}"`, async () =>
+    session.exec(
+      "return [...document.querySelectorAll('.msg-assistant')].some(e => e.textContent.includes(arguments[0]))",
+      text,
+    ),
+    { timeout },
+  );
+}
+
+function marker() {
+  return `TKN${Math.random().toString(36).slice(2, 9).toUpperCase()}`;
+}
+
+/** igni_core.backend processes whose command line names `needle`. */
+function backends(needle) {
+  try {
+    if (WIN) {
+      const out = execFileSync("powershell", [
+        "-NoProfile",
+        "-Command",
+        "Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like '*igni_core.backend*' } | ForEach-Object { \"$($_.ProcessId) $($_.CommandLine)\" }",
+      ]).toString();
+      return out.split(/\r?\n/).filter((l) => l.includes(needle));
+    }
+    const out = execFileSync("ps", ["-eo", "pid=,args="]).toString();
+    return out.split("\n").filter((l) => l.includes("igni_core.backend") && l.includes(needle));
+  } catch {
+    return [];
+  }
+}
+
+let linkEnv = process.env;
+
+/**
+ * The command the scheme is registered to, as the registry names it: the
+ * program and its arguments, with %1 for the link. What a desktop shell
+ * runs when the link is followed.
+ */
+function registeredHandler(url) {
+  const out = execFileSync("reg", ["query", "HKCU\\Software\\Classes\\igni\\shell\\open\\command", "/ve"], {
+    encoding: "utf8",
+  });
+  const value = out.trim().split(/\r?\n/).pop() ?? "";
+  const command = (value.match(/REG_SZ\s+(.*)$/)?.[1] ?? value).trim();
+  // The command line as a shell reads it: a quoted part stays together.
+  const parts = [];
+  let current = "";
+  let quoted = false;
+  for (const ch of command) {
+    if (ch === '"') {
+      quoted = !quoted;
+      continue;
+    }
+    if (ch === " " && !quoted) {
+      if (current) parts.push(current);
+      current = "";
+      continue;
+    }
+    current += ch;
+  }
+  if (current) parts.push(current);
+  const program = parts.shift() ?? "";
+  if (!program) throw new Error(`the registry names no program for igni:// (${command})`);
+  return { program, args: parts.map((a) => (a === "%1" ? url : a)) };
+}
+
+/**
+ * The app's processes on the machine, with their command lines: whether a
+ * second one started for the link, and whether the link was among its
+ * arguments. A runner has no shell to hand the link over, so this is what
+ * says what the OS did with it.
+ */
+function windowsAppProcesses() {
+  // No double quotes anywhere: PowerShell reads the command line itself, and
+  // a quoted argument with escapes in it is a quoting puzzle of its own.
+  const script = [
+    "$seen = @{}",
+    "$end = (Get-Date).AddSeconds(6)",
+    "while ((Get-Date) -lt $end) {",
+    "  Get-CimInstance Win32_Process -ErrorAction SilentlyContinue |",
+    "    Where-Object { $_.Name -eq 'igni-app.exe' } |",
+    "    ForEach-Object {",
+    "      if (-not $seen.ContainsKey($_.ProcessId)) {",
+    "        $seen[$_.ProcessId] = $true",
+    "        Write-Output ($_.ProcessId.ToString() + ' :: ' + $_.CommandLine)",
+    "      }",
+    "    }",
+    "  Start-Sleep -Milliseconds 250",
+    "}",
+  ].join("\n");
+  try {
+    return execFileSync("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", script], {
+      encoding: "utf8",
+      timeout: 30_000,
+    }).trim();
+  } catch (err) {
+    return `(the process list failed: ${String(err.stderr || err.message).trim()})`;
+  }
+}
+
+/**
+ * What the app itself printed, for a step that failed. The app's own
+ * output is the only place the shell's side of a link is visible: what
+ * it emitted, and to whom.
+ */
+function appOutput(lines = 40) {
+  const file = path.join(OUT, "app-output.log");
+  if (!fs.existsSync(file)) return "(the app printed nothing)";
+  try {
+    const all = fs.readFileSync(file, "utf8").split("\n").filter((l) => l.trim());
+    return all.slice(-lines).join("\n");
+  } catch (err) {
+    return `(the app's output could not be read: ${String(err.message)})`;
+  }
+}
+
+/**
+ * Follow an igni:// link the way the OS does. On Linux, xdg-open is tried
+ * first; on a runner with no desktop environment it can fail to run the
+ * handler it found, so the handler the scheme is registered to (the
+ * `.desktop` file `xdg-mime` names) is then run as its Exec line says,
+ * with the link as its argument — what the desktop would do. Windows is
+ * the same: the shell opens the link, and where the runner's shell cannot,
+ * the command the registry names is run with the link as its argument.
+ */
+function openLink(url) {
+  if (WIN) {
+    // What the scheme is registered to, for the log when the link goes nowhere.
+    for (const key of ["HKCU\\Software\\Classes\\igni\\shell\\open\\command", "HKCR\\igni\\shell\\open\\command"]) {
+      try {
+        console.log(`  ${key}: ${execFileSync("reg", ["query", key, "/ve"]).toString().trim().split(/\r?\n/).pop()}`);
+      } catch {
+        console.log(`  ${key}: (none)`);
+      }
+    }
+    try {
+      const out = execFileSync("cmd", ["/c", "start", "", url], {
+        encoding: "utf8",
+        stdio: ["ignore", "pipe", "pipe"],
+      });
+      console.log(`  the shell opened the link${out.trim() ? `: ${out.trim()}` : ""}`);
+    } catch (err) {
+      console.log(`  the shell did not open the link: ${String(err.stderr || err.message).trim()}`);
+    }
+    return;
+  }
+  if (process.platform === "darwin") return execFileSync("open", [url]);
+  const handler = execFileSync("xdg-mime", ["query", "default", "x-scheme-handler/igni"], { env: linkEnv })
+    .toString()
+    .trim();
+  console.log(`  x-scheme-handler/igni -> ${handler || "(none)"}`);
+  if (!handler) throw new Error("no handler is registered for igni:// (xdg-mime query default)");
+  try {
+    execFileSync("xdg-open", [url], { env: linkEnv, stdio: "pipe" });
+    console.log("  opened with xdg-open");
+    return;
+  } catch (err) {
+    console.log(`  xdg-open failed (${String(err.stderr || err.message).trim()}); running the handler's Exec line`);
+  }
+  const dirs = [
+    path.join(linkEnv.XDG_DATA_HOME || path.join(os.homedir(), ".local/share"), "applications"),
+    "/usr/local/share/applications",
+    "/usr/share/applications",
+  ];
+  const file = dirs.map((d) => path.join(d, handler)).find((f) => fs.existsSync(f));
+  if (!file) throw new Error(`the handler ${handler} is in none of ${dirs.join(", ")}`);
+  const exec = fs.readFileSync(file, "utf8").match(/^Exec=(.*)$/m)?.[1];
+  if (!exec) throw new Error(`${file} has no Exec line`);
+  const argv = exec.replace(/"/g, "").split(/\s+/).map((a) => (/^%[uUfF]$/.test(a) ? url : a)).filter((a) => !/^%/.test(a));
+  console.log(`  ${file}: ${argv.join(" ")}`);
+  spawn(argv[0], argv.slice(1), { env: linkEnv, detached: true, stdio: "ignore" }).unref();
+}
+
+// ── suites ─────────────────────────────────────────────────────────────
+
+async function firstLaunch() {
+  const model = await startServer(SCRIPTED_MODEL, ["--port", "0"]);
+  const { home, project } = makeHome(model.port);
+  const index = must("IGNI_E2E_INDEX");
+
+  // A development extension, installed the documented way into this HOME.
+  const igni = WIN ? path.join(path.dirname(PYTHON), "igni.exe") : path.join(path.dirname(PYTHON), "igni");
+  const src = fs.mkdtempSync(path.join(os.tmpdir(), "igni-ext-"));
+  // PYTHONUTF8: `igni ext init` writes "→" with the platform's default
+  // encoding, which is cp1252 on Windows, and dies with UnicodeEncodeError
+  // (an igni-core bug, reported with this suite).
+  const extEnv = { ...appEnv(home), IGNI_DEV_EXTENSIONS: "1", PYTHONUTF8: "1", PYTHONIOENCODING: "utf-8" };
+  execFileSync(igni, ["ext", "init", "--id", "acme.hello", "hello"], { cwd: src, env: extEnv, stdio: "inherit" });
+  execFileSync(igni, ["ext", "install", "hello"], { cwd: src, env: extEnv, stdio: "inherit" });
+
+  const env = appEnv(home, {
+    IGNI_DEV_EXTENSIONS: "1",
+    // The runtime install goes to the organisation's own index, never PyPI.
+    UV_INDEX_URL: index,
+    UV_DEFAULT_INDEX: index,
+    // No 1.7 GB model download in CI: the prefetch fails fast and is not
+    // fatal (igni_core.prefetch_models), which is the documented contract.
+    HF_HUB_OFFLINE: "1",
+  });
+  linkEnv = env;
+  await startDriver(env);
+
+  await step("PLAT-012 PLAT-001", "first launch installs the runtime from the local index and opens the chat", async () => {
+    await launch(project);
+    await sleep(3_000);
+    await shot("01-loading");
+    await waitForChat(25 * 60_000);
+    await shot("02-chat-ready");
+  });
+
+  await step("CHAT-002", "a question gets a streamed answer", async () => {
+    const t = marker();
+    await send(`Reply with exactly ${t}.`);
+    await assistantSaid(t);
+    await shot("03-answered");
+  });
+
+  await step("TOOL-003", "an approval is asked, granted, and the tool runs", async () => {
+    const t = marker();
+    await send(`[[tool run_shell_command {"command":"${WIN ? "echo ok> approved.txt" : "touch approved.txt"}"}]] then say ${t}`);
+    await session.waitFor("the approval card", () => session.exec("return !!document.querySelector('.hitl-card')"), { timeout: 60_000 });
+    await shot("04-approval");
+    await session.exec(
+      "[...document.querySelectorAll('.hitl-card button')].find(b => b.textContent.trim() === 'Allow once').click()",
+    );
+    await assistantSaid(t);
+    if (!fs.existsSync(path.join(project, "approved.txt"))) throw new Error("the approved command did not run");
+    await shot("05-tool-done");
+  });
+
+  await step("SEC-024", "the window's CSP blocks an injected inline script", async () => {
+    const ran = await session.execAsync(
+      "const done = arguments[arguments.length - 1];" +
+        "const s = document.createElement('script'); s.textContent = 'window.__inl = 1';" +
+        "document.head.appendChild(s); setTimeout(() => done(window.__inl === 1), 500);",
+    );
+    if (ran) throw new Error("an inline script ran in the app window");
+  });
+
+  await step("EXT-022", "the development extension's page opens and reaches its backend", async () => {
+    await session.waitFor("the extension's sidebar entry", () =>
+      session.exec("return [...document.querySelectorAll('*')].some(e => e.children.length === 0 && e.textContent.trim() === 'hello')"),
+      { timeout: 60_000 },
+    );
+    await session.exec(
+      "[...document.querySelectorAll('*')].find(e => e.children.length === 0 && e.textContent.trim() === 'hello').click()",
+    );
+    await session.waitFor("the extension frame", () => session.exec("return !!document.querySelector('iframe')"), { timeout: 60_000 });
+    // The frame is another origin; its content is checked by switching into it.
+    // Into the frame: by reference, the W3C way; WebKitWebDriver refuses
+    // that ("Invalid frame ID object"), so by index (the page has one frame).
+    const frame = await session.find("iframe");
+    try {
+      await session.cmd("POST", "/frame", { id: { "element-6066-11e4-a52f-4f735466cecf": frame.id } });
+    } catch {
+      await session.cmd("POST", "/frame", { id: 0 });
+    }
+    await session.waitFor("the page's answer from its backend", async () =>
+      (await session.bodyText()).includes("hello from the extension backend"),
+      { timeout: 60_000 },
+    );
+    await session.cmd("POST", "/frame", { id: null });
+    await shot("06-extension-page");
+  });
+
+  await step("EXT-007 PLAT-014 PLAT-011", "an igni:// link brings the running app to a page", async () => {
+    // Back to the chat first, so arriving on the page is the link's doing.
+    await session.exec("const n=[...document.querySelectorAll('*')].find(e => e.children.length === 0 && e.textContent.trim() === 'Chat'); if (n) n.click();");
+    await sleep(1_000);
+    // Watch every step the link travels, so a failure says *where* it
+    // stopped: the shell's event, the window's own DOM event, and the
+    // link the window never took. The shell's event is watched through
+    // the global API (`event.listen` takes every target), because the
+    // shell emits it to one window by name.
+    const main = await session.cmd("GET", "/window");
+    await session.execAsync(
+      "const done = arguments[arguments.length - 1];" +
+        "window.__linkTrace = { event: false, dom: false };" +
+        "window.addEventListener('igni-host', (e) => { if (e.detail && e.detail.type === 'igni:open-link') window.__linkTrace.dom = true; });" +
+        "window.__TAURI__.event.listen('igni-open-link', () => { window.__linkTrace.event = true; }).then(() => done('watching'), (e) => done('error: ' + e));",
+    );
+    const arrived = (timeout) =>
+      session.waitFor("the Plugins page after the link", async () => {
+        const handles = await session.windowHandles();
+        for (const h of handles) {
+          await session.switchTo(h);
+          const where = await session.exec("return location.search");
+          const t = await session.bodyText();
+          if (/open=plugins/.test(where) || /No marketplaces configured|Marketplace/.test(t)) return true;
+        }
+        return false;
+      }, { timeout });
+    const url = "igni://open?open=plugins";
+    openLink(url);
+    try {
+      await arrived(20_000);
+    } catch {
+      // The runner's shell may have no way to hand the link to the app.
+      // What the OS did with it is worth saying before the next way.
+      const processes = windowsAppProcesses();
+      console.log(`  the shell did not bring the app to the page; the app processes were:\n${processes}`);
+      // The way the shell would: the command the scheme is registered to,
+      // with the link as its argument.
+      const handler = registeredHandler(url);
+      console.log(`  running the registered handler: ${handler.program} ${handler.args.join(" ")}`);
+      spawn(handler.program, handler.args, { detached: true, stdio: "ignore" }).unref();
+      try {
+        await arrived(40_000);
+      } catch (err) {
+        // Where the link stopped. `event` is the shell's own event: false
+        // means the link never reached the app at all (the handover from
+        // the second process), true with `dom` false means the shell's
+        // event did not reach the window, and `dom` true means the
+        // window saw it and did not act on it. The held link is what the
+        // window never took.
+        await session.switchTo(main);
+        const trace = await session.exec("return JSON.stringify(window.__linkTrace || null)").catch(() => "?");
+        // What the page registered for itself, and for which label: a
+        // listener that was never registered, or one registered for
+        // another label, is a different failure from a listener that
+        // was registered and not called.
+        const listen = await session.exec("return JSON.stringify(window.__igniListen || null)").catch(() => "?");
+        const meta = await session
+          .exec("return JSON.stringify((window.__TAURI_INTERNALS__ || {}).metadata || null)")
+          .catch(() => "?");
+        // What Tauri holds for this window: every listener's target, so
+        // the kind and the label the shell addressed can be read against
+        // the kind and the label the page registered with.
+        const registry = await session
+          .exec(
+            "const r = window.__TAURI_EVENT_PLUGIN_INTERNALS__ || {};" +
+              "const e = r['igni-open-link'] || {};" +
+              "return JSON.stringify(Object.keys(e).map((id) => ({ id: id, target: e[id].target })));",
+          )
+          .catch(() => "?");
+        // Every window the driver can see, and what each shows. The
+        // URL carries the window's session token, so only the path is
+        // printed.
+        const shown = (href) => String(href).split(/[?#]/)[0];
+        const pages = [];
+        for (const h of await session.windowHandles().catch(() => [])) {
+          await session.switchTo(h);
+          const href = await session.exec("return location.href").catch(() => "?");
+          pages.push(`${h}: ${shown(href)}`);
+        }
+        await session.switchTo(main);
+        const held = await session
+          .execAsync(
+            "const done = arguments[arguments.length - 1];" +
+              "window.__TAURI__.core.invoke('igni_take_open_link').then((r) => done(r === null ? 'none' : r), (e) => done('error: ' + e));",
+          )
+          .catch(() => "?");
+        throw new Error(
+          `${err.message}\n  the app processes were:\n${processes}\n` +
+            `  the link's way through the app: ${trace}\n` +
+            `  the window's own listeners: ${listen}\n` +
+            `  the window's own labels: ${meta}\n` +
+            `  the listeners Tauri holds for the window: ${registry}\n` +
+            `  the windows the driver sees:\n    ${pages.join("\n    ")}\n` +
+            `  the link the window never took: ${held}\n` +
+            `  what the app itself said:\n${appOutput()}`,
+        );
+      }
+    }
+    await shot("07-deep-link");
+  });
+
+  await step("ENT-032", "quitting the app leaves no backend behind", async () => {
+    if (backends(project).length === 0) throw new Error("no backend was running for the project before quit");
+    await stopDriver();
+    const end = Date.now() + 30_000;
+    while (backends(project).length && Date.now() < end) await sleep(1_000);
+    const left = backends(project);
+    if (left.length) throw new Error(`backend still running after quit:\n${left.join("\n")}`);
+  });
+  model.proc.kill();
+}
+
+async function airGapped() {
+  const model = await startServer(SCRIPTED_MODEL, ["--port", "0"]);
+  const { home, project } = makeHome(model.port);
+  // No provisioned runtime and no managed one: the install must refuse.
+  await startDriver(appEnv(home, { IGNI_AIR_GAPPED: "1" }));
+  await step("ENT-016", "air-gapped with no runtime refuses to download and says what to do", async () => {
+    await launch(project);
+    const text = await session.waitFor("the refusal", async () => {
+      const t = await session.exec("const e=document.querySelector('.igni-loading-error'); return e ? e.textContent : null");
+      return t;
+    }, { timeout: 120_000 });
+    await shot("air-gapped-refusal");
+    if (!/air-gapped/i.test(text) || !/runtime_python/.test(text)) throw new Error(`unexpected refusal: ${text}`);
+    if (fs.existsSync(path.join(managedCache(home), "venv"))) throw new Error("a managed venv was created while air-gapped");
+  });
+  await stopDriver();
+  model.proc.kill();
+}
+
+async function provisioned() {
+  // The workflow has written the managed-settings file (root-owned):
+  //   air_gapped: true, runtime_python: <IGNI_E2E_PYTHON>,
+  //   update_endpoint: http://127.0.0.1:<IGNI_E2E_UPDATE_PORT>/latest.json
+  // (plain HTTP on purpose: ENT-024, the updater must refuse it)
+  const model = await startServer(SCRIPTED_MODEL, ["--port", "0"]);
+  const { home, project } = makeHome(model.port);
+  const hits = [];
+  const port = Number(must("IGNI_E2E_UPDATE_PORT"));
+  const mirror = http
+    .createServer((req, res) => {
+      hits.push(req.url);
+      // No newer version: an answer the updater accepts as "up to date".
+      res.writeHead(204);
+      res.end();
+    })
+    .listen(port, "127.0.0.1");
+  await startDriver(appEnv(home));
+
+  await step("ENT-015", "a managed runtime_python starts the app air-gapped, with no download", async () => {
+    await launch(project);
+    await waitForChat(5 * 60_000);
+    // The app restores the window's last page, and this suite does not
+    // always start on the chat: on Windows the runner's profile is
+    // shared by every suite, so the one before it left the Plugins page
+    // behind. The chat is what this step is about, so it goes back to it
+    // before the shot.
+    await readyToType();
+    await shot("provisioned-chat");
+    const t = marker();
+    await send(`Reply with exactly ${t}.`);
+    await assistantSaid(t);
+    // The backend runs on the provisioned interpreter, not a managed venv.
+    const running = backends(project);
+    if (running.length === 0) throw new Error("no backend for the project");
+    const want = path.resolve(PYTHON).toLowerCase();
+    if (!running.some((l) => l.toLowerCase().includes(want))) {
+      throw new Error(`the backend is not on runtime_python (${want}):\n${running.join("\n")}`);
+    }
+  });
+
+  await step("ENT-024", "a plain-HTTP managed update_endpoint is refused, with no fallback to the vendor's", async () => {
+    const answer = await session.execAsync(
+      "const done = arguments[arguments.length - 1];" +
+        "window.__TAURI__.core.invoke('igni_check_update').then(r => done(JSON.stringify(r)), e => done('error: ' + e));",
+    );
+    console.log(`  update check answered: ${answer}`);
+    // The updater accepts only https mirrors; the check must say so and
+    // name the managed endpoint, not quietly ask the compiled one.
+    if (!/^error: /.test(answer) || !answer.includes(`127.0.0.1:${port}/latest.json`)) {
+      throw new Error(`expected a refusal naming the managed endpoint, got: ${answer}`);
+    }
+    if (hits.length) throw new Error(`the refused endpoint was asked anyway: ${JSON.stringify(hits)}`);
+  });
+
+  await stopDriver();
+  mirror.close();
+  model.proc.kill();
+}
+
+const SUITES = { "first-launch": firstLaunch, "air-gapped": airGapped, provisioned };
+
+try {
+  await SUITES[suite]();
+  finish(results.every((r) => r.ok) ? 0 : 1);
+} catch (err) {
+  console.error(err);
+  await stopDriver().catch(() => undefined);
+  finish(1);
+}

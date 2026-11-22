@@ -107,8 +107,15 @@ libc = "0.2"
 zip = { version = "9", default-features = false, features = ["deflate"] }
 
 [dev-dependencies]
+# The Windows uv extraction is plain logic over a .zip; its tests build a
+# zip and run on every platform, so a zip API change cannot again break
+# only the Windows build, which no other CI job compiles.
+zip = { version = "9", default-features = false, features = ["deflate"] }
 # ``tauri::test``'s mock runtime, so the update tests drive ``AppUpdater``
-# and the real updater plugin without a webview. The feature adds no crate.
+# and the real updater plugin without a webview; it also lets a test build
+# a real app and real window and ask what a listener of a given kind hears
+# (``events.rs``: Tauri matches the kind of an address exactly, so a
+# listener of one kind never hears an address of another). Adds no crate.
 tauri = { version = "2", features = ["test"] }
 
 [lib]

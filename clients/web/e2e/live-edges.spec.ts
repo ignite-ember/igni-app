@@ -246,26 +246,21 @@ test(
   async ({ page, liveBe }) => {
     needsAModel();
 
-    // **Known failure.** Reproduced three times, 150s each: send in
-    // session A, switch to a new session, send there, and the second
-    // message sits at "Queued — will run after the current turn"
-    // forever. The first run finishes — its session gets its generated
-    // title, the composer returns to idle — and the queued one never
-    // starts.
+    // **Known failure, now fixed.** This used to be `test.fixme()`:
+    // send in session A, switch to a new session, send there, and the
+    // second message sat at "Queued — will run after the current turn"
+    // forever. The first run finished — its session got its generated
+    // title, the composer returned to idle — and the queued one never
+    // started.
     //
-    // `test.fixme` rather than deleting it or leaving a permanent red:
-    // the expectation is right and the product does not meet it, and
-    // that is worth carrying in the report as a declared gap rather
-    // than as noise somebody learns to scroll past.
-    //
-    // Not diagnosed further. The backend log showed transient
-    // `API connection error` around the same window, but the proxy was
-    // healthy before and after and a CLI call through it answered in
-    // 2.0s — so "the upstream was down" does not explain it, and
-    // "queued work is dropped" is not yet proven either. Whoever picks
-    // this up should start at `get_pending_messages`.
-    test.fixme();
-
+    // The cause was igni-core's queue: it drained only into a running
+    // turn's *tool results*, and nothing started a turn for what was
+    // left when a run ended. igni-core cefccc4f ("A message queued
+    // during a run is the next turn when no tool call took it") fixed
+    // it — the backend drains the rest of the queue when the run ends
+    // (`backend/message_dispatcher.py`, `_run_queued`). The same defect
+    // held CHAT-012 red-on-fix; both rows run green now.
+    // docs/ENTERPRISE_TEST_PLAN.md CHAT-014, CHAT-012.
     await open(page, liveBe.wsUrl);
     await newChat(page);
     const slow = marker();

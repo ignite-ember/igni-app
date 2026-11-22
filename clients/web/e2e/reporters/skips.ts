@@ -50,11 +50,10 @@ const DECLARED: Record<string, string> = {
     "Playwright names baselines per-OS and only the Linux ones are in " +
     "the repository. Run scripts/baselines-linux.sh to compare here",
   "@needs-model":
-    "drives a real model turn, and CI has no model. The fixture's " +
-    "spawned backend is configured with e2e-wire-format-stub, which " +
-    "points at a port nothing listens on — so these do not degrade, " +
-    "they fail. Export IGNI_LIVE_WS=ws://127.0.0.1:PORT against a " +
-    "backend running on your own config to include them",
+    "drives a model turn, and there is no backend to spawn. Every spawned " +
+    "backend talks to scripts/e2e/scripted_model.py, a deterministic " +
+    "OpenAI-compatible model, so this skips only where igni-core's venv " +
+    "is missing and IGNI_LIVE_WS is unset",
 };
 
 type Skip = {
