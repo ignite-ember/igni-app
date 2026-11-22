@@ -1,9 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { authPhaseOf, type AuthPhase } from "../chat/useShellStatus";
+import type { BackendSnapshot } from "../cloud/backendState";
+import { host } from "../lib/host";
 import type { IgniClient } from "../protocol/client";
 import type { StatusUpdate } from "../protocol/messages";
 import { CloudPlan } from "../protocol/rpcResults";
 import { AccountChip } from "./AccountChip";
+import { BackendSwitch } from "./BackendSwitch";
 
 /**
  * The account chip and its menu: who is signed in, and Log out.
@@ -12,15 +16,27 @@ import { AccountChip } from "./AccountChip";
  * the menu opens (the backend proxies ``/portal/me``). Until it arrives
  * the chip says the address, which is on disk and correct; the org is
  * the last resort, because it is not a person at all.
+ *
+ * The desktop's *This computer · Cloud* switch sits at the top, when the
+ * shell offers it. On the cloud side the window's socket is the VM's, so
+ * the account's own calls go to this computer's backend through the
+ * shell (`account_rpc`): the name, and Log out, which signs the desktop
+ * out and so ends the cloud connection too.
  */
 export function AccountMenu({
   status,
   client,
+  backend = null,
+  auth = authPhaseOf(status),
   onLogIn,
   onLogOut,
 }: {
   status: StatusUpdate | null;
   client: Pick<IgniClient, "rpc">;
+  backend?: BackendSnapshot | null;
+  /** Whether anybody is known to be signed in; ``unknown`` on the cloud
+   *  side until this computer has said who. */
+  auth?: AuthPhase;
   onLogIn: () => void;
   onLogOut: () => void;
 }) {
@@ -32,8 +48,8 @@ export function AccountMenu({
     const opening = !accountMenu;
     setAccountMenu(opening);
     if (!opening) return;
-    void client
-      .rpc<unknown>("get_cloud_plan")
+    const ask = (host.onCloud && host.accountRpc("get_cloud_plan")) || client.rpc<unknown>("get_cloud_plan");
+    void ask
       .then((raw) => {
         const plan = CloudPlan.parse(raw);
         if (plan.fullName) setCloudName(plan.fullName);
@@ -66,11 +82,13 @@ export function AccountMenu({
         onLogIn={onLogIn}
         onOpenAccount={toggle}
         buttonRef={chipRef}
+        pending={auth === "unknown"}
       />
       {accountMenu && (
         <>
           <div className="account-menu-backdrop" onClick={() => setAccountMenu(false)} />
           <div className="dropdown account-menu">
+            {backend && <BackendSwitch backend={backend} />}
             <div className="popup-item account-menu-who">
               <span className="desc">
                 Signed in as <span className="account-menu-name">{accountName}</span>

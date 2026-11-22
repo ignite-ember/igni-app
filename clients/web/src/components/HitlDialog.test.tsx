@@ -42,6 +42,29 @@ function req(overrides: Partial<HITLRequest> = {}): HITLRequest {
   };
 }
 
+describe("HitlDialog — the Escape hint", () => {
+  it("says under the buttons what Escape does", () => {
+    const { container } = render(<HitlDialog requirements={[req()]} onResolve={vi.fn()} />);
+    const hint = screen.getByText("Esc rejects all and stops");
+    // Below the answer buttons: the card's last row.
+    expect(container.querySelector(".hitl-card")?.lastElementChild).toBe(hint);
+  });
+
+  it("says it with the acceptEdits shortcut showing too", () => {
+    const { container } = render(
+      <HitlDialog
+        requirements={[req({ tool_name: "Edit" })]}
+        onResolve={vi.fn()}
+        onAcceptEditsThisRun={vi.fn()}
+      />,
+    );
+    expect(screen.getByText("Accept all edits during this session")).toBeTruthy();
+    expect(container.querySelector(".hitl-card")?.lastElementChild?.textContent).toBe(
+      "Esc rejects all and stops",
+    );
+  });
+});
+
 describe("HitlDialog — single requirement", () => {
   it("renders 'Allow <friendly_name>?' as the title", () => {
     // friendly_name is the human-readable label the BE assigns

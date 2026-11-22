@@ -19,7 +19,11 @@ export function UserCodePill({ block }: { block: CodePasteBlock }) {
       <button
         type="button"
         className="file-pill code-pill inline-pill"
-        title={`${block.path}:${block.line} — click to open in editor (alt-click to preview snippet)`}
+        title={
+          host.canOpenNatively
+            ? `${block.path}:${block.line} — click to open in editor (alt-click to preview snippet)`
+            : `${block.path}:${block.line} — click to preview (alt-click to preview snippet)`
+        }
         onClick={(e) => {
           e.stopPropagation();
           if (e.altKey) {

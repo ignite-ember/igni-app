@@ -13,6 +13,8 @@ import {
   TERMINAL_PHASES,
   isProcessing,
   isFinalizing,
+  isAwaitingApproval,
+  canStop,
   shouldShowSpinner,
   phaseLabel,
   phaseFromProcFinalizing,
@@ -27,6 +29,7 @@ describe("RunPhase — derived flags", () => {
       "starting",
       "streaming",
       "finalizing",
+      "awaiting_approval",
       "cancelled",
       "errored",
       "done",
@@ -57,6 +60,7 @@ describe("RunPhase — derived flags", () => {
       "starting",
       "streaming",
       "finalizing",
+      "awaiting_approval",
       "cancelled",
       "errored",
       "done",
@@ -70,6 +74,47 @@ describe("RunPhase — derived flags", () => {
   });
 });
 
+describe("RunPhase — a run paused on an approval", () => {
+  it("is active (the indicator shows) but not processing (a message is sent, not queued)", () => {
+    expect(ACTIVE_PHASES.has("awaiting_approval")).toBe(true);
+    expect(shouldShowSpinner("awaiting_approval")).toBe(true);
+    expect(isProcessing("awaiting_approval")).toBe(false);
+    expect(isFinalizing("awaiting_approval")).toBe(false);
+    expect(isAwaitingApproval("awaiting_approval")).toBe(true);
+  });
+
+  it("only that phase is awaiting an approval", () => {
+    for (const p of ["idle", "starting", "streaming", "finalizing", "cancelled", "errored", "done"] as const) {
+      expect(isAwaitingApproval(p)).toBe(false);
+    }
+  });
+
+  it("Stop is offered while replying or waiting on an approval, and never otherwise", () => {
+    const all: RunPhase[] = [
+      "idle",
+      "starting",
+      "streaming",
+      "finalizing",
+      "awaiting_approval",
+      "cancelled",
+      "errored",
+      "done",
+    ];
+    expect(all.filter(canStop).sort()).toEqual(["awaiting_approval", "starting", "streaming"]);
+  });
+
+  it("the observer's flag shape keeps the pause: a stream_end is not the run ending", () => {
+    expect(phaseToProcFinalizing("awaiting_approval")).toEqual({ proc: false, finalizing: false });
+    expect(
+      phaseFromProcFinalizing({ proc: false, finalizing: false }, "awaiting_approval"),
+    ).toBe("awaiting_approval");
+    // The next run starting still moves it on.
+    expect(
+      phaseFromProcFinalizing({ proc: true, finalizing: false }, "awaiting_approval"),
+    ).toBe("streaming");
+  });
+});
+
 describe("RunPhase — labels", () => {
   it("streaming + starting share the 'replying' label", () => {
     expect(phaseLabel("streaming")).toBe("igni is replying…");
@@ -78,6 +123,10 @@ describe("RunPhase — labels", () => {
 
   it("finalizing has its own label", () => {
     expect(phaseLabel("finalizing")).toBe("Finalizing…");
+  });
+
+  it("a run paused on an approval says it waits for the person, not that it finalizes", () => {
+    expect(phaseLabel("awaiting_approval")).toBe("Waiting for your approval");
   });
 
   it("terminal phases produce empty labels", () => {
@@ -173,7 +222,7 @@ describe("RunPhase — cancel is a single transition", () => {
     // The user's bug: from finalizing, cancel used to leave spinner
     // stuck. Now transition to "cancelled" makes shouldShowSpinner
     // false on the very next render.
-    const activeStates: RunPhase[] = ["starting", "streaming", "finalizing"];
+    const activeStates: RunPhase[] = ["starting", "streaming", "finalizing", "awaiting_approval"];
     for (const from of activeStates) {
       // Simulate the transition — useRunPhase's cancel()
       // is the actual code path; here we assert the invariant that

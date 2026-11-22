@@ -238,6 +238,60 @@ jobs:
           # ``includeUpdaterJson``).
           uploadUpdaterJson: false
 
+      # The Linux and Windows updater payloads are the installers
+      # themselves: with ``createUpdaterArtifacts: true`` and the signing
+      # key set, tauri-bundler writes a .sig next to the .AppImage, the
+      # .msi and the NSIS setup, and tauri-action uploads both under the
+      # bundle's own file name. Each is stashed straight after the action
+      # (as the macOS leg stashes its signature below), with the asset
+      # name, for ``updater-json``; scripts/stash-updater-sig.sh also checks
+      # the release holds that asset and its .sig.
+      - name: Stash updater signature (Linux AppImage)
+        if: matrix.platform == 'ubuntu-22.04'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: scripts/stash-updater-sig.sh appimage clients/tauri/src-tauri/target/release/bundle "$RUNNER_TEMP/updater-sig/linux-appimage"
+
+      - name: Upload updater signature artifact (Linux AppImage)
+        if: matrix.platform == 'ubuntu-22.04'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: updater-sig-linux-appimage
+          path: ${{ runner.temp }}/updater-sig/linux-appimage/
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Stash updater signatures (Windows .msi and NSIS)
+        if: matrix.platform == 'windows-latest'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          for kind in msi nsis; do
+            scripts/stash-updater-sig.sh "$kind" clients/tauri/src-tauri/target/release/bundle "$RUNNER_TEMP/updater-sig/windows-$kind"
+          done
+
+      - name: Upload updater signature artifact (Windows .msi)
+        if: matrix.platform == 'windows-latest'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: updater-sig-windows-msi
+          path: ${{ runner.temp }}/updater-sig/windows-msi/
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Upload updater signature artifact (Windows NSIS)
+        if: matrix.platform == 'windows-latest'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: updater-sig-windows-nsis
+          path: ${{ runner.temp }}/updater-sig/windows-nsis/
+          if-no-files-found: error
+          retention-days: 1
+
       # Submit the signed .app to Apple's notarization service
       # ourselves, with per-30s status logging. Replaces the
       # ``tauri-action`` --wait flow that produced 30+ min of dead
@@ -511,71 +565,56 @@ jobs:
             gh release upload "${{ github.ref_name }}" "$dmg" --clobber
           done
 
-  # Build ``latest.json`` ourselves and attach it to the release —
-  # see the long comment in the matrix step above. Mac-only for now;
-  # Windows + Linux updaters use different bundle types we don't
-  # currently ship signed payloads for.
+  # Build ``latest.json`` ourselves and attach it to the release: one
+  # entry per installer the release ships an updater payload for, each
+  # with the signature its build leg stashed (scripts/latest-json.mjs says
+  # which keys and why). macOS points at the stapled
+  # ``igni_aarch64.app.tar.gz``; Linux at the .AppImage; Windows at the
+  # .msi and the NSIS setup.
   updater-json:
     needs: [prepare-release, build-tauri]
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
-      - name: Download macOS updater signatures
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24"
+
+      - name: Download the updater signatures
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           pattern: updater-sig-*
           path: /tmp/sigs/
+
       - name: Assemble + upload latest.json
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
           TAG="${{ github.ref_name }}"
-          # Strip leading "v" so ``version`` matches what the
-          # updater plugin compares against ``CARGO_PKG_VERSION``.
-          VERSION="${TAG#v}"
-          PUB_DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-          BASE_URL="https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}"
-
-          # The macOS matrix leg copied its ``.app.tar.gz.sig`` to
-          # ``/tmp/updater-sig/updater.sig`` before uploading the
-          # artifact, so the filename inside each download dir is
-          # the stable ``updater.sig`` (no space-in-filename glob
-          # surprises like the v0.6.2 attempt hit).
-          AARCH64_SIG="$(cat /tmp/sigs/updater-sig-aarch64/updater.sig)"
-
-          # ``jq -Rs .`` reads the file content as a raw string and
-          # JSON-quotes it (escapes newlines / quotes correctly).
-          AARCH64_JSON="$(printf '%s' "$AARCH64_SIG" | jq -Rs .)"
-
-          # tauri-bundler emits ``<productName>_<arch>.app.tar.gz`` —
-          # productName is ``igni`` per tauri.conf.json, so the asset
-          # is ``igni_aarch64.app.tar.gz`` (Apple Silicon only; no Intel build).
-          # (Pre-rename builds at v0.6.x used ``Ember.Code_<arch>...``;
-          # spaces in the old productName became dots in the
-          # filename. Bumping ``productName`` in tauri.conf.json
-          # changes this output; the URLs below must follow.)
-          cat > /tmp/latest.json <<EOF
-          {
-            "version": "${VERSION}",
-            "notes": "See the GitHub release page for the changelog.",
-            "pub_date": "${PUB_DATE}",
-            "platforms": {
-              "darwin-aarch64": {
-                "signature": ${AARCH64_JSON},
-                "url": "${BASE_URL}/igni_aarch64.app.tar.gz"
-              }
-            }
-          }
-          EOF
-          # Sanity-check the JSON before we ship it.
-          jq . /tmp/latest.json >/dev/null
-          # ``--repo`` is required because this job doesn't check out
-          # the repo (no .git), so ``gh`` can't detect the upstream.
+          # ``--expect`` fails the job if any leg stashed nothing, rather
+          # than publishing a latest.json that leaves a platform behind.
+          # The version loses its leading "v" in the script, so it matches
+          # what the updater plugin compares against the app's version.
+          node scripts/latest-json.mjs \
+            --sigs /tmp/sigs \
+            --version "$TAG" \
+            --base-url "https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}" \
+            --expect darwin-aarch64,linux-x86_64-appimage,windows-x86_64-msi,windows-x86_64-nsis,windows-x86_64 \
+            --assets-out /tmp/latest-json-assets.txt \
+            --out /tmp/latest.json
+          # Every URL in it names an asset the release holds.
+          UPLOADED="$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets -q '.assets[].name')"
+          while read -r asset; do
+            grep -Fxq "$asset" <<<"$UPLOADED" || { echo "::error::latest.json points at $asset, which the release does not hold"; exit 1; }
+          done < /tmp/latest-json-assets.txt
           gh release upload "$TAG" /tmp/latest.json --clobber --repo "$GITHUB_REPOSITORY"
-          echo "latest.json uploaded:"
-          cat /tmp/latest.json
+          echo "latest.json uploaded"
 
   # SBOMs, checksums, provenance and (once the key exists) a signature,
   # for every file this release ships — before the draft is published, so

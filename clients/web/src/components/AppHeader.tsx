@@ -3,6 +3,8 @@ import { useEffect, useRef } from "react";
 // hamburger. This is the glyph set the panels draw from.
 import { MenuIcon as Glyph } from "@ignite-ember/ui-react";
 
+import type { AuthPhase } from "../chat/useShellStatus";
+import type { BackendSnapshot } from "../cloud/backendState";
 import { host } from "../lib/host";
 import type { ConnectionState, IgniClient } from "../protocol/client";
 import type { StatusUpdate } from "../protocol/messages";
@@ -27,12 +29,17 @@ export interface AppHeaderProps {
   projectDir: string;
   onPickProject: () => void;
   status: StatusUpdate | null;
+  /** Whether anybody is known to be signed in (the account chip's
+   *  question); derived from ``status`` when not given. */
+  auth?: AuthPhase;
   /** Unread notifications: the bell's count. */
   waiting: number;
   onToggleNotifications: () => void;
   client: Pick<IgniClient, "rpc" | "connect">;
   onLogIn: () => void;
   onLogOut: () => void;
+  /** The desktop's cloud switch, when the shell has one. */
+  backend?: BackendSnapshot | null;
 }
 
 /**
@@ -96,7 +103,7 @@ export function AppHeader(props: AppHeaderProps) {
           </svg>
         </button>
       )}
-      <ProjectChip projectDir={props.projectDir} onPick={props.onPickProject} />
+      <ProjectChip projectDir={props.projectDir} onPick={props.onPickProject} readOnly={host.onCloud} />
       {(status?.cloud_connected || waiting > 0) && (
         <button
           className={waiting ? "chip chip-bell has-waiting" : "chip chip-bell"}
@@ -118,7 +125,14 @@ export function AppHeader(props: AppHeaderProps) {
           )}
         </button>
       )}
-      <AccountMenu status={status} client={props.client} onLogIn={props.onLogIn} onLogOut={props.onLogOut} />
+      <AccountMenu
+        status={status}
+        client={props.client}
+        backend={props.backend ?? null}
+        auth={props.auth}
+        onLogIn={props.onLogIn}
+        onLogOut={props.onLogOut}
+      />
       {conn === "replaced" && (
         <button
           className="chip"

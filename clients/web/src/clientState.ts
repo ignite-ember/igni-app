@@ -28,7 +28,8 @@
  *
  * - **Our own echo** clears the pending write; the pushed value is now
  *   the confirmed one.
- * - **Somebody else's change** (an extension, another window) becomes
+ * - **Somebody else's change** (an extension, another window, another
+ *   browser tab showing this same window) becomes
  *   the confirmed value. A pending write *not yet sent* — typing inside
  *   the pause — is dropped in its favour: what the model was told last
  *   wins. A pending write already sent stays on screen until its echo,
@@ -47,10 +48,19 @@ import { useCallback, useSyncExternalStore } from "react";
 import type { IgniClient } from "./protocol/client";
 import type { PageRoute } from "./chat/pageStack";
 
-const CLIENT_ID_KEY = "ember-code:client-id";
+/** The key every window used before client state was kept per backend. */
+const LEGACY_CLIENT_ID_KEY = "ember-code:client-id";
+/** `igni:client-id:<backend>[:<label>]` (design §4.4). */
+const CLIENT_ID_PREFIX = "igni:client-id";
+
+/** The label part of a key: none for the first window (`main`, which
+ *  predates multi-window) and for a host with a single view (`""`). */
+function labelSuffix(viewKey: string): string {
+  return !viewKey || viewKey === "main" ? "" : `:${viewKey}`;
+}
 
 /**
- * Which `localStorage` slot holds this view's id.
+ * Which `localStorage` slot holds this view's id on `backend`.
  *
  * `localStorage` is per-origin, so every Tauri window of one app
  * instance shares it. An unpartitioned key would hand all of them
@@ -60,18 +70,27 @@ const CLIENT_ID_KEY = "ember-code:client-id";
  * Partitioning by the host's view key (the Tauri window label) gives
  * each window its own identity while keeping the model on the BE.
  *
- * The first window is labelled `main` and predates multi-window, so
- * it keeps the unsuffixed key. A host with a single view (the
- * browser) passes `""` and lands on the same key.
+ * It is partitioned by backend too: `local`, or `cloud-<12 hex>` for one
+ * account on one gateway (the desktop shell hashes it, so a second
+ * account never collides and no address is written here in clear). The
+ * window model is kept by each backend, so a window has one id per side.
+ *
+ * In a browser every tab of one profile reads the same key, so the tabs
+ * are one window: they show the same session and follow each other,
+ * each with its own write tokens ({@link WindowModel}).
  *
  * Note for whoever wires up "New Window": labels must be stable
  * across app restarts, not minted fresh each launch. A random label
  * per launch means a window can never restore its model, and the
  * BE's store accrues a dead row set per window per run.
  */
-function storageKeyFor(viewKey: string): string {
-  if (!viewKey || viewKey === "main") return CLIENT_ID_KEY;
-  return `${CLIENT_ID_KEY}:${viewKey}`;
+export function storageKeyFor(viewKey: string, backend = "local"): string {
+  return `${CLIENT_ID_PREFIX}:${backend}${labelSuffix(viewKey)}`;
+}
+
+/** The key the same window used before the per-backend keys. */
+function legacyKeyFor(viewKey: string): string {
+  return `${LEGACY_CLIENT_ID_KEY}${labelSuffix(viewKey)}`;
 }
 
 /** localStorage adapter; swap for the host's API in IDE clients. */
@@ -98,16 +117,31 @@ function newClientId(): string {
   return `c-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
+/** A nonce of this view's, for its write tokens: unique per tab, so two
+ *  tabs of one window never share one. */
+function viewNonce(): string {
+  const cr = (globalThis as { crypto?: Crypto }).crypto;
+  if (cr && typeof cr.randomUUID === "function") return cr.randomUUID().slice(0, 8);
+  return Math.random().toString(36).slice(2, 10);
+}
+
 /**
- * This view's stable `client_id` — the id its model is kept under —
- * minting one on first use.
+ * This view's stable `client_id` on `backend` — the id its model is kept
+ * under — minting one on first use.
  *
  * `viewKey` comes from `host.viewKey` — the Tauri window label, or
- * `""` on hosts that shell a single view.
+ * `""` on hosts that shell a single view. `backend` is the desktop
+ * shell's `?backend=` (`local` everywhere else). The local id migrates
+ * once from the key it was kept under before: it is copied, and the old
+ * key is left for a release, so a downgrade still finds its windows.
  */
-export function ensureClientId(viewKey = ""): string {
-  const storageKey = storageKeyFor(viewKey);
+export function ensureClientId(viewKey = "", backend = "local"): string {
+  const storageKey = storageKeyFor(viewKey, backend);
   let id = readClientId(storageKey);
+  if (!id && backend === "local") {
+    id = readClientId(legacyKeyFor(viewKey));
+    if (id) writeClientId(storageKey, id);
+  }
   if (!id) {
     id = newClientId();
     writeClientId(storageKey, id);
@@ -266,7 +300,13 @@ interface Pending {
   send?: () => void;
 }
 
-type RemoteListener = (change: WindowChange) => void;
+/** Who made a change this window did not: another view of this same
+ *  window (a second browser tab — every tab of a profile keeps the one
+ *  id in `localStorage`), or somebody else (an extension, another
+ *  window). */
+export type ChangeOrigin = "sibling" | "elsewhere";
+
+type RemoteListener = (change: WindowChange, origin: ChangeOrigin) => void;
 
 export interface WriteOptions {
   /** Hold the network write for the store's pause, collapsing a burst
@@ -295,6 +335,17 @@ export class WindowModel {
   private counts = new Map<WindowField, number>();
   private seq = 0;
   private localToast = 0;
+  /**
+   * This view's own prefix for the tokens its writes carry: the window's
+   * id and a nonce of this view's. Two browser tabs share the window id
+   * (and so the model), and each counts its writes from 1, so a token of
+   * the id and the count alone named both tabs' writes alike: a tab took
+   * the other's change for its own echo — it never followed the other
+   * onto a new chat, and dropped every event of it — and a pending write
+   * was cleared by the other tab's write that happened to share its
+   * count. F5 (igni-app #96, CHAT-027).
+   */
+  private readonly writer: string;
 
   constructor(
     private client: IgniClient,
@@ -307,6 +358,7 @@ export class WindowModel {
   ) {
     this.confirmed = { ...emptyWindowState(), ...initial };
     this.view = this.confirmed;
+    this.writer = `${clientId}#${viewNonce()}`;
   }
 
   // ── Reading ───────────────────────────────────────────────────
@@ -344,8 +396,9 @@ export class WindowModel {
   }
 
   /** Be told of each change somebody else made — an extension, another
-   *  window — after it is applied. For what a change *asks* of a view
-   *  beyond rendering it: scroll there, switch to that session. */
+   *  window, another tab of this one (`origin`) — after it is applied.
+   *  For what a change *asks* of a view beyond rendering it: scroll
+   *  there, switch to that session. */
   onRemote(fn: RemoteListener): () => void {
     this.remoteListeners.add(fn);
     return () => this.remoteListeners.delete(fn);
@@ -387,7 +440,7 @@ export class WindowModel {
    *  are ignored. */
   applyPush(change: WindowChange): void {
     if (change.window !== this.clientId) return;
-    const own = Boolean(change.token) && change.token.startsWith(`${this.clientId}#`);
+    const own = Boolean(change.token) && change.token.startsWith(`${this.writer}#`);
     const fresh = change.rev > (this.revs.get(change.field) ?? -1);
     if (fresh) {
       this.confirmed = { ...this.confirmed, [change.field]: change.value };
@@ -407,7 +460,10 @@ export class WindowModel {
     // Our own echo is not news: the write already counted.
     if (!own && fresh) this.bump(change.field);
     this.recompute();
-    if (!own && fresh) for (const fn of this.remoteListeners) fn(change);
+    if (!own && fresh) {
+      const origin: ChangeOrigin = change.token.startsWith(`${this.clientId}#`) ? "sibling" : "elsewhere";
+      for (const fn of this.remoteListeners) fn(change, origin);
+    }
   }
 
   // ── Writing ───────────────────────────────────────────────────
@@ -433,7 +489,7 @@ export class WindowModel {
     }
     const previous = this.pending.get(field);
     if (previous?.timer) clearTimeout(previous.timer);
-    const token = `${this.clientId}#${++this.seq}`;
+    const token = `${this.writer}#${++this.seq}`;
     const entry: Pending = { value: next, token, sent: false, timer: null };
     this.pending.set(field, entry);
     this.bump(field);
@@ -487,7 +543,7 @@ export class WindowModel {
         op: "toast",
         window: this.clientId,
         value: toast,
-        token: `${this.clientId}#${++this.seq}`,
+        token: `${this.writer}#${++this.seq}`,
       })
       .catch((error) => {
         if (isRefusal(error)) return;
@@ -508,7 +564,7 @@ export class WindowModel {
         op: "dismiss_toast",
         window: this.clientId,
         value: id,
-        token: `${this.clientId}#${++this.seq}`,
+        token: `${this.writer}#${++this.seq}`,
       })
       .catch((error) => {
         if (!isRefusal(error)) this.local("toasts", remaining);
@@ -522,7 +578,7 @@ export class WindowModel {
         op: "open_dialog",
         window: this.clientId,
         value: spec,
-        token: `${this.clientId}#${++this.seq}`,
+        token: `${this.writer}#${++this.seq}`,
       })
       .catch((error) => {
         if (!isRefusal(error)) this.local("dialog", { id: `local-${++this.localToast}`, spec, source: null });
@@ -542,7 +598,7 @@ export class WindowModel {
         window: this.clientId,
         dialog_id: id,
         value: answer,
-        token: `${this.clientId}#${++this.seq}`,
+        token: `${this.writer}#${++this.seq}`,
       })
       .catch((error) => {
         if (!isRefusal(error)) this.local("dialog", null);

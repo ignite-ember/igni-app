@@ -22,10 +22,10 @@ export interface AppComposerProps {
   ready: boolean;
   brandName: string;
   status: StatusUpdate | null;
-  run: Pick<RunPhaseState, "runPhase" | "cancel" | "controls">;
+  run: Pick<RunPhaseState, "runPhase" | "controls">;
   commands: Pick<CommandsState, "skills" | "backendCommands" | "modelMenuSignal">;
   contributions: Pick<Contributions, "tools">;
-  hitl: Pick<HitlState, "pending">;
+  hitl: Pick<HitlState, "pending" | "stop">;
   onResolveHitl: ChatController["resolveHitl"];
   actions: Pick<ShellActions, "runCommand" | "submit">;
   switcher: RunSettingsSwitcher;
@@ -54,7 +54,10 @@ export function AppComposer({
   onSend,
 }: AppComposerProps) {
   const permissionMode = status?.permission_mode;
-  const { cancel, controls } = run;
+  const { controls } = run;
+  // Stop is Escape: with an approval waiting it rejects them all and
+  // cancels, otherwise it cancels.
+  const { stop } = hitl;
   const composerActions = useMemo<ComposerActions>(
     () => ({
       onPickModel: (name) => void switcher.pickModel(name),
@@ -63,10 +66,10 @@ export function AppComposer({
         onSend?.();
         actions.submit(text);
       },
-      onStop: cancel,
+      onStop: stop,
       onPickMode: (mode) => switcher.pickMode(permissionMode, mode),
     }),
-    [switcher, actions, cancel, permissionMode, onSend],
+    [switcher, actions, stop, permissionMode, onSend],
   );
   // Read every render: the tools menu fills in place as extensions
   // install.

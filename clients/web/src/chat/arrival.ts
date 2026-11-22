@@ -51,6 +51,12 @@ const IGNI_PARAMS = new Set([
   "expected_cli",
   "actual_cli",
   "backend_source",
+  // The desktop's Local / Cloud switch: the side and the backend this
+  // window is on. Dropped from the address bar, a window on the cloud
+  // read itself as local, and the next extension list framed the VM's
+  // own page origins on this computer.
+  "side",
+  "backend",
 ]);
 
 /** What a page kind looks like: `acme.notes`, `plugins`, `igni.artifacts`. */

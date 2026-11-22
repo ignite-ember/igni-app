@@ -97,7 +97,7 @@ export const VIEW_STATE: Record<string, Partial<Record<Category, string[]>>> = {
     menu: ["modelMenuSignal"],
   },
   "chat/useShellStatus.ts": {
-    data: ["status", "sessions"],
+    data: ["backendStatus", "account", "sessions"],
   },
   "chat/useHitl.ts": {
     data: ["pending"],
@@ -123,6 +123,21 @@ export const VIEW_STATE: Record<string, Partial<Record<Category, string[]>>> = {
   "components/AccountMenu.tsx": {
     menu: ["accountMenu"],
     data: ["cloudName"],
+  },
+  "cloud/useBackendState.ts": {
+    data: ["snapshot"],
+  },
+  "cloud/useConnectionGeneration.ts": {
+    data: ["generation"],
+  },
+  "components/BackendSwitch.tsx": {
+    pending: ["busy", "error"],
+  },
+  "components/BackendBanner.tsx": {
+    pending: ["busy", "error"],
+  },
+  "components/WakingOverlay.tsx": {
+    animation: ["shown"],
   },
   "extensions/useExtensions.ts": {
     data: ["extensions"],

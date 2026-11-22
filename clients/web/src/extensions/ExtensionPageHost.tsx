@@ -1,4 +1,5 @@
 import type { PageRoute } from "../chat/pageStack";
+import { useConnectionGeneration } from "../cloud/useConnectionGeneration";
 import { Drawer } from "../components/panels/Drawer";
 import type { IgniClient } from "../protocol/client";
 import { HostModelReply, ServiceTokenReply } from "../protocol/rpcResults";
@@ -15,6 +16,11 @@ export const DIALOG_WAIT_MS = 24 * 3_600_000;
  * Every call it makes goes as that extension (``client.asExtension``),
  * which is what lets the backend enforce its manifest's permissions
  * rather than trusting this process to have done so.
+ *
+ * The frame is keyed by the client's connection generation: a new
+ * connection (a backend restart, or the cloud's resync after a node
+ * move) remounts it with a new nonce, so it says `hello` again and
+ * re-subscribes in the igni process that now answers (design §15.5).
  */
 export function ExtensionPageHost({
   extension,
@@ -29,7 +35,7 @@ export function ExtensionPageHost({
 }: {
   extension: ExtensionSummary;
   page: PageRoute;
-  client: Pick<IgniClient, "asExtension">;
+  client: Pick<IgniClient, "asExtension"> & Partial<Pick<IgniClient, "onStateChange" | "generation">>;
   /** The window it is framed in, for ``host_model``. */
   homeWindow: string;
   theme: string;
@@ -41,6 +47,7 @@ export function ExtensionPageHost({
    *  the window's route so the next `hello` replays it. */
   onLocation?: (state: Record<string, string>) => void;
 }) {
+  const generation = useConnectionGeneration(client);
   const caller = client.asExtension(extension.id);
   const onHost: NonNullable<ExtensionPageProps["onHost"]> = async (request) =>
     HostModelReply.parse(
@@ -57,6 +64,7 @@ export function ExtensionPageHost({
   return (
     <Drawer title={page.label} titleInBody onClose={onClose}>
       <ExtensionPage
+        key={generation}
         extension={extension}
         kind={page.kind}
         // Launch params: a notification's target.params, when that opened it.

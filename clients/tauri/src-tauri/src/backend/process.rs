@@ -31,6 +31,27 @@ pub(crate) enum ShutdownOutcome {
     Forced,
 }
 
+/// Which backend to start.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum BackendKind {
+    /// The whole backend, on a project folder.
+    Full,
+    /// `--account-only`, for `cloud` mode (§6.4): sign-in, discovery, the
+    /// pack sync and status; no agent, tools, extensions or event pull.
+    /// It has no project folder.
+    AccountOnly,
+}
+
+impl BackendKind {
+    /// The backend's arguments after `-m igni_core.backend`.
+    pub fn args(self, project_dir: &str) -> Vec<String> {
+        match self {
+            BackendKind::Full => vec!["--ws-port".into(), "0".into(), "--project-dir".into(), project_dir.into()],
+            BackendKind::AccountOnly => vec!["--account-only".into(), "--ws-port".into(), "0".into()],
+        }
+    }
+}
+
 pub(crate) struct BackendProcess {
     child: Child,
     port: u16,
@@ -43,6 +64,7 @@ impl BackendProcess {
     /// (possibly multi-minute) first-launch bootstrap.
     pub fn spawn(
         project_dir: &str,
+        kind: BackendKind,
         token: Option<&WsToken>,
         progress: ProgressFn,
     ) -> Result<Self, ShellError> {
@@ -52,15 +74,9 @@ impl BackendProcess {
 
         progress("Starting the igni backend…");
         let mut cmd = runtime::host_command(&install.python);
-        cmd.args([
-            "-m",
-            "igni_core.backend",
-            "--ws-port",
-            "0",
-            "--project-dir",
-            project_dir,
-        ])
-        .env("IGNI_PARENT_PID", std::process::id().to_string())
+        cmd.args(["-m", "igni_core.backend"])
+            .args(kind.args(project_dir))
+            .env("IGNI_PARENT_PID", std::process::id().to_string())
         .stdout(Stdio::piped())
         // Captured so a backend that dies during startup can say why.
         .stderr(Stdio::piped());
@@ -165,6 +181,11 @@ impl BackendProcess {
         &self.version
     }
 
+    /// Whether the process has exited (and is reaped). Never blocks.
+    pub fn has_exited(&mut self) -> bool {
+        matches!(self.child.try_wait(), Ok(Some(_)))
+    }
+
     /// Stop the backend, giving it `grace` to exit cleanly.
     ///
     /// SIGTERM lets the backend drain its session pool and remove its
@@ -212,6 +233,14 @@ impl BackendProcess {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_account_only_backend_gets_no_project_and_never_the_full_arguments() {
+        assert_eq!(BackendKind::Full.args("/p"), vec!["--ws-port", "0", "--project-dir", "/p"]);
+        let account = BackendKind::AccountOnly.args("/p");
+        assert_eq!(account, vec!["--account-only", "--ws-port", "0"]);
+        assert!(!account.iter().any(|a| a == "--project-dir" || a == "/p"));
+    }
 
     // Real child processes: the thing under test is whether a signal is
     // delivered and the child reaped, which a mock would only echo back.

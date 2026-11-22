@@ -8,7 +8,7 @@
  */
 
 import type { IgniClient } from "../protocol/client";
-import type { CommandResult, RunCompleted, RunStarted, ServerMessage } from "../protocol/messages";
+import type { CommandResult, RunCompleted, RunPaused, RunStarted, ServerMessage } from "../protocol/messages";
 import { ContextTokenCount } from "../protocol/rpcResults";
 import type { HitlRequests } from "./hitlRequests";
 import type { ShellPort } from "./shellPort";
@@ -19,7 +19,7 @@ export interface StreamEventRouterDeps {
   client: Pick<IgniClient, "rpc">;
   view: TranscriptView;
   hitl: HitlRequests;
-  run: Pick<RunControls, "setRunPhase" | "autoAcceptForRunRef">;
+  run: Pick<RunControls, "setRunPhase" | "runPhaseRef" | "autoAcceptForRunRef">;
   shell: Pick<ShellPort, "setStatus" | "refreshStatus" | "refreshSessions">;
   /** Turn acceptEdits back off, silently (no typed command in the chat). */
   revertAutoAccept: () => void;
@@ -33,7 +33,7 @@ type StreamRoutes = {
 export class StreamEventRouter {
   private readonly routes: StreamRoutes = {
     streaming_done: () => this.onContentDone(),
-    run_paused: (m) => this.deps.hitl.show(m.requirements),
+    run_paused: (m) => this.onPaused(m),
     // On the run stream, where the safety check's question was raised.
     requirement_details: (m) => this.deps.hitl.addDetails(m),
     status_update: (m) => this.deps.shell.setStatus(m),
@@ -51,9 +51,12 @@ export class StreamEventRouter {
   }
 
   /** Content has ended; the backend's tail (memory, compression) still
-   *  drains, which ``finalizing`` keeps the indicator up through. */
+   *  drains, which ``finalizing`` keeps the indicator up through. A run
+   *  already paused on an approval stays paused: ``streaming_done`` comes
+   *  first on the wire, but the pause is what the run is in. */
   private onContentDone(): void {
-    this.deps.run.setRunPhase("finalizing");
+    if (this.deps.run.runPhaseRef.current !== "awaiting_approval")
+      this.deps.run.setRunPhase("finalizing");
     const autoAccept = this.deps.run.autoAcceptForRunRef;
     if (autoAccept.current) {
       autoAccept.current = false;
@@ -68,9 +71,21 @@ export class StreamEventRouter {
     view.append(m.kind === "error" ? view.chatItems.error(text) : view.chatItems.assistant(text));
   }
 
-  /** The backend confirmed the run is live. */
+  /** The run waits on the person: the dialog opens, and the phase says
+   *  so (the indicator, and Stop in place of Send). */
+  private onPaused(m: RunPaused): void {
+    this.deps.hitl.show(m.requirements);
+    this.deps.run.setRunPhase("awaiting_approval");
+  }
+
+  /** The backend confirmed the run is live. A top-level run starting
+   *  means any approval still on screen is gone on the backend: a new
+   *  message closes the run that stood paused and drops its approvals
+   *  before the new run starts (igni-core ``_close_abandoned_pause``), so
+   *  the dialog's answers would only fail with "Unknown requirement". */
   private onRunStarted(m: RunStarted): void {
     this.deps.run.setRunPhase("streaming");
+    if (!m.parent_run_id) this.deps.hitl.clear();
     this.deps.view.apply(m);
   }
 

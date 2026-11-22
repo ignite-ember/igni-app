@@ -243,6 +243,19 @@ describe("while a turn is running", () => {
     expect(sendButton()).not.toBeNull();
   });
 
+  it("shows Stop instead of Send while the run waits on an approval, and Stop calls onStop", () => {
+    const { container, props, sendButton } = mount({ runPhase: "awaiting_approval" });
+
+    expect(sendButton()).toBeNull();
+    const stop = container.querySelector(".send-btn.stop") as HTMLButtonElement;
+    expect(stop).not.toBeNull();
+    expect(stop.title).toBe("Stop (Esc)");
+    act(() => stop.click());
+
+    expect(props.actions.onStop).toHaveBeenCalledOnce();
+    expect(props.actions.onSubmit).not.toHaveBeenCalled();
+  });
+
   it("keeps Send while the backend finalizes", () => {
     const { container, sendButton } = mount({ runPhase: "finalizing" });
 

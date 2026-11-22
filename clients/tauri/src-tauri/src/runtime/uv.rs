@@ -9,7 +9,7 @@ use std::time::Duration;
 #[cfg(not(target_os = "windows"))]
 use std::os::unix::fs::PermissionsExt;
 
-use crate::error::LogOnError;
+use crate::error::{CauseChain, LogOnError};
 
 use super::interpreter::is_executable;
 use super::UV_VERSION;
@@ -60,34 +60,44 @@ impl Uv {
         }
     }
 
+    /// GET `url` and its body, through the shell's one agent (`net`):
+    /// the system's certificate roots, so a proxy that inspects TLS with a
+    /// company CA works once IT has installed that CA, and the
+    /// environment's `HTTPS_PROXY`/`NO_PROXY`. ureq follows redirects by
+    /// default; GitHub release URLs redirect once to a signed S3 URL.
+    fn download(url: &str) -> Result<Vec<u8>, String> {
+        let host = tauri::Url::parse(url)
+            .ok()
+            .and_then(|u| u.host_str().map(str::to_string))
+            .unwrap_or_default();
+        let agent = crate::cloud::net::agent_builder(&host, true)
+            .map_err(|e| format!("the system's certificate roots are unavailable ({e})"))?
+            .timeout_connect(Duration::from_secs(15))
+            .timeout_read(Duration::from_secs(120))
+            .build();
+        let resp = agent
+            .get(url)
+            .call()
+            .map_err(|e| CauseChain::new(&e, CauseChain::DOWNLOAD).to_string())?;
+        if resp.status() < 200 || resp.status() >= 300 {
+            return Err(format!("uv download returned HTTP {} from {url}", resp.status()));
+        }
+        let mut bytes = Vec::new();
+        resp.into_reader()
+            .read_to_end(&mut bytes)
+            .map_err(|e| format!("read uv body: {e}"))?;
+        Ok(bytes)
+    }
+
     /// Download the pinned release and put its binary at this path.
     pub fn fetch(&self) -> Result<(), String> {
         let triple = Self::target()?;
         let url = format!(
             "https://github.com/astral-sh/uv/releases/download/{UV_VERSION}/uv-{triple}.{ARCHIVE_EXT}"
         );
-        // ureq follows redirects by default — GitHub release URLs redirect
-        // once to a signed S3 URL.
-        let agent = ureq::AgentBuilder::new()
-            .timeout_connect(Duration::from_secs(15))
-            .timeout_read(Duration::from_secs(120))
-            .build();
-        let resp = agent
-            .get(&url)
-            .call()
-            .map_err(|e| format!("HTTP error fetching uv: {e}"))?;
-        if resp.status() < 200 || resp.status() >= 300 {
-            return Err(format!(
-                "uv download returned HTTP {} from {url}",
-                resp.status()
-            ));
-        }
+        let bytes = Self::download(&url)?;
         let archive =
             std::env::temp_dir().join(format!("uv-download-{}.{ARCHIVE_EXT}", std::process::id()));
-        let mut bytes = Vec::new();
-        resp.into_reader()
-            .read_to_end(&mut bytes)
-            .map_err(|e| format!("read uv body: {e}"))?;
         fs::write(&archive, &bytes).map_err(|e| format!("write uv tmp: {e}"))?;
 
         if let Some(parent) = self.path.parent() {
@@ -202,6 +212,39 @@ fn extract_uv_exe(archive: &Path, dest: &Path) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::tls_testing::TestMirror;
+
+    #[test]
+    fn a_download_whose_certificate_this_computer_does_not_trust_is_refused_and_says_why() {
+        // What a proxy that inspects TLS looks like before IT installs its
+        // CA: a certificate for the host from an authority in no store.
+        let mirror = TestMirror::start("uv");
+        let url = mirror.url("/uv.tar.gz");
+        let message = Uv::download(&url).unwrap_err();
+        assert!(message.contains(&url), "{message}");
+        assert!(message.contains("invalid peer certificate"), "{message}");
+        // macOS refuses this 100-year leaf for its lifetime before its
+        // issuer; the advice follows the issuer verdict.
+        #[cfg(not(target_os = "macos"))]
+        assert!(message.ends_with(CauseChain::DOWNLOAD), "{message}");
+    }
+
+    /// With the CA in the system bundle, the download goes through: the
+    /// agent reads the system's roots, which a compiled-in list would not.
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn a_download_through_a_proxy_ca_the_system_trusts_goes_through() {
+        crate::tls_testing::passes_trusting_the_test_ca(
+            "runtime::uv::tests::download_with_the_test_ca_in_the_system_bundle",
+        );
+    }
+
+    #[test]
+    #[ignore = "run by a_download_through_a_proxy_ca_the_system_trusts_goes_through, with SSL_CERT_FILE"]
+    fn download_with_the_test_ca_in_the_system_bundle() {
+        let mirror = TestMirror::start("uv archive bytes");
+        assert_eq!(Uv::download(&mirror.url("/uv.tar.gz")).unwrap(), b"uv archive bytes");
+    }
 
     fn zip_with(dir: &Path, entries: &[(&str, &[u8])]) -> PathBuf {
         use std::io::Write;

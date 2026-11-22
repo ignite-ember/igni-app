@@ -10,10 +10,12 @@
  * months, and the reason was that mounting it needs app knowledge the
  * frame deliberately does not have.
  */
-import { useCallback, useMemo } from "react";
+import { useCallback, useContext, useMemo } from "react";
 
 import { Banner, Button, Empty } from "@ignite-ember/ui-react";
 
+import { BackendStateContext } from "../cloud/backendContext";
+import { windowSide } from "../cloud/backendState";
 import { ExtensionFrame, type ExtensionFrameProps } from "./ExtensionFrame";
 import { OpenOnWeb } from "./OpenOnWeb";
 
@@ -136,6 +138,11 @@ export function ExtensionPage({
   // Stable across renders so the frame's listener is not torn down
   // and rebuilt, which drops messages in flight.
   const call = useCallback(onCall, [onCall]);
+  // On the desktop's cloud side the page is fetched from the VM: no frame
+  // loads against a VM that cannot answer. The overlay or banner of the
+  // switch says why meanwhile (design §15.5).
+  const backend = useContext(BackendStateContext);
+  const cloudNotReady = windowSide() === "cloud" && backend?.state !== "cloud_ready";
 
   if (page === undefined) {
     return (
@@ -168,6 +175,10 @@ export function ExtensionPage({
           : `${extension.name} is ${extension.state}.`}
       </Empty>
     );
+  }
+
+  if (cloudNotReady) {
+    return <Banner tone="neutral">{`${extension.name} opens once your cloud igni is ready.`}</Banner>;
   }
 
   if (!extension.origin) {

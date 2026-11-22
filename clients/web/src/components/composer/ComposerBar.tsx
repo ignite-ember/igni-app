@@ -1,4 +1,4 @@
-import { isProcessing, type RunPhase } from "../../chat/runPhase";
+import { canStop, type RunPhase } from "../../chat/runPhase";
 import type { ComposerMode } from "../../clientState";
 import type { PermissionModeName } from "../../protocol/messages";
 import { ChevronIcon, StopIcon } from "../Icons";
@@ -8,7 +8,8 @@ import { SendButton } from "./SendButton";
 import type { ComposerPopupApi } from "./useComposerPopup";
 
 /** The row under the editor: the tools and attach buttons, the mode
- *  badge, the model chip, and Send — or Stop while the model is replying. */
+ *  badge, the model chip, and Send — or Stop while the model is replying
+ *  or the run waits on an approval. */
 export function ComposerBar({
   ui,
   draftMode,
@@ -60,7 +61,7 @@ export function ComposerBar({
           {model} <ChevronIcon size={9} down />
         </button>
       )}
-      {isProcessing(runPhase) ? (
+      {canStop(runPhase) ? (
         <button className="send-btn stop" title="Stop (Esc)" onClick={onStop}>
           <StopIcon />
         </button>

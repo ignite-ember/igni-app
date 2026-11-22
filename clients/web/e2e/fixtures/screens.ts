@@ -27,6 +27,8 @@ export async function openScreen(
     theme,
   )
 
+  if (screen.desktop) await standInForTheShell(page, screen.desktop)
+
   await page.goto(`/?demo=${screen.demo}`)
   await page.waitForLoadState('networkidle')
 
@@ -80,6 +82,16 @@ export async function openScreen(
     }
   }
 
+  if (screen.desktop?.pages) {
+    // The extension's own page, inside its frame.
+    const inFrame = page.frameLocator('iframe').locator(screen.desktop.pages.ready)
+    try {
+      await inFrame.waitFor({ timeout: 30_000 })
+    } catch {
+      return `${screen.name}: the framed page never showed ${screen.desktop.pages.ready}`
+    }
+  }
+
   // A short settle on top, for web fonts and the last layout pass.
   // Everything structural is waited for above.
   await page.waitForTimeout(screen.settleMs ?? 900)
@@ -110,4 +122,38 @@ export async function openScreen(
   })
   await expect(page.locator('body')).toBeVisible()
   return null
+}
+
+/**
+ * The desktop shell, as far as a screen needs it: Tauri's `invoke` answers
+ * `backend_state` with the snapshot and `cloud_page_origin` with the
+ * page origin, and that origin serves the extension's page.
+ */
+async function standInForTheShell(page: Page, desktop: NonNullable<AppScreen['desktop']>) {
+  const origin = desktop.pages?.origin ?? null
+  await page.addInitScript(
+    ({ snapshot, origin }) => {
+      ;(window as unknown as { __TAURI__: unknown }).__TAURI__ = {
+        core: {
+          invoke: async (cmd: string) => {
+            if (cmd === 'backend_state') return snapshot
+            if (cmd === 'cloud_page_origin') return origin
+            return null
+          },
+        },
+      }
+    },
+    { snapshot: desktop.snapshot, origin },
+  )
+  if (desktop.pages) {
+    const html = desktop.pages.html
+    await page.route(`${desktop.pages.origin}/**`, (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'text/html',
+        headers: { 'Content-Security-Policy': "default-src 'self'; style-src 'unsafe-inline'" },
+        body: html,
+      }),
+    )
+  }
 }

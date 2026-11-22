@@ -4,6 +4,7 @@
 
 mod backend;
 mod bootstrap;
+mod cloud;
 mod deep_link;
 mod desktop_settings;
 mod diagnostics;
@@ -17,14 +18,22 @@ mod launch_args;
 mod macos;
 mod menu;
 mod runtime;
+#[cfg(test)]
+mod tls_testing;
 mod update_policy;
 mod updater;
 mod windows;
+
+use std::sync::Arc;
 
 use tauri::{Manager, RunEvent};
 
 use backend::BackendSupervisor;
 use bootstrap::Bootstrap;
+use cloud::controller::CloudController;
+use cloud::gateway::GatewayUrl;
+use cloud::shell::TauriShell;
+use desktop_settings::CloudSettings;
 use deep_link::DeepLinks;
 use launch_args::LaunchArgs;
 use menu::{AppMenu, MenuAction};
@@ -67,6 +76,15 @@ pub fn run() {
             updater::igni_install_update,
             deep_link::igni_take_open_link,
             bootstrap::igni_bootstrap_state,
+            cloud::commands::backend_state,
+            cloud::commands::switch_backend,
+            cloud::commands::cloud_sign_in,
+            cloud::commands::cloud_retry,
+            cloud::commands::dismiss_backend_notice,
+            cloud::commands::report_local_activity,
+            cloud::commands::account_rpc,
+            cloud::commands::cloud_page_origin,
+            menu::igni_menu_shortcut,
         ])
         .setup(|app| {
             let handle = app.handle();
@@ -78,6 +96,18 @@ pub fn run() {
             app.manage(launch.clone());
             app.manage(DeepLinks::default());
             app.manage(bootstrap::BootstrapState::default());
+            // The cloud switch (`cloud/`): one app-wide side, owned here.
+            {
+                let home = dirs::home_dir().unwrap_or_default();
+                let state_dir = app.path().app_config_dir().unwrap_or_else(|_| home.join(".igni/desktop"));
+                app.manage(CloudController::new(
+                    home,
+                    state_dir,
+                    CloudSettings::load(),
+                    Arc::new(TauriShell::new(handle.clone())),
+                    GatewayUrl::insecure_allowed_here(),
+                ));
+            }
 
             // igni:// links (`deep_link.rs`): the one the app was launched
             // with is held for the window to take once the app has
@@ -116,6 +146,15 @@ pub fn run() {
             )?;
             Bootstrap::spawn_in_background(handle, launch);
             Ok(())
+        })
+        .on_window_event(|window, event| match event {
+            tauri::WindowEvent::Focused(focused) => {
+                WindowManager::note_focus(window.app_handle(), window.label(), *focused)
+            }
+            tauri::WindowEvent::Destroyed => {
+                WindowManager::forget(window.app_handle(), window.label())
+            }
+            _ => {}
         })
         .on_menu_event(|app, event| {
             let id = event.id().as_ref();

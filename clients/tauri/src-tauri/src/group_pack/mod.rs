@@ -40,7 +40,8 @@ pub(crate) use local_state::{subject_from_credentials, PackState};
 pub(crate) use pins::{pins_from_env, pins_from_managed, TRUSTED_KEYS_ENV};
 pub(crate) use policy::GroupPolicy;
 
-use jose::{decode_json, JwsHeader};
+pub(crate) use jose::decode_json;
+use jose::JwsHeader;
 
 /// What a pack is checked against.
 #[derive(Debug, Default, Clone)]
@@ -207,6 +208,35 @@ mod tests {
         let settings = crate::desktop_settings::DesktopSettings::from_json(&policy.settings_json());
         assert_eq!(settings.air_gapped, Some(true));
         assert_eq!(settings.update_endpoint.as_deref(), Some("https://m.internal/l.json"));
+    }
+
+    #[test]
+    fn the_mode_comes_from_a_verified_pack_and_a_tampered_one_is_both() {
+        use crate::cloud::mode::GroupMode;
+        let pair = key();
+        let keys = jwks(&pair);
+        let kid = kid_of(&keys);
+        for (stated, mode) in [("cloud", GroupMode::Cloud), ("local", GroupMode::Local), ("local_and_cloud", GroupMode::LocalAndCloud)] {
+            let mut body = claims("p1", "https://igni.example.invalid", 5);
+            body["policy"]["theme"] = Value::Null;
+            body["policy"]["mode"] = Value::from(stated);
+            let compact = sign(&pair, &kid, &body);
+            let policy = verify(&compact, &keys, &trust()).expect("verifies");
+            assert_eq!(GroupMode::from_pack(policy.mode.as_deref()), mode, "{stated}");
+            // The same pack with its mode edited no longer verifies, and no
+            // pack is `local_and_cloud`.
+            let parts: Vec<&str> = compact.split('.').collect();
+            let mut edited = body.clone();
+            edited["policy"]["mode"] = Value::from(if stated == "cloud" { "local" } else { "cloud" });
+            let forged = format!("{}.{}.{}", parts[0], URL_SAFE_NO_PAD.encode(edited.to_string()), parts[2]);
+            let refused = verify(&forged, &keys, &trust()).ok();
+            assert!(refused.is_none());
+            assert_eq!(GroupMode::from_pack(refused.and_then(|p| p.mode).as_deref()), GroupMode::LocalAndCloud);
+        }
+        // An older server's pack carries no mode: both.
+        let compact = sign(&pair, &kid, &claims("p1", "https://igni.example.invalid", 5));
+        let policy = verify(&compact, &keys, &trust()).unwrap();
+        assert_eq!(GroupMode::from_pack(policy.mode.as_deref()), GroupMode::LocalAndCloud);
     }
 
     #[test]

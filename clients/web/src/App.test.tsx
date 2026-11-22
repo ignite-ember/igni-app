@@ -595,6 +595,83 @@ describe("shell mode", () => {
   });
 });
 
+describe("a run paused on an approval", () => {
+  /** A run that asks two questions, as the core ends a paused stream:
+   *  ``streaming_done`` first, then ``run_paused``, then the stream's end. */
+  async function pausedOnTwo(): Promise<{ editor: HTMLElement; runId: string }> {
+    const editor = await boot();
+    typeAndSend(editor, "tidy the repo");
+    const runId = await sentRun("tidy the repo");
+    push({ type: "run_started", id: runId, run_id: runId, parent_run_id: null, agent_name: "igni", model: "test-model" });
+    push({ type: "streaming_done", id: runId, run_id: runId });
+    push({
+      type: "run_paused",
+      id: runId,
+      run_id: runId,
+      requirements: ["req-a", "req-b"].map((requirement_id, i) => ({
+        type: "hitl_request",
+        requirement_id,
+        tool_name: "run_shell_command",
+        friendly_name: "Bash",
+        tool_args: { command: `rm -rf build-${i}` },
+        details: "",
+        agent_path: [],
+      })),
+    });
+    push({ type: "stream_end", id: runId });
+    expect((await screen.findAllByText(/rm -rf build-0/)).length).toBeGreaterThan(0);
+    return { editor, runId };
+  }
+
+  it("shows Stop in place of Send, and says it is waiting for your approval", async () => {
+    await pausedOnTwo();
+    expect(screen.getByTitle("Stop (Esc)")).toBeTruthy();
+    expect(screen.queryByTitle("Send")).toBeNull();
+    expect(screen.getByText("Waiting for your approval")).toBeTruthy();
+    expect(screen.queryByText("Finalizing…")).toBeNull();
+    expect(screen.getByText("Esc rejects all and stops")).toBeTruthy();
+  });
+
+  // Stop is Escape: the same frames, in the same order, and nothing else —
+  // no model turn of its own.
+  it.each([
+    ["Escape", () => fireEvent.keyDown(window, { key: "Escape" })],
+    ["the composer's Stop", () => fireEvent.click(screen.getByTitle("Stop (Esc)"))],
+  ])("%s rejects every waiting approval in one batch and cancels", async (_how, stop) => {
+    await pausedOnTwo();
+    act(() => {
+      stop();
+    });
+    await waitFor(() => expect(received("cancel")).toHaveLength(1));
+    const batches = received("hitl_response_batch");
+    expect(batches).toHaveLength(1);
+    expect(batches[0].decisions).toEqual([
+      { requirement_id: "req-a", action: "reject", choice: "" },
+      { requirement_id: "req-b", action: "reject", choice: "" },
+    ]);
+    const order = be.received().map((m) => m.type);
+    expect(order.indexOf("hitl_response_batch")).toBeLessThan(order.indexOf("cancel"));
+    expect(received("user_message")).toHaveLength(1);
+    expect(screen.queryByText(/rm -rf build-0/)).toBeNull();
+    expect(screen.queryByText("Waiting for your approval")).toBeNull();
+    expect(screen.queryByTitle("Stop (Esc)")).toBeNull();
+  });
+
+  it("a new message instead of an answer goes out as a run, and the approval goes when that run starts", async () => {
+    const { editor } = await pausedOnTwo();
+    typeAndSend(editor, "never mind, list the files");
+    const next = await sentRun("never mind, list the files");
+    // Sent, not queued behind a run that will not end by itself.
+    expect(received("queue_message")).toHaveLength(0);
+    // The backend drops the waiting approvals before the new run starts;
+    // its ``run_started`` is what says so.
+    push({ type: "run_started", id: next, run_id: next, parent_run_id: null, agent_name: "igni", model: "test-model" });
+    await waitFor(() => expect(screen.queryByText(/rm -rf build-0/)).toBeNull());
+    expect(screen.queryByText("Waiting for your approval")).toBeNull();
+    expect(received("hitl_response_batch")).toHaveLength(0);
+  });
+});
+
 describe("while a run is going", () => {
   it("queues a second message instead of starting a second run", async () => {
     const editor = await boot();

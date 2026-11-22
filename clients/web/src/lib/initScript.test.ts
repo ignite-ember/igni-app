@@ -1,138 +1,185 @@
 // @vitest-environment jsdom
 /**
- * The desktop app's initialization script, run.
- *
- * ``clients/tauri/src-tauri/src/init_script.js`` is the app's first
- * code in every page load: it registers the shell's event listeners
- * (the menu, a followed ``igni://`` link, the fullscreen state) and
- * stamps the host on the document's root.
- *
- * Windows injects the script at document start, where the document's
- * root element does not exist yet. The script used to read the root
- * unguarded, and the throw that caused aborted the whole script — so
- * the window never registered its listeners, never heard the shell's
- * link and never opened the page a followed ``igni://`` link names.
- * Linux and macOS run the same script with the root already there,
- * which is why only Windows showed it.
- *
- * These tests run the script against a document with no root and say
- * whether the listeners are registered anyway.
+ * The desktop shell's init script (clients/tauri/src-tauri/src/init_script.js),
+ * run in a page the way the webview runs it: before the app's own code,
+ * and on Windows before Tauri has set `window.__TAURI__` (R624, desktop
+ * proof run 44810142993: New Chat and Check for Updates never reached the
+ * page there, because the listeners were only registered if the API was
+ * already present when the script ran).
  */
 
-import { describe, expect, it, vi } from "vitest";
 import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
-import * as path from "node:path";
+import { resolve } from "node:path";
 
-const HERE = path.dirname(fileURLToPath(import.meta.url));
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-/** The script as the shell injects it, before the platform token is replaced. */
-const SCRIPT = readFileSync(
-  path.join(HERE, "..", "..", "..", "tauri", "src-tauri", "src", "init_script.js"),
+const TEMPLATE = readFileSync(
+  resolve(__dirname, "../../../tauri/src-tauri/src/init_script.js"),
   "utf8",
 );
+const SCRIPT = TEMPLATE.replaceAll("__PLATFORM__", "win");
 
-/** What the script registered, and the handlers it registered them with. */
-type Harness = {
-  registered: string[];
-  handlers: Map<string, (event: unknown) => void>;
-};
+type Listener = (e: { payload: unknown }) => void;
 
-/**
- * Stand in for the Tauri API the script talks to. The window's own
- * ``listen`` is what the script prefers: a global listen would hear
- * every window's events.
- */
-function stubTheTauriApi(): Harness {
-  const registered: string[] = [];
-  const handlers = new Map<string, (event: unknown) => void>();
-  const current = {
-    label: "main",
-    listen: (name: string, handler: (event: unknown) => void) => {
-      registered.push(name);
-      handlers.set(name, handler);
-      return Promise.resolve();
+/** A stand-in for Tauri's global API that records each listener. */
+function fakeTauri() {
+  const listeners = new Map<string, Listener>();
+  const listen = (name: string, handler: Listener) => {
+    listeners.set(name, handler);
+    return Promise.resolve(() => listeners.delete(name));
+  };
+  return {
+    listeners,
+    api: {
+      core: { invoke: vi.fn((_cmd: string, _args?: unknown) => Promise.resolve<unknown>(false)) },
+      event: { listen },
+      webviewWindow: { getCurrentWebviewWindow: () => ({ label: "main", listen }) },
     },
   };
-  (window as unknown as Record<string, unknown>).__TAURI__ = {
-    core: { invoke: vi.fn().mockResolvedValue(undefined) },
-    event: {
-      listen: (name: string) => {
-        registered.push(`any:${name}`);
-        return Promise.resolve();
-      },
-    },
-    webviewWindow: { getCurrentWebviewWindow: () => current },
-  };
-  return { registered, handlers };
 }
 
-/** Run the script the way the webview does. */
-function runTheScript() {
-  // A plain script, not a module: it runs against the window it finds.
+function runScript() {
+  // The script is a classic script, run as the webview runs it.
   new Function(SCRIPT)();
 }
 
-describe("the desktop app's initialization script", () => {
-  it("registers the shell's listeners when the document has no root element", () => {
-    // The script waits for the API and for the root; the fake clock
-    // keeps those waits from outliving the test.
+/**
+ * The document as WebView2 hands it to a script that runs when the
+ * document is created: no <html> element yet. Listeners added to it are
+ * kept so the test can fire them once the element exists.
+ */
+function documentBeforeHtml() {
+  const handlers: Record<string, Array<() => void>> = {};
+  let html: HTMLElement | null = null;
+  const doc = new Proxy(document, {
+    get(target, key) {
+      if (key === "documentElement") return html;
+      if (key === "addEventListener") {
+        return (name: string, handler: () => void) => {
+          if (name === "readystatechange" || name === "DOMContentLoaded") {
+            (handlers[name] ??= []).push(handler);
+            return;
+          }
+          target.addEventListener(name, handler as EventListener, true);
+        };
+      }
+      if (key === "removeEventListener") {
+        return (name: string, handler: () => void) => {
+          handlers[name] = (handlers[name] ?? []).filter((h) => h !== handler);
+        };
+      }
+      const value = Reflect.get(target, key, target);
+      return typeof value === "function" ? value.bind(target) : value;
+    },
+  });
+  return {
+    doc,
+    parse() {
+      html = document.createElement("html");
+      for (const handler of [...(handlers.readystatechange ?? []), ...(handlers.DOMContentLoaded ?? [])]) handler();
+      return html;
+    },
+  };
+}
+
+function runScriptIn(doc: Document) {
+  new Function("document", SCRIPT)(doc);
+}
+
+// Each test runs the script afresh; what one run added to the document
+// is taken off again so the next starts clean.
+const added: Array<[string, EventListenerOrEventListenerObject, boolean | AddEventListenerOptions | undefined]> = [];
+const addToDocument = document.addEventListener.bind(document);
+
+describe("the desktop shell's init script", () => {
+  beforeEach(() => {
     vi.useFakeTimers();
-    // Windows: the script runs at document start, before the root
-    // element exists.
-    Object.defineProperty(document, "documentElement", {
-      configurable: true,
-      get: () => null,
+    delete (window as { __TAURI__?: unknown }).__TAURI__;
+    vi.spyOn(document, "addEventListener").mockImplementation((name, handler, options) => {
+      added.push([name, handler, options]);
+      addToDocument(name, handler, options);
     });
-    try {
-      const harness = stubTheTauriApi();
-      runTheScript();
-
-      expect(harness.registered).toEqual([
-        "igni-menu",
-        "igni-open-link",
-        "igni-fullscreen",
-      ]);
-    } finally {
-      delete (document as unknown as Record<string, unknown>).documentElement;
-      vi.clearAllTimers();
-      vi.useRealTimers();
-    }
   });
 
-  it("hands the shell's link to the page as a DOM event", () => {
-    vi.useFakeTimers();
-    try {
-      const harness = stubTheTauriApi();
-      runTheScript();
-
-      const seen: unknown[] = [];
-      window.addEventListener("igni-host", (event) => {
-        seen.push((event as CustomEvent).detail);
-      });
-      // The shell emits the event; the page's own listener turns it into
-      // the DOM event the web UI listens for.
-      harness.handlers.get("igni-open-link")?.({ payload: null });
-
-      expect(seen).toEqual([{ type: "igni:open-link" }]);
-    } finally {
-      vi.clearAllTimers();
-      vi.useRealTimers();
-    }
+  afterEach(() => {
+    vi.restoreAllMocks();
+    for (const [name, handler, options] of added.splice(0)) document.removeEventListener(name, handler, options);
+    vi.clearAllTimers();
+    vi.useRealTimers();
+    delete (window as { __TAURI__?: unknown }).__TAURI__;
   });
 
-  it("stamps the host on the root element when there is one", () => {
-    vi.useFakeTimers();
-    try {
-      stubTheTauriApi();
-      runTheScript();
+  it("registers the shell's event listeners once Tauri's API arrives after it ran", () => {
+    runScript();
+    const tauri = fakeTauri();
+    (window as { __TAURI__?: unknown }).__TAURI__ = tauri.api;
+    vi.advanceTimersByTime(100);
+    expect([...tauri.listeners.keys()].sort()).toEqual([
+      "igni-backend-state",
+      "igni-fullscreen",
+      "igni-menu",
+      "igni-open-link",
+    ]);
+  });
 
-      expect(document.documentElement.dataset.host).toBe("tauri");
-      // The token the shell replaces with the OS name (init_script.rs).
-      expect(document.documentElement.dataset.platform).toBe("__PLATFORM__");
-    } finally {
-      vi.clearAllTimers();
-      vi.useRealTimers();
-    }
+  it("turns a menu event into the page's igni-host event", () => {
+    runScript();
+    const tauri = fakeTauri();
+    (window as { __TAURI__?: unknown }).__TAURI__ = tauri.api;
+    vi.advanceTimersByTime(100);
+    const seen: unknown[] = [];
+    const on = (e: Event) => seen.push((e as CustomEvent).detail);
+    window.addEventListener("igni-host", on);
+    tauri.listeners.get("igni-menu")?.({ payload: "new_chat" });
+    window.removeEventListener("igni-host", on);
+    expect(seen).toEqual([{ type: "igni:menu", payload: { id: "new_chat" } }]);
+  });
+
+  it("runs to the end in a document that has no <html> element yet (WebView2)", () => {
+    const tauri = fakeTauri();
+    (window as { __TAURI__?: unknown }).__TAURI__ = tauri.api;
+    const early = documentBeforeHtml();
+    expect(() => runScriptIn(early.doc)).not.toThrow();
+    expect(tauri.listeners.has("igni-menu")).toBe(true);
+    expect(typeof (window as { __IGNI_PICK_DIR__?: unknown }).__IGNI_PICK_DIR__).toBe("function");
+    const html = early.parse();
+    expect(html.dataset.host).toBe("tauri");
+    expect(html.dataset.platform).toBe("win");
+  });
+
+  it("on Windows runs the menu's shortcuts through the shell", () => {
+    const tauri = fakeTauri();
+    (window as { __TAURI__?: unknown }).__TAURI__ = tauri.api;
+    runScript();
+    const press = (init: KeyboardEventInit) => {
+      const e = new KeyboardEvent("keydown", { bubbles: true, cancelable: true, ...init });
+      document.body.dispatchEvent(e);
+      return e.defaultPrevented;
+    };
+    expect(press({ key: "n", ctrlKey: true })).toBe(true);
+    expect(press({ key: "N", ctrlKey: true, shiftKey: true })).toBe(true);
+    expect(press({ key: "q", ctrlKey: true })).toBe(true);
+    expect(press({ key: "F11" })).toBe(true);
+    expect(press({ key: "n" })).toBe(false);
+    expect(press({ key: "c", ctrlKey: true })).toBe(false);
+    const sent = tauri.api.core.invoke.mock.calls.filter((c) => c[0] === "igni_menu_shortcut").map((c) => c[1]);
+    expect(sent).toEqual([{ id: "new_chat" }, { id: "new_window" }, { id: "quit_app" }, { id: "toggle_fullscreen" }]);
+  });
+
+  it("leaves shortcuts to the menu on macOS and Linux", () => {
+    const tauri = fakeTauri();
+    (window as { __TAURI__?: unknown }).__TAURI__ = tauri.api;
+    new Function(TEMPLATE.replaceAll("__PLATFORM__", "linux"))();
+    const e = new KeyboardEvent("keydown", { key: "n", ctrlKey: true, bubbles: true, cancelable: true });
+    document.body.dispatchEvent(e);
+    expect(e.defaultPrevented).toBe(false);
+    expect(tauri.api.core.invoke.mock.calls.some((c) => c[0] === "igni_menu_shortcut")).toBe(false);
+  });
+
+  it("registers at once when the API is already there", () => {
+    const tauri = fakeTauri();
+    (window as { __TAURI__?: unknown }).__TAURI__ = tauri.api;
+    runScript();
+    expect(tauri.listeners.has("igni-menu")).toBe(true);
   });
 });

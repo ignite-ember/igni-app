@@ -10,7 +10,7 @@
 //! refuses non-HTTPS endpoints at the builder.
 
 use serde::Serialize;
-use tauri::AppHandle;
+use tauri::{AppHandle, Runtime, Wry};
 use tauri_plugin_updater::{Updater, UpdaterExt};
 
 use crate::error::ShellError;
@@ -81,15 +81,17 @@ impl UpdateGate {
     }
 }
 
-pub(crate) struct AppUpdater<'a> {
-    app: &'a AppHandle,
+/// Generic over the runtime so a test can drive it on Tauri's mock one;
+/// the app itself only ever has the webview runtime, the default.
+pub(crate) struct AppUpdater<'a, R: Runtime = Wry> {
+    app: &'a AppHandle<R>,
     gate: UpdateGate,
 }
 
-impl<'a> AppUpdater<'a> {
+impl<'a, R: Runtime> AppUpdater<'a, R> {
     const CURRENT_VERSION: &'static str = env!("CARGO_PKG_VERSION");
 
-    pub fn load(app: &'a AppHandle) -> Self {
+    pub fn load(app: &'a AppHandle<R>) -> Self {
         AppUpdater {
             app,
             gate: UpdateGate::from_source(UpdatePolicy::load().source()),
@@ -183,6 +185,80 @@ pub(crate) async fn igni_install_update(app: AppHandle) -> Result<(), ShellError
 mod tests {
     use super::*;
     use serde_json::json;
+    use crate::tls_testing::TestMirror;
+    use tauri::test::{mock_builder, mock_context, noop_assets, MockRuntime};
+
+    /// The app on Tauri's mock runtime with the real updater plugin, as
+    /// `run()` registers it (any public key: no payload gets that far).
+    fn app() -> tauri::App<MockRuntime> {
+        let mut context = mock_context(noop_assets());
+        context
+            .config_mut()
+            .plugins
+            .0
+            .insert("updater".into(), json!({ "pubkey": "unused", "endpoints": [] }));
+        mock_builder()
+            .plugin(tauri_plugin_updater::Builder::new().build())
+            .build(context)
+            .unwrap()
+    }
+
+    /// A release newer than any build, for every target the plugin asks
+    /// about (its signature is never reached: no test downloads).
+    const LATEST: &str = r#"{"version":"999.0.0","notes":"","pub_date":"2026-11-21T00:00:00Z","platforms":{
+        "darwin-aarch64":{"url":"https://127.0.0.1/p","signature":"x"},
+        "darwin-x86_64":{"url":"https://127.0.0.1/p","signature":"x"},
+        "linux-x86_64":{"url":"https://127.0.0.1/p","signature":"x"},
+        "linux-aarch64":{"url":"https://127.0.0.1/p","signature":"x"},
+        "windows-x86_64":{"url":"https://127.0.0.1/p","signature":"x"}}}"#;
+
+    /// A company mirror once IT has its CA in the system's store: the
+    /// check goes through and offers the release. Linux only, where the
+    /// store can be swapped for one process (`SSL_CERT_FILE`); the
+    /// updater-e2e proof covers all three with the real OS stores.
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn a_mirror_whose_ca_the_system_trusts_offers_its_update() {
+        crate::tls_testing::passes_trusting_the_test_ca("updater::tests::check_with_the_test_ca_in_the_system_bundle");
+    }
+
+    #[test]
+    #[ignore = "run by a_mirror_whose_ca_the_system_trusts_offers_its_update, with SSL_CERT_FILE"]
+    fn check_with_the_test_ca_in_the_system_bundle() {
+        let mirror = TestMirror::start(LATEST);
+        let app = app();
+        let updater = AppUpdater {
+            app: app.handle(),
+            gate: UpdateGate::Endpoint(Some(mirror.url("/latest.json"))),
+        };
+        let result = tauri::async_runtime::block_on(updater.check()).unwrap();
+        assert_eq!(serde_json::to_value(&result).unwrap()["latest_version"], json!("999.0.0"));
+        assert_eq!(serde_json::to_value(&result).unwrap()["available"], json!(true));
+    }
+
+    #[test]
+    fn a_mirror_with_a_certificate_this_computer_does_not_trust_is_refused_and_says_why() {
+        let mirror = TestMirror::start(LATEST);
+        let endpoint = mirror.url("/latest.json");
+        let app = app();
+        let updater = AppUpdater {
+            app: app.handle(),
+            gate: UpdateGate::Endpoint(Some(endpoint.clone())),
+        };
+        let message = tauri::async_runtime::block_on(updater.check()).unwrap_err().to_string();
+        assert!(message.contains(&endpoint), "{message}");
+        // The cause, not only "error sending request": a refused
+        // certificate must not read like a mirror that is down.
+        assert!(message.contains("invalid peer certificate"), "{message}");
+        // macOS refuses this leaf first for its 100-year lifetime (the
+        // fixture must outlive the suite), so the issuer verdict and its
+        // advice are asserted where the verdict is the issuer's.
+        #[cfg(not(target_os = "macos"))]
+        assert!(message.ends_with(crate::error::CauseChain::UPDATE_SERVER), "{message}");
+
+        let message = tauri::async_runtime::block_on(updater.install()).unwrap_err().to_string();
+        assert!(message.contains("invalid peer certificate"), "{message}");
+    }
 
     #[test]
     fn a_disabled_check_serializes_as_before() {

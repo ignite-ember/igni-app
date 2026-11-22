@@ -84,6 +84,18 @@ impl ShellEvent {
     }
 }
 
+/// The app-wide side and state of the cloud switch (§4.2). Unlike the
+/// events above it goes to every window: the choice is the app's, and
+/// every window renders it. `init_script.js` hands it to the web UI as an
+/// `igni-host` event of type `igni:backend-state`.
+pub(crate) const BACKEND_STATE_EVENT: &str = "igni-backend-state";
+
+/// Send `snapshot` to every window.
+pub(crate) fn broadcast_backend_state<R: Runtime, S: serde::Serialize + Clone>(app: &tauri::AppHandle<R>, snapshot: &S) {
+    app.emit(BACKEND_STATE_EVENT, snapshot.clone())
+        .log_on_error(&format!("emitting {BACKEND_STATE_EVENT}"));
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -101,6 +113,7 @@ mod tests {
         assert_eq!(ShellEvent::Menu(String::new()).name(), "igni-menu");
         assert_eq!(ShellEvent::Fullscreen(false).name(), "igni-fullscreen");
         assert_eq!(ShellEvent::OpenLink.name(), "igni-open-link");
+        assert_eq!(BACKEND_STATE_EVENT, "igni-backend-state");
     }
 
     #[test]

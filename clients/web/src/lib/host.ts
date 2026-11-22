@@ -95,6 +95,8 @@ const HOST_EVENT = "igni-host";
 const HOST_MENU_TYPE = "igni:menu";
 /** The desktop shell was handed an `igni://` link for this window. */
 const HOST_OPEN_LINK_TYPE = "igni:open-link";
+/** The desktop shell's cloud switch changed (`igni-backend-state`). */
+const HOST_BACKEND_STATE_TYPE = "igni:backend-state";
 
 /** Header descendants that keep their own click rather than dragging. */
 const DRAG_EXEMPT =
@@ -134,6 +136,13 @@ function detectViewKey(): string {
        through to the internals metadata. */
   }
   return w.__TAURI_INTERNALS__?.metadata?.currentWindow?.label || "";
+}
+
+/** The side this window was loaded on: the desktop shell puts
+ *  `side=cloud` in the URL of a window it points at the cloud relay. */
+function loadedOnCloud(): boolean {
+  if (typeof window === "undefined") return false;
+  return new URLSearchParams(window.location?.search ?? "").get("side") === "cloud";
 }
 
 export class Host {
@@ -194,7 +203,14 @@ export class Host {
   /** `true` if the host can open files in something other than the
    *  built-in preview modal. Useful for tooltips. */
   get canOpenNatively(): boolean {
-    return this.kind !== "web";
+    return this.kind !== "web" && !this.onCloud;
+  }
+
+  /** Whether this window is on the desktop's cloud side. A path there is
+   *  on the VM, so nothing opens or reveals it on this computer: the
+   *  in-app preview, which the backend serves, stands in (design §5). */
+  get onCloud(): boolean {
+    return loadedOnCloud();
   }
 
   /**
@@ -354,6 +370,70 @@ export class Host {
     return () => el.removeEventListener("mousedown", onDown);
   }
 
+  // ── The cloud switch (desktop only) ───────────────────────────
+
+  private invoke(): ((cmd: string, args?: Record<string, unknown>) => Promise<unknown>) | null {
+    return window.__TAURI__?.core?.invoke ?? null;
+  }
+
+  /** The shell's switch state now, or `null` outside the desktop app.
+   *  Untyped; `BackendSnapshot.parse` reads it. */
+  async backendState(): Promise<unknown> {
+    const invoke = this.invoke();
+    if (!invoke) return null;
+    try {
+      return await invoke("backend_state");
+    } catch {
+      return null;
+    }
+  }
+
+  /** Be told whenever the shell's switch state changes. */
+  onBackendState(handler: (raw: unknown) => void): () => void {
+    const listener = (e: Event) => {
+      const detail = (e as CustomEvent<{ type?: string; payload?: unknown } | null>).detail;
+      if (detail?.type === HOST_BACKEND_STATE_TYPE) handler(detail.payload);
+    };
+    window.addEventListener(HOST_EVENT, listener);
+    return () => window.removeEventListener(HOST_EVENT, listener);
+  }
+
+  /** Flip the app to `side`. Rejects with the shell's reason. */
+  async switchBackend(side: "local" | "cloud"): Promise<void> {
+    const invoke = this.invoke();
+    if (!invoke) throw new Error("only the desktop app switches sides");
+    await invoke("switch_backend", { side });
+  }
+
+  /** The needs-sign-in banner's **Sign in**. */
+  async cloudSignIn(): Promise<void> {
+    const invoke = this.invoke();
+    if (!invoke) throw new Error("only the desktop app signs the cloud in");
+    await invoke("cloud_sign_in");
+  }
+
+  /** The unreachable banner's **Retry**. */
+  cloudRetry(): void {
+    void this.invoke()?.("cloud_retry").catch(() => undefined);
+  }
+
+  /** Dismiss the shell's notice, or a refusal already handled. */
+  dismissBackendNotice(): void {
+    void this.invoke()?.("dismiss_backend_notice").catch(() => undefined);
+  }
+
+  /** This window's local runs and approvals, for the switch's badge. */
+  reportLocalActivity(report: { session_id: string; runs: number; approvals: number }): void {
+    void this.invoke()?.("report_local_activity", { report }).catch(() => undefined);
+  }
+
+  /** An account call on this computer's backend, while the window's own
+   *  socket is the cloud's. `null` outside the desktop app. */
+  accountRpc(method: string, args: Record<string, unknown> = {}): Promise<unknown> | null {
+    const invoke = this.invoke();
+    return invoke ? invoke("account_rpc", { method, args }) : null;
+  }
+
   /** The desktop shell's update check, or `null` when this host has
    *  none and the backend should be asked instead. The answer is
    *  untyped; `UpdateInfo.parse` reads it. */
@@ -366,7 +446,7 @@ export class Host {
     if (!path) return false;
     for (const fn of this.openListeners) fn(path);
     try {
-      switch (this.kind) {
+      switch (this.onCloud ? "web" : this.kind) {
         case "tauri": {
           const bridge = window.__IGNI_HOST__;
           if (bridge?.openFile) {

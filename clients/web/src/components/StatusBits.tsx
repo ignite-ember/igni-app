@@ -167,6 +167,15 @@ export function SessionChip({ sessionId }: { sessionId: string }) {
 export function BackendVersionChip() {
   const info = readBackendVersionParams();
   if (!info) return null;
+  // On the desktop's cloud side the backend is the VM's igni, whose
+  // version the relay cannot see: its `welcome` carries none (design §5).
+  if (info.source === "cloud") {
+    return (
+      <span className="backend-version-chip tone-ok" title="igni in your cloud">
+        cloud
+      </span>
+    );
+  }
 
   const mismatch =
     info.actual && info.expected && info.actual !== info.expected;

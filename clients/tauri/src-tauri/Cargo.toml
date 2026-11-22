@@ -34,6 +34,30 @@ serde = { version = "1", features = ["derive"] }
 ring = "0.17"
 base64 = "0.23"
 
+# ── The cloud relay (see ``src/cloud/``) ───────────────────────────
+# Windows reach a person's cloud igni through a loopback relay in this
+# process, which dials the Fleet gateway with the desktop's session token
+# so the token never enters the webview. All of these were already in
+# the build through Tauri, its updater and ureq: tokio is Tauri's
+# runtime, rustls (with ring) and the platform verifier come with the
+# updater's HTTP client, so the relay trusts the same roots the system
+# does, enterprise CAs included. tokio-tungstenite is the WebSocket
+# handshake and framing, without its own connector: the relay opens the
+# TCP and TLS itself so it can honour HTTPS_PROXY.
+tokio = { version = "1", features = ["net", "io-util", "sync", "time", "macros", "rt-multi-thread"] }
+tokio-tungstenite = { version = "0.29", default-features = false, features = ["handshake"] }
+tokio-rustls = { version = "0.26", default-features = false, features = ["ring", "tls12"] }
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
+rustls-platform-verifier = "0.7"
+futures-util = { version = "0.3", default-features = false, features = ["sink", "std"] }
+# The extension page origins in cloud mode (``src/cloud/pages.rs``): an
+# HTTP/1 client to the gateway's page route over the relay's own TCP and
+# TLS. hyper, hyper-util and http-body-util were already in the build
+# through the updater's HTTP client.
+hyper = { version = "1", features = ["client", "http1"] }
+hyper-util = { version = "0.1", features = ["tokio"] }
+http-body-util = "0.1"
+
 # ── Bootstrap runtime (see ``src/runtime.rs``) ─────────────────────
 # Sync HTTP client — ``ureq`` pulls in a fraction of what ``reqwest``
 # does and we don't need async for a serial download → install
@@ -82,15 +106,16 @@ libc = "0.2"
 # platform — see ``runtime::extract_uv``.
 zip = { version = "9", default-features = false, features = ["deflate"] }
 
+[dev-dependencies]
 # The Windows uv extraction is plain logic over a .zip; its tests build a
 # zip and run on every platform, so a zip API change cannot again break
 # only the Windows build, which no other CI job compiles.
-[dev-dependencies]
 zip = { version = "9", default-features = false, features = ["deflate"] }
-# Tauri's own mock runtime, so a test can build a real app and a real
-# window and ask what a listener of a given kind hears (``events.rs``:
-# Tauri matches the kind of an address exactly, so a listener of one
-# kind never hears an address of another).
+# ``tauri::test``'s mock runtime, so the update tests drive ``AppUpdater``
+# and the real updater plugin without a webview; it also lets a test build
+# a real app and real window and ask what a listener of a given kind hears
+# (``events.rs``: Tauri matches the kind of an address exactly, so a
+# listener of one kind never hears an address of another). Adds no crate.
 tauri = { version = "2", features = ["test"] }
 
 [lib]
