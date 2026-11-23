@@ -26,7 +26,6 @@ import { BackendStateContext } from "../cloud/backendContext";
 import { BackendSnapshot } from "../cloud/backendState";
 import { shellSnapshot } from "../cloud/testing";
 import { useBackendState } from "../cloud/useBackendState";
-import { AccountMenu } from "../components/AccountMenu";
 import { BackendBanner, type BackendActions } from "../components/BackendBanner";
 import { BackendChip } from "../components/BackendChip";
 import { BackendSwitch } from "../components/BackendSwitch";
@@ -110,25 +109,18 @@ const BANNERS: Array<[string, BackendSnapshot]> = [
   ["Moved to this computer", snap({ notice: { kind: "moved_to_local" } })],
 ];
 
-/** Who the account menu says is signed in. The address's monogram hue
- *  (218) keeps white initials above 4.5:1: igni-sdk's `Monogram` draws
- *  `hsl(hue 42% 42%)`, and about half the hues fall below it in the light
- *  theme (an igni-sdk finding, not this sandbox's). */
-const SIGNED_IN = { cloud_email: "maya@acme.example", cloud_connected: true, cloud_org: "Acme" };
-/** The menu asks for the person's name as it opens; offline here, so it
- *  keeps the address, the same on every run. */
-const NO_SERVER = { rpc: () => Promise.reject(new Error("offline")) };
-
 /**
- * The account menu as the header draws it, on the cloud side with a run
+ * The switch as the composer dock draws it, on the cloud side with a run
  * still going on this computer: both choices, Cloud chosen, and the badge
- * that switches back. Opened by its chip (the screen clicks it).
+ * that switches back. The dock opens the same control the menu used to.
  */
-function SwitchInMenu() {
+function SwitchControl() {
   const backend = snap({ side: "cloud", state: "cloud_ready", local_activity: { runs: 1, approvals: 1 } });
   return (
-    <div className="statusline" style={{ position: "relative", justifyContent: "flex-end", minHeight: 320 }}>
-      <AccountMenu status={SIGNED_IN as never} client={NO_SERVER as never} backend={backend} onLogIn={() => undefined} onLogOut={() => undefined} />
+    <div className="composer-dock" style={{ position: "relative", minHeight: 200 }}>
+      <div className="dropdown dock-menu" style={{ position: "static" }}>
+        <BackendSwitch backend={backend} />
+      </div>
     </div>
   );
 }
@@ -182,9 +174,9 @@ function CloudExtension() {
 /** Each piece alone: its heading, a line saying what it shows, the piece. */
 const PARTS: Record<string, { title: string; caption: string; body: () => ReactNode }> = {
   switch: {
-    title: "The switch in the account menu",
+    title: "The switch under the composer",
     caption: "Cloud is chosen, and a run and an approval are still going on this computer.",
-    body: () => <SwitchInMenu />,
+    body: () => <SwitchControl />,
   },
   chips: {
     title: "The backend chip",

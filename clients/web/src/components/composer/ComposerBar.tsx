@@ -1,10 +1,7 @@
 import { canStop, type RunPhase } from "../../chat/runPhase";
 import type { ComposerMode } from "../../clientState";
-import type { PermissionModeName } from "../../protocol/messages";
-import { ChevronIcon, StopIcon } from "../Icons";
+import { ArrowUpIcon, ChevronIcon, StopIcon } from "../Icons";
 import type { ModeUi } from "./modeUi";
-import type { PermissionMode } from "./permissionModes";
-import { SendButton } from "./SendButton";
 import type { ComposerPopupApi } from "./useComposerPopup";
 
 /** The row under the editor: the tools and attach buttons, the mode
@@ -21,8 +18,6 @@ export function ComposerBar({
   canSend,
   onSubmit,
   onStop,
-  permissionMode,
-  onPickMode,
 }: {
   ui: ModeUi;
   draftMode: ComposerMode;
@@ -34,11 +29,6 @@ export function ComposerBar({
   canSend: boolean;
   onSubmit: () => void;
   onStop: () => void;
-  /** The backend's mode as the wire reports it; {@link SendButton} reads
-   *  it with `permissionModeOption`, which also covers a mode it does not
-   *  know. */
-  permissionMode?: PermissionModeName;
-  onPickMode?: (mode: PermissionMode) => void;
 }) {
   const { popup } = popups;
   return (
@@ -66,16 +56,15 @@ export function ComposerBar({
           <StopIcon />
         </button>
       ) : (
-        <SendButton
-          connected={connected}
-          canSend={canSend}
-          onSubmit={onSubmit}
-          permissionMode={permissionMode}
-          onPickMode={onPickMode}
-          menuOpen={popup.kind === "mode"}
-          onToggleMenu={popups.toggleMode}
-          onCloseMenu={popups.close}
-        />
+        <button
+          type="button"
+          className="send-btn"
+          title="Send"
+          disabled={!connected || !canSend}
+          onClick={onSubmit}
+        >
+          <ArrowUpIcon />
+        </button>
       )}
     </div>
   );

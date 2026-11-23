@@ -40,12 +40,12 @@ const MODE_OPTIONS = {
   },
   acceptEdits: {
     value: "acceptEdits",
-    label: "Auto-edit",
+    label: "Accept edits",
     desc: "Auto-approve file edits (Edit / Write / NotebookEdit). Shell + web tools still ask.",
   },
   bypassPermissions: {
     value: "bypassPermissions",
-    label: "Bypass",
+    label: "Auto",
     desc: "Auto-approve every tool, including shell. Explicit deny rules in settings still block.",
   },
   dontAsk: {

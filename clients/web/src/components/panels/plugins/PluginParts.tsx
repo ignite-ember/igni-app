@@ -43,17 +43,15 @@ export function PluginCapabilities({ plugin }: { plugin: InstalledPlugin }) {
 
 export function PluginsSkeleton() {
   return (
-    <div className="plugins-list">
-      {Array.from({ length: 4 }).map((_, i) => (
-        <div key={i} className="plugins-card">
-          <div className="plugins-card-head">
-            <div style={{ flex: 1 }}>
-              <Skeleton.Line width="40%" height={13} />
-              <Skeleton.Line width="65%" height={11} style={{ marginTop: 6 }} />
-            </div>
-            <Skeleton.Block height={26} width={86} />
+    <div className="plugins-grid">
+      {Array.from({ length: 6 }).map((_, i) => (
+        <div key={i} className="plugins-gcard">
+          <Skeleton.Block height={34} width={34} />
+          <div style={{ flex: 1 }}>
+            <Skeleton.Line width="50%" height={13} />
+            <Skeleton.Line width="90%" height={11} style={{ marginTop: 8 }} />
+            <Skeleton.Line width="70%" height={11} style={{ marginTop: 4 }} />
           </div>
-          <Skeleton.Line width="90%" style={{ marginTop: 6 }} />
         </div>
       ))}
     </div>

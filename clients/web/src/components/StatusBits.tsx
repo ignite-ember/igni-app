@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 /** Mode badge — small chip rendered in the status line when
  *  ``permission_mode`` is any non-default value. Different
@@ -43,9 +43,9 @@ const MODE_BADGE_STYLES: Record<string, ModeBadgeStyle> = {
   },
   bypassPermissions: {
     className: "plan-badge mode-badge--bypass",
-    label: "BYPASS PERMISSIONS",
+    label: "AUTO",
     title:
-      "In bypassPermissions mode — most permission gates skipped. Scoped denies still hold (e.g. .env protection).",
+      "In Auto mode — most permission gates skipped. Scoped denies still hold (e.g. .env protection).",
   },
 };
 
@@ -97,47 +97,6 @@ export function AutoApproveSwitch({
       <span className="auto-approve-label">
         Auto-approve{active ? " ON" : ""}
       </span>
-    </button>
-  );
-}
-
-const fmtTokens = (n: number): string =>
-  n >= 1000 ? `${(n / 1000).toFixed(n >= 10_000 ? 0 : 1)}k` : String(n);
-
-/** Click to copy the full session id. Visible label is the short
- *  prefix the BE uses everywhere else. */
-export function SessionChip({ sessionId }: { sessionId: string }) {
-  const [copied, setCopied] = useState(false);
-
-  if (!sessionId) return <span>session —</span>;
-
-  const onCopy = async () => {
-    try {
-      await navigator.clipboard.writeText(sessionId);
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 1400);
-    } catch {
-      // Clipboard API blocked (insecure context, etc.); silently ignore.
-    }
-  };
-
-  // First 8 hex chars only — what the BE uses as the canonical
-  // session id today. Older sessions persisted with a longer id
-  // (when ``persistence.fork`` was using ``uuid.uuid4().hex``)
-  // get the same treatment; click-to-copy still ships the full
-  // string so consumers that need the original keep working.
-  const short = sessionId.slice(0, 8);
-
-  return (
-    <button
-      type="button"
-      className={`session-chip${copied ? " copied" : ""}`}
-      title={copied ? "Copied!" : `Copy ${sessionId}`}
-      onClick={onCopy}
-    >
-      <span className="session-chip-label">session</span>
-      <code>{short}</code>
-      {copied && <span className="session-chip-toast">copied</span>}
     </button>
   );
 }
@@ -230,45 +189,132 @@ function readBackendVersionParams(): BackendVersionInfo | null {
   return { expected, actual, source };
 }
 
-/** Context meter: a slim bar that fills as the conversation grows,
- *  color-graded (calm → warning → danger). The numeric readout sits
- *  next to it so the user can read both at a glance.
+/** Session + context in one control: a ring that fills as the session's
+ *  context does (calm → warning → danger), with the short session id
+ *  beside it, opening one readout — the session (click to copy its full
+ *  id) and how full the context window is. igni has no rate limits to
+ *  show, so this one dial is the whole story of the session's memory.
  *
  *  **Every number is checked before it is formatted.** The types say
- *  they are numbers; they come off a status message from the
- *  backend, where a field can be absent, and ``undefined`` has no
+ *  they are numbers; they come off a status message from the backend,
+ *  where a field can be absent, and ``undefined`` has no
  *  ``toLocaleString``. There is no error boundary above this, so one
- *  status update without a token count did not degrade the meter —
- *  it unmounted the application and left a blank window. */
-export function CtxMeter({
+ *  status update without a token count must not unmount the window. */
+export function SessionContext({
+  sessionId,
   tokens,
   max,
   pct,
 }: {
+  sessionId: string;
   tokens: number;
   max: number;
   pct: number;
 }) {
+  const [open, setOpen] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const close = useCallback(() => setOpen(false), []);
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      e.stopPropagation();
+      setOpen(false);
+      btnRef.current?.focus();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [open]);
+
   const used = Number.isFinite(tokens) ? tokens : 0;
   const ceiling = Number.isFinite(max) ? max : 0;
   const safe = Math.min(100, Math.max(0, Number.isFinite(pct) ? pct : 0));
   const tone = safe >= 85 ? "danger" : safe >= 60 ? "warn" : "ok";
+  // First 8 chars — the id the backend uses everywhere; copy ships the
+  // full string for consumers that kept the longer original.
+  const short = sessionId ? sessionId.slice(0, 8) : "—";
+
+  // Ring geometry: a 16-px circle whose arc is the share used, drawn
+  // from the top (the −90° rotation) clockwise.
+  const r = 6.9;
+  const circumference = 2 * Math.PI * r;
+  const dash = circumference * (safe / 100);
+
+  const copyId = async () => {
+    if (!sessionId) return;
+    try {
+      await navigator.clipboard.writeText(sessionId);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1400);
+    } catch {
+      // Clipboard API blocked (insecure context, etc.); silently ignore.
+    }
+  };
+
   return (
-    <span
-      className={`ctx-meter tone-${tone}`}
-      title={
-        ceiling
-          ? `${used.toLocaleString()} of ${ceiling.toLocaleString()} tokens used`
-          : `${used.toLocaleString()} tokens`
-      }
-    >
-      <span className="ctx-meter-label">ctx</span>
-      <span className="ctx-meter-track">
-        <span className="ctx-meter-fill" style={{ width: `${safe}%` }} />
-      </span>
-      <span className="ctx-meter-text">
-        {fmtTokens(used)} <span className="ctx-meter-pct">· {safe}%</span>
-      </span>
+    <span className="session-ctx-wrap">
+      <button
+        ref={btnRef}
+        type="button"
+        className={`session-ctx tone-${tone}`}
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        aria-label={`Session ${short}, context ${safe}% full`}
+        title={
+          ceiling
+            ? `Context: ${used.toLocaleString()} of ${ceiling.toLocaleString()} tokens (${safe}%)`
+            : `Context: ${used.toLocaleString()} tokens`
+        }
+        onClick={() => setOpen((v) => !v)}
+      >
+        <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" style={{ display: "block" }}>
+          <circle className="ctx-ring-track" cx="8" cy="8" r={r} fill="none" strokeWidth="2.2" />
+          <circle
+            className="ctx-ring-fill"
+            cx="8"
+            cy="8"
+            r={r}
+            fill="none"
+            strokeWidth="2.2"
+            strokeLinecap="round"
+            strokeDasharray={`${dash} ${circumference}`}
+            transform="rotate(-90 8 8)"
+          />
+        </svg>
+        <code className="session-ctx-id">{short}</code>
+      </button>
+      {open && (
+        <>
+          <span className="ctx-backdrop" onClick={close} />
+          <div className={`dropdown ctx-pop tone-${tone}`} role="dialog" aria-label="Session and context">
+            <button
+              type="button"
+              className="session-ctx-copy"
+              onClick={copyId}
+              disabled={!sessionId}
+              title={sessionId ? (copied ? "Copied!" : `Copy ${sessionId}`) : undefined}
+            >
+              <span className="session-ctx-copy-head">Session</span>
+              <code>{copied ? "copied" : short}</code>
+            </button>
+            <div className="ctx-pop-divider" />
+            <div className="ctx-pop-head">
+              <span>Context window</span>
+              <span className="ctx-pop-pct">{safe}%</span>
+            </div>
+            <div className="ctx-pop-bar">
+              <span className="ctx-pop-bar-fill" style={{ width: `${safe}%` }} />
+            </div>
+            <div className="ctx-pop-sub">
+              {ceiling
+                ? `${used.toLocaleString()} of ${ceiling.toLocaleString()} tokens`
+                : `${used.toLocaleString()} tokens`}
+            </div>
+          </div>
+        </>
+      )}
     </span>
   );
 }

@@ -6,10 +6,12 @@ import type { CommandsState } from "../chat/useCommands";
 import type { HitlState } from "../chat/useHitl";
 import type { RunPhaseState } from "../chat/useRunPhase";
 import type { WindowModel } from "../clientState";
+import type { BackendSnapshot } from "../cloud/backendState";
 import type { Contributions } from "../extensions/contributions";
 import type { IgniClient } from "../protocol/client";
 import type { ChatController } from "../chat/useChatController";
 import type { StatusUpdate } from "../protocol/messages";
+import { ComposerDock } from "./ComposerDock";
 import { Composer } from "./composer/Composer";
 import type { ComposerActions, ComposerCatalog, ComposerHandle } from "./composer/composerContract";
 import { HitlDialog } from "./HitlDialog";
@@ -29,6 +31,12 @@ export interface AppComposerProps {
   onResolveHitl: ChatController["resolveHitl"];
   actions: Pick<ShellActions, "runCommand" | "submit">;
   switcher: RunSettingsSwitcher;
+  /** The dock under the composer: where igni runs, the folder, and the
+   *  session + its context. */
+  backend: BackendSnapshot | null;
+  projectDir: string;
+  onPickProject: () => void;
+  sessionId: string;
   /** Before a line is sent: bring the transcript to its end, so the person
    *  sees what they sent and the answer to it. After a long reply the list
    *  can have stopped following, and the new turn landed out of view. */
@@ -51,6 +59,10 @@ export function AppComposer({
   onResolveHitl,
   actions,
   switcher,
+  backend,
+  projectDir,
+  onPickProject,
+  sessionId,
   onSend,
 }: AppComposerProps) {
   const permissionMode = status?.permission_mode;
@@ -100,7 +112,17 @@ export function AppComposer({
       windowModel={windowModel}
       model={status?.model}
       modelMenuSignal={commands.modelMenuSignal}
-      permissionMode={permissionMode}
+      dockSlot={
+        <ComposerDock
+          backend={backend}
+          projectDir={projectDir}
+          onPickProject={onPickProject}
+          sessionId={sessionId}
+          status={status}
+          permissionMode={permissionMode}
+          onPickMode={composerActions.onPickMode}
+        />
+      }
     />
   );
 }

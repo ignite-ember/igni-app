@@ -190,10 +190,9 @@ export const APP_SCREENS: readonly AppScreen[] = [
   },
   // And each piece alone (design §12.1, §15.7), in both themes for axe.
   {
-    name: '19-cloud-switch-in-account-menu',
+    name: '19-cloud-switch-under-composer',
     demo: 'cloud&part=switch',
-    click: /maya@acme\.example/,
-    ready: { selector: '.account-menu .backend-switch-badge' },
+    ready: { selector: '.backend-switch-badge' },
     axeBothThemes: true,
   },
   {

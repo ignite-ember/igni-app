@@ -3,7 +3,6 @@ import { useRef, type ReactNode, type Ref } from "react";
 import type { RunPhase } from "../../chat/runPhase";
 import type { WindowModel } from "../../clientState";
 import type { IgniClient } from "../../protocol/client";
-import type { PermissionModeName } from "../../protocol/messages";
 import { EditableInput, type EditableInputHandle } from "../EditableInput";
 import { ComposerBar } from "./ComposerBar";
 import type { ComposerActions, ComposerCatalog, ComposerHandle } from "./composerContract";
@@ -31,10 +30,10 @@ export interface ComposerProps {
   /** Rendered inside the composer box, above the editor: the HITL
    *  approval form rises out of the input panel instead of floating. */
   hitlSlot?: ReactNode;
-  /** The backend's `PermissionEvaluator.mode`, as the wire reports it;
-   *  pre-selects the send button's mode. Typed by the wire contract, so
-   *  the button reads a mode and not a bare string. */
-  permissionMode?: PermissionModeName;
+  /** Rendered under the composer box, inside its zone so it aligns with
+   *  the input: the environment, folder, mode and session controls
+   *  (`ComposerDock`). */
+  dockSlot?: ReactNode;
   /** The product's name in the placeholder — a group can rebrand it.
    *  See `lib/theme.ts`. */
   brandName?: string;
@@ -56,7 +55,7 @@ export function Composer({
   model,
   modelMenuSignal,
   hitlSlot,
-  permissionMode,
+  dockSlot,
   brandName = "igni",
 }: ComposerProps) {
   const editorRef = useRef<EditableInputHandle>(null);
@@ -114,10 +113,9 @@ export function Composer({
           canSend={controller.canSend}
           onSubmit={() => controller.submit()}
           onStop={actions.onStop}
-          permissionMode={permissionMode}
-          onPickMode={actions.onPickMode}
         />
       </div>
+      {dockSlot}
     </div>
   );
 }

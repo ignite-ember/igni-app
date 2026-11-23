@@ -3,16 +3,14 @@ import { useEffect, useRef } from "react";
 // hamburger. This is the glyph set the panels draw from.
 import { MenuIcon as Glyph } from "@ignite-ember/ui-react";
 
-import type { AuthPhase } from "../chat/useShellStatus";
-import type { BackendSnapshot } from "../cloud/backendState";
+import type { PageRoute } from "../chat/pageStack";
+import { ExtensionIndicator } from "../extensions/ExtensionIndicator";
+import type { ExtensionSummary } from "../extensions/ExtensionPage";
 import { host } from "../lib/host";
+import { unreadFor, type NotificationCounts } from "../notifications/model";
 import type { ConnectionState, IgniClient } from "../protocol/client";
 import type { StatusUpdate } from "../protocol/messages";
-import { AccountMenu } from "./AccountMenu";
-import { BrandMark } from "./BrandMark";
-import { MenuIcon } from "./Icons";
-import { ProjectChip } from "./ProjectChip";
-import { BackendVersionChip } from "./StatusBits";
+import { FolderIcon, PanelLeftIcon } from "./Icons";
 
 /** The most the bell's count says before it gives up counting. */
 const BELL_COUNT_CAP = 99;
@@ -22,29 +20,31 @@ export interface AppHeaderProps {
   groupName: string;
   groupMark: string | null;
   onToggleSidebar: () => void;
+  /** Whether the sidebar is open — drives the toggle icon's two states. */
+  sidebarOpen: boolean;
   /** Whether there is a conversation to search. */
   canSearch: boolean;
   searchOpen: boolean;
   onToggleSearch: () => void;
-  projectDir: string;
-  onPickProject: () => void;
+  /** Whether the Files split is docked open — drives the folder button. */
+  filesOpen: boolean;
+  onToggleFiles: () => void;
   status: StatusUpdate | null;
-  /** Whether anybody is known to be signed in (the account chip's
-   *  question); derived from ``status`` when not given. */
-  auth?: AuthPhase;
   /** Unread notifications: the bell's count. */
   waiting: number;
   onToggleNotifications: () => void;
-  client: Pick<IgniClient, "rpc" | "connect">;
-  onLogIn: () => void;
-  onLogOut: () => void;
-  /** The desktop's cloud switch, when the shell has one. */
-  backend?: BackendSnapshot | null;
+  /** Installed extensions — their status chips sit in the header now,
+   *  beside igni's own controls, rather than in the footer. */
+  extensions: ExtensionSummary[];
+  notificationCounts: NotificationCounts;
+  onOpenPage: (route: PageRoute) => void;
+  client: Pick<IgniClient, "connect" | "asExtension">;
 }
 
 /**
  * The main column's header: the sidebar toggle, the brand with the
- * connection, find, the project, what is waiting, the account.
+ * connection, find, and what is waiting. The folder and the environment
+ * sit under the composer, and the account at the foot of the sidebar.
  *
  * It is also the desktop window's drag region: ``data-tauri-drag-region``
  * and the stylesheet's ``-webkit-app-region`` where WebKit honours
@@ -64,21 +64,40 @@ export function AppHeader(props: AppHeaderProps) {
       {/* The opaque panel behind the header content, so messages
           scrolling under it disappear at its edge; also the drag area. */}
       <div className="app-header-blur" aria-hidden="true" />
-      <button className="icon-btn" title="Toggle sessions" onClick={props.onToggleSidebar}>
-        <MenuIcon />
+      <button
+        className="icon-btn"
+        title={props.sidebarOpen ? "Hide sidebar" : "Show sidebar"}
+        aria-label={props.sidebarOpen ? "Hide sidebar" : "Show sidebar"}
+        aria-pressed={props.sidebarOpen}
+        onClick={props.onToggleSidebar}
+      >
+        <PanelLeftIcon open={props.sidebarOpen} />
       </button>
-      <div className="brand">
-        <BrandMark mark={props.groupMark} size={20} />
-        <span>{props.groupName}</span>
-        <span
-          className={`dot conn-dot ${conn === "replaced" ? "disconnected" : conn}`}
-          title={`backend ${conn}`}
-        />
-        {/* Last in the row: ``igni ● v0.9.0``. Paints only where a host
-            embedded the version. */}
-        <BackendVersionChip />
-      </div>
+      {/* The open page's breadcrumb (``Chat / Plugins``) renders here,
+          portaled in from ``PageShell`` so the trail sits to the right of
+          the sidebar toggle. Empty when no page is open. */}
+      <div className="header-crumbs" id="app-header-crumbs" />
+      {/* The igni flame, wordmark and version live at the foot of the
+          account menu now, not here — the top bar stays clean. */}
       <div className="header-spacer" />
+      {/* Extensions' status chips — data the host draws, moved up from the
+          footer so they sit beside igni's own header controls. */}
+      {status &&
+        props.extensions.flatMap((extension) =>
+          extension.indicators.map((indicator) => (
+            <ExtensionIndicator
+              key={indicator.id}
+              extensionId={extension.id}
+              indicator={indicator}
+              unread={unreadFor(props.notificationCounts, extension.id)}
+              onCall={(method, args) => props.client.asExtension(extension.id).rpc(method, args)}
+              onOpen={(kind) => {
+                const page = extension.pages.find((p) => p.kind === kind);
+                if (page) props.onOpenPage({ kind: page.kind, label: page.label });
+              }}
+            />
+          )),
+        )}
       {props.canSearch && (
         <button
           className={`chip chip-search${props.searchOpen ? " active" : ""}`}
@@ -103,7 +122,17 @@ export function AppHeader(props: AppHeaderProps) {
           </svg>
         </button>
       )}
-      <ProjectChip projectDir={props.projectDir} onPick={props.onPickProject} readOnly={host.onCloud} />
+      {/* The project's files, as a read-only split beside the chat —
+          opened and closed here, next to what is waiting. */}
+      <button
+        className={`chip chip-files${props.filesOpen ? " active" : ""}`}
+        title={props.filesOpen ? "Close files" : "Browse project files"}
+        aria-label="Files"
+        aria-pressed={props.filesOpen}
+        onClick={props.onToggleFiles}
+      >
+        <FolderIcon size={15} />
+      </button>
       {(status?.cloud_connected || waiting > 0) && (
         <button
           className={waiting ? "chip chip-bell has-waiting" : "chip chip-bell"}
@@ -125,14 +154,6 @@ export function AppHeader(props: AppHeaderProps) {
           )}
         </button>
       )}
-      <AccountMenu
-        status={status}
-        client={props.client}
-        backend={props.backend ?? null}
-        auth={props.auth}
-        onLogIn={props.onLogIn}
-        onLogOut={props.onLogOut}
-      />
       {conn === "replaced" && (
         <button
           className="chip"

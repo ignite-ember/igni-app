@@ -114,6 +114,10 @@ function defaultProps(overrides: Partial<React.ComponentProps<typeof Sidebar>> =
     onNewChat: vi.fn(),
     onPick: vi.fn(),
     onClose: vi.fn(),
+    status: null,
+    client: { rpc: vi.fn(async () => ({})) } as never,
+    onLogIn: vi.fn(),
+    onLogOut: vi.fn(),
     ...overrides,
   };
 }

@@ -2,7 +2,8 @@ import { useMemo, useState } from "react";
 import type { IgniClient } from "../../protocol/client";
 import type { PanelLevels } from "../PageShell";
 import { Drawer } from "./Drawer";
-import { CatalogToolbar, PluginsTabs } from "./plugins/PluginsChrome";
+import { ALL_CATEGORIES, categoriesOf, type SortKey } from "./plugins/catalogView";
+import { CatalogControls, PluginsTabs } from "./plugins/PluginsChrome";
 import { PluginsApi } from "./plugins/pluginsApi";
 import { PluginsPage, type PluginsPageContext } from "./plugins/pluginsPages";
 import { PluginsView } from "./plugins/pluginsView";
@@ -27,6 +28,13 @@ export function PluginsPanel({ client, onClose }: PluginsPanelProps) {
   const [installRef, setInstallRef] = useState("");
   const [marketUrl, setMarketUrl] = useState("");
   const [query, setQuery] = useState("");
+  const [sortBy, setSortBy] = useState<SortKey>("default");
+  const [filterBy, setFilterBy] = useState<string>(ALL_CATEGORIES);
+
+  const categories = useMemo(
+    () => categoriesOf(plugins.catalog?.entries() ?? []),
+    [plugins.catalog],
+  );
 
   const screen = view.screen(plugins.installed);
   const contents = usePluginContents(api, screen.page === "detail" ? screen.resolved : null);
@@ -46,8 +54,27 @@ export function PluginsPanel({ client, onClose }: PluginsPanelProps) {
       marketUrl: { value: marketUrl, set: setMarketUrl },
       query: { value: query, set: setQuery },
     },
+    catalogView: { sortBy, filterBy },
     go: setView,
   };
+
+  const controls =
+    view.showsCatalogToolbar && plugins.catalog !== null ? (
+      <CatalogControls
+        pluginCount={plugins.catalog.pluginCount}
+        marketCount={plugins.catalog.marketCount}
+        query={query}
+        onQueryChange={setQuery}
+        categories={categories}
+        sortBy={sortBy}
+        onSortChange={setSortBy}
+        filterBy={filterBy}
+        onFilterChange={setFilterBy}
+        refreshing={plugins.refreshing}
+        onRefresh={plugins.refreshMarketplaces}
+        onManage={() => setView((v) => v.manageMarkets())}
+      />
+    ) : null;
 
   const headerExtras = view.showsTabs ? (
     <PluginsTabs
@@ -55,21 +82,9 @@ export function PluginsPanel({ client, onClose }: PluginsPanelProps) {
       catalogCount={plugins.catalog?.pluginCount ?? 0}
       installedCount={plugins.installed?.count ?? 0}
       onSelect={(tab) => setView((v) => v.withTab(tab))}
+      controls={controls}
     />
   ) : null;
-
-  const toolbar =
-    view.showsCatalogToolbar && plugins.catalog !== null ? (
-      <CatalogToolbar
-        pluginCount={plugins.catalog.pluginCount}
-        marketCount={plugins.catalog.marketCount}
-        query={query}
-        onQueryChange={setQuery}
-        refreshing={plugins.refreshing}
-        onRefresh={plugins.refreshMarketplaces}
-        onManage={() => setView((v) => v.manageMarkets())}
-      />
-    ) : null;
 
   return (
     <Drawer
@@ -77,7 +92,6 @@ export function PluginsPanel({ client, onClose }: PluginsPanelProps) {
       levels={levels}
       onClose={onClose}
       headerExtras={headerExtras}
-      toolbar={toolbar}
     >
       {plugins.error && (
         <div className="msg-error msg-error--banner">{`Error: ${plugins.error.reason}`}</div>

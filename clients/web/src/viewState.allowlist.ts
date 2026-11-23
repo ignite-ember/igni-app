@@ -124,6 +124,15 @@ export const VIEW_STATE: Record<string, Partial<Record<Category, string[]>>> = {
     menu: ["accountMenu"],
     data: ["cloudName"],
   },
+  "components/PageShell.tsx": {
+    measure: ["crumbSlot"],
+  },
+  "components/Sidebar.tsx": {
+    disclosure: ["collapsed"],
+  },
+  "components/ComposerDock.tsx": {
+    menu: ["open"],
+  },
   "cloud/useBackendState.ts": {
     data: ["snapshot"],
   },
@@ -179,9 +188,12 @@ export const VIEW_STATE: Record<string, Partial<Record<Category, string[]>>> = {
   },
   "components/ChatSearchBar.tsx": {
     field: ["query"],
-    data: ["matches"],
-    page: ["activeIdx"],
+    data: ["matches", "globalMatches"],
+    page: ["activeIdx", "scope"],
     pending: ["pending"],
+  },
+  "components/composer/ModeChip.tsx": {
+    menu: ["open"],
   },
   "components/composer/useAttachments.ts": {
     pending: ["uploads"],
@@ -212,6 +224,10 @@ export const VIEW_STATE: Record<string, Partial<Record<Category, string[]>>> = {
     field: ["query"],
     data: ["results"],
     menu: ["active"],
+  },
+  "components/FilesDock.tsx": {
+    menu: ["menuOpen"],
+    disclosure: ["maximized"],
   },
   "components/GroupIndicator.tsx": {
     data: ["policy"],
@@ -251,6 +267,7 @@ export const VIEW_STATE: Record<string, Partial<Record<Category, string[]>>> = {
   },
   "components/StatusBits.tsx": {
     animation: ["copied"],
+    menu: ["open"],
   },
   "components/ThemeToggle.tsx": {
     device: ["theme"],
@@ -270,6 +287,28 @@ export const VIEW_STATE: Record<string, Partial<Record<Category, string[]>>> = {
   "components/pages/ContextPage.tsx": {
     data: ["breakdown"],
     pending: ["error", "loading"],
+  },
+  "components/pages/files/PdfFrame.tsx": {
+    measure: ["url"],
+  },
+  "components/pages/files/useFileBytes.ts": {
+    data: ["bytes"],
+    pending: ["loading", "error"],
+  },
+  "components/pages/files/useFileContents.ts": {
+    data: ["file"],
+    pending: ["loading", "error"],
+  },
+  "components/pages/files/useFilesPrefs.ts": {
+    device: ["prefs"],
+  },
+  "components/pages/files/useProjectFiles.ts": {
+    data: ["index"],
+    pending: ["loading", "error"],
+  },
+  "components/pages/files/useFilesSession.ts": {
+    page: ["tabs", "activePath"],
+    field: ["query"],
   },
   "components/pages/WorkflowsPage.tsx": {
     data: ["workflows"],
@@ -317,8 +356,12 @@ export const VIEW_STATE: Record<string, Partial<Record<Category, string[]>>> = {
     pending: ["busy", "loadError", "actionError"],
   },
   "components/panels/PluginsPanel.tsx": {
-    page: ["view"],
+    page: ["view", "sortBy", "filterBy"],
     field: ["installRef", "marketUrl", "query"],
+  },
+  "components/panels/plugins/PluginsChrome.tsx": {
+    disclosure: ["expanded"],
+    menu: ["openMenu"],
   },
   "components/panels/plugins/usePlugins.ts": {
     data: ["installed", "catalog"],

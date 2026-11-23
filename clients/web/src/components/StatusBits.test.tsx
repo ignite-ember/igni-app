@@ -4,8 +4,7 @@
  *
  *   • ModeBadge       — permission-mode chip (rows 50, 51, 7)
  *   • AutoApproveSwitch — one-click bypassPermissions toggle (row 51)
- *   • SessionChip     — short session-id with click-to-copy
- *   • CtxMeter        — context-usage bar with tonal grading
+ *   • SessionContext  — session id + context ring, in one readout
  *
  * Each widget has a small, sharp contract — wrong styling or wrong
  * callback wiring is immediately visible in the UI. These tests
@@ -17,9 +16,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import {
   AutoApproveSwitch,
-  CtxMeter,
   ModeBadge,
-  SessionChip,
+  SessionContext,
 } from "./StatusBits";
 
 afterEach(() => {
@@ -66,13 +64,12 @@ describe("ModeBadge", () => {
     expect(container.querySelector(".mode-badge--dontask")).toBeTruthy();
   });
 
-  it("bypassPermissions mode shows the loud 'BYPASS PERMISSIONS' label", () => {
-    // This mode is the sharpest one — agent can do anything
-    // without prompting. The label has to be unmistakeable
-    // (full caps, no abbreviation) so users don't leave it on
-    // by accident.
+  it("bypassPermissions mode shows the loud 'AUTO' label", () => {
+    // This mode is the sharpest one — the agent can do anything
+    // without prompting. It is labelled "Auto" (igni runs every tool
+    // for you), in full caps so the badge is unmistakeable.
     const { container } = render(<ModeBadge mode="bypassPermissions" />);
-    expect(screen.getByText("BYPASS PERMISSIONS")).toBeTruthy();
+    expect(screen.getByText("AUTO")).toBeTruthy();
     expect(container.querySelector(".mode-badge--bypass")).toBeTruthy();
   });
 
@@ -156,151 +153,109 @@ describe("AutoApproveSwitch", () => {
   });
 });
 
-// ── SessionChip ──────────────────────────────────────────────
+// ── SessionContext ───────────────────────────────────────────
 
-describe("SessionChip", () => {
-  it("renders the placeholder 'session —' for an empty id", () => {
-    // No live session yet. Showing a clickable empty pill would
-    // be confusing; render an inert dash so the slot still has
-    // shape but nothing happens on click.
-    render(<SessionChip sessionId="" />);
-    expect(screen.getByText("session —")).toBeTruthy();
+describe("SessionContext", () => {
+  /** The ring's fill arc dash, as [drawn, circumference]. */
+  const dash = (container: HTMLElement): [number, number] => {
+    const fill = container.querySelector(".ctx-ring-fill");
+    const [drawn, circ] = (fill?.getAttribute("stroke-dasharray") ?? "0 0").split(" ").map(Number);
+    return [drawn, circ];
+  };
+
+  it("shows the first 8 chars of the session id on the face", () => {
+    // The 8-char prefix is the canonical short form used everywhere
+    // else (Session.fork, persistence, logs).
+    const { container } = render(<SessionContext sessionId="abcd1234ef56789" tokens={0} max={100} pct={0} />);
+    expect(container.querySelector(".session-ctx-id")?.textContent).toBe("abcd1234");
   });
 
-  it("renders the first 8 chars of the session id", () => {
-    // The 8-char prefix is the canonical short form used
-    // everywhere else in the codebase (Session.fork, persistence,
-    // logs). Drift here would break copy/paste round-tripping
-    // with logs.
-    const { container } = render(<SessionChip sessionId="abcd1234ef56789" />);
-    const code = container.querySelector("code");
-    expect(code?.textContent).toBe("abcd1234");
+  it("shows a dash on the face when there is no session yet", () => {
+    const { container } = render(<SessionContext sessionId="" tokens={0} max={100} pct={0} />);
+    expect(container.querySelector(".session-ctx-id")?.textContent).toBe("—");
   });
 
-  it("title attr shows what the click does (copy full id)", () => {
-    // The visible label is the short prefix — the full id is
-    // only discoverable via the title. Without that, the user
-    // has no way to know they can grab the full string.
-    const { container } = render(<SessionChip sessionId="abcd1234ef56789" />);
-    const btn = container.querySelector("button");
-    expect(btn?.getAttribute("title")).toContain("abcd1234ef56789");
-  });
-
-  it("click copies the FULL id to clipboard (not the short prefix)", async () => {
-    // The button shows ``abcd1234`` but copy must yield the full
-    // session id — that's the whole reason for the chip's
-    // existence (clipboard handoff to ``ember-code resume <id>``
-    // or to logs that ship 32-char ids).
-    const writeText = vi.fn().mockResolvedValue(undefined);
-    Object.defineProperty(navigator, "clipboard", {
-      configurable: true,
-      value: { writeText },
-    });
-    const { container } = render(<SessionChip sessionId="abcd1234ef56789" />);
-    fireEvent.click(container.querySelector("button")!);
-    // Tick microtasks so the async copy + state update flush.
-    await Promise.resolve();
-    expect(writeText).toHaveBeenCalledWith("abcd1234ef56789");
-  });
-});
-
-// ── CtxMeter ─────────────────────────────────────────────────
-
-describe("CtxMeter", () => {
   it("ok tone for pct < 60", () => {
-    // The thresholds are not arbitrary — the user starts
-    // worrying at "more than half used" (warn) and panicking
-    // at "running out" (danger). Pin both transitions so a
-    // 5% drift doesn't silently change the affordance.
-    const { container } = render(<CtxMeter tokens={1000} max={10000} pct={20} />);
+    // The thresholds are not arbitrary — the user starts worrying at
+    // "more than half used" (warn) and panicking at "running out"
+    // (danger). Pin both transitions so a 5% drift can't shift them.
+    const { container } = render(<SessionContext sessionId="s" tokens={1000} max={10000} pct={20} />);
     expect(container.querySelector(".tone-ok")).toBeTruthy();
     expect(container.querySelector(".tone-warn")).toBeNull();
     expect(container.querySelector(".tone-danger")).toBeNull();
   });
 
   it("warn tone at exactly 60", () => {
-    // 60 is the transition point. Off-by-one in the source
-    // (>= vs >) would flip this; pin both boundaries.
-    const { container } = render(<CtxMeter tokens={6000} max={10000} pct={60} />);
+    const { container } = render(<SessionContext sessionId="s" tokens={6000} max={10000} pct={60} />);
     expect(container.querySelector(".tone-warn")).toBeTruthy();
   });
 
   it("danger tone at exactly 85", () => {
-    const { container } = render(<CtxMeter tokens={8500} max={10000} pct={85} />);
+    const { container } = render(<SessionContext sessionId="s" tokens={8500} max={10000} pct={85} />);
     expect(container.querySelector(".tone-danger")).toBeTruthy();
   });
 
   it("survives a status message with no token count", () => {
     // No error boundary sits above this in the app, so a field that
-    // arrives absent does not degrade the meter — it unmounts the
-    // whole window and leaves a blank page. The types promise
-    // numbers; the wire does not.
+    // arrives absent must not unmount the whole window. The types
+    // promise numbers; the wire does not.
     const { container } = render(
-      <CtxMeter
+      <SessionContext
+        sessionId="s"
         tokens={undefined as unknown as number}
         max={undefined as unknown as number}
         pct={undefined as unknown as number}
       />,
     );
-    const fill = container.querySelector(".ctx-meter-fill") as HTMLElement | null;
-    expect(container.querySelector(".ctx-meter")).toBeTruthy();
-    expect(fill?.style.width).toBe("0%");
+    expect(container.querySelector(".session-ctx")).toBeTruthy();
+    expect(dash(container)[0]).toBe(0); // an empty ring, not a crash
   });
 
-  it("clamps pct above 100 to 100% fill width", () => {
-    // The pct comes from `tokens / max` which can momentarily
-    // exceed 100 if the BE's token-count lags the conversation
-    // size. Filling >100% would overflow the track visually.
-    const { container } = render(<CtxMeter tokens={120_000} max={100_000} pct={120} />);
-    const fill = container.querySelector(".ctx-meter-fill") as HTMLElement | null;
-    expect(fill?.style.width).toBe("100%");
+  it("clamps pct above 100 to a full ring", () => {
+    const { container } = render(<SessionContext sessionId="s" tokens={120_000} max={100_000} pct={120} />);
+    const [drawn, circ] = dash(container);
+    expect(drawn).toBeCloseTo(circ); // full circle, not more
   });
 
-  it("clamps negative pct to 0", () => {
-    // Defensive: a stale or buggy upstream could send a
-    // negative pct. Show an empty bar rather than a glitched
-    // one.
-    const { container } = render(<CtxMeter tokens={0} max={10000} pct={-5} />);
-    const fill = container.querySelector(".ctx-meter-fill") as HTMLElement | null;
-    expect(fill?.style.width).toBe("0%");
+  it("clamps negative pct to an empty ring", () => {
+    const { container } = render(<SessionContext sessionId="s" tokens={0} max={10000} pct={-5} />);
+    expect(dash(container)[0]).toBe(0);
   });
 
-  it("formats tokens under 1000 verbatim", () => {
-    render(<CtxMeter tokens={999} max={10000} pct={9.99} />);
-    expect(screen.getByText(/999/)).toBeTruthy();
+  it("the readout shows the session and the exact count when opened", () => {
+    const { container } = render(
+      <SessionContext sessionId="abcd1234ef56789" tokens={42_000} max={100_000} pct={42} />,
+    );
+    fireEvent.click(container.querySelector(".session-ctx")!);
+    const pop = screen.getByRole("dialog", { name: "Session and context" });
+    expect(pop.textContent).toContain("abcd1234");
+    expect(pop.textContent).toContain("42,000");
+    expect(pop.textContent).toContain("100,000");
+    expect(pop.textContent).toContain("42%");
   });
 
-  it("formats tokens 1000-9999 with one decimal k", () => {
-    // ``1.5k`` reads quicker than ``1500`` for a status-line
-    // metric where the user just wants a magnitude.
-    render(<CtxMeter tokens={1500} max={10000} pct={15} />);
-    expect(screen.getByText(/1\.5k/)).toBeTruthy();
-  });
-
-  it("formats tokens >=10000 with no decimal", () => {
-    // Past 10k a decimal is noise — pin to integer form so
-    // ``42k`` not ``42.0k``.
-    render(<CtxMeter tokens={42_000} max={100_000} pct={42} />);
-    expect(screen.getByText(/42k/)).toBeTruthy();
-    expect(screen.queryByText(/42\.0k/)).toBeNull();
+  it("copies the FULL id from the readout (not the short prefix)", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
+    const { container } = render(
+      <SessionContext sessionId="abcd1234ef56789" tokens={0} max={100} pct={0} />,
+    );
+    fireEvent.click(container.querySelector(".session-ctx")!);
+    fireEvent.click(container.querySelector(".session-ctx-copy")!);
+    await Promise.resolve();
+    expect(writeText).toHaveBeenCalledWith("abcd1234ef56789");
   });
 
   it("title attr includes the raw token count + max for hover precision", () => {
-    // Status-line numbers are coarse for at-a-glance reading;
-    // the tooltip is where the exact numbers live for users
-    // who want to verify.
-    const { container } = render(<CtxMeter tokens={42_000} max={100_000} pct={42} />);
-    const title = container.querySelector(".ctx-meter")?.getAttribute("title");
+    const { container } = render(<SessionContext sessionId="s" tokens={42_000} max={100_000} pct={42} />);
+    const title = container.querySelector(".session-ctx")?.getAttribute("title");
     expect(title).toContain("42,000");
     expect(title).toContain("100,000");
   });
 
   it("title attr omits max when max is 0 (no model context window known)", () => {
-    // ``max=0`` shows up briefly during /clear → before the
-    // status update lands. Don't say "0 of 0 tokens" — show
-    // just the absolute count.
-    const { container } = render(<CtxMeter tokens={1234} max={0} pct={0} />);
-    const title = container.querySelector(".ctx-meter")?.getAttribute("title");
+    const { container } = render(<SessionContext sessionId="s" tokens={1234} max={0} pct={0} />);
+    const title = container.querySelector(".session-ctx")?.getAttribute("title");
     expect(title).toContain("1,234");
     expect(title).not.toContain(" of 0");
   });

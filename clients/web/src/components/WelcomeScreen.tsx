@@ -14,6 +14,7 @@ const WELCOME_CAPS: readonly { command: string; desc: string }[] = [
   { command: "/loop", desc: "Repeat a prompt across a batch until done" },
   { command: "/mcp", desc: "Plug in external tools and data sources" },
   { command: "/plugins", desc: "Install skills, agents and hooks" },
+  { command: "/extensions", desc: "Installed extensions and their settings" },
 ];
 
 /**
@@ -42,7 +43,7 @@ export function WelcomeScreen({
             <BrandMark mark={groupMark} size={56} />
           </div>
           <h1>{groupName}</h1>
-          <p>Your AI coding agent, in this project.</p>
+          <p>Your AI agent, in this project.</p>
           {status && !status.model_configured ? (
             <FirstRunSetup onLogin={onLogin} signedInAs={status.cloud_email ?? ""} />
           ) : null}

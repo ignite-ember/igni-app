@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { SidebarLayout } from "./chat/sidebarLayout";
 import { useChatController } from "./chat/useChatController";
 import { useChatSearch } from "./chat/useChatSearch";
@@ -33,6 +34,9 @@ import { AppSidebar } from "./components/AppSidebar";
 import { BackendBanner } from "./components/BackendBanner";
 import { ChatSearchBar } from "./components/ChatSearchBar";
 import { ConversationFrame } from "./components/ConversationFrame";
+import { FilesDock } from "./components/FilesDock";
+import { useFilesSession } from "./components/pages/files/useFilesSession";
+import { FileViewerContext } from "./components/pages/files/viewerContext";
 import { FPSCounterOverlay } from "./components/FPSCounter";
 import { ScrollIndicator } from "./components/ScrollIndicator";
 import { SignedOutApp } from "./components/SignedOutApp";
@@ -98,6 +102,25 @@ export default function App() {
 
   const { groupName, groupMark } = useGroupBranding(status?.theme);
 
+  // The Files viewer's open tabs, active file and per-file scroll — held
+  // here, above the dock, so closing it keeps them; a different project
+  // starts over.
+  const filesSession = useFilesSession(projectDir);
+  const filesOpen = panel?.kind === "files";
+
+  // Opening a file in the read-only viewer from a chat pill, wherever it
+  // is. It docks the Files split open at that file, over whichever
+  // backend is live — the local project or a cloud VM's.
+  const fileViewer = useMemo(
+    () => ({
+      open: (path: string) => {
+        filesSession.open(path);
+        windowModel.write("panel", { kind: "files" });
+      },
+    }),
+    [windowModel, filesSession.open],
+  );
+
   // The floor's notifications per extension; the backend pushes
   // ``notifications_changed`` and this only listens.
   const [notificationCounts, setNotificationCounts] = useNotificationCounts(client, connected);
@@ -154,6 +177,7 @@ export default function App() {
   return (
     <ExtensionNamesContext.Provider value={extensionNames}>
     <BackendStateContext.Provider value={backend}>
+    <FileViewerContext.Provider value={fileViewer}>
     <div className="shell" style={SidebarLayout.styleFor(sidebar)}>
       {/* Live FPS overlay, hidden by default: Ctrl/Cmd+Alt+Shift+F. */}
       <FPSCounterOverlay />
@@ -167,7 +191,15 @@ export default function App() {
         activeKind={page?.kind}
         onOpenPage={navigator.openPage}
         onNewChat={actions.newChat}
+        onNewChatInFolder={(folder) =>
+          folder ? actions.attachFolder(folder) : actions.newChat()
+        }
         onPickSession={actions.pickSession}
+        status={status}
+        client={client}
+        auth={auth}
+        onLogIn={actions.openLogin}
+        onLogOut={actions.logOut}
       />
 
       {/* The window's one <main>: without it nothing on the page was in a
@@ -178,19 +210,19 @@ export default function App() {
           groupName={groupName}
           groupMark={groupMark}
           onToggleSidebar={layout.toggle}
-          canSearch={items.length > 0}
+          sidebarOpen={sidebar.open}
+          canSearch={items.length > 0 && !page}
           searchOpen={search.searchOpen}
           onToggleSearch={search.toggleSearch}
-          projectDir={projectDir}
-          onPickProject={() => void actions.pickProject()}
+          filesOpen={filesOpen}
+          onToggleFiles={() => windowModel.togglePanel("files")}
           status={status}
-          auth={auth}
           waiting={notificationCounts.unread}
           onToggleNotifications={() => windowModel.togglePanel("notifications")}
+          extensions={extensions}
+          notificationCounts={notificationCounts}
+          onOpenPage={navigator.openPage}
           client={client}
-          onLogIn={actions.openLogin}
-          onLogOut={actions.logOut}
-          backend={backend}
         />
 
         {/* The scroll indicator stands in for the hidden native
@@ -204,6 +236,7 @@ export default function App() {
             historyIndexToItemIndex={historyIndexToItemIndex}
             liveItemCount={items.length}
             onJumpTo={search.onSearchJump}
+            onOpenSession={actions.pickSession}
             onClose={() => windowModel.closePanel()}
           />
         )}
@@ -256,20 +289,32 @@ export default function App() {
           onResolveHitl={controller.resolveHitl}
           actions={actions}
           switcher={switcher}
+          backend={backend}
+          projectDir={projectDir}
+          onPickProject={() => void actions.pickProject()}
+          sessionId={sessionId}
           onSend={scroll.scrollToBottom}
         />
         <StatusLine
           status={status}
-          sessionId={sessionId}
           client={client}
-          extensions={extensions}
-          notificationCounts={notificationCounts}
           pendingUpdate={updateCheck.pendingUpdate}
           onShowUpdate={updateCheck.showUpdate}
           onOpen={navigator.openPage}
-          backend={backend}
         />
       </main>
+
+      {/* The read-only Files viewer, docked as a split to the right of
+          the chat rather than over it. Toggled by the header's folder
+          button, and opened at a file by a chat pill. */}
+      {filesOpen && (
+        <FilesDock
+          client={client}
+          connected={connected}
+          session={filesSession}
+          onClose={() => windowModel.closePanel()}
+        />
+      )}
 
       <AppOverlays
         client={client}
@@ -285,6 +330,7 @@ export default function App() {
         onLoginFailed={actions.loginFailed}
       />
     </div>
+    </FileViewerContext.Provider>
     </BackendStateContext.Provider>
     </ExtensionNamesContext.Provider>
   );

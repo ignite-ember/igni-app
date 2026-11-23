@@ -66,13 +66,15 @@ const PROJECT = "/srv/claims";
 const ORG = "Acme Insurance";
 const EMAIL = "sanne.devries@acme-insurance.nl";
 
+// All bound to the project folder, so the sidebar groups them under
+// "claims" (the folder's name is the group's name).
 const SESSIONS = [
-  { session_id: "c1a7e0f2", name: "Water damage, Keizersgracht" },
-  { session_id: "c2b81d93", name: "Vehicle claim CL-20421, third party" },
-  { session_id: "c3c4f1a8", name: "Weekly fraud review" },
-  { session_id: "c4d09b71", name: "Storm damage, roof tiles Haarlem" },
-  { session_id: "c5e6a2c0", name: "Letter to broker about excess" },
-  { session_id: "c6f3b8d4", name: "Bicycle theft, missing receipt" },
+  { session_id: "c1a7e0f2", name: "Water damage, Keizersgracht", project_dir: PROJECT },
+  { session_id: "c2b81d93", name: "Vehicle claim CL-20421, third party", project_dir: PROJECT },
+  { session_id: "c3c4f1a8", name: "Weekly fraud review", project_dir: PROJECT },
+  { session_id: "c4d09b71", name: "Storm damage, roof tiles Haarlem", project_dir: PROJECT },
+  { session_id: "c5e6a2c0", name: "Letter to broker about excess", project_dir: PROJECT },
+  { session_id: "c6f3b8d4", name: "Bicycle theft, missing receipt", project_dir: PROJECT },
 ];
 
 type Theme = "light" | "dark";
@@ -133,6 +135,46 @@ async function boot(page: Page, appUrl: string, theme: Theme) {
   await page.goto(appUrl);
   await expect(page.locator(".composer-editable")).toBeVisible();
   await expect.poll(() => page.evaluate(() => document.documentElement.dataset.theme)).toBe(theme);
+  // Put the app on the Cloud side — the environment is app-wide, and this
+  // insurer runs igni in the cloud, so the composer dock shows "Cloud".
+  await page.evaluate(() => {
+    window.dispatchEvent(
+      new CustomEvent("igni-host", {
+        detail: {
+          type: "igni:backend-state",
+          payload: {
+            side: "cloud",
+            state: "cloud_ready",
+            mode: "local_and_cloud",
+            cloud: "available",
+            switch_visible: true,
+            chip_visible: true,
+            can_use_local: true,
+            backend_key: "cloud-acme",
+            group_name: "Acme Insurance",
+          },
+        },
+      }),
+    );
+  });
+  await expect(page.locator(".composer-dock", { hasText: "Cloud" })).toBeVisible();
+  // The desktop app is a native macOS window: paint its traffic lights at
+  // the top-left (where the sidebar header leaves room, New chat being
+  // right-aligned). The OS draws these on the real window; the browser
+  // capture has none, so the mockup injects them.
+  if ((page.viewportSize()?.width ?? 0) > 700) {
+    await page.evaluate(() => {
+      const bar = document.createElement("div");
+      bar.style.cssText =
+        "position:fixed;top:20px;left:18px;display:flex;gap:9px;z-index:99999;pointer-events:none";
+      for (const color of ["#ff5f57", "#febc2e", "#28c840"]) {
+        const dot = document.createElement("span");
+        dot.style.cssText = `width:14px;height:14px;border-radius:50%;background:${color}`;
+        bar.appendChild(dot);
+      }
+      document.body.appendChild(bar);
+    });
+  }
 }
 
 /** The id of the n-th user_message the client sent (1-based). */
@@ -293,7 +335,7 @@ function surfaces(page: Page) {
   return {
     sidebar_app_entry: page.locator(".sidebar-link", { hasText: CLAIMS_NAME }),
     extension_page_frame: page.locator("iframe.extension-frame"),
-    indicator_chip: page.locator(".statusline button", { hasText: "Claims: 4 open" }),
+    indicator_chip: page.locator(".app-header button", { hasText: "Claims: 4 open" }),
     json_render_card: page.locator(".jr-view"),
     extension_message: page.locator(".msg-user", { has: page.locator(".msg-user-from") }),
     composer: page.locator(".composer"),
@@ -307,7 +349,7 @@ async function openClaimsPage(page: Page) {
   } else {
     // Phone: the sidebar is folded away, so open the page the other
     // real way — its status chip, whose manifest names the page.
-    await page.locator(".statusline button", { hasText: "Claims: 4 open" }).click();
+    await page.locator(".app-header button", { hasText: "Claims: 4 open" }).click();
   }
   const frame = page.frameLocator("iframe.extension-frame");
   await expect(frame.locator("body.ready")).toBeVisible({ timeout: 10_000 });
@@ -331,8 +373,8 @@ for (const theme of ["light", "dark"] as const) {
           bubble.getBoundingClientRect().top - scroller.getBoundingClientRect().top - 72;
       });
       await settle(page);
-      // No cloud symbol anywhere: `CloudIcon`'s path is nowhere on the page.
-      await expect(page.locator('path[d^="M4.5 12.5a3 3 0 0 1-.4-5.97"]')).toHaveCount(0);
+      // The app runs in the cloud now — the composer dock shows a Cloud chip.
+      await expect(page.locator(".composer-dock", { hasText: "Cloud" })).toBeVisible();
       await page.screenshot({ path: `${OUT}/igni-claims-plain-${theme}.png`, clip: { x: 0, y: 0, ...DESKTOP } });
     });
 
@@ -361,7 +403,7 @@ for (const theme of ["light", "dark"] as const) {
           menu_entry: null,
           composer: null,
         }, [
-          "indicator_chip: null when the open page covers the status line it sits in (it does in this client).",
+          "indicator_chip: in the header now, so it stays visible even while an extension page is open.",
           "menu_entry: not captured. The tools menu opens from the composer, which is hidden while an extension page is open.",
           "composer: hidden while a page is open, so not in this image.",
         ]);
@@ -511,7 +553,7 @@ for (const theme of ["light", "dark"] as const) {
           },
           [
             "sidebar_app_entry: the sidebar is folded away at phone width, so it is not in the image. The page was opened from the indicator chip.",
-            "indicator_chip: null when the open page covers the status line it sits in (it does in this client).",
+            "indicator_chip: in the header now, so it stays visible even while an extension page is open.",
           ],
         );
       } finally {

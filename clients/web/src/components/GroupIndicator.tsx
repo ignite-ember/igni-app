@@ -50,8 +50,8 @@ export function classify(policy: GroupPolicy | null): GroupBadge {
   };
 }
 
-/** The group this person is in. */
-export function GroupIndicator({ client }: { client: IgniClient }) {
+/** The group this person is in, polled, as a badge the account row shows. */
+export function useGroupBadge(client: Pick<IgniClient, "rpc">): GroupBadge {
   const [policy, setPolicy] = useState<GroupPolicy | null>(null);
 
   const refresh = useCallback(async () => {
@@ -65,20 +65,11 @@ export function GroupIndicator({ client }: { client: IgniClient }) {
   useEffect(() => {
     void refresh();
     // The pack is revalidated when a dialogue starts and on a
-    // five-minute timer, so a slower poll than the index pill's; nothing
-    // here changes second to second.
+    // five-minute timer, so a slow poll; nothing here changes second to
+    // second.
     const interval = setInterval(() => void refresh(), 60_000);
     return () => clearInterval(interval);
   }, [refresh]);
 
-  const badge = classify(policy);
-
-  return (
-    <div className="group-pill-wrap">
-      <button className={`status-pill tone-${badge.tone}`} title={badge.detail} disabled>
-        <span className="status-dot" />
-        Group <span className="status-label">{badge.label}</span>
-      </button>
-    </div>
-  );
+  return classify(policy);
 }

@@ -23,6 +23,7 @@ import { ChevronIcon } from "./Icons";
 export function AccountChip({
   status,
   name,
+  subtitle,
   onOpenAccount,
   onLogIn,
   buttonRef,
@@ -30,6 +31,10 @@ export function AccountChip({
 }: {
   status: Pick<StatusUpdate, "cloud_email" | "cloud_connected"> | null;
   name: string;
+  /** The second line under the name — the group this person's agents
+   *  come from, or the address when they are in no group. Omitted when
+   *  it would only repeat the name. */
+  subtitle?: string;
   onOpenAccount: () => void;
   onLogIn: () => void;
   /** The account button, for the menu to hand focus back to. */
@@ -63,7 +68,14 @@ export function AccountChip({
             uploaded picture, and inventing a silhouette for everybody
             says less than two letters of their own name. The portal
             draws the same thing from the same source. */}
-        <Monogram name={name} /> <span className="chip-label">{name}</span>{" "}
+        <Monogram name={name} />{" "}
+        {/* Name over the group (or the address when in no group), the
+            way an account row reads in most apps. The second line is
+            dropped when it would only repeat the name. */}
+        <span className="chip-identity">
+          <span className="chip-label">{name}</span>
+          {subtitle && subtitle !== name && <span className="chip-sub">{subtitle}</span>}
+        </span>{" "}
         {/* The person is signed in; the server is the one that is away.
             The marker is there so the chip says so without a hover, and
             the title says it in words for the hover and the screen
@@ -75,7 +87,9 @@ export function AccountChip({
             aria-label="The igni server is not answering"
           />
         )}
-        <ChevronIcon size={9} down />
+        {/* The menu rises out of the sidebar's foot, so the chevron
+            points the way it opens. */}
+        <ChevronIcon size={9} up />
       </button>
     );
   }

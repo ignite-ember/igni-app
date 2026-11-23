@@ -15,7 +15,7 @@
 
 import { useState } from "react";
 import { ChatItemView } from "../components/chatItems/ChatItemView";
-import { CtxMeter, PlanBadge, SessionChip } from "../components/StatusBits";
+import { PlanBadge, SessionContext } from "../components/StatusBits";
 import type { PlanItem } from "../chat/chatItem";
 import { ChatItemFactory } from "../chat/chatItemFactory";
 import { ChatItemIds } from "../chat/chatItemIds";
@@ -137,9 +137,8 @@ export function PlanModeDemo() {
         aria-label="Session status"
         style={{ marginTop: 0, paddingBottom: 8, flexShrink: 0 }}
       >
-        <SessionChip sessionId="demoabcd1234" />
         <PlanBadge mode={mode} />
-        <CtxMeter tokens={12340} max={200000} pct={6.17} />
+        <SessionContext sessionId="demoabcd1234" tokens={12340} max={200000} pct={6} />
         <button
           type="button"
           className="brand-update"

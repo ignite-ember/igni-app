@@ -1,8 +1,11 @@
 import type { PageRoute } from "../chat/pageStack";
 import type { SidebarLayout } from "../chat/sidebarLayout";
+import type { AuthPhase } from "../chat/useShellStatus";
 import type { Sidebar as SidebarModel } from "../clientState";
 import type { Contributions } from "../extensions/contributions";
 import type { NotificationCounts } from "../notifications/model";
+import type { IgniClient } from "../protocol/client";
+import type { StatusUpdate } from "../protocol/messages";
 import { Sidebar, type SessionEntry } from "./Sidebar";
 
 export interface AppSidebarProps {
@@ -17,7 +20,14 @@ export interface AppSidebarProps {
   activeKind: string | undefined;
   onOpenPage: (route: PageRoute) => void;
   onNewChat: () => void;
+  onNewChatInFolder: (folder: string) => void;
   onPickSession: (id: string) => void;
+  /** The account menu lives at the foot of the sidebar. */
+  status: StatusUpdate | null;
+  client: Pick<IgniClient, "rpc">;
+  auth?: AuthPhase;
+  onLogIn: () => void;
+  onLogOut: () => void;
 }
 
 /** The window's sidebar: igni's and the extensions' destinations, each
@@ -33,7 +43,13 @@ export function AppSidebar({
   activeKind,
   onOpenPage,
   onNewChat,
+  onNewChatInFolder,
   onPickSession,
+  status,
+  client,
+  auth,
+  onLogIn,
+  onLogOut,
 }: AppSidebarProps) {
   const openLink = (kind: string) => {
     const link = contributions.sidebar().find((l) => l.kind === kind);
@@ -49,10 +65,16 @@ export function AppSidebar({
       badges={contributions.sidebarBadges(notificationCounts)}
       onLink={openLink}
       onNewChat={onNewChat}
+      onNewChatInFolder={onNewChatInFolder}
       onPick={onPickSession}
       onClose={layout.close}
       section={sidebar.section}
       onSection={layout.setSection}
+      status={status}
+      client={client}
+      auth={auth}
+      onLogIn={onLogIn}
+      onLogOut={onLogOut}
     />
   );
 }

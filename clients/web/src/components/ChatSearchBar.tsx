@@ -1,5 +1,5 @@
 import { memo, useCallback, useEffect, useRef, useState } from "react";
-import type { ChatSearchMatch } from "../protocol/backendCallResults";
+import type { ChatSearchMatch, GlobalChatSearchMatch } from "../protocol/backendCallResults";
 import type { IgniClient } from "../protocol/client";
 
 /** Find-in-conversation bar. Search runs on the BE against the Agno
@@ -26,6 +26,9 @@ export interface ChatSearchBarProps {
   /** Called when the user activates a result. ``itemIndex`` is the
    *  index into the FE's items array. */
   onJumpTo: (itemIndex: number, match: ChatSearchMatch) => void;
+  /** Open another conversation — used when an "All chats" result is in a
+   *  different session than the open one. */
+  onOpenSession: (sessionId: string) => void;
   onClose: () => void;
 }
 
@@ -199,14 +202,18 @@ export const ChatSearchBar = memo(function ChatSearchBar({
   historyIndexToItemIndex,
   liveItemCount,
   onJumpTo,
+  onOpenSession,
   onClose,
 }: ChatSearchBarProps) {
   const [query, setQuery] = useState("");
+  const [scope, setScope] = useState<"chat" | "all">("chat");
   const [matches, setMatches] = useState<ChatSearchMatch[]>([]);
+  const [globalMatches, setGlobalMatches] = useState<GlobalChatSearchMatch[]>([]);
   const [activeIdx, setActiveIdx] = useState(0);
   const [pending, setPending] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const seqRef = useRef(0);
+  const resultCount = scope === "all" ? globalMatches.length : matches.length;
 
   // Autofocus on mount.
   useEffect(() => {
@@ -214,11 +221,12 @@ export const ChatSearchBar = memo(function ChatSearchBar({
     inputRef.current?.select();
   }, []);
 
-  // Debounced search.
+  // Debounced search — scoped to this chat, or across every chat.
   useEffect(() => {
     const trimmed = query.trim();
     if (!trimmed) {
       setMatches([]);
+      setGlobalMatches([]);
       setActiveIdx(0);
       setPending(false);
       return;
@@ -227,22 +235,38 @@ export const ChatSearchBar = memo(function ChatSearchBar({
     const seq = ++seqRef.current;
     const t = window.setTimeout(async () => {
       try {
-        const res = await client.calls.searchChat(sessionId, trimmed, LIMIT);
-        if (seq !== seqRef.current) return; // stale
-        setMatches(res);
+        if (scope === "all") {
+          const res = await client.calls.searchAllChats(trimmed, LIMIT);
+          if (seq !== seqRef.current) return;
+          setGlobalMatches(res);
+        } else {
+          const res = await client.calls.searchChat(sessionId, trimmed, LIMIT);
+          if (seq !== seqRef.current) return;
+          setMatches(res);
+        }
         setActiveIdx(0);
       } catch {
         if (seq !== seqRef.current) return;
         setMatches([]);
+        setGlobalMatches([]);
       } finally {
         if (seq === seqRef.current) setPending(false);
       }
     }, DEBOUNCE_MS);
     return () => window.clearTimeout(t);
-  }, [query, sessionId, client]);
+  }, [query, scope, sessionId, client]);
 
   const jump = useCallback(
     (i: number, andClose = false) => {
+      // All-chats: a result lives in another conversation — open it.
+      if (scope === "all") {
+        const g = globalMatches[i];
+        if (!g) return;
+        setActiveIdx(i);
+        onOpenSession(g.sessionId);
+        onClose();
+        return;
+      }
       const m = matches[i];
       if (!m) return;
       const itemIndex = translateIndex(
@@ -258,20 +282,23 @@ export const ChatSearchBar = memo(function ChatSearchBar({
       // leaves it open so the user can keep browsing matches.
       if (andClose) onClose();
     },
-    [matches, historyIndexToItemIndex, liveItemCount, onJumpTo, onClose],
+    [scope, globalMatches, matches, historyIndexToItemIndex, liveItemCount, onJumpTo, onOpenSession, onClose],
   );
 
-  const nextMatch = useCallback(() => {
-    if (!matches.length) return;
-    const i = (activeIdx + 1) % matches.length;
-    jump(i);
-  }, [matches.length, activeIdx, jump]);
+  // In-transcript jump for keyboard nav; in all-chats mode arrows only
+  // move the highlight (opening a chat on every arrow would be jarring).
+  const moveHighlight = useCallback(
+    (delta: number) => {
+      if (!resultCount) return;
+      const i = (activeIdx + delta + resultCount) % resultCount;
+      if (scope === "all") setActiveIdx(i);
+      else jump(i);
+    },
+    [resultCount, activeIdx, scope, jump],
+  );
 
-  const prevMatch = useCallback(() => {
-    if (!matches.length) return;
-    const i = (activeIdx - 1 + matches.length) % matches.length;
-    jump(i);
-  }, [matches.length, activeIdx, jump]);
+  const nextMatch = useCallback(() => moveHighlight(1), [moveHighlight]);
+  const prevMatch = useCallback(() => moveHighlight(-1), [moveHighlight]);
 
   const onKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -283,6 +310,11 @@ export const ChatSearchBar = memo(function ChatSearchBar({
       }
       if (e.key === "Enter") {
         e.preventDefault();
+        // All-chats: Enter opens the highlighted conversation.
+        if (scope === "all" && !e.shiftKey) {
+          jump(activeIdx, true);
+          return;
+        }
         if (e.shiftKey) prevMatch();
         else nextMatch();
         return;
@@ -297,14 +329,16 @@ export const ChatSearchBar = memo(function ChatSearchBar({
         prevMatch();
       }
     },
-    [onClose, nextMatch, prevMatch],
+    [onClose, nextMatch, prevMatch, scope, jump, activeIdx],
   );
 
   const status = (() => {
-    if (!query.trim()) return "Type to search this conversation";
-    if (pending && !matches.length) return "Searching…";
-    if (!matches.length) return "No matches";
-    return `${activeIdx + 1} / ${matches.length}${matches.length === LIMIT ? "+" : ""}`;
+    if (!query.trim()) {
+      return scope === "all" ? "Type to search all chats" : "Type to search this conversation";
+    }
+    if (pending && !resultCount) return "Searching…";
+    if (!resultCount) return "No matches";
+    return `${activeIdx + 1} / ${resultCount}${resultCount === LIMIT ? "+" : ""}`;
   })();
 
   return (
@@ -313,12 +347,33 @@ export const ChatSearchBar = memo(function ChatSearchBar({
         <span className="chat-search-icon">
           <MagnifierIcon />
         </span>
+        {/* Scope switch: this conversation, or every chat in the project. */}
+        <div className="chat-search-scope" role="tablist" aria-label="Search scope">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={scope === "chat"}
+            className={`chat-search-scope-btn${scope === "chat" ? " active" : ""}`}
+            onClick={() => setScope("chat")}
+          >
+            This chat
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={scope === "all"}
+            className={`chat-search-scope-btn${scope === "all" ? " active" : ""}`}
+            onClick={() => setScope("all")}
+          >
+            All chats
+          </button>
+        </div>
         <input
           ref={inputRef}
           className="chat-search-input"
           type="text"
           value={query}
-          placeholder="Find in conversation"
+          placeholder={scope === "all" ? "Find in all chats" : "Find in conversation"}
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={onKeyDown}
           spellCheck={false}
@@ -357,7 +412,40 @@ export const ChatSearchBar = memo(function ChatSearchBar({
           <CloseGlyph />
         </button>
       </div>
-      {matches.length > 0 && (
+      {scope === "all" && globalMatches.length > 0 && (
+        <ul className="chat-search-results">
+          {globalMatches.map((m, i) => {
+            const before = cleanSnippetText(m.snippet.slice(0, m.matchStart));
+            const hit = m.snippet.slice(m.matchStart, m.matchEnd);
+            const after = cleanSnippetText(m.snippet.slice(m.matchEnd));
+            return (
+              <li
+                key={`${m.sessionId}-${i}`}
+                className={`chat-search-result${i === activeIdx ? " active" : ""}`}
+                onClick={() => jump(i, true)}
+              >
+                <span className="chat-search-chat" title={m.sessionName || m.sessionId}>
+                  {m.sessionName || m.sessionId.slice(0, 8)}
+                </span>
+                <span className="chat-search-snippet">
+                  {before}
+                  <mark>{hit}</mark>
+                  {after}
+                </span>
+                {m.createdAt > 0 && (
+                  <span
+                    className="chat-search-time"
+                    title={new Date(m.createdAt * 1000).toLocaleString()}
+                  >
+                    {formatTurnTime(m.createdAt)}
+                  </span>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+      {scope === "chat" && matches.length > 0 && (
         <ul className="chat-search-results">
           {matches.map((m, i) => {
             const itemIndex = translateIndex(

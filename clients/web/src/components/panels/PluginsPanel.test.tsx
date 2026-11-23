@@ -101,15 +101,18 @@ describe("the marketplace tab", () => {
     expect(screen.getByText("ssh-only")).toBeTruthy();
     // An unnamed marketplace is labelled by its URL.
     expect(screen.getByText("https://git.example/unnamed")).toBeTruthy();
-    // Installed plugins are marked, not offered again.
-    expect(screen.getByText("installed")).toBeTruthy();
+    // Installed plugins are marked (a check, not an Install button), not offered again.
+    expect(screen.getByRole("button", { name: "Installed" })).toBeTruthy();
     expect(screen.getAllByRole("button", { name: "Install" })).toHaveLength(2);
+    // Search is collapsed behind an icon until opened.
+    fireEvent.click(screen.getByRole("button", { name: "Search plugins" }));
     expect(screen.getByPlaceholderText("Search 3 plugins across 2 marketplaces…")).toBeTruthy();
   });
 
   it("searches names, descriptions and sources", async () => {
     panelWith();
-    const search = await screen.findByPlaceholderText(/Search 3 plugins/);
+    fireEvent.click(await screen.findByRole("button", { name: "Search plugins" }));
+    const search = screen.getByPlaceholderText(/Search 3 plugins/);
     fireEvent.change(search, { target: { value: "LINTER" } });
     expect(screen.getByText("lint-helper")).toBeTruthy();
     expect(screen.queryByText("ssh-only")).toBeNull();
@@ -154,7 +157,7 @@ describe("the marketplace tab", () => {
   it("re-fetches the catalogs on Refresh", async () => {
     const { sent } = panelWith();
     await screen.findByText("lint-helper");
-    fireEvent.click(screen.getByRole("button", { name: "Refresh" }));
+    fireEvent.click(screen.getByRole("button", { name: "Refresh catalogs" }));
     await waitFor(() => expect(sent("refresh_marketplaces")).toHaveLength(1));
     expect(sent("refresh_marketplaces")[0].args).toEqual({ name: null });
   });

@@ -123,7 +123,8 @@ function mount({ catalog, ...over }: MountProps = {}, stub: Stub = stubClient())
   };
   const view = render(<Composer {...props} />);
   const editor = view.container.querySelector('[role="textbox"]') as HTMLElement;
-  const sendButton = () => view.container.querySelector(".send-split-go") as HTMLButtonElement | null;
+  const sendButton = () =>
+    view.container.querySelector(".send-btn:not(.stop)") as HTMLButtonElement | null;
   return { ...view, props, editor, windowModel, stub, sendButton };
 }
 
@@ -910,30 +911,6 @@ describe("the bar's menus", () => {
     expect(container.querySelector(".model-menu")).toBeNull();
   });
 
-  it("the mode half of Send shows the current mode and switches to another", () => {
-    const { container, props } = mount({ permissionMode: "acceptEdits" });
-    const trigger = container.querySelector(".send-split-mode") as HTMLButtonElement;
-    expect(trigger.textContent).toContain("Auto-edit");
-    expect(trigger.getAttribute("aria-expanded")).toBe("false");
-
-    act(() => trigger.click());
-    const items = Array.from(container.querySelectorAll('[role="menuitem"]'));
-    expect(items.map((i) => i.querySelector(".cmd")!.textContent)).toEqual([
-      "Execute",
-      "Plan",
-      "Auto-edit",
-      "Bypass",
-    ]);
-
-    // Picking the mode already in force is not a change.
-    act(() => (items[2] as HTMLElement).click());
-    expect(props.actions.onPickMode).not.toHaveBeenCalled();
-
-    act(() => trigger.click());
-    act(() => (container.querySelectorAll('[role="menuitem"]')[1] as HTMLElement).click());
-    expect(props.actions.onPickMode).toHaveBeenCalledExactlyOnceWith("plan");
-    expect(container.querySelector('[role="menu"]')).toBeNull();
-  });
 });
 
 describe("one popup at a time", () => {
@@ -957,15 +934,6 @@ describe("one popup at a time", () => {
     expect(items).toEqual(["Compact", "Sessions"]);
   });
 
-  it("opening one bar menu closes another", () => {
-    const { container } = mount();
-    act(() => (container.querySelector(".slash-btn") as HTMLButtonElement).click());
-
-    act(() => (container.querySelector(".send-split-mode") as HTMLButtonElement).click());
-
-    expect(container.querySelectorAll('[role="menu"]')).toHaveLength(1);
-    expect(container.querySelectorAll(".popup-menu")).toHaveLength(1);
-  });
 
   it("the /model command replaces an open @ menu", async () => {
     const stub = withFile();

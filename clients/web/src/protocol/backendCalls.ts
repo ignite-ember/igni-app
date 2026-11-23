@@ -11,6 +11,7 @@ import { bytesToBase64 } from "../lib/base64";
 import {
   ChatSearchMatch,
   FileCompletions,
+  GlobalChatSearchMatch,
   LoginStarted,
   PlanDecision,
   ShellOutput,
@@ -98,6 +99,14 @@ export class BackendCalls {
   async searchChat(sessionId: string, query: string, limit = 50): Promise<ChatSearchMatch[]> {
     return ChatSearchMatch.parseList(
       await this.transport.rpc("search_chat", { session_id: sessionId, query, limit }),
+    );
+  }
+
+  /** Search across every session in the project; each hit says which
+   *  session it was found in so the caller can open it. */
+  async searchAllChats(query: string, limit = 50): Promise<GlobalChatSearchMatch[]> {
+    return GlobalChatSearchMatch.parseList(
+      await this.transport.rpc("search_all_chats", { query, limit }),
     );
   }
 

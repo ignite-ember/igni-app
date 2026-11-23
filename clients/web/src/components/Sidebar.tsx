@@ -1,7 +1,12 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { AccountMenu } from "./AccountMenu";
+import { BlocksIcon, ChevronIcon, CircleIcon, McpIcon, NamedIcon, PuzzleIcon } from "./Icons";
+import { useGroupBadge } from "./GroupIndicator";
 import { ScrollIndicator } from "./ScrollIndicator";
-import { ThemeToggle } from "./ThemeToggle";
+import type { AuthPhase } from "../chat/useShellStatus";
 import { badgeText } from "../notifications/model";
+import type { IgniClient } from "../protocol/client";
+import type { StatusUpdate } from "../protocol/messages";
 
 export interface SessionEntry {
   session_id: string;
@@ -12,11 +17,58 @@ export interface SessionEntry {
    *  backend that does not send it says nothing, so no row claims to
    *  be waiting. */
   has_paused_run?: boolean;
+  /** The project folder the chat is bound to; the sidebar groups by it.
+   *  Empty when the backend reports none. */
+  folder?: string;
 }
 
 export interface SidebarLink {
   kind: string;
   label: string;
+}
+
+/** A folder's chats, in the order the backend listed them (newest
+ *  first), with the folder's most-recent chat deciding the group's
+ *  place in the list. */
+interface SessionGroup {
+  folder: string;
+  label: string;
+  sessions: SessionEntry[];
+}
+
+/** The folder's short name: the last path segment, or "Local" when the
+ *  chat is not bound to a folder. */
+function folderLabel(folder: string): string {
+  if (!folder) return "Local";
+  const parts = folder.replace(/[/\\]+$/, "").split(/[/\\]/);
+  return parts[parts.length - 1] || folder;
+}
+
+/** Group chats by folder, keeping the backend's recency order — a
+ *  folder's first appearance (its most-recent chat) fixes its place. */
+function groupByFolder(sessions: SessionEntry[]): SessionGroup[] {
+  const groups: SessionGroup[] = [];
+  const byFolder = new Map<string, SessionGroup>();
+  for (const s of sessions) {
+    const folder = s.folder ?? "";
+    let g = byFolder.get(folder);
+    if (!g) {
+      g = { folder, label: folderLabel(folder), sessions: [] };
+      byFolder.set(folder, g);
+      groups.push(g);
+    }
+    g.sessions.push(s);
+  }
+  return groups;
+}
+
+/** The glyph for a destination; a quiet dot stands in for an
+ *  extension-contributed page igni does not know by name. */
+function linkIcon(kind: string): ReactNode {
+  if (kind === "plugins") return <PuzzleIcon size={15} />;
+  if (kind === "mcp") return <McpIcon size={15} />;
+  if (kind === "extensions") return <BlocksIcon size={15} />;
+  return <CircleIcon size={7} />;
 }
 
 export function Sidebar({
@@ -28,10 +80,16 @@ export function Sidebar({
   badges = {},
   onLink,
   onNewChat,
+  onNewChatInFolder,
   onPick,
   onClose,
   section = null,
   onSection,
+  status,
+  client,
+  auth,
+  onLogIn,
+  onLogOut,
 }: {
   open: boolean;
   sessions: SessionEntry[];
@@ -47,6 +105,9 @@ export function Sidebar({
   badges?: Record<string, number>;
   onLink: (kind: string) => void;
   onNewChat: () => void;
+  /** Start a new chat in a specific folder — the "+" on a folder group's
+   *  header. */
+  onNewChatInFolder?: (folder: string) => void;
   onPick: (id: string) => void;
   onClose: () => void;
   /** The part of the list in view — ``ui.sidebar.section``: `links`
@@ -55,7 +116,27 @@ export function Sidebar({
   section?: "links" | "sessions" | null;
   /** The person scrolled the list into the other part. */
   onSection?: (section: "links" | "sessions") => void;
+  /** The account menu's inputs — it sits at the foot of the sidebar,
+   *  under the chats, the way most apps place "who is signed in". */
+  status: StatusUpdate | null;
+  client: Pick<IgniClient, "rpc">;
+  /** Whether anybody is known to be signed in; derived from ``status``
+   *  when not given. */
+  auth?: AuthPhase;
+  onLogIn: () => void;
+  onLogOut: () => void;
 }) {
+  const groupBadge = useGroupBadge(client);
+  // Which folder groups are collapsed (by folder key).
+  const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
+  const toggleGroup = (folder: string) =>
+    setCollapsed((prev) => {
+      const next = new Set(prev);
+      if (next.has(folder)) next.delete(folder);
+      else next.add(folder);
+      return next;
+    });
+  const groups = groupByFolder(sessions);
   const listRef = useRef<HTMLDivElement>(null);
   const topRef = useRef<HTMLDivElement>(null);
   const sessionsRef = useRef<HTMLDivElement>(null);
@@ -121,18 +202,13 @@ export function Sidebar({
             extends up behind it. Mirrors the ``.app-header`` /
             ``.conversation`` overlap pattern. */}
         <div className="sidebar-top" ref={topRef}>
+          {/* The primary action sits at the top of the sidebar, where the
+              theme toggle used to be — the theme control moved to the
+              account menu at the foot. On macOS this row is also the
+              title bar (traffic-light gutter + drag region); the button
+              is excluded from the drag region so it stays clickable. */}
           <div className="sidebar-head">
-            {/* App identity (flame + "igni") lives in the main
-                column's ``.app-header`` — repeating it in the sidebar
-                header makes the brand appear twice when the sidebar
-                is open. Keep this row for the controls only (theme
-                toggle today, settings later). The spacer pushes them
-                to the right so the row stays visually anchored. */}
-            <div className="sidebar-head-spacer" />
-            <ThemeToggle />
-          </div>
-          <div style={{ padding: "6px 12px" }}>
-            <button className="btn" style={{ width: "100%" }} onClick={onNewChat}>
+            <button className="btn sidebar-new-chat" onClick={onNewChat}>
               + New chat
             </button>
           </div>
@@ -170,7 +246,10 @@ export function Sidebar({
                       : undefined
                   }
                 >
-                  {link.label}
+                  <span className="sidebar-link-icon" aria-hidden="true">
+                    {linkIcon(link.kind)}
+                  </span>
+                  <span className="sidebar-link-label">{link.label}</span>
                   {!!badges[link.kind] && (
                     <span className="extension-badge" aria-hidden="true">
                       {badgeText(badges[link.kind])}
@@ -180,39 +259,89 @@ export function Sidebar({
               ))}
             </nav>
           )}
-          <div className="sidebar-section" ref={sessionsRef}>
-            Sessions
+          <div className="session-groups" ref={sessionsRef}>
+            {sessions.length === 0 && (
+              <>
+                <div className="sidebar-section">Sessions</div>
+                <div className="session-item" style={{ cursor: "default" }}>
+                  No past sessions
+                </div>
+              </>
+            )}
+            {/* Chats grouped by their folder; the group with the most
+                recent chat comes first (the backend lists newest-first,
+                so a folder's place follows its first chat). */}
+            {groups.map((g) => {
+              const isCollapsed = collapsed.has(g.folder);
+              return (
+                <div className="session-group" key={g.folder || "__local__"}>
+                  <div className="session-group-head">
+                    <button
+                      type="button"
+                      className="session-group-toggle"
+                      aria-expanded={!isCollapsed}
+                      onClick={() => toggleGroup(g.folder)}
+                    >
+                      <span className="session-group-chevron" aria-hidden="true">
+                        <ChevronIcon down={!isCollapsed} size={12} />
+                      </span>
+                      <span className="session-group-name" title={g.folder || g.label}>
+                        {g.label}
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      className="session-group-add"
+                      title={`New chat in ${g.label}`}
+                      aria-label={`New chat in ${g.label}`}
+                      onClick={() =>
+                        onNewChatInFolder ? onNewChatInFolder(g.folder) : onNewChat()
+                      }
+                    >
+                      <NamedIcon name="plus" size={13} />
+                    </button>
+                  </div>
+                  {!isCollapsed &&
+                    g.sessions.map((s) => (
+                      <div
+                        key={s.session_id}
+                        className={`session-item ${s.session_id === currentId ? "current" : ""}`}
+                        title={s.detail || s.name}
+                        onClick={() => onPick(s.session_id)}
+                      >
+                        <span className="session-name">{s.name || s.session_id}</span>
+                        {s.has_paused_run && (
+                          <span
+                            className="session-waiting"
+                            role="img"
+                            aria-label="Waiting for your answer"
+                            title="Waiting for your answer"
+                          >
+                            waiting
+                          </span>
+                        )}
+                        <span className="session-id">{s.session_id.slice(0, 8)}</span>
+                      </div>
+                    ))}
+                </div>
+              );
+            })}
           </div>
-          {sessions.length === 0 && (
-            <div className="session-item" style={{ cursor: "default" }}>
-              No past sessions
-            </div>
-          )}
-          {sessions.map((s) => (
-            <div
-              key={s.session_id}
-              className={`session-item ${s.session_id === currentId ? "current" : ""}`}
-              title={s.detail || s.name}
-              onClick={() => onPick(s.session_id)}
-            >
-              <span className="session-name">{s.name || s.session_id}</span>
-              {/* A run is waiting for an answer in this session. The
-                  marker sits inside the row, so picking the row is
-                  what reaches it: the row attaches the session, and
-                  the backend shows the approval again. */}
-              {s.has_paused_run && (
-                <span
-                  className="session-waiting"
-                  role="img"
-                  aria-label="Waiting for your answer"
-                  title="Waiting for your answer"
-                >
-                  waiting
-                </span>
-              )}
-              <span className="session-id">{s.session_id.slice(0, 8)}</span>
-            </div>
-          ))}
+        </div>
+        {/* The account at the foot of the sidebar, under the chats —
+            where most apps keep "who am I signed in as". The group this
+            person's agents come from is its second line, so the two read
+            as one control. Outside the scrolling list so it stays put as
+            the chats scroll; the menu rises upward out of this strip. */}
+        <div className="sidebar-footer">
+          <AccountMenu
+            status={status}
+            client={client}
+            auth={auth}
+            group={groupBadge}
+            onLogIn={onLogIn}
+            onLogOut={onLogOut}
+          />
         </div>
       </nav>
     </>

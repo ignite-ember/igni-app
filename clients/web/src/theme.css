@@ -5,8 +5,10 @@
    red #DC2626 gradient, monospace for tool/terminal content. */
 
 :root {
+  /* Ember orange accent. `--accent` is the fill token components read. */
   --igni-orange: #f97316;
   --igni-orange-hover: #fb923c;
+  --accent: #f97316;
   --igni-red: #dc2626;
   --igni-gradient: linear-gradient(135deg, #f97316, #dc2626);
   --igni-gradient-soft: linear-gradient(
@@ -131,6 +133,7 @@
   --accent-green-text: #177332;
   --accent-red-text: #be1f2a;
   --accent-orange-text: #a24a0e;
+  --accent: #f97316;
   --danger-text: #be1f2a;
   --shadow-pop: 0 12px 40px rgba(0, 0, 0, 0.14);
   /* Darker than ``--border`` so the thumb reads clearly against the
@@ -163,6 +166,7 @@
     --accent-green-text: #177332;
     --accent-red-text: #be1f2a;
     --accent-orange-text: #a24a0e;
+    --accent: #f97316;
   --danger-text: #be1f2a;
     --shadow-pop: 0 12px 40px rgba(0, 0, 0, 0.14);
     --scroll-thumb: #b8b5ad;
@@ -384,6 +388,32 @@ button {
   flex: 1;
 }
 
+/* The New-chat button is the whole header row now (the theme toggle
+   moved to the account menu). It reads like a sidebar link — plain
+   text, no border or filled box, just a soft hover highlight — rather
+   than a boxed control. flex:1 so it fills the row past the macOS
+   traffic-light gutter. */
+/* Scoped to beat the later ``.btn`` rule (equal specificity, defined
+   further down the file, which would otherwise restore the border and
+   fill). */
+.sidebar-head .sidebar-new-chat {
+  /* Sized to its text (not flex:1), so the hover highlight hugs the
+     label instead of spanning the whole row. margin-left:auto pushes
+     it to the right edge of the sidebar, clear of the traffic lights. */
+  flex: 0 0 auto;
+  margin-left: auto;
+  border: none;
+  background: transparent;
+  color: var(--fg);
+  text-align: left;
+  border-radius: var(--radius-sm);
+  padding: var(--space-3) var(--space-4);
+}
+
+.sidebar-head .sidebar-new-chat:hover {
+  background: var(--bg-raised);
+}
+
 .theme-toggle {
   appearance: none;
   width: 24px;
@@ -423,6 +453,9 @@ button {
 }
 
 .sidebar-link {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
   text-align: left;
   background: none;
   border: none;
@@ -434,9 +467,27 @@ button {
   cursor: pointer;
 }
 
+.sidebar-link-icon {
+  display: inline-flex;
+  flex-shrink: 0;
+  width: 16px;
+  justify-content: center;
+  color: var(--fg-faint);
+}
+
+.sidebar-link-label {
+  flex: 1;
+  min-width: 0;
+}
+
 .sidebar-link:hover {
   color: var(--fg);
   background: var(--bg-raised);
+}
+
+.sidebar-link:hover .sidebar-link-icon,
+.sidebar-link.active .sidebar-link-icon {
+  color: var(--fg);
 }
 
 .sidebar-link.active {
@@ -452,6 +503,74 @@ button {
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--fg-faint);
+}
+
+
+/* The account's home at the foot of the sidebar, under the chats — the
+   placement most apps use, so it is where the eye already looks for who
+   is signed in. A fixed strip below the scrolling list (``flex-shrink``
+   keeps it from being squeezed), and its own positioning context so the
+   menu can rise out of it rather than drop off the bottom of the window. */
+.sidebar-footer {
+  flex-shrink: 0;
+  padding: var(--space-4) var(--space-5);
+  border-top: 1px solid var(--border-soft);
+  position: relative;
+}
+
+/* In the sidebar the chip is a full-width row that reads left to right,
+   not a pill tucked in a corner. Two lines tall, so it grows to fit the
+   name over the address. */
+.sidebar-footer .chip {
+  width: 100%;
+  justify-content: flex-start;
+  height: auto;
+  min-height: 40px;
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-sm);
+}
+
+/* Name over address, the column between the monogram and the chevron;
+   it takes the room and the chevron is carried to the far end. */
+.chip-identity {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  flex: 1;
+  min-width: 0;
+  line-height: 1.25;
+  text-align: left;
+}
+
+.chip-identity .chip-label {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--fg);
+  font-weight: 500;
+}
+
+/* The address, a quieter line under the name. */
+.chip-identity .chip-sub {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--text-xs);
+  color: var(--fg-faint);
+}
+
+/* The menu opens upward from the foot, spanning the strip's width,
+   instead of dropping down from the top-right corner it used to live in. */
+.sidebar-footer .dropdown.account-menu {
+  top: auto;
+  right: var(--space-5);
+  bottom: calc(100% + var(--space-3));
+  left: var(--space-5);
+  width: auto;
+  transform-origin: bottom left;
 }
 
 /* Floating top cluster — head row + New-chat button + "Sessions"
@@ -569,6 +688,70 @@ button {
   background: var(--bg-raised);
   color: var(--fg);
   font-weight: 600;
+}
+
+/* Chats grouped by folder: a collapsible header (folder name + chevron)
+   with a "+" to start a chat in that folder. No environment icon — in
+   igni the local/cloud choice is app-wide, not per chat. */
+.session-group {
+  margin-bottom: var(--space-3);
+}
+
+.session-group-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-4) var(--space-4) var(--space-2);
+}
+
+.session-group-toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex: 1;
+  min-width: 0;
+  appearance: none;
+  background: transparent;
+  border: none;
+  padding: 0;
+  color: var(--fg);
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+.session-group-chevron {
+  display: inline-flex;
+  flex-shrink: 0;
+  color: var(--fg-faint);
+}
+
+.session-group-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.session-group-add {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: var(--fg-faint);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: var(--radius-sm);
+  flex-shrink: 0;
+  cursor: pointer;
+}
+
+.session-group-add:hover {
+  color: var(--fg);
+  background: var(--bg-raised);
 }
 
 .main {
@@ -700,7 +883,10 @@ button {
   display: flex;
   align-items: center;
   gap: var(--space-4);
-  padding: var(--space-5) var(--space-8);
+  /* Left padding trimmed so the sidebar-toggle glyph (the icon button
+     adds its own 9px) lines up with the page title and breadcrumb
+     below, which start at ~18px. */
+  padding: var(--space-5) var(--space-8) var(--space-5) var(--space-5);
   /* Pulled out of the flex flow so it can float over the top of
      ``.conversation`` — messages scroll up *behind* the header and
      get visually frosted by the blur stack inside it. ``.main``
@@ -791,8 +977,16 @@ button {
    Traffic-light cluster right edge sits at ~x=70 (origin 16
    + ~54px cluster width). Padding-left lands the hamburger a
    short gap past the cluster. */
+/* The New-chat button sits at the title-bar level, just to the right of
+   the traffic lights, and fills the rest of the row. 80px clears the
+   cluster (origin 16 + ~58px wide); the band stays a drag region and
+   the button is excluded below. Matches the 38px title-bar height the
+   main header uses so the button lines up with the ``igni`` wordmark. */
 :root[data-host="tauri"][data-platform="mac"] .sidebar:not(.closed) .sidebar-head {
-  padding-left: 48px;
+  /* Match the main header's vertical padding (space-4) + 38px height so
+     the New-chat row lines up with the toggle/breadcrumb across the
+     divider instead of riding a couple of pixels higher. */
+  padding: var(--space-4) var(--space-5) var(--space-4) 72px;
   min-height: 38px;
   box-sizing: border-box;
   -webkit-app-region: drag;
@@ -816,7 +1010,7 @@ button {
    ``.app-header``'s default ``padding: 10px 16px`` and the chips
    visibly jitter 2 px down whenever the user opens the sidebar. */
 :root[data-host="tauri"][data-platform="mac"] .sidebar:not(.closed) ~ .main .app-header {
-  padding: var(--space-4) var(--space-8);
+  padding: var(--space-4) var(--space-8) var(--space-4) var(--space-5);
   min-height: 38px;
   box-sizing: border-box;
   -webkit-app-region: drag;
@@ -1339,6 +1533,48 @@ button {
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
   padding: 0 var(--space-2);
+}
+
+/* This chat / All chats scope switch. */
+.chat-search-scope {
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  background: var(--bg-raised);
+  border-radius: var(--radius-sm);
+  flex-shrink: 0;
+}
+.chat-search-scope-btn {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: var(--fg-faint);
+  font: inherit;
+  font-size: var(--text-xs);
+  font-weight: 600;
+  padding: 3px 9px;
+  border-radius: calc(var(--radius-sm) - 2px);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.chat-search-scope-btn:hover {
+  color: var(--fg);
+}
+.chat-search-scope-btn.active {
+  background: var(--bg-surface);
+  color: var(--fg);
+}
+
+/* The chat a cross-chat hit was found in — the result row's leading label. */
+.chat-search-chat {
+  flex-shrink: 0;
+  max-width: 150px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--fg-muted);
 }
 .chat-search-nav,
 .chat-search-close {
@@ -3781,7 +4017,139 @@ button {
 
 .composer-zone {
   flex-shrink: 0;
-  padding: 0 20px 18px;
+  /* Bottom padding matches the sidebar footer's, so the dock row and the
+     account card sit the same distance from the window's edge. */
+  padding: 0 20px var(--space-4);
+}
+
+/* The row under the composer — where igni runs, and the folder — aligned
+   to the composer's own column and its left edge. */
+.composer-dock {
+  max-width: var(--col);
+  margin: var(--space-3) auto 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding-left: var(--space-2);
+}
+
+/* The session + context ring is pushed to the far end of the row, so the
+   folder sits at the left edge and this at the right, both aligned to the
+   composer above. */
+.composer-dock-end {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.dock-menu-wrap {
+  position: relative;
+  display: inline-flex;
+}
+
+/* A quiet text button: an icon, a label, a chevron. Reads as a control
+   without the weight of the header chips. */
+.dock-btn {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+  max-width: 260px;
+  height: 28px;
+  padding: 0 var(--space-4);
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--fg-muted);
+  font: inherit;
+  font-size: var(--text-sm);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color 0.12s, background 0.12s, border-color 0.12s;
+}
+
+.dock-btn:hover:not(:disabled),
+.dock-btn.active {
+  color: var(--fg);
+  background: var(--bg-raised);
+}
+
+.dock-btn:disabled {
+  cursor: default;
+}
+
+/* Read-only sibling of the dock button: the current side when there is
+   no choice to make — it reads, it does not press. */
+.dock-static {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+  height: 28px;
+  padding: 0 var(--space-4);
+  color: var(--fg-muted);
+  font-size: var(--text-sm);
+  white-space: nowrap;
+}
+
+.dock-btn-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The menu rises above the button, left-aligned to it. */
+.dropdown.dock-menu {
+  top: auto;
+  bottom: calc(100% + var(--space-3));
+  left: 0;
+  right: auto;
+  width: max-content;
+  min-width: 200px;
+  max-width: 320px;
+  transform-origin: bottom left;
+}
+
+.dock-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 39;
+}
+
+/* Menu rows line up on a leading check column, so the chosen folder and
+   the actions share one left edge. A row that acts is a ``<button>`` for
+   the keyboard, so strip the browser's button chrome and let it read as
+   a plain row like the rest of igni's menus (hover from ``.popup-item``). */
+.dock-menu .popup-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: var(--fg);
+  font: inherit;
+  font-size: var(--text-md);
+  text-align: left;
+}
+
+.dock-menu .dock-check {
+  display: inline-flex;
+  width: 12px;
+  flex-shrink: 0;
+  color: var(--accent-fg, var(--fg));
+}
+
+.dock-menu .dock-current {
+  cursor: default;
+  color: var(--fg);
+}
+
+.dock-menu .dock-current-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .composer {
@@ -3990,23 +4358,24 @@ button {
 .send-btn {
   appearance: none;
   border: none;
-  width: 34px;
-  height: 34px;
-  border-radius: var(--radius-circle);
-  background: var(--igni-gradient);
-  color: #fff;
+  width: 30px;
+  height: 30px;
+  border-radius: var(--radius-sm);
+  /* A bare arrow, no filled circle — the send affordance sits quietly in
+     the bar, the way Claude's does. */
+  background: transparent;
+  color: var(--fg);
   font-size: var(--text-lg);
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  transition: transform 0.12s ease, box-shadow 0.12s ease, opacity 0.12s;
+  transition: background 0.12s ease, opacity 0.12s;
 }
 
 .send-btn:hover:not(:disabled) {
-  transform: translateY(-1px);
-  box-shadow: 0 6px 18px rgba(249, 115, 22, 0.35);
+  background: var(--bg-raised);
 }
 
 .send-btn:disabled {
@@ -4018,144 +4387,6 @@ button {
   background: var(--bg-raised);
   color: var(--fg);
   border: 1px solid var(--border);
-}
-
-/* Split send button — left half opens the permission-mode
-   picker, right half sends. Same ember gradient as ``.send-btn``
-   so the affordance reads as "the send button, but with
-   options now."
-
-   ``overflow: visible`` is REQUIRED so the dropdown menu
-   anchored to ``bottom: 100%`` on ``.send-mode-menu`` can
-   escape the wrapper's box. The rounded pill shape is
-   produced by per-button ``border-radius`` instead of a
-   wrapper clip. */
-.send-split {
-  position: relative;
-  display: inline-flex;
-  align-items: stretch;
-  height: 34px;
-  background: var(--igni-gradient);
-  border-radius: var(--radius-pill);
-  flex-shrink: 0;
-  transition: transform 0.12s ease, box-shadow 0.12s ease;
-}
-
-.send-split:hover:not(:has(:disabled)) {
-  transform: translateY(-1px);
-  box-shadow: 0 6px 18px rgba(249, 115, 22, 0.35);
-}
-
-.send-split-mode {
-  appearance: none;
-  border: none;
-  /* Per-mode background tint set on ``.send-split[data-mode]``
-     below. ``transparent`` here is the fallback for the
-     default mode — it lets the parent's ember gradient bleed
-     through so Execute reads as the standard send affordance. */
-  background: transparent;
-  color: #fff;
-  font-family: var(--font-ui);
-  font-size: var(--text-sm);
-  font-weight: 500;
-  cursor: pointer;
-  padding: 0 var(--space-5) 0 var(--space-7);
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  border-right: 1px solid rgba(255, 255, 255, 0.25);
-  border-radius: 9999px 0 0 9999px;
-  white-space: nowrap;
-  transition: background 0.15s ease;
-}
-
-.send-split-mode:hover {
-  background: rgba(255, 255, 255, 0.12);
-}
-
-/* ── Per-mode tinting via the WHOLE wrapper ─────────────────
-   The wrapper itself paints a single 135° gradient from the
-   mode color (top-left) into the ember red (bottom-right).
-   That way the left half and the right half are colored by
-   the same continuous gradient — no seam at the divider,
-   the transition is smooth, and the right half still reads
-   as "orange send" because the gradient's end stop is the
-   ember red.
-
-   The button children stay ``background: transparent`` (set
-   above) so the wrapper's gradient shows through both halves.
-   Default mode keeps the original ``--igni-gradient`` (no
-   per-mode rule needed). */
-
-.send-split[data-mode="plan"] {
-  background: linear-gradient(135deg, #2563eb 0%, #dc2626 100%);
-}
-
-.send-split[data-mode="acceptEdits"] {
-  /* Yellow → red gradient. Pure amber/orange (``#d97706``)
-     was visually indistinguishable from the igni-orange
-     default because the ember gradient is itself orange-to-red
-     — auto-edit looked like a slightly darker Execute. Yellow
-     is the natural "permissive but watch the shell" signal and
-     clearly distinct from both Execute (orange) and Bypass (red). */
-  background: linear-gradient(135deg, #eab308 0%, #dc2626 100%);
-}
-
-.send-split[data-mode="bypassPermissions"] {
-  /* Bypass goes red-to-red — keep it ALL red so the
-     "danger" signal isn't softened by the orange end stop. */
-  background: linear-gradient(135deg, #ef4444 0%, #991b1b 100%);
-}
-
-.send-split[data-mode="dontAsk"] {
-  /* Deny-by-default: the strictest mode there is, and not one the
-     composer can pick. Slate, so it reads as "closed" rather than as
-     another shade of the permissive end of the scale. */
-  background: linear-gradient(135deg, #475569 0%, #dc2626 100%);
-}
-
-.send-split[data-mode="unknown"] {
-  /* The backend named a mode this client does not know. Neutral grey:
-     the button says it does not know rather than borrowing another
-     mode's colour. */
-  background: linear-gradient(135deg, #64748b 0%, #b91c1c 100%);
-}
-
-/* The divider between the two halves needs to be invisible
-   over the seamless gradient. Drop the hard border line and
-   use a faint inset shadow instead — the eye reads it as a
-   subtle pill seam without breaking the gradient continuity. */
-.send-split[data-mode]:not([data-mode="default"]) .send-split-mode,
-.send-split[data-mode="default"] .send-split-mode {
-  border-right: 1px solid rgba(255, 255, 255, 0.18);
-}
-
-.send-split-mode-label {
-  line-height: 1;
-}
-
-.send-split-go {
-  appearance: none;
-  border: none;
-  background: transparent;
-  color: #fff;
-  cursor: pointer;
-  width: 38px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: var(--text-lg);
-  border-radius: 0 9999px 9999px 0;
-  transition: opacity 0.12s;
-}
-
-.send-split-go:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.08);
-}
-
-.send-split-go:disabled {
-  opacity: 0.4;
-  cursor: default;
 }
 
 /* Compound selector (``.popup-menu.send-mode-menu``) beats
@@ -4223,6 +4454,14 @@ button {
   font-size: var(--text-sm);
   font-family: var(--font-mono);
   flex-wrap: wrap;
+}
+
+/* The session and context moved to the composer dock; watcher, backend
+   and extension chips only appear when there is something to say. With
+   none of them the row collapses rather than leaving a floating gap. */
+.statusline:empty {
+  display: none;
+  margin: 0;
 }
 
 /* ── Popup menus (slash / mention) ──────────────────────────────── */
@@ -4877,6 +5116,9 @@ button {
   --page-chrome-h: 82px;
 }
 
+/* The breadcrumb is portaled up into the app header (next to the sidebar
+   toggle), so it no longer sits inside the page; the title's own
+   border-bottom is the page's separator again. */
 .main--paged > .conversation-frame,
 .main--paged > .composer-zone {
   visibility: hidden;
@@ -4898,6 +5140,27 @@ button {
      the conversation — started lower than it needed to. */
   padding: 0 18px 0 14px;
   font-size: var(--text-sm);
+}
+
+/* The header slot the breadcrumb is portaled into — sits right of the
+   sidebar toggle. The crumbs drop their page padding and stay on one
+   line, truncating rather than pushing the search/bell controls. */
+.header-crumbs {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.header-crumbs .page-crumbs {
+  padding: 0;
+  flex-wrap: nowrap;
+  overflow: hidden;
+}
+
+.header-crumbs .page-crumb,
+.header-crumbs .page-crumb-name {
+  white-space: nowrap;
 }
 
 /* Out of the flow — but only on a page whose columns sit *beside* it.
@@ -5581,6 +5844,28 @@ button {
   color: var(--fg);
 }
 
+/* The permission-mode chip, beside the model — same quiet treatment, and
+   the anchor for its upward menu. */
+.composer-mode-wrap {
+  position: relative;
+  display: inline-flex;
+}
+
+.chip.composer-mode {
+  height: 24px;
+  padding: 0 9px;
+  font-size: var(--text-sm);
+  gap: var(--space-2);
+  flex-shrink: 0;
+  white-space: nowrap;
+  color: var(--fg-faint);
+}
+
+.chip.composer-mode:hover,
+.chip.composer-mode[aria-expanded="true"] {
+  color: var(--fg);
+}
+
 /* Model picker: compact dropdown anchored above its chip (bottom
    right of the composer), not the full-width autocomplete strip. */
 .popup-menu.model-menu {
@@ -5952,52 +6237,162 @@ button {
   color: var(--danger);
 }
 
-.ctx-meter {
+/* Session + context ring — a dial that fills as the session's context
+   does, the short session id beside it, opening one readout. */
+.session-ctx-wrap {
+  position: relative;
+  display: inline-flex;
+}
+
+.session-ctx {
+  appearance: none;
   display: inline-flex;
   align-items: center;
-  gap: 7px;
-  font-size: var(--text-sm);
-  color: var(--fg-faint);
-  padding: 3px 4px;
-}
-
-.ctx-meter-label {
-  color: var(--fg-faint);
-}
-
-.ctx-meter-track {
-  width: 64px;
-  height: 5px;
+  gap: var(--space-3);
+  /* Same height as the folder control so the two level across the row. */
+  height: 28px;
+  padding: 0 var(--space-4) 0 var(--space-2);
+  border: none;
   border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--fg-muted);
+  cursor: pointer;
+  line-height: 0;
+}
+
+.session-ctx:hover,
+.session-ctx[aria-expanded="true"] {
   background: var(--bg-raised);
-  overflow: hidden;
-  flex-shrink: 0;
+  color: var(--fg);
 }
 
-.ctx-meter-fill {
-  display: block;
-  height: 100%;
-  border-radius: inherit;
-  transition: width 0.3s ease, background 0.3s ease;
+.session-ctx-id {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  line-height: 1;
+  color: inherit;
 }
 
-.ctx-meter.tone-ok .ctx-meter-fill {
-  background: var(--success);
-}
-.ctx-meter.tone-warn .ctx-meter-fill {
-  background: var(--warning);
-}
-.ctx-meter.tone-danger .ctx-meter-fill {
-  background: var(--danger);
+.ctx-ring-track {
+  stroke: var(--bg-raised);
 }
 
-.ctx-meter-text {
-  font-variant-numeric: tabular-nums;
+.ctx-ring-fill {
+  transition: stroke-dasharray 0.3s ease, stroke 0.3s ease;
+}
+
+.ctx-ring.tone-ok .ctx-ring-fill {
+  stroke: var(--success);
+}
+.ctx-ring.tone-warn .ctx-ring-fill {
+  stroke: var(--warning);
+}
+.ctx-ring.tone-danger .ctx-ring-fill {
+  stroke: var(--danger);
+}
+
+/* The readout opens upward from the control, aligned to its right edge
+   (it sits at the right end of the dock). */
+.dropdown.ctx-pop {
+  top: auto;
+  bottom: calc(100% + var(--space-3));
+  left: auto;
+  right: 0;
+  transform-origin: bottom right;
+  width: 240px;
+  padding: var(--space-5) var(--space-6);
+  cursor: default;
+}
+
+/* The session row at the top of the readout — click to copy the full id. */
+.session-ctx-copy {
+  appearance: none;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-4);
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  margin: calc(-1 * var(--space-2)) calc(-1 * var(--space-3)) 0;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--fg);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.session-ctx-copy:hover:not(:disabled) {
+  background: var(--bg-raised);
+}
+
+.session-ctx-copy-head {
+  font-weight: 500;
+}
+
+.session-ctx-copy code {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
   color: var(--fg-muted);
 }
 
-.ctx-meter-pct {
-  color: var(--fg-faint);
+.ctx-pop-divider {
+  height: 1px;
+  margin: var(--space-4) 0;
+  background: var(--border-soft);
+}
+
+.ctx-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 39;
+}
+
+.ctx-pop-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  font-size: var(--text-md);
+  color: var(--fg);
+  font-weight: 500;
+}
+
+.ctx-pop-pct {
+  font-variant-numeric: tabular-nums;
+  color: var(--fg-muted);
+  font-weight: 600;
+}
+
+.ctx-pop-bar {
+  height: 6px;
+  margin: var(--space-4) 0 var(--space-3);
+  border-radius: var(--radius-pill);
+  background: var(--bg-raised);
+  overflow: hidden;
+}
+
+.ctx-pop-bar-fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  transition: width 0.3s ease;
+}
+
+.ctx-pop.tone-ok .ctx-pop-bar-fill {
+  background: var(--success);
+}
+.ctx-pop.tone-warn .ctx-pop-bar-fill {
+  background: var(--warning);
+}
+.ctx-pop.tone-danger .ctx-pop-bar-fill {
+  background: var(--danger);
+}
+
+.ctx-pop-sub {
+  font-size: var(--text-sm);
+  color: var(--fg-muted);
+  font-variant-numeric: tabular-nums;
 }
 
 /* ── Scheduled tasks panel ─────────────────────────────────────── */
@@ -6910,12 +7305,19 @@ button {
 }
 
 /* ── MCP: server row ──────────────────────────────────────────── */
+/* Each server is a card, matching the extensions and plugins lists;
+   the header stays a full-width button so expand/collapse still works. */
 .mcp-server {
-  border-bottom: 1px solid var(--border-soft);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-lg);
+  background: var(--bg-surface);
+  padding: var(--space-4) var(--space-5);
+  margin-bottom: var(--space-3);
 }
 
 :is(.drawer-body, .page-body) .row.mcp-server-row {
   border-bottom: none;
+  padding: 0;
 }
 
 /* The heading is a button when the server has something to open, so
@@ -7231,10 +7633,181 @@ button.mcp-server-head:focus-visible {
 }
 
 /* ── Plugins panel ─────────────────────────────────────────────── */
+/* One header row: the tab toggle on the left, the icon controls pushed
+   to the right. The extras slot only spans the row when it holds this
+   bar, so other pages that use the slot keep their content sizing. */
+.page-head-extras:has(.plugins-headerbar),
+.drawer-head-extras:has(.plugins-headerbar) {
+  flex: 1;
+  min-width: 0;
+}
+
+.plugins-headerbar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  width: 100%;
+}
+
 .plugins-tabs {
   display: flex;
   gap: var(--space-2);
+}
+
+.plugins-controls {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
   margin-left: auto;
+}
+
+/* Bare icons in the header — no boxed border around each one. A soft
+   round hover is the only affordance, so the row reads as controls, not
+   a row of buttons. */
+.plugins-controls .kb-icon-btn {
+  border: none;
+  background: transparent;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-circle);
+  color: var(--fg-faint);
+}
+
+.plugins-controls .kb-icon-btn:hover:not(:disabled),
+.plugins-controls .kb-icon-btn.is-active {
+  border: none;
+  color: var(--fg);
+  background: var(--bg-surface);
+}
+
+/* Filter / sort dropdowns. */
+.plugins-menu-wrap {
+  position: relative;
+  display: inline-flex;
+}
+
+.plugins-menu-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+}
+
+.plugins-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 41;
+  min-width: 184px;
+  max-height: 340px;
+  overflow-y: auto;
+  padding: var(--space-3);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-lg);
+  background: var(--bg-surface);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.22);
+}
+
+.plugins-menu-head {
+  position: sticky;
+  top: 0;
+  background: var(--bg-surface);
+}
+
+.plugins-menu-head {
+  padding: var(--space-2) var(--space-3) var(--space-3);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--fg-faint);
+}
+
+.plugins-menu-item {
+  appearance: none;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-3) var(--space-3);
+  border: none;
+  background: transparent;
+  border-radius: var(--radius-sm);
+  color: var(--fg);
+  font: inherit;
+  font-size: var(--text-sm);
+  text-align: left;
+  cursor: pointer;
+}
+
+.plugins-menu-item:hover {
+  background: var(--bg-raised);
+}
+
+.plugins-menu-item.active {
+  color: var(--fg);
+}
+
+.plugins-menu-item svg {
+  color: var(--accent, #f97316);
+  flex-shrink: 0;
+}
+
+/* Search as a pill that only appears once opened. */
+.plugins-searchbox {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  height: 31px;
+  padding: 0 var(--space-3) 0 var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  background: var(--bg-surface);
+  color: var(--fg-faint);
+  width: 260px;
+  max-width: 42vw;
+}
+
+.plugins-searchbox-input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  background: transparent;
+  color: var(--fg);
+  font: inherit;
+  font-size: var(--text-sm);
+  outline: none;
+}
+
+.plugins-searchbox-clear {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  border: none;
+  background: transparent;
+  color: var(--fg-faint);
+  border-radius: var(--radius-circle);
+  cursor: pointer;
+}
+
+.plugins-searchbox-clear:hover {
+  color: var(--fg);
+  background: var(--bg-raised);
+}
+
+/* A real ring spinner in the refresh button while a fetch is in flight,
+   rather than rotating the refresh glyph itself. */
+.plugins-spinner {
+  display: inline-block;
+  width: 13px;
+  height: 13px;
+  border-radius: var(--radius-circle);
+  border: 1.5px solid color-mix(in srgb, var(--fg-faint) 35%, transparent);
+  border-top-color: var(--fg);
+  animation: igni-spin 0.8s linear infinite;
 }
 
 .plugins-tab {
@@ -7245,7 +7818,7 @@ button.mcp-server-head:focus-visible {
   font-size: var(--text-sm);
   font-weight: 600;
   padding: var(--space-2) var(--space-5);
-  border-radius: var(--radius-pill);
+  border-radius: var(--radius-sm);
   cursor: pointer;
   display: inline-flex;
   align-items: center;
@@ -7271,8 +7844,28 @@ button.mcp-server-head:focus-visible {
 }
 
 .plugins-tab.active .plugins-tab-count {
-  background: var(--accent, #f97316);
-  color: #0b0b0c;
+  /* Match the notification badge: orange gradient, white text. */
+  background: var(--igni-gradient);
+  color: #fff;
+}
+
+/* The reverse of the "/" menu's Manage entry: the page says the command
+   that reopens it, so the fast path stays discoverable from here. */
+.plugins-cmd-hint {
+  display: inline-flex;
+  align-items: center;
+  align-self: center;
+  margin-left: var(--space-3);
+}
+
+.plugins-cmd-hint code {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--fg-faint);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-sm);
+  padding: 2px 7px;
 }
 
 .plugins-toolbar {
@@ -7302,6 +7895,134 @@ button.mcp-server-head:focus-visible {
 
 .plugins-list {
   gap: var(--space-4);
+}
+
+/* Marketplace catalog — a grid of cards, the way a store of things to add
+   reads, rather than a stack of full-width rows. */
+.plugins-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-5);
+}
+
+@media (max-width: 760px) {
+  .plugins-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Soft filled cards, no border — the fill alone separates them from the
+   page, the way Claude's marketplace reads. A border on every card plus
+   a coloured icon on every card is what made the grid feel busy. */
+.plugins-gcard {
+  display: flex;
+  gap: var(--space-5);
+  padding: var(--space-7);
+  border: 1px solid transparent;
+  border-radius: var(--radius-lg);
+  background: var(--bg-surface);
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.12s ease, background 0.12s ease;
+}
+
+.plugins-gcard:hover,
+.plugins-gcard:focus-visible {
+  border-color: var(--border-soft);
+  background: var(--bg-raised);
+  outline: none;
+}
+
+/* A neutral icon tile for things without an icon of their own: a quiet
+   square, not a per-name colour. Sits a shade darker than its card. */
+.entity-glyph {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  border-radius: 10px;
+  background: var(--bg);
+  border: 1px solid var(--border-soft);
+  color: var(--fg-muted);
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+.plugins-gcard-icon {
+  flex-shrink: 0;
+  display: inline-flex;
+}
+
+.plugins-gcard-body {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.plugins-gcard-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.plugins-gcard-top .plugins-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.plugins-gcard-desc {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--fg-muted);
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.plugins-gcard-foot {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-top: auto;
+  padding-top: var(--space-2);
+}
+
+/* The add control: a quiet + that turns into a green check once added. */
+.plugins-add {
+  appearance: none;
+  flex-shrink: 0;
+  width: 26px;
+  height: 26px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-soft);
+  background: var(--bg-raised);
+  color: var(--fg-muted);
+  font-size: var(--text-lg);
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: color 0.12s, border-color 0.12s, background 0.12s;
+}
+
+.plugins-add:hover:not(:disabled) {
+  color: var(--fg);
+  border-color: var(--border);
+}
+
+.plugins-add.is-installed {
+  color: var(--success, #10b981);
+  background: color-mix(in srgb, var(--success, #10b981) 14%, transparent);
+  border-color: transparent;
+  cursor: default;
 }
 
 .plugins-card {
@@ -7362,9 +8083,6 @@ button.mcp-server-head:focus-visible {
 .plugins-source {
   font-size: var(--text-xs);
   color: var(--fg-faint);
-  padding: 1px 6px;
-  background: var(--bg-raised);
-  border-radius: 4px;
 }
 
 .plugins-tag {
@@ -7619,14 +8337,34 @@ button.mcp-server-head:focus-visible {
 }
 
 .plugin-detail-hero {
+  display: flex;
+  gap: var(--space-6);
   padding-bottom: var(--space-7);
   margin-bottom: var(--space-2);
   border-bottom: 1px solid var(--border-soft);
 }
 
+.plugin-detail-icon {
+  flex-shrink: 0;
+  display: inline-flex;
+  margin-top: 2px;
+}
+
+.plugin-detail-main {
+  min-width: 0;
+  flex: 1;
+}
+
 .plugin-detail-title-row {
   gap: var(--space-5);
   flex-wrap: wrap;
+}
+
+.plugin-detail-caps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin-bottom: var(--space-5);
 }
 
 .plugin-detail-title {
@@ -10071,8 +10809,38 @@ button.mcp-server-head:focus-visible {
    `list_extensions` long before anything drew it, so the grant was
    declarable and unreachable. */
 
-.ext-row {
-  display: block;
+/* Each installed extension is a card in the list — a monogram beside
+   its identity, state badge, and any settings — matching the plugins
+   marketplace card aesthetic. The :is() scope beats the generic
+   .row rule that would otherwise lay it out as a bordered flex strip. */
+:is(.drawer-body, .page-body) .ext-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-start;
+  gap: var(--space-4);
+  padding: var(--space-5);
+  margin-bottom: var(--space-3);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-lg);
+  background: var(--bg-surface);
+}
+
+.ext-icon {
+  flex-shrink: 0;
+  display: inline-flex;
+  margin-top: 1px;
+}
+
+.ext-body {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.ext-title {
+  min-width: 0;
 }
 
 /* A message an extension posted (host.chat.post): labelled, never
@@ -10278,16 +11046,72 @@ button.mcp-server-head:focus-visible {
 }
 
 .dropdown.account-menu {
-  width: 220px;
+  width: 260px;
 }
 
+/* Stack the identity: "Signed in as <name>" on its own line, then the
+   address — a flex row (the .popup-item default) sat them side by side
+   and the base nowrap+ellipsis clipped both to "D…" / "name@v…". */
 .account-menu .popup-item.account-menu-who {
   cursor: default;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+}
+
+.account-menu .account-menu-who .desc {
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  max-width: 100%;
+  word-break: break-word;
+  line-height: 1.35;
 }
 
 .account-menu .account-menu-name {
   color: var(--fg);
-  font-weight: 500;
+  font-weight: 600;
+}
+
+/* A hairline between menu groups (identity / appearance / log out). */
+.account-menu-sep {
+  height: 1px;
+  margin: var(--space-2) 0;
+  background: var(--border-soft);
+}
+
+/* Appearance row: label left, the theme toggle pushed to the right. */
+.account-menu .popup-item.account-menu-theme {
+  align-items: center;
+  cursor: default;
+}
+
+.account-menu-theme .theme-toggle {
+  margin-left: auto;
+}
+
+/* The igni flame, wordmark and build, at the top of the menu — the
+   app's identity header. */
+.account-menu-brand {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4) var(--space-3);
+  font-size: var(--text-sm);
+  color: var(--fg-faint);
+}
+
+.account-menu-brand > span {
+  font-weight: 700;
+  color: var(--fg);
+}
+
+/* The address on its own quiet line under "Signed in as …". */
+.account-menu .account-menu-email {
+  display: block;
+  margin-top: 2px;
+  color: var(--fg-faint);
+  font-size: var(--text-xs);
 }
 
 .welcome-mark {
@@ -10469,4 +11293,598 @@ button.mcp-server-head:focus-visible {
   to {
     transform: rotate(360deg);
   }
+}
+
+/* ── Files: a read-only view of the project tree ──────────────────────
+   A full-bleed two-pane page (code + navigator), so it opts out of the
+   centred reading measure the other pages sit in and manages its own
+   scroll inside each pane. */
+.page:has(.files-layout) .page-body {
+  display: flex;
+  overflow: hidden;
+  padding: 0;
+}
+.page:has(.files-layout) .page-measure {
+  flex: 1;
+  min-width: 0;
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+}
+.files-layout {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+}
+.files-main {
+  order: 2;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.files-nav {
+  order: 3;
+  flex: 0 0 300px;
+  width: 300px;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  border-left: 1px solid var(--border-soft);
+  background: var(--bg);
+}
+.files-layout[data-side="left"] .files-nav {
+  order: 1;
+  border-left: none;
+  border-right: 1px solid var(--border-soft);
+}
+
+/* Open-file tabs. */
+.files-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 7px 10px 0;
+  overflow-x: auto;
+  border-bottom: 1px solid var(--border-soft);
+  scrollbar-width: none;
+}
+.files-tabs::-webkit-scrollbar { display: none; }
+.files-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 5px 4px 5px 11px;
+  border: 1px solid transparent;
+  border-bottom: none;
+  border-radius: 9px 9px 0 0;
+  font-size: var(--text-sm);
+  color: var(--fg-muted);
+  background: transparent;
+  white-space: nowrap;
+}
+.files-tab.is-active {
+  background: var(--bg-surface);
+  color: var(--fg);
+  border-color: var(--border-soft);
+  margin-bottom: -1px;
+}
+.files-tab-label {
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+.files-tab-close.kb-icon-btn {
+  border: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 5px;
+  color: var(--fg-faint);
+  opacity: 0.55;
+}
+.files-tab:hover .files-tab-close.kb-icon-btn,
+.files-tab-close.kb-icon-btn:hover {
+  opacity: 1;
+  background: var(--bg-raised);
+}
+
+/* The filename row with the read-only mark and the view controls. */
+.files-subhead {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 12px;
+  min-height: 42px;
+  border-bottom: 1px solid var(--border-soft);
+}
+.files-subhead-name {
+  font-size: var(--text-md);
+  font-weight: 600;
+  color: var(--fg);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.files-spacer { flex: 1; }
+.files-readonly {
+  font-size: var(--text-xs);
+  color: var(--fg-faint);
+  letter-spacing: 0.02em;
+}
+.files-subhead-sep {
+  width: 1px;
+  height: 16px;
+  background: var(--border-soft);
+  margin: 0 3px;
+}
+.files-subhead .kb-icon-btn {
+  border: none;
+  width: 27px;
+  height: 27px;
+  border-radius: 7px;
+  color: var(--fg-faint);
+}
+.files-subhead .kb-icon-btn:hover:not(:disabled),
+.files-subhead .kb-icon-btn.is-on {
+  border: none;
+  color: var(--fg);
+  background: var(--bg-surface);
+}
+
+/* The overflow menu. */
+.files-menu-anchor { position: relative; display: inline-flex; }
+.files-menu-scrim { position: fixed; inset: 0; z-index: 40; }
+.files-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 41;
+  min-width: 238px;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-soft);
+  border-radius: 12px;
+  box-shadow: var(--shadow-pop);
+}
+.files-menu-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  width: 100%;
+  padding: 8px 10px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--fg);
+  font-size: var(--text-md);
+  text-align: left;
+  cursor: pointer;
+}
+.files-menu-item:hover { background: var(--bg-raised); }
+.files-menu-item kbd {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--fg-faint);
+  background: transparent;
+  border: none;
+  padding: 0;
+}
+.files-menu-value { color: var(--fg-faint); font-size: var(--text-sm); }
+.files-menu-check { color: var(--accent); font-size: var(--text-md); }
+.files-menu-sep { height: 1px; background: var(--border-soft); margin: 4px 6px; }
+
+/* The code pane: a sticky line-number gutter beside highlighted text. */
+.files-code {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 8px 0 28px;
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  line-height: 1.55;
+  background: var(--bg);
+}
+.files-code[data-wrap="on"] { overflow-x: hidden; }
+.files-line { display: flex; align-items: flex-start; }
+.files-line-no {
+  flex: 0 0 auto;
+  width: 56px;
+  padding: 0 16px 0 10px;
+  text-align: right;
+  color: var(--fg-faint);
+  user-select: none;
+  position: sticky;
+  left: 0;
+  background: var(--bg);
+}
+.files-line-src {
+  flex: 0 0 auto;
+  display: block;
+  white-space: pre;
+  padding-right: 20px;
+}
+.files-code[data-wrap="on"] .files-line-src {
+  flex: 1 1 auto;
+  min-width: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+/* The viewer paints through theme.css's own .hljs-* token colours; the
+   base .hljs rule's background/padding would fight the pane, so drop
+   them and let the tokens show on the pane's own ground. */
+.files-code .hljs { background: transparent; color: var(--fg); padding: 0; }
+.files-code-state { padding: 28px 24px; font-size: var(--text-sm); }
+.files-code-empty { color: var(--fg-faint); }
+
+/* The navigator: one search box, then the folder-or-find list. */
+.files-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 11px 12px;
+  border-bottom: 1px solid var(--border-soft);
+  color: var(--fg-faint);
+}
+.files-search-input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: var(--fg);
+  font-size: var(--text-md);
+}
+.files-search-input::placeholder { color: var(--fg-faint); }
+.files-search-clear.kb-icon-btn {
+  border: none;
+  width: 20px;
+  height: 20px;
+  color: var(--fg-faint);
+}
+.files-search-clear.kb-icon-btn:hover { background: var(--bg-raised); color: var(--fg); }
+.files-nav-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.files-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 7px 10px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--fg-muted);
+  font-size: var(--text-md);
+  text-align: left;
+  cursor: pointer;
+}
+.files-row:hover { background: var(--bg-surface); color: var(--fg); }
+.files-row.is-active {
+  background: color-mix(in srgb, var(--igni-orange) 15%, transparent);
+  color: var(--fg);
+}
+.files-row-icon { display: inline-flex; flex: 0 0 auto; color: var(--fg-faint); }
+.files-row--dir .files-row-icon { color: var(--accent); }
+.files-row-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.files-row--up { color: var(--fg-faint); }
+.files-row--up:hover { color: var(--fg); }
+.files-nav-note { padding: 10px 14px; font-size: var(--text-xs); color: var(--fg-faint); }
+.files-nav-state, .files-nav-empty { padding: 12px 14px; font-size: var(--text-sm); color: var(--fg-faint); }
+
+/* With no wrap the code pane scrolls sideways; stretch every line to at
+   least the viewport so the sticky gutter has a full-width box to pin
+   within, and let its own content widen it past that. */
+.files-code[data-wrap="off"] .files-line { min-width: 100%; width: max-content; }
+
+/* ── Files dock: the read-only viewer, split to the right of the chat ──
+   A third flex column in ``.shell`` beside ``.main`` rather than a page
+   over it, so the chat stays live on the left. Its width is dragged on
+   the left edge and remembered per device. */
+.main { min-width: 0; }
+.files-dock {
+  flex: 0 0 auto;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  border-left: 1px solid var(--border-soft);
+  position: relative;
+}
+.files-dock-resize {
+  position: absolute;
+  left: -3px;
+  top: 0;
+  bottom: 0;
+  width: 7px;
+  cursor: col-resize;
+  z-index: 6;
+  touch-action: none;
+}
+.files-dock-resize:hover {
+  background: color-mix(in srgb, var(--accent) 35%, transparent);
+}
+.files-dock-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 8px 0 12px;
+  border-bottom: 1px solid var(--border-soft);
+}
+.files-dock-head .files-tabs {
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  border-bottom: none;
+}
+.files-dock-close.kb-icon-btn {
+  flex: 0 0 auto;
+  border: none;
+  margin-bottom: 6px;
+  color: var(--fg-faint);
+}
+.files-dock-close.kb-icon-btn:hover {
+  border: none;
+  color: var(--fg);
+  background: var(--bg-surface);
+}
+.files-viewer-wrap {
+  order: 2;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.files-code-state { flex: 1; }
+
+/* The header's folder button, beside the bell. */
+.chip-files.active {
+  color: var(--fg);
+  background: var(--bg-surface);
+  border-color: var(--border);
+}
+
+/* Full screen: the dock takes the whole window; the chat and the
+   sessions rail step aside until it is restored. */
+.shell:has(.files-dock--full) .main,
+.shell:has(.files-dock--full) .sidebar {
+  display: none;
+}
+.files-dock--full {
+  flex: 1 1 auto;
+  width: auto;
+  border-left: none;
+}
+.files-dock-expand.kb-icon-btn,
+.files-dock-close.kb-icon-btn {
+  flex: 0 0 auto;
+  border: none;
+  margin-bottom: 6px;
+  color: var(--fg-faint);
+}
+.files-dock-expand.kb-icon-btn:hover,
+.files-dock-close.kb-icon-btn:hover {
+  border: none;
+  color: var(--fg);
+  background: var(--bg-surface);
+}
+
+/* Full screen on macOS Tauri: the dock's tab row now reaches the
+   top-left, where the window's traffic lights float — give it the same
+   gutter the sidebar and header use so the first tab clears the cluster,
+   and keep the empty row a drag handle with the tabs and controls
+   excluded. In the split it sits on the right, clear of the lights, so
+   this is full-screen only. */
+:root[data-host="tauri"][data-platform="mac"] .files-dock--full .files-dock-head {
+  padding-left: 80px;
+  -webkit-app-region: drag;
+  app-region: drag;
+}
+:root[data-host="tauri"][data-platform="mac"] .files-dock--full .files-dock-head .files-tab,
+:root[data-host="tauri"][data-platform="mac"] .files-dock--full .files-dock-head button {
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
+}
+
+/* ── Rendered markdown (a read-only .md shows formatted, not as source) */
+.files-md {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  background: var(--bg);
+}
+.files-md-body {
+  max-width: 820px;
+  margin: 0 auto;
+  padding: 24px 28px 48px;
+  font-size: var(--text-lg);
+  line-height: 1.65;
+  color: var(--fg);
+}
+.files-md-body > :first-child { margin-top: 0; }
+.files-md-body h1,
+.files-md-body h2,
+.files-md-body h3,
+.files-md-body h4 {
+  line-height: 1.3;
+  font-weight: 650;
+  margin: 1.6em 0 0.6em;
+}
+.files-md-body h1 { font-size: 1.7em; }
+.files-md-body h2 { font-size: 1.35em; }
+.files-md-body h3 { font-size: 1.15em; }
+.files-md-body h1,
+.files-md-body h2 {
+  padding-bottom: 0.3em;
+  border-bottom: 1px solid var(--border-soft);
+}
+.files-md-body p,
+.files-md-body ul,
+.files-md-body ol,
+.files-md-body blockquote,
+.files-md-body table { margin: 0.75em 0; }
+.files-md-body ul,
+.files-md-body ol { padding-left: 1.6em; }
+.files-md-body li { margin: 0.25em 0; }
+.files-md-body a { color: var(--accent); text-decoration: none; }
+.files-md-body a:hover { text-decoration: underline; }
+.files-md-body code {
+  font-family: var(--font-mono);
+  font-size: 0.88em;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-soft);
+  border-radius: 5px;
+  padding: 0.1em 0.35em;
+}
+/* Fenced code renders through the chat's CodeBlock (copy + collapse),
+   but its box comes from ``.msg-assistant pre`` — a chat-only ancestor
+   the viewer has not got — so the box is drawn here, matching that look,
+   and the inline-code chrome is cleared off the code inside it. */
+.files-md-body .code-block-wrap { margin: 0.9em 0; }
+.files-md-body pre {
+  background: var(--bg-inset);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius);
+  padding: var(--space-7);
+  overflow-x: auto;
+  font-family: var(--font-mono);
+  font-size: var(--text-md);
+  line-height: 1.6;
+}
+.files-md-body pre code {
+  background: none;
+  border: none;
+  padding: 0;
+}
+.files-md-body blockquote {
+  border-left: 3px solid var(--border);
+  padding-left: 1em;
+  color: var(--fg-muted);
+}
+.files-md-body hr {
+  border: none;
+  border-top: 1px solid var(--border-soft);
+  margin: 1.6em 0;
+}
+.files-md-body img { max-width: 100%; border-radius: 8px; }
+.files-md-body table { border-collapse: collapse; display: block; overflow-x: auto; }
+.files-md-body th,
+.files-md-body td {
+  border: 1px solid var(--border-soft);
+  padding: 6px 11px;
+  text-align: left;
+}
+.files-md-body th { background: var(--bg-surface); font-weight: 600; }
+
+/* The Source / Preview toggle, shown for a markdown file. */
+.files-md-toggle {
+  border: 1px solid var(--border-soft);
+  background: transparent;
+  color: var(--fg-muted);
+  font-size: var(--text-xs);
+  padding: 3px 9px;
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+}
+.files-md-toggle:hover { color: var(--fg); border-color: var(--border); background: var(--bg-surface); }
+
+/* The card for a file the text viewer cannot show (PDF, image, binary). */
+.files-unsupported {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  text-align: center;
+  padding: 32px;
+  color: var(--fg-muted);
+}
+.files-unsupported-icon { color: var(--fg-faint); margin-bottom: 6px; }
+.files-unsupported-title { font-size: var(--text-lg); color: var(--fg); margin: 0; }
+.files-unsupported-note { font-size: var(--text-sm); max-width: 320px; margin: 0; }
+.files-unsupported-open {
+  margin-top: 12px;
+  border: 1px solid var(--border);
+  background: var(--bg-surface);
+  color: var(--fg);
+  font-size: var(--text-sm);
+  padding: 7px 16px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+.files-unsupported-open:hover { background: var(--bg-raised); }
+
+/* Markdown HTML the file renderer now allows (details, badges, task
+   lists, alignment) gets the small amount of styling it needs. */
+.files-md-body [align="center"] { text-align: center; }
+.files-md-body [align="right"] { text-align: right; }
+.files-md-body img[align="right"] { float: right; margin: 0 0 1em 1em; }
+.files-md-body img[align="left"] { float: left; margin: 0 1em 1em 0; }
+.files-md-body details {
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+  padding: 8px 12px;
+  margin: 0.9em 0;
+}
+.files-md-body summary { cursor: pointer; font-weight: 600; }
+.files-md-body kbd {
+  font-family: var(--font-mono);
+  font-size: 0.82em;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-bottom-width: 2px;
+  border-radius: 5px;
+  padding: 1px 5px;
+}
+.files-md-body mark { background: color-mix(in srgb, var(--igni-orange) 30%, transparent); color: inherit; }
+.files-md-body ul.contains-task-list { list-style: none; padding-left: 0.4em; }
+.files-md-body .task-list-item { display: flex; align-items: flex-start; gap: 0.5em; }
+.files-md-body .task-list-item input { margin-top: 0.4em; }
+
+/* Inline image and PDF preview (read as bytes). */
+.files-image {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 24px;
+  background:
+    repeating-conic-gradient(var(--bg-surface) 0% 25%, transparent 0% 50%) 50% / 22px 22px;
+}
+.files-image-el {
+  max-width: 100%;
+  height: auto;
+  border-radius: 6px;
+  box-shadow: 0 2px 14px rgba(0, 0, 0, 0.25);
+}
+.files-pdf {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  border: none;
+  background: var(--bg-surface);
 }

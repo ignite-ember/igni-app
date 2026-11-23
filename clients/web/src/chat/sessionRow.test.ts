@@ -24,6 +24,7 @@ describe("SessionRow", () => {
       name: "Named",
       detail: "s1",
       has_paused_run: false,
+      folder: "",
     });
     expect(new SessionRow("s1", "", 0).toEntry().name).toBe("s1");
     const dated = new SessionRow("s1", "", 1_700_000_000).toEntry();
