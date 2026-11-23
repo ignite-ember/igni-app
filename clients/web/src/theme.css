@@ -7635,11 +7635,25 @@ button.mcp-server-head:focus-visible {
 /* ── Plugins panel ─────────────────────────────────────────────── */
 /* One header row: the tab toggle on the left, the icon controls pushed
    to the right. The extras slot only spans the row when it holds this
-   bar, so other pages that use the slot keep their content sizing. */
+   bar — or, on the MCPs and Extensions pages, the bare controls group
+   (which carries ``margin-left: auto``) — so other pages that use the
+   slot keep their content sizing. Without the span the controls have no
+   room to push against and sit against the title on the left. */
 .page-head-extras:has(.plugins-headerbar),
-.drawer-head-extras:has(.plugins-headerbar) {
+.page-head-extras:has(> .plugins-controls),
+.drawer-head-extras:has(.plugins-headerbar),
+.drawer-head-extras:has(> .plugins-controls) {
   flex: 1;
   min-width: 0;
+}
+
+/* The MCPs/Extensions pages drop the bare controls group into the slot
+   with no headerbar around it. The group carries ``margin-left: auto``
+   to sit at the far edge, but that only pushes inside a flex row — so
+   make the slot one. (The headerbar case is already its own flex row.) */
+.page-head-extras:has(> .plugins-controls),
+.drawer-head-extras:has(> .plugins-controls) {
+  display: flex;
 }
 
 .plugins-headerbar {
