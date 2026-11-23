@@ -328,7 +328,7 @@ export const VIEW_STATE: Record<string, Partial<Record<Category, string[]>>> = {
   "components/panels/ExtensionsPanel.tsx": {
     field: ["draft", "query"],
     pending: ["busy", "error"],
-    page: ["sortBy", "filterBy"],
+    page: ["sortBy", "filterBy", "selected"],
     menu: ["openMenu"],
   },
   "components/panels/McpPanel.tsx": {

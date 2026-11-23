@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { EntityGlyph } from "../EntityGlyph";
 import { FilterIcon, SortIcon } from "../Icons";
+import type { PanelLevels } from "../PageShell";
 import type { IgniClient } from "../../protocol/client";
 import type { ExtensionSummary } from "../../extensions/ExtensionPage";
 import { OpenOnWeb } from "../../extensions/OpenOnWeb";
@@ -260,6 +261,126 @@ function AgentTools({ tools }: { tools: { name: string; hints: string }[] }) {
   );
 }
 
+/** A compact extension card. The whole card is one control: clicking it
+ *  opens the extension's own page, the way a plugin card does. Collapsed,
+ *  it is just name, version, state and a one-line summary, so the grid
+ *  reads as a row of cards rather than a stack of open forms. */
+function ExtensionCard({
+  extension,
+  onOpen,
+}: {
+  extension: ExtensionSummary;
+  onOpen: () => void;
+}) {
+  // A real line only — the reason it failed, or what its command does.
+  // Not the id, which already sits in the foot.
+  const desc = extension.reason || extension.menu[0]?.desc || "";
+  return (
+    <button type="button" className="plugins-gcard ext-card" onClick={onOpen}>
+      <span className="plugins-gcard-icon" aria-hidden="true">
+        <EntityGlyph name={extension.name} size={38} />
+      </span>
+      <span className="plugins-gcard-body">
+        <span className="plugins-gcard-top">
+          <span className="plugins-name name">
+            {extension.name} <span className="meta">· {extension.version}</span>
+          </span>
+          <span className={stateClass(extension.state)}>{extension.state}</span>
+        </span>
+        {desc && <span className="plugins-gcard-desc">{desc}</span>}
+        <span className="plugins-gcard-foot">
+          <span className="meta ext-card-id">{extension.id}</span>
+          <span className="plugins-chevron-end" aria-hidden="true">
+            ›
+          </span>
+        </span>
+      </span>
+    </button>
+  );
+}
+
+/** One extension in full: its state, why it is not working, what it
+ *  contributes, and its settings — the page a card opens onto. */
+function ExtensionDetailPage({
+  extension,
+  onSave,
+}: {
+  extension: ExtensionSummary;
+  onSave: (values: Record<string, Value>) => Promise<void>;
+}) {
+  const failed = extension.state === "failed";
+  return (
+    <div className="ext-detail">
+      <div className="ext-detail-hero">
+        <span className="ext-detail-icon" aria-hidden="true">
+          <EntityGlyph name={extension.name} size={46} />
+        </span>
+        <div className="ext-detail-head">
+          <div className="ext-detail-title-row">
+            <h2 className="ext-detail-title">{extension.name}</h2>
+            <span className={stateClass(extension.state)}>{extension.state}</span>
+          </div>
+          <div className="meta">
+            {extension.id} · {extension.version}
+          </div>
+        </div>
+      </div>
+
+      {extension.reason && (
+        <div className={failed ? "msg-error" : "msg-info"}>{extension.reason}</div>
+      )}
+      <SwitchedOff entries={extension.switched_off ?? []} />
+      <SwitchedOff
+        entries={extension.dropped ?? []}
+        title="Prompt edits that land nowhere — another extension's override has no such section:"
+      />
+      {extension.faulty && (
+        <div className="ext-switched-off" role="alert">
+          <div className="meta">Not responding: {extension.faulty}</div>
+        </div>
+      )}
+      <Problems entries={extension.problems ?? []} />
+
+      {extension.pages.length > 0 && (
+        <div className="ext-detail-section">
+          <div className="ext-detail-section-title">Pages</div>
+          <ul className="ext-detail-list">
+            {extension.pages.map((p) => (
+              <li key={p.kind}>
+                {p.label}
+                {p.sidebar && <span className="meta"> · in the sidebar</span>}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {extension.menu.length > 0 && (
+        <div className="ext-detail-section">
+          <div className="ext-detail-section-title">Commands</div>
+          <ul className="ext-detail-list">
+            {extension.menu.map((c) => (
+              <li key={c.command}>
+                <code>{c.command}</code> <span className="meta">{c.desc}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      <AgentTools tools={extension.tools ?? []} />
+      <OpenOnWeb url={extension.web_url} name={extension.name} />
+
+      {extension.settings.length > 0 && (
+        <div className="ext-detail-section">
+          <div className="ext-detail-section-title">Settings</div>
+          <SettingsForm extension={extension} onSave={onSave} />
+        </div>
+      )}
+    </div>
+  );
+}
+
 /** Installed extensions, their state, and their settings. */
 export function ExtensionsPanel({
   client,
@@ -277,6 +398,28 @@ export function ExtensionsPanel({
   const [sortBy, setSortBy] = useState<ExtSort>("default");
   const [filterBy, setFilterBy] = useState<ExtFilter>("all");
   const [openMenu, setOpenMenu] = useState<"sort" | "filter" | null>(null);
+  // Which extension's page is open, by id. `null` is the grid.
+  const [selected, setSelected] = useState<string | null>(null);
+
+  const save = (id: string) => async (values: Record<string, Value>) => {
+    const result = await client.rpc<{ extensions: ExtensionSummary[] }>(
+      "set_extension_settings",
+      { extension_id: id, values },
+    );
+    onChanged(result.extensions);
+  };
+
+  // Resolved live so a settings save (a fresh list) re-reads the open one.
+  const current = selected ? (extensions.find((e) => e.id === selected) ?? null) : null;
+
+  // One crumb below "Extensions" while a page is open, so the trail reads
+  // "… / Extensions / <name>" and back returns to the grid.
+  const levels = useMemo<PanelLevels | undefined>(
+    () =>
+      current ? { labels: [current.name], onTruncate: () => setSelected(null) } : undefined,
+    [current],
+  );
+
   const term = query.trim().toLowerCase();
   const matchesFilter = (e: ExtensionSummary): boolean => {
     if (filterBy === "all") return true;
@@ -290,12 +433,14 @@ export function ExtensionsPanel({
   );
   if (sortBy === "name-asc") shown = [...shown].sort((a, b) => a.name.localeCompare(b.name));
   else if (sortBy === "name-desc") shown = [...shown].sort((a, b) => b.name.localeCompare(a.name));
+
   return (
     <Drawer
       title="Extensions"
+      levels={levels}
       onClose={onClose}
       headerExtras={
-        extensions.length > 0 ? (
+        !current && extensions.length > 0 ? (
           <div className="plugins-controls">
             <PanelSearch
               value={query}
@@ -329,68 +474,32 @@ export function ExtensionsPanel({
         ) : undefined
       }
     >
-      {extensions.length === 0 && (
-        <div className="msg-info">
-          No extensions installed. They arrive from your organisation&apos;s
-          services when you are signed in to igni.
-        </div>
-      )}
-      {extensions.length > 0 && shown.length === 0 && (
-        <div className="plugins-empty">
-          <div className="plugins-empty-title">No extensions match</div>
-        </div>
-      )}
-      <div className="plugins-grid plugins-grid--start">
-      {shown.map((extension) => (
-        <div className="row ext-row" key={extension.id}>
-          <span className="ext-icon" aria-hidden="true">
-            <EntityGlyph name={extension.name} size={38} />
-          </span>
-          <div className="ext-body">
-            <div className="ext-head">
-              <div className="ext-title">
-                <div className="name">
-                  {extension.name}{" "}
-                  <span className="meta">· {extension.version}</span>
-                </div>
-                <div className="meta">{extension.id}</div>
-              </div>
-              <span className={stateClass(extension.state)}>
-                {extension.state}
-              </span>
+      {current ? (
+        <ExtensionDetailPage extension={current} onSave={save(current.id)} />
+      ) : (
+        <>
+          {extensions.length === 0 && (
+            <div className="msg-info">
+              No extensions installed. They arrive from your organisation&apos;s
+              services when you are signed in to igni.
             </div>
-            {extension.reason && <div className="meta">{extension.reason}</div>}
-            <SwitchedOff entries={extension.switched_off ?? []} />
-            <SwitchedOff
-              entries={extension.dropped ?? []}
-              title="Prompt edits that land nowhere — another extension's override has no such section:"
-            />
-            {extension.faulty && (
-              <div className="ext-switched-off" role="alert">
-                <div className="meta">Not responding: {extension.faulty}</div>
-              </div>
-            )}
-            <Problems entries={extension.problems ?? []} />
-            <AgentTools tools={extension.tools ?? []} />
-            <OpenOnWeb url={extension.web_url} name={extension.name} />
-            {extension.settings.length > 0 && (
-              <SettingsForm
+          )}
+          {extensions.length > 0 && shown.length === 0 && (
+            <div className="plugins-empty">
+              <div className="plugins-empty-title">No extensions match</div>
+            </div>
+          )}
+          <div className="plugins-grid plugins-grid--start">
+            {shown.map((extension) => (
+              <ExtensionCard
+                key={extension.id}
                 extension={extension}
-                onSave={async (values) => {
-                  const result = await client.rpc<{
-                    extensions: ExtensionSummary[];
-                  }>("set_extension_settings", {
-                    extension_id: extension.id,
-                    values,
-                  });
-                  onChanged(result.extensions);
-                }}
+                onOpen={() => setSelected(extension.id)}
               />
-            )}
+            ))}
           </div>
-        </div>
-      ))}
-      </div>
+        </>
+      )}
     </Drawer>
   );
 }
