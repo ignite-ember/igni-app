@@ -326,8 +326,18 @@ export const VIEW_STATE: Record<string, Partial<Record<Category, string[]>>> = {
     pending: ["loading"],
   },
   "components/panels/ExtensionsPanel.tsx": {
-    field: ["draft"],
+    field: ["draft", "query"],
     pending: ["busy", "error"],
+    page: ["sortBy", "filterBy"],
+    menu: ["openMenu"],
+  },
+  "components/panels/McpPanel.tsx": {
+    field: ["query"],
+    page: ["sortBy", "filterBy"],
+    menu: ["openMenu"],
+  },
+  "components/panels/PanelSearch.tsx": {
+    disclosure: ["expanded"],
   },
   "components/panels/HooksPanel.tsx": {
     data: ["rows"],

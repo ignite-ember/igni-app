@@ -160,7 +160,7 @@ describe("the server list", () => {
 
   it("hands the composer a setup prompt rather than a form", async () => {
     const { onAddServer } = panelWith();
-    fireEvent.click(screen.getByRole("button", { name: "+ Add server" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add an MCP server" }));
     const [seed] = onAddServer.mock.calls[0];
     expect(seed).toMatch(/Help me set up a new MCP server/);
     expect(seed).toMatch(/mcpServers/);
