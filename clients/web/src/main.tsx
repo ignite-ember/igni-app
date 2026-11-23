@@ -6,6 +6,7 @@ import { CloudSwitchDemo } from "./dev/CloudSwitchDemo";
 import { HitlDemo } from "./dev/HitlDemo";
 import { InterruptedBannerDemo } from "./dev/InterruptedBannerDemo";
 import { OrchestrateDemo } from "./dev/OrchestrateDemo";
+import { PanelsDemo } from "./dev/PanelsDemo";
 import { PlanModeDemo } from "./dev/PlanModeDemo";
 import { VisualizerStreamDemo } from "./dev/VisualizerStreamDemo";
 import { WorkflowDemo } from "./dev/WorkflowDemo";
@@ -54,6 +55,7 @@ function pickRoot() {
   if (demo === "workflow") return <WorkflowDemo />;
   if (demo === "interrupted") return <InterruptedBannerDemo />;
   if (demo === "cloud") return <CloudSwitchDemo />;
+  if (demo === "panels") return <PanelsDemo />;
   return <App />;
 }
 
