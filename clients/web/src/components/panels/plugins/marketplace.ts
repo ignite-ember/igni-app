@@ -14,6 +14,7 @@ export class MarketplacePlugin {
     readonly source: string,
     readonly branch: string,
     readonly market: string = "",
+    readonly category: string = "",
   ) {}
 
   /** One catalog entry, or ``null`` when it has no name. */
@@ -21,7 +22,13 @@ export class MarketplacePlugin {
     const p = new WirePayload(raw);
     const about = PluginAbout.read(p);
     if (!about.name) return null;
-    return new MarketplacePlugin(about, p.string("source"), p.string("branch"), market);
+    return new MarketplacePlugin(
+      about,
+      p.string("source"),
+      p.string("branch"),
+      market,
+      p.string("category"),
+    );
   }
 
   /** What `install_plugin` takes for it: ``@<marketplace>/<plugin>``,

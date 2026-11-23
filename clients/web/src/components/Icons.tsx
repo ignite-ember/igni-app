@@ -74,6 +74,29 @@ export function MenuIcon({ size = 16 }: IconProps) {
   );
 }
 
+/** Sidebar toggle: a window with a left pane. The pane is filled when
+ *  the sidebar is open and hollow when it is closed, so the one glyph
+ *  shows both states (Lucide "panel-left"). */
+export function PanelLeftIcon({ size = 16, open = false }: IconProps & { open?: boolean }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width={size}
+      height={size}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <rect x="3" y="3" width="18" height="18" rx="2" />
+      <path d="M9 3v18" />
+      {open && <rect x="4" y="4" width="4" height="16" rx="1" fill="currentColor" stroke="none" />}
+    </svg>
+  );
+}
+
 export function CloseIcon({ size = 14 }: IconProps) {
   return (
     <Svg size={size}>
@@ -213,7 +236,11 @@ export function StatusIcon({
 
 /** Right-pointing chevron; rotate via the host element (e.g.
  * `.tool-chevron.open`) or the `down` prop. */
-export function ChevronIcon({ size = 10, down = false }: IconProps & { down?: boolean }) {
+export function ChevronIcon({
+  size = 10,
+  down = false,
+  up = false,
+}: IconProps & { down?: boolean; up?: boolean }) {
   return (
     <svg
       width={size}
@@ -223,7 +250,7 @@ export function ChevronIcon({ size = 10, down = false }: IconProps & { down?: bo
       style={{
         display: "block",
         flexShrink: 0,
-        transform: down ? "rotate(90deg)" : undefined,
+        transform: down ? "rotate(90deg)" : up ? "rotate(-90deg)" : undefined,
       }}
       {...strokeProps}
       strokeWidth={2}
@@ -369,6 +396,116 @@ export function GearIcon() {
   );
 }
 
+export function SearchIcon({ size = 14 }: IconProps) {
+  return (
+    <svg viewBox="0 0 16 16" width={size} height={size} fill="none" aria-hidden="true">
+      <circle cx="7" cy="7" r="4.4" stroke="currentColor" strokeWidth="1.3" />
+      <path d="M10.3 10.3 14 14" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+export function FilterIcon({ size = 14 }: IconProps) {
+  return (
+    <svg viewBox="0 0 16 16" width={size} height={size} fill="none" aria-hidden="true">
+      <path
+        d="M2.5 4.5h11M4.5 8h7M6.5 11.5h3"
+        stroke="currentColor"
+        strokeWidth="1.3"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+export function SortIcon({ size = 14 }: IconProps) {
+  return (
+    <svg viewBox="0 0 16 16" width={size} height={size} fill="none" aria-hidden="true">
+      <path
+        d="M4.5 13V4M2.5 6l2-2 2 2"
+        stroke="currentColor"
+        strokeWidth="1.3"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M11.5 3v9M9.5 10l2 2 2-2"
+        stroke="currentColor"
+        strokeWidth="1.3"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+/** Plugins — the classic puzzle piece (Lucide "puzzle"). */
+export function PuzzleIcon({ size = 15 }: IconProps) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width={size}
+      height={size}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M15.39 4.39a1 1 0 0 0 1.68-.474 2.5 2.5 0 1 1 3.014 3.015 1 1 0 0 0-.474 1.68l1.683 1.682a2.414 2.414 0 0 1 0 3.414L19.61 15.39a1 1 0 0 1-1.68-.474 2.5 2.5 0 1 0-3.014 3.015 1 1 0 0 1 .474 1.68l-1.683 1.682a2.414 2.414 0 0 1-3.414 0L8.61 19.61a1 1 0 0 0-1.68.474 2.5 2.5 0 1 1-3.014-3.015 1 1 0 0 0 .474-1.68l-1.683-1.682a2.414 2.414 0 0 1 0-3.414L4.39 8.61a1 1 0 0 1 1.68.474 2.5 2.5 0 1 0 3.014-3.015 1 1 0 0 1-.474-1.68l1.683-1.682a2.414 2.414 0 0 1 3.414 0z" />
+    </svg>
+  );
+}
+
+/** The official Model Context Protocol mark, monochrome via currentColor
+ *  (paths from modelcontextprotocol.io's logo). */
+export function McpIcon({ size = 15 }: IconProps) {
+  return (
+    <svg viewBox="0 0 180 180" width={size} height={size} fill="none" aria-hidden="true">
+      <g stroke="currentColor" strokeWidth="12" strokeLinecap="round" fill="none">
+        <path d="M23.5996 85.2532L86.2021 22.6507C94.8457 14.0071 108.86 14.0071 117.503 22.6507C126.147 31.2942 126.147 45.3083 117.503 53.9519L70.2254 101.23" />
+        <path d="M70.8789 100.578L117.504 53.952C126.148 45.3083 140.163 45.3083 148.806 53.952L149.132 54.278C157.776 62.9216 157.776 76.9357 149.132 85.5792L92.5139 142.198C89.6327 145.079 89.6327 149.75 92.5139 152.631L104.14 164.257" />
+        <path d="M101.853 38.3013L55.553 84.6011C46.9094 93.2447 46.9094 107.258 55.553 115.902C64.1966 124.546 78.2106 124.546 86.8543 115.902L133.154 69.6025" />
+      </g>
+    </svg>
+  );
+}
+
+/** Extensions — a base block with an added block (Lucide "blocks"). */
+export function BlocksIcon({ size = 15 }: IconProps) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width={size}
+      height={size}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M10 22V7a1 1 0 0 0-1-1H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-5a1 1 0 0 0-1-1H2" />
+      <rect x="14" y="2" width="8" height="8" rx="1" />
+    </svg>
+  );
+}
+
+export function RefreshIcon({ size = 14 }: IconProps) {
+  return (
+    <svg viewBox="0 0 16 16" width={size} height={size} fill="none" aria-hidden="true">
+      <path
+        d="M13 8a5 5 0 1 1-1.46-3.54"
+        stroke="currentColor"
+        strokeWidth="1.3"
+        strokeLinecap="round"
+      />
+      <path d="M13 2.5V5h-2.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
 /** Artwork the json-render catalog's ``Icon`` (and the icon slots on
  *  ``Button``) can name. The visualizer agent picks the name, so an
  *  unknown one falls back to ``info``. The ``triangle*`` and ``dot``
@@ -395,6 +532,71 @@ export function NamedIcon({ name, size = 14 }: IconProps & { name: string }) {
   return (
     <Svg size={size}>
       <path d={NAMED_ICON_PATHS[name] ?? NAMED_ICON_PATHS.info} />
+    </Svg>
+  );
+}
+
+/** A document — a file in the tree, and the "open file" affordance. */
+export function FileIcon({ size = 13 }: IconProps) {
+  return (
+    <Svg size={size}>
+      <path d="M9 1.8H4.2c-.66 0-1.2.54-1.2 1.2v10c0 .66.54 1.2 1.2 1.2h7.6c.66 0 1.2-.54 1.2-1.2V5z" />
+      <path d="M9 1.8V5h3.2" />
+    </Svg>
+  );
+}
+
+/** Three dots — the overflow ("more") menu. */
+export function MoreIcon({ size = 16 }: IconProps) {
+  return (
+    <Svg size={size}>
+      <path d="M4 8h.01M8 8h.01M12 8h.01" />
+    </Svg>
+  );
+}
+
+/** A small up arrow for "go up one folder". */
+export function LevelUpIcon({ size = 14 }: IconProps) {
+  return (
+    <Svg size={size}>
+      <path d="M8 12.5V4M4.5 7.5 8 4l3.5 3.5" />
+    </Svg>
+  );
+}
+
+/** A bulleted list with a nested row — the file-tree toggle. */
+export function ListTreeIcon({ size = 15 }: IconProps) {
+  return (
+    <svg viewBox="0 0 16 16" width={size} height={size} fill="none" aria-hidden="true">
+      <g stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M6 4h7.5M8.5 8h5M8.5 12h5" />
+        <path d="M3 3.5v3.2c0 .55.45 1 1 1h1.5M4 10v1.5c0 .55.45 1 1 1h1.5" />
+        <circle cx="3" cy="3" r="0.6" fill="currentColor" stroke="none" />
+      </g>
+    </svg>
+  );
+}
+
+/** Four corner brackets — expand the viewer to full screen; the inward
+ *  form restores it to the split. */
+export function ExpandIcon({ size = 14, full = false }: IconProps & { full?: boolean }) {
+  return (
+    <Svg size={size}>
+      {full ? (
+        <>
+          <path d="M7 4v3H4" />
+          <path d="M9 4v3h3" />
+          <path d="M7 12V9H4" />
+          <path d="M9 12V9h3" />
+        </>
+      ) : (
+        <>
+          <path d="M4 7V4h3" />
+          <path d="M12 7V4h-3" />
+          <path d="M4 9v3h3" />
+          <path d="M12 9v3h-3" />
+        </>
+      )}
     </Svg>
   );
 }

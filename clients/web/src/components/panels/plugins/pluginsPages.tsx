@@ -7,6 +7,7 @@
 
 import type { ComponentType } from "react";
 
+import { applyCatalogView, type SortKey } from "./catalogView";
 import { InstalledPlugins } from "./installedPlugin";
 import { InstalledTab } from "./InstalledTab";
 import { MarketplacesPage } from "./MarketplacesPage";
@@ -30,11 +31,19 @@ export interface PluginsFields {
   query: PluginsField;
 }
 
+/** How the catalog grid is ordered and narrowed. */
+export interface CatalogViewState {
+  sortBy: SortKey;
+  /** A category key, or ``"all"``. */
+  filterBy: string;
+}
+
 /** What every page reads and how it moves the panel. */
 export interface PluginsPageContext {
   plugins: PluginsState;
   contents: ContentsLoad;
   fields: PluginsFields;
+  catalogView: CatalogViewState;
   /** Move the panel: every move is a ``PluginsView`` method. */
   go: (move: (view: PluginsView) => PluginsView) => void;
 }
@@ -82,16 +91,21 @@ const PLUGINS_PAGE_RENDERERS: PluginsPageRenderers = {
       onOpen={(p) => ctx.go((v) => v.open(PluginSelection.installed(p)))}
     />
   ),
-  catalog: ({ ctx }) => (
-    <MarketplaceTab
-      catalog={ctx.plugins.catalog}
-      entries={ctx.plugins.catalog?.filter(ctx.fields.query.value) ?? []}
-      installed={ctx.plugins.installed ?? InstalledPlugins.EMPTY}
-      isRunning={ctx.plugins.isRunning}
-      onInstall={ctx.plugins.installPlugin}
-      onOpen={(entry) => ctx.go((v) => v.open(PluginSelection.fromCatalog(entry)))}
-    />
-  ),
+  catalog: ({ ctx }) => {
+    const installed = ctx.plugins.installed ?? InstalledPlugins.EMPTY;
+    const matched = ctx.plugins.catalog?.filter(ctx.fields.query.value) ?? [];
+    const entries = applyCatalogView(matched, ctx.catalogView.sortBy, ctx.catalogView.filterBy);
+    return (
+      <MarketplaceTab
+        catalog={ctx.plugins.catalog}
+        entries={entries}
+        installed={installed}
+        isRunning={ctx.plugins.isRunning}
+        onInstall={ctx.plugins.installPlugin}
+        onOpen={(entry) => ctx.go((v) => v.open(PluginSelection.fromCatalog(entry)))}
+      />
+    );
+  },
 };
 
 function rendererFor<P extends PluginsScreen["page"]>(page: P): ComponentType<PluginsPageProps<P>> {

@@ -24,13 +24,16 @@ export class SessionRow {
      *  about waiting — not that it is waiting — so the flag counts only
      *  when it is a plain ``true``. */
     readonly hasPausedRun: boolean = false,
+    /** The project folder this chat is bound to; empty when unknown.
+     *  The sidebar groups chats by it. */
+    readonly folder: string = "",
   ) {}
 
   static parse(raw: unknown): SessionRow {
     const p = new WirePayload(raw);
     const id = String(p.value("session_id") ?? p.value("id") ?? "");
     const ts = Number(p.value("updated_at") ?? p.value("created_at") ?? 0) || 0;
-    return new SessionRow(id, p.text("name"), ts, p.value("has_paused_run") === true);
+    return new SessionRow(id, p.text("name"), ts, p.value("has_paused_run") === true, p.text("project_dir"));
   }
 
   /** The rows of an answer: wrapped (``{sessions: [...]}``, as the
@@ -51,6 +54,7 @@ export class SessionRow {
       name: this.name || (when ? `Chat · ${when}` : this.sessionId),
       detail: [this.sessionId, when].filter(Boolean).join(" · "),
       has_paused_run: this.hasPausedRun,
+      folder: this.folder,
     };
   }
 }

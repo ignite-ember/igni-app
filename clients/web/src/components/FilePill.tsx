@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { FileTypeIcon } from "./FileTypeIcon";
+import { useFileViewer } from "./pages/files/viewerContext";
 import { host } from "../lib/host";
 
 /** Inline file reference rendered inside a user bubble. The same
@@ -9,6 +10,7 @@ export function FilePill({ path }: { path: string }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const wrapRef = useRef<HTMLSpanElement>(null);
+  const viewer = useFileViewer();
   const name = path.split("/").pop() || path;
 
   useEffect(() => {
@@ -66,19 +68,51 @@ export function FilePill({ path }: { path: string }) {
           >
             {copied ? "Copied!" : "Copy path"}
           </button>
-          <button
-            type="button"
-            className="file-pill-menu-item"
-            onClick={() => {
-              setMenuOpen(false);
-              // Route through the host bridge — Tauri opens it via
-              // the OS shell, a browser tab (or a window on the cloud,
-              // whose paths are the VM's) in the preview.
-              void host.openFile(path);
-            }}
-          >
-            {host.canOpenNatively ? "Open" : "Preview"}
-          </button>
+          {viewer ? (
+            <>
+              {/* The in-app read-only viewer: it reads over the live
+                  connection, so it works the same locally and on a
+                  cloud VM, where there is no OS editor to open. */}
+              <button
+                type="button"
+                className="file-pill-menu-item"
+                onClick={() => {
+                  setMenuOpen(false);
+                  viewer.open(path);
+                }}
+              >
+                View
+              </button>
+              {/* The OS editor stays an explicit choice, but only where
+                  there is one — the local desktop. */}
+              {host.canOpenNatively && (
+                <button
+                  type="button"
+                  className="file-pill-menu-item"
+                  onClick={() => {
+                    setMenuOpen(false);
+                    void host.openFile(path);
+                  }}
+                >
+                  Open in editor
+                </button>
+              )}
+            </>
+          ) : (
+            <button
+              type="button"
+              className="file-pill-menu-item"
+              onClick={() => {
+                setMenuOpen(false);
+                // No in-app viewer wired (a bare render): route through
+                // the host bridge — the OS shell on desktop, the preview
+                // overlay on web or the cloud, whose paths are the VM's.
+                void host.openFile(path);
+              }}
+            >
+              {host.canOpenNatively ? "Open" : "Preview"}
+            </button>
+          )}
         </span>
       )}
     </span>

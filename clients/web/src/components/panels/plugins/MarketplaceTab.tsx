@@ -1,5 +1,8 @@
-/** The Marketplace tab: every registered marketplace's plugins, searched. */
+/** The Marketplace tab: every registered marketplace's plugins, searched,
+ *  as a grid of cards. */
 
+import { CheckIcon } from "../../Icons";
+import { EntityGlyph } from "../../EntityGlyph";
 import type { InstalledPlugins } from "./installedPlugin";
 import type { CatalogEntry, MarketplaceCatalog, MarketplacePlugin } from "./marketplace";
 import { PluginAction } from "./pluginAction";
@@ -37,41 +40,57 @@ export function MarketplaceTab({
       </div>
     );
   }
+  // Every card carrying the same marketplace name is just noise; show
+  // the source only when there is more than one to tell apart.
+  const showSource = catalog.marketCount > 1;
   return (
-    <div className="plugins-list">
+    <div className="plugins-grid">
       {entries.map((entry) => {
         const { market, plugin } = entry;
         const isInstalled = installed.has(plugin.name);
         const busy = isRunning(PluginAction.plugin(plugin.name));
         return (
           <div
-            className="plugins-card plugins-card-clickable"
+            className="plugins-gcard"
             key={`${market}:${plugin.name}`}
+            role="button"
+            tabIndex={0}
             onClick={() => onOpen(entry)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                onOpen(entry);
+              }
+            }}
           >
-            <div className="plugins-card-head">
-              <div className="plugins-card-title">
+            <span className="plugins-gcard-icon" aria-hidden="true">
+              <EntityGlyph name={plugin.name} size={38} />
+            </span>
+            <div className="plugins-gcard-body">
+              <div className="plugins-gcard-top">
                 <span className="plugins-name">{plugin.name}</span>
-                {plugin.version && <span className="plugins-version">{plugin.version}</span>}
-                <span className="plugins-source">{market}</span>
-                {isInstalled && <span className="plugins-tag">installed</span>}
+                <button
+                  type="button"
+                  className={`plugins-add${isInstalled ? " is-installed" : ""}`}
+                  disabled={busy || isInstalled}
+                  aria-label={isInstalled ? "Installed" : "Install"}
+                  title={isInstalled ? "Installed" : `Install from ${plugin.source}`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (!isInstalled && !busy) onInstall(plugin);
+                  }}
+                >
+                  {busy ? "…" : isInstalled ? <CheckIcon size={12} /> : "+"}
+                </button>
               </div>
-              {isInstalled ? (
-                <span className="plugins-chevron-end">›</span>
-              ) : (
-                <div className="plugins-actions" onClick={(e) => e.stopPropagation()}>
-                  <button
-                    className="btn btn-sm btn-primary"
-                    disabled={busy}
-                    onClick={() => onInstall(plugin)}
-                    title={`Install from ${plugin.source}`}
-                  >
-                    {busy ? "…" : "Install"}
-                  </button>
+              {plugin.description && <p className="plugins-gcard-desc">{plugin.description}</p>}
+              {(showSource || plugin.version) && (
+                <div className="plugins-gcard-foot">
+                  {showSource && <span className="plugins-source">{market}</span>}
+                  {plugin.version && <span className="plugins-version">{plugin.version}</span>}
                 </div>
               )}
             </div>
-            {plugin.description && <div className="plugins-desc">{plugin.description}</div>}
           </div>
         );
       })}

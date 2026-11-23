@@ -13,7 +13,7 @@ import { ShellActions, type ShellActionsDeps } from "../chat/shellActions";
 import { StatusSource } from "../chat/statusSource";
 import { useShellStatus } from "../chat/useShellStatus";
 import { AccountMenu } from "../components/AccountMenu";
-import { AppHeader } from "../components/AppHeader";
+import { ComposerDock } from "../components/ComposerDock";
 import { ProjectChip } from "../components/ProjectChip";
 import { BackendVersionChip } from "../components/StatusBits";
 import { BackendSnapshot } from "./backendState";
@@ -67,10 +67,11 @@ describe("useBackendState", () => {
 describe("the account menu", () => {
   const status = { cloud_email: "ada@acme.example", cloud_org: "Acme" } as never;
 
-  it("puts the switch at the top when the shell offers it", () => {
+  it("offers the switch under the composer when the shell allows it", () => {
+    // The switch moved out of the menu into the composer dock.
     const backend = BackendSnapshot.parse(shellSnapshot())!;
-    render(<AccountMenu status={status} client={{ rpc: vi.fn(async () => ({})) as never }} backend={backend} onLogIn={() => {}} onLogOut={() => {}} />);
-    fireEvent.click(screen.getByRole("button", { name: /ada@acme\.example/ }));
+    render(<ComposerDock backend={backend} projectDir="/work" onPickProject={() => {}} sessionId="s1" status={null} />);
+    fireEvent.click(screen.getByTitle("Where igni runs"));
     expect(screen.getByRole("radiogroup", { name: "Where igni runs" })).toBeTruthy();
   });
 
@@ -96,25 +97,15 @@ describe("the account menu", () => {
 describe("the account chip right after a switch to the cloud", () => {
   // R691 G: the VM's igni names nobody (its status has no address), and
   // this computer's account-only backend answers a few seconds after the
-  // switch. For those seconds the header said "Log in" to a person who
-  // was signed in all along.
+  // switch. For those seconds the chip said "Log in" to a person who was
+  // signed in all along. The chip is the account menu's, which sits at
+  // the foot of the sidebar; rendering it directly is what these go by.
   function header(status: unknown, auth: "unknown" | "signed-in" | "signed-out") {
     return (
-      <AppHeader
-        conn="connected"
-        groupName="igni"
-        groupMark={null}
-        onToggleSidebar={() => {}}
-        canSearch={false}
-        searchOpen={false}
-        onToggleSearch={() => {}}
-        projectDir="/workspace"
-        onPickProject={() => {}}
+      <AccountMenu
         status={status as never}
         auth={auth}
-        waiting={0}
-        onToggleNotifications={() => {}}
-        client={{ rpc: vi.fn(async () => ({})), connect: vi.fn() } as never}
+        client={{ rpc: vi.fn(async () => ({})) } as never}
         onLogIn={() => {}}
         onLogOut={() => {}}
       />

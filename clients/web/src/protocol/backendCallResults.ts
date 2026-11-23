@@ -58,6 +58,35 @@ export class ChatSearchMatch {
   }
 }
 
+/** ``search_all_chats``: a hit, plus which session it was found in. */
+export class GlobalChatSearchMatch {
+  constructor(
+    readonly sessionId: string,
+    readonly sessionName: string,
+    readonly role: "user" | "assistant" | string,
+    readonly snippet: string,
+    readonly matchStart: number,
+    readonly matchEnd: number,
+    readonly createdAt: number,
+  ) {}
+
+  static parseList(raw: unknown): GlobalChatSearchMatch[] {
+    const rows = Array.isArray(raw) ? raw : [];
+    return rows.filter(WirePayload.isRecord).map((row) => {
+      const p = new WirePayload(row);
+      return new GlobalChatSearchMatch(
+        p.string("session_id"),
+        p.string("session_name"),
+        p.string("role"),
+        p.string("snippet"),
+        p.number("match_start"),
+        p.number("match_end"),
+        p.number("created_at"),
+      );
+    });
+  }
+}
+
 /** ``run_shell``: a ``$`` line's captured output. */
 export class ShellOutput {
   constructor(

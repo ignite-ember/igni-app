@@ -2,12 +2,27 @@
  *  to it (install a catalog entry; enable, disable or remove an
  *  installed one). */
 
+import { EntityGlyph } from "../../EntityGlyph";
 import type { InstalledPlugin } from "./installedPlugin";
 import type { MarketplacePlugin } from "./marketplace";
 import { PluginAction } from "./pluginAction";
 import type { ContentsLoad } from "./pluginContents";
 import { PluginContentsView } from "./PluginContentsView";
 import type { ResolvedPlugin } from "./pluginSelection";
+
+/** The one-line capability summary shown under the title: "3 agents ·
+ *  1 MCP server · 2 hooks", built from whatever the contents loaded. */
+function capabilitySummary(contents: ContentsLoad): string[] {
+  if (contents.kind !== "loaded") return [];
+  const { agents, mcpServers, hooks, tools } = contents.contents.parts;
+  const plural = (n: number, one: string) => `${n} ${one}${n === 1 ? "" : "s"}`;
+  return [
+    agents.length > 0 ? plural(agents.length, "agent") : "",
+    mcpServers.length > 0 ? plural(mcpServers.length, "MCP server") : "",
+    hooks.length > 0 ? plural(hooks.length, "hook") : "",
+    tools.length > 0 ? plural(tools.length, "tool") : "",
+  ].filter(Boolean);
+}
 
 export function PluginDetailPage({
   resolved,
@@ -26,46 +41,61 @@ export function PluginDetailPage({
 }) {
   const { about, sourceLabel } = resolved.display;
   const busy = isRunning(PluginAction.plugin(about.name));
+  const caps = capabilitySummary(contents);
   return (
     <div className="plugin-detail">
       <div className="plugin-detail-hero">
-        <div className="plugin-detail-title-row">
-          {resolved.kind === "installed" && (
-            <span className={`plugins-status ${resolved.plugin.enabled ? "is-on" : "is-off"}`} />
+        <span className="plugin-detail-icon" aria-hidden="true">
+          <EntityGlyph name={about.name} size={52} />
+        </span>
+        <div className="plugin-detail-main">
+          <div className="plugin-detail-title-row">
+            {resolved.kind === "installed" && (
+              <span className={`plugins-status ${resolved.plugin.enabled ? "is-on" : "is-off"}`} />
+            )}
+            <h2 className="plugin-detail-title">{about.name}</h2>
+            {about.version && <span className="plugins-version">{about.version}</span>}
+            {sourceLabel && <span className="plugins-source">{sourceLabel}</span>}
+          </div>
+          {about.description && <div className="plugin-detail-desc">{about.description}</div>}
+          {caps.length > 0 && (
+            <div className="plugin-detail-caps">
+              {caps.map((c) => (
+                <span key={c} className="plugins-cap">
+                  {c}
+                </span>
+              ))}
+            </div>
           )}
-          <h2 className="plugin-detail-title">{about.name}</h2>
-          {about.version && <span className="plugins-version">{about.version}</span>}
-          {sourceLabel && <span className="plugins-source">{sourceLabel}</span>}
-        </div>
-        {about.description && <div className="plugin-detail-desc">{about.description}</div>}
-        <div className="plugin-detail-actions">
-          {resolved.kind === "installed" ? (
-            <>
+          <div className="plugin-detail-actions">
+            {resolved.kind === "installed" ? (
+              <>
+                <button
+                  className="btn btn-sm"
+                  disabled={busy}
+                  onClick={() => onToggle(resolved.plugin)}
+                >
+                  {resolved.plugin.enabled ? "Disable" : "Enable"}
+                </button>
+                <button
+                  className="btn btn-sm btn-danger"
+                  disabled={busy}
+                  onClick={() => onRemove(resolved.plugin)}
+                >
+                  Remove
+                </button>
+              </>
+            ) : (
               <button
-                className="btn btn-sm"
+                className="btn btn-sm btn-primary"
                 disabled={busy}
-                onClick={() => onToggle(resolved.plugin)}
+                onClick={() => onInstall(resolved.plugin)}
+                title={`Install from ${resolved.plugin.source}`}
               >
-                {resolved.plugin.enabled ? "Disable" : "Enable"}
+                {busy ? "Installing…" : "Install"}
               </button>
-              <button
-                className="btn btn-sm btn-danger"
-                disabled={busy}
-                onClick={() => onRemove(resolved.plugin)}
-              >
-                Remove
-              </button>
-            </>
-          ) : (
-            <button
-              className="btn btn-sm btn-primary"
-              disabled={busy}
-              onClick={() => onInstall(resolved.plugin)}
-              title={`Install from ${resolved.plugin.source}`}
-            >
-              {busy ? "Installing…" : "Install"}
-            </button>
-          )}
+            )}
+          </div>
         </div>
       </div>
 

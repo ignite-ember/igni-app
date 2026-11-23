@@ -153,7 +153,7 @@ export function ensureClientId(viewKey = "", backend = "local"): string {
 
 /** What igni itself opens over the chat: pick a folder and go, get
  *  through sign-in, glance at what is waiting, find in the conversation. */
-export type PanelKind = "notifications" | "search" | "login" | "dir-picker";
+export type PanelKind = "notifications" | "search" | "login" | "dir-picker" | "files";
 
 /** `Panel`: what is open over the chat. One at a time. */
 export interface Panel {

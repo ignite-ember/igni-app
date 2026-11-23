@@ -1,4 +1,5 @@
-import { createContext, useEffect, type ReactNode } from "react";
+import { createContext, useEffect, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 
 import type { PageRoute } from "../chat/pageStack";
 
@@ -107,7 +108,7 @@ export function PageShell({
       if (e.key !== "Escape") return;
       if (
         document.querySelector(
-          ".file-preview, .modal-overlay, .overflow-list, .notify-panel",
+          ".file-preview, .modal-overlay, .overflow-list, .notify-panel, .files-menu",
         )
       )
         return;
@@ -122,9 +123,16 @@ export function PageShell({
   const here = trail[trail.length - 1];
   const leaf = panelCrumbs.length ? panelCrumbs[panelCrumbs.length - 1] : here?.label;
 
-  return (
-    <section className="page" aria-label={here?.label ?? "Page"}>
-      <nav className="page-crumbs" aria-label="Breadcrumb">
+  // The breadcrumb renders into the header's slot when one exists (a page
+  // over the chat), so the trail sits beside the sidebar toggle; it falls
+  // back to inline (a modal, or a test that renders no header).
+  const [crumbSlot, setCrumbSlot] = useState<HTMLElement | null>(null);
+  useEffect(() => {
+    setCrumbSlot(document.getElementById("app-header-crumbs"));
+  }, []);
+
+  const crumbs = (
+    <nav className="page-crumbs" aria-label="Breadcrumb">
         <button className="page-crumb" onClick={onClose}>
           Chat
         </button>
@@ -186,7 +194,12 @@ export function PageShell({
             </span>
           );
         })}
-      </nav>
+    </nav>
+  );
+
+  return (
+    <section className="page" aria-label={here?.label ?? "Page"}>
+      {crumbSlot ? createPortal(crumbs, crumbSlot) : crumbs}
 
       {/* A page whose body opens with its own heading — a document —
           would otherwise show its name twice: once in this bar, and

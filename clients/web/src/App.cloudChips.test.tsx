@@ -131,7 +131,9 @@ describe("the desktop's cloud side, in the whole window", () => {
     expect(screen.queryByText("Log in")).toBeNull();
 
     await act(async () => answer({ cloud_email: "ada@acme.example", cloud_connected: true }));
-    await waitFor(() => expect(screen.getByRole("button", { name: /ada@acme\.example/ })).toBeTruthy());
+    // Named from the address — "ada@acme.example" → "Ada" — until the
+    // server sends a display name; the address itself is in the menu.
+    await waitFor(() => expect(screen.getByRole("button", { name: /Ada/ })).toBeTruthy());
     expect(screen.queryByText("Log in")).toBeNull();
   });
 
@@ -154,7 +156,8 @@ describe("the desktop's cloud side, in the whole window", () => {
     );
     openWindow(deadUrl);
 
-    await waitFor(() => expect(document.querySelector(".backend-chip")?.textContent).toBe("Cloud · offline"));
+    // The side shows read-only in the composer dock now, not in the status line.
+    await waitFor(() => expect(document.querySelector(".dock-static")?.textContent).toContain("Cloud · offline"));
     expect(screen.queryByText("Log in")).toBeNull();
   });
 });

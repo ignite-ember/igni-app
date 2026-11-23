@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { EntityGlyph } from "../EntityGlyph";
 import type { IgniClient } from "../../protocol/client";
 import type { ExtensionSummary } from "../../extensions/ExtensionPage";
 import { OpenOnWeb } from "../../extensions/OpenOnWeb";
@@ -264,46 +265,51 @@ export function ExtensionsPanel({
       )}
       {extensions.map((extension) => (
         <div className="row ext-row" key={extension.id}>
-          <div className="ext-head">
-            <div>
-              <div className="name">
-                {extension.name}{" "}
-                <span className="meta">· {extension.version}</span>
+          <span className="ext-icon" aria-hidden="true">
+            <EntityGlyph name={extension.name} size={38} />
+          </span>
+          <div className="ext-body">
+            <div className="ext-head">
+              <div className="ext-title">
+                <div className="name">
+                  {extension.name}{" "}
+                  <span className="meta">· {extension.version}</span>
+                </div>
+                <div className="meta">{extension.id}</div>
               </div>
-              <div className="meta">{extension.id}</div>
+              <span className={stateClass(extension.state)}>
+                {extension.state}
+              </span>
             </div>
-            <span className={stateClass(extension.state)}>
-              {extension.state}
-            </span>
-          </div>
-          {extension.reason && <div className="meta">{extension.reason}</div>}
-          <SwitchedOff entries={extension.switched_off ?? []} />
-          <SwitchedOff
-            entries={extension.dropped ?? []}
-            title="Prompt edits that land nowhere — another extension's override has no such section:"
-          />
-          {extension.faulty && (
-            <div className="ext-switched-off" role="alert">
-              <div className="meta">Not responding: {extension.faulty}</div>
-            </div>
-          )}
-          <Problems entries={extension.problems ?? []} />
-          <AgentTools tools={extension.tools ?? []} />
-          <OpenOnWeb url={extension.web_url} name={extension.name} />
-          {extension.settings.length > 0 && (
-            <SettingsForm
-              extension={extension}
-              onSave={async (values) => {
-                const result = await client.rpc<{
-                  extensions: ExtensionSummary[];
-                }>("set_extension_settings", {
-                  extension_id: extension.id,
-                  values,
-                });
-                onChanged(result.extensions);
-              }}
+            {extension.reason && <div className="meta">{extension.reason}</div>}
+            <SwitchedOff entries={extension.switched_off ?? []} />
+            <SwitchedOff
+              entries={extension.dropped ?? []}
+              title="Prompt edits that land nowhere — another extension's override has no such section:"
             />
-          )}
+            {extension.faulty && (
+              <div className="ext-switched-off" role="alert">
+                <div className="meta">Not responding: {extension.faulty}</div>
+              </div>
+            )}
+            <Problems entries={extension.problems ?? []} />
+            <AgentTools tools={extension.tools ?? []} />
+            <OpenOnWeb url={extension.web_url} name={extension.name} />
+            {extension.settings.length > 0 && (
+              <SettingsForm
+                extension={extension}
+                onSave={async (values) => {
+                  const result = await client.rpc<{
+                    extensions: ExtensionSummary[];
+                  }>("set_extension_settings", {
+                    extension_id: extension.id,
+                    values,
+                  });
+                  onChanged(result.extensions);
+                }}
+              />
+            )}
+          </div>
         </div>
       ))}
     </Drawer>
