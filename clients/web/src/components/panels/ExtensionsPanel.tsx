@@ -1,9 +1,27 @@
 import { useMemo, useState } from "react";
 import { EntityGlyph } from "../EntityGlyph";
+import { FilterIcon, SortIcon } from "../Icons";
 import type { IgniClient } from "../../protocol/client";
 import type { ExtensionSummary } from "../../extensions/ExtensionPage";
 import { OpenOnWeb } from "../../extensions/OpenOnWeb";
+import { ControlMenu } from "./ControlMenu";
 import { Drawer } from "./Drawer";
+import { PanelSearch } from "./PanelSearch";
+
+type ExtSort = "default" | "name-asc" | "name-desc";
+type ExtFilter = "all" | "ready" | "failed" | "busy";
+
+const EXT_SORTS: readonly { key: ExtSort; label: string }[] = [
+  { key: "default", label: "Default" },
+  { key: "name-asc", label: "Name A→Z" },
+  { key: "name-desc", label: "Name Z→A" },
+];
+const EXT_FILTERS: readonly { key: ExtFilter; label: string }[] = [
+  { key: "all", label: "All extensions" },
+  { key: "ready", label: "Ready" },
+  { key: "failed", label: "Failed" },
+  { key: "busy", label: "Starting" },
+];
 
 /**
  * What is installed, why it is not working, and what it can be set to.
@@ -255,15 +273,75 @@ export function ExtensionsPanel({
   onChanged: (extensions: ExtensionSummary[]) => void;
   onClose: () => void;
 }) {
+  const [query, setQuery] = useState("");
+  const [sortBy, setSortBy] = useState<ExtSort>("default");
+  const [filterBy, setFilterBy] = useState<ExtFilter>("all");
+  const [openMenu, setOpenMenu] = useState<"sort" | "filter" | null>(null);
+  const term = query.trim().toLowerCase();
+  const matchesFilter = (e: ExtensionSummary): boolean => {
+    if (filterBy === "all") return true;
+    if (filterBy === "busy") return e.state !== "ready" && e.state !== "failed";
+    return e.state === filterBy;
+  };
+  let shown = extensions.filter(
+    (e) =>
+      (!term || e.name.toLowerCase().includes(term) || e.id.toLowerCase().includes(term)) &&
+      matchesFilter(e),
+  );
+  if (sortBy === "name-asc") shown = [...shown].sort((a, b) => a.name.localeCompare(b.name));
+  else if (sortBy === "name-desc") shown = [...shown].sort((a, b) => b.name.localeCompare(a.name));
   return (
-    <Drawer title="Extensions" onClose={onClose}>
+    <Drawer
+      title="Extensions"
+      onClose={onClose}
+      headerExtras={
+        extensions.length > 0 ? (
+          <div className="plugins-controls">
+            <PanelSearch
+              value={query}
+              onChange={setQuery}
+              label="Search extensions"
+              placeholder={`Search ${extensions.length} extension${extensions.length === 1 ? "" : "s"}…`}
+            />
+            <ControlMenu
+              label="Filter"
+              icon={<FilterIcon />}
+              active={filterBy !== "all"}
+              open={openMenu === "filter"}
+              onToggle={() => setOpenMenu(openMenu === "filter" ? null : "filter")}
+              onClose={() => setOpenMenu(null)}
+              options={EXT_FILTERS}
+              current={filterBy}
+              onPick={setFilterBy}
+            />
+            <ControlMenu
+              label="Sort"
+              icon={<SortIcon />}
+              active={sortBy !== "default"}
+              open={openMenu === "sort"}
+              onToggle={() => setOpenMenu(openMenu === "sort" ? null : "sort")}
+              onClose={() => setOpenMenu(null)}
+              options={EXT_SORTS}
+              current={sortBy}
+              onPick={setSortBy}
+            />
+          </div>
+        ) : undefined
+      }
+    >
       {extensions.length === 0 && (
         <div className="msg-info">
           No extensions installed. They arrive from your organisation&apos;s
           services when you are signed in to igni.
         </div>
       )}
-      {extensions.map((extension) => (
+      {extensions.length > 0 && shown.length === 0 && (
+        <div className="plugins-empty">
+          <div className="plugins-empty-title">No extensions match</div>
+        </div>
+      )}
+      <div className="plugins-grid plugins-grid--start">
+      {shown.map((extension) => (
         <div className="row ext-row" key={extension.id}>
           <span className="ext-icon" aria-hidden="true">
             <EntityGlyph name={extension.name} size={38} />
@@ -312,6 +390,7 @@ export function ExtensionsPanel({
           </div>
         </div>
       ))}
+      </div>
     </Drawer>
   );
 }

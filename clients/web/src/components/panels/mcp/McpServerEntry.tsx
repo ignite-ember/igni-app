@@ -1,6 +1,7 @@
 /** One MCP server: its status line, its connect button, and what it offers when opened. */
 
 import { useState, type ReactNode } from "react";
+import { EntityGlyph } from "../../EntityGlyph";
 import { ChevronIcon } from "../../Icons";
 import type { McpApproval } from "./mcpApproval";
 import type { McpServer } from "./mcpServer";
@@ -104,6 +105,10 @@ export function McpServerEntry({
   );
   return (
     <div className="mcp-server">
+      <span className="plugins-gcard-icon" aria-hidden="true">
+        <EntityGlyph name={server.name} size={38} />
+      </span>
+      <div className="plugins-gcard-body mcp-server-main">
       <div className="row mcp-server-row">
         {server.expandable ? (
           <button
@@ -155,6 +160,7 @@ export function McpServerEntry({
           </Section>
         </div>
       )}
+      </div>
     </div>
   );
 }

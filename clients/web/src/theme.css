@@ -11888,3 +11888,32 @@ button.mcp-server-head:focus-visible {
   border: none;
   background: var(--bg-surface);
 }
+
+/* MCPs and Extensions, as the Plugins card grid: soft filled cards in
+   the same two-column grid, top-aligned so an expanded card (a server's
+   tools, an extension's settings) does not stretch its neighbour. */
+.plugins-grid--start { align-items: start; }
+
+.mcp-server {
+  display: flex;
+  gap: var(--space-5);
+  padding: var(--space-7);
+  margin-bottom: 0;
+  border: 1px solid transparent;
+  border-radius: var(--radius-lg);
+  background: var(--bg-surface);
+}
+.mcp-server:hover { border-color: var(--border-soft); background: var(--bg-raised); }
+.mcp-server-main { gap: var(--space-3); }
+
+.plugins-grid .ext-row {
+  align-items: flex-start;
+  gap: var(--space-5);
+  padding: var(--space-7);
+  margin-bottom: 0;
+  border: 1px solid transparent;
+  border-bottom: 1px solid transparent;
+  border-radius: var(--radius-lg);
+  background: var(--bg-surface);
+}
+.plugins-grid .ext-row:hover { border-color: var(--border-soft); background: var(--bg-raised); }
