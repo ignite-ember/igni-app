@@ -613,12 +613,10 @@ button {
   overscroll-behavior: contain;
 }
 
-/* Solid opaque cover for the top ~118 px of the sidebar. Items
-   scrolling into this strip disappear at the bottom edge — the
-   "Sessions" cluster paints above (z:10) untouched. Was a
-   six-layer ``backdrop-filter`` blur ramp originally; it cost
-   too many frames, so we accept the flat look on every surface
-   for consistency. */
+/* The sidebar's top edge fades the way the conversation's does: the
+   session list fades out (the mask on `.sidebar-list` below) and this
+   layer adds a soft, untinted blur on the same curve. It used to be a
+   solid cover, so a row slid under "+ New chat" and was cut at a line. */
 .sidebar-blur {
   position: absolute;
   top: 0;
@@ -627,7 +625,62 @@ button {
   height: var(--sidebar-top-h);
   z-index: 5;
   pointer-events: none;
-  background: var(--bg);
+  background: transparent;
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    #000 0%,
+    rgba(0, 0, 0, 0.9) 40%,
+    rgba(0, 0, 0, 0.6) 65%,
+    rgba(0, 0, 0, 0.25) 85%,
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    to bottom,
+    #000 0%,
+    rgba(0, 0, 0, 0.9) 40%,
+    rgba(0, 0, 0, 0.6) 65%,
+    rgba(0, 0, 0, 0.25) 85%,
+    transparent 100%
+  );
+}
+
+/* Rows stay fully hidden behind "+ New chat" (the strip's top 40px)
+   and fade in on a smooth curve over the next 30px, reaching full
+   opacity exactly where the first row rests — the list's top padding is
+   the strip plus 20px of air for that. So the button stays readable, a
+   row at rest is never faded, and none is ever cut at a line. Tied to
+   the strip's measured height (`--sidebar-top-h`). */
+.sidebar-list {
+  --fade-from: calc(var(--sidebar-top-h) - 10px);
+  padding-top: calc(var(--sidebar-top-h) + 20px);
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    transparent 0px,
+    transparent var(--fade-from),
+    rgba(0, 0, 0, 0.03) calc(var(--fade-from) + 3px),
+    rgba(0, 0, 0, 0.12) calc(var(--fade-from) + 7px),
+    rgba(0, 0, 0, 0.27) calc(var(--fade-from) + 10px),
+    rgba(0, 0, 0, 0.46) calc(var(--fade-from) + 14px),
+    rgba(0, 0, 0, 0.65) calc(var(--fade-from) + 18px),
+    rgba(0, 0, 0, 0.82) calc(var(--fade-from) + 22px),
+    rgba(0, 0, 0, 0.94) calc(var(--fade-from) + 26px),
+    #000 calc(var(--fade-from) + 30px)
+  );
+  mask-image: linear-gradient(
+    to bottom,
+    transparent 0px,
+    transparent var(--fade-from),
+    rgba(0, 0, 0, 0.03) calc(var(--fade-from) + 3px),
+    rgba(0, 0, 0, 0.12) calc(var(--fade-from) + 7px),
+    rgba(0, 0, 0, 0.27) calc(var(--fade-from) + 10px),
+    rgba(0, 0, 0, 0.46) calc(var(--fade-from) + 14px),
+    rgba(0, 0, 0, 0.65) calc(var(--fade-from) + 18px),
+    rgba(0, 0, 0, 0.82) calc(var(--fade-from) + 22px),
+    rgba(0, 0, 0, 0.94) calc(var(--fade-from) + 26px),
+    #000 calc(var(--fade-from) + 30px)
+  );
 }
 
 /* WebKit scrollbar hide for both surfaces (Firefox uses
