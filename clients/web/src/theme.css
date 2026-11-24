@@ -8274,6 +8274,11 @@ button.mcp-server-head:focus-visible {
 }
 
 .plugins-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 46vh;
   padding: var(--space-12) var(--space-4);
   text-align: center;
   color: var(--fg-muted);
