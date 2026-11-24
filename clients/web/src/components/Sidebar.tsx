@@ -26,6 +26,9 @@ export interface SessionEntry {
   activity?: ChatActivity;
   /** A run finished after the person last looked at the chat. */
   unread?: boolean;
+  /** When a message last went in or a reply came out, in milliseconds:
+   *  the list is newest first by it. */
+  last_message_at?: number;
 }
 
 export interface SidebarLink {

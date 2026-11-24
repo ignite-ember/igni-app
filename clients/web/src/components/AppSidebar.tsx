@@ -62,7 +62,7 @@ export function AppSidebar({
   return (
     <Sidebar
       open={sidebar.open}
-      sessions={sessions.map((s) => ({ ...s, ...states.of(s.session_id) }))}
+      sessions={states.ordered(sessions).map((s) => ({ ...s, ...states.of(s.session_id) }))}
       currentId={currentId}
       links={contributions.sidebar()}
       activeLink={activeKind}

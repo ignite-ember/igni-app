@@ -28,27 +28,41 @@ export interface ChatState {
 
 const IDLE: ChatState = { activity: "idle", unread: false };
 
+/** A chat entry's place in the list: its last message, newest first. */
+interface Placed {
+  session_id: string;
+  last_message_at?: number;
+}
+
 function activityOf(value: unknown): ChatActivity {
   return value === "running" || value === "waiting" ? value : "idle";
 }
 
 export class SessionStates {
-  static readonly NONE = new SessionStates(new Map());
+  static readonly NONE = new SessionStates(new Map(), new Map());
 
-  constructor(private readonly byId: ReadonlyMap<string, ChatState>) {}
+  constructor(
+    private readonly byId: ReadonlyMap<string, ChatState>,
+    /** The newest last-message time told for each chat. Kept after the
+     *  chat leaves the list (idle and read), so it keeps its place. */
+    private readonly lastMessage: ReadonlyMap<string, number>,
+  ) {}
 
   /** The states an answer or a push carries; `null` when it is not that shape. */
   static parse(raw: unknown): SessionStates | null {
     const payload = new WirePayload(raw);
     if (!Array.isArray(payload.value("sessions"))) return null;
     const byId = new Map<string, ChatState>();
+    const lastMessage = new Map<string, number>();
     for (const row of payload.list("sessions")) {
       const r = new WirePayload(row);
       const id = r.text("session_id");
       if (!id) continue;
       byId.set(id, { activity: activityOf(r.value("state")), unread: r.value("unread") === true });
+      const at = Number(r.value("last_message_at")) || 0;
+      if (at > 0) lastMessage.set(id, at);
     }
-    return new SessionStates(byId);
+    return new SessionStates(byId, lastMessage);
   }
 
   /** The states `session_states_changed` carries, or `null` for anything else. */
@@ -60,6 +74,25 @@ export class SessionStates {
   /** A chat not listed is idle and read. */
   of(sessionId: string): ChatState {
     return this.byId.get(sessionId) ?? IDLE;
+  }
+
+  /** These states, told after this: its marks, and the newest time of each chat. */
+  followedBy(next: SessionStates): SessionStates {
+    const lastMessage = new Map(this.lastMessage);
+    for (const [id, at] of next.lastMessage) {
+      if (at > (lastMessage.get(id) ?? 0)) lastMessage.set(id, at);
+    }
+    return new SessionStates(next.byId, lastMessage);
+  }
+
+  /** ``entries`` newest conversation first: each by the later of its own
+   *  last message and the newest one told here. Stable on a tie. */
+  ordered<T extends Placed>(entries: T[]): T[] {
+    const at = (e: T) => Math.max(e.last_message_at ?? 0, this.lastMessage.get(e.session_id) ?? 0);
+    return entries
+      .map((entry, index) => ({ entry, index, at: at(entry) }))
+      .sort((a, b) => b.at - a.at || a.index - b.index)
+      .map(({ entry, at: time }) => ({ ...entry, last_message_at: time }));
   }
 }
 
@@ -84,7 +117,7 @@ export function useSessionStates(
       .rpc<unknown>("list_session_states")
       .then((answer) => {
         const next = SessionStates.parse(answer);
-        if (alive && next && !pushed.current) setStates(next);
+        if (alive && next && !pushed.current) setStates((prev) => prev.followedBy(next));
       })
       .catch(() => {
         // An older backend without the method: no chat is marked.
@@ -100,7 +133,7 @@ export function useSessionStates(
       const next = SessionStates.fromPush(message);
       if (!next) return;
       pushed.current = true;
-      setStates(next);
+      setStates((prev) => prev.followedBy(next));
     });
   }, [client, connected]);
 

@@ -85,6 +85,65 @@ describe("SessionStates", () => {
   });
 });
 
+describe("the order", () => {
+  const states = (rows: unknown[]) => SessionStates.parse({ sessions: rows }) as SessionStates;
+  const timed = (session_id: string, last_message_at: number, state = "idle") => ({
+    session_id,
+    state,
+    unread: false,
+    last_message_at,
+  });
+
+  it("puts the newest conversation first", () => {
+    const entries = [
+      { session_id: "a", last_message_at: 1_000 },
+      { session_id: "b", last_message_at: 3_000 },
+      { session_id: "c", last_message_at: 2_000 },
+    ];
+
+    expect(SessionStates.NONE.ordered(entries).map((e) => e.session_id)).toEqual(["b", "c", "a"]);
+  });
+
+  it("moves a chat up the moment a message goes in", () => {
+    const entries = [
+      { session_id: "a", last_message_at: 3_000 },
+      { session_id: "b", last_message_at: 1_000 },
+    ];
+
+    const ordered = states([timed("b", 9_000, "running")]).ordered(entries);
+
+    expect(ordered.map((e) => [e.session_id, e.last_message_at])).toEqual([
+      ["b", 9_000],
+      ["a", 3_000],
+    ]);
+  });
+
+  it("keeps a chat's newer time after it leaves the live list", () => {
+    const told = SessionStates.NONE.followedBy(states([timed("b", 9_000, "running")])).followedBy(
+      states([]),
+    );
+
+    expect(told.of("b")).toEqual({ activity: "idle", unread: false });
+    expect(told.ordered([{ session_id: "a", last_message_at: 3_000 }, { session_id: "b" }])[0].session_id).toBe(
+      "b",
+    );
+  });
+
+  it("never takes an older time over a newer one", () => {
+    const told = SessionStates.NONE.followedBy(states([timed("b", 9_000)])).followedBy(
+      states([timed("b", 5_000)]),
+    );
+
+    expect(told.ordered([{ session_id: "b", last_message_at: 1 }])[0].last_message_at).toBe(9_000);
+  });
+
+  it("keeps the given order on a tie, and for chats with no time at all", () => {
+    const entries = [{ session_id: "x" }, { session_id: "y" }, { session_id: "z", last_message_at: 0 }];
+
+    expect(SessionStates.NONE.ordered(entries).map((e) => e.session_id)).toEqual(["x", "y", "z"]);
+  });
+});
+
 describe("useSessionStates", () => {
   it("asks once when connected", async () => {
     const { client, rpc } = backend({ sessions: [row("a", "running")] });
@@ -137,6 +196,21 @@ describe("useSessionStates", () => {
 
     act(() => send(push([row("a", "idle", true)])));
     expect(result.current.of("a")).toEqual({ activity: "idle", unread: true });
+  });
+
+  it("remembers each chat's newest time across pushes", async () => {
+    const { client, rpc, send } = backend();
+    const { result } = renderHook(() => useSessionStates(client, true, ""));
+    await waitFor(() => expect(rpc).toHaveBeenCalledTimes(1));
+
+    act(() => send(push([{ ...row("b", "running"), last_message_at: 9_000 }])));
+    act(() => send(push([])));
+
+    const ordered = result.current.ordered([
+      { session_id: "a", last_message_at: 3_000 },
+      { session_id: "b", last_message_at: 1_000 },
+    ]);
+    expect(ordered.map((e) => e.session_id)).toEqual(["b", "a"]);
   });
 
   it("marks the chat on screen seen when it has news, once", async () => {
