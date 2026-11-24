@@ -1,16 +1,5 @@
-import { useMemo, useState } from "react";
-import {
-  Badge,
-  Banner,
-  Button,
-  Card,
-  Field,
-  Heading,
-  Input,
-  Select,
-  Switch,
-  Text,
-} from "@ignite-ember/ui-react";
+import { useMemo, useState, type ReactNode } from "react";
+import { Button, Field, Input, Select, Switch, Text } from "@ignite-ember/ui-react";
 import { EntityGlyph } from "../EntityGlyph";
 import { FilterIcon, SortIcon } from "../Icons";
 import type { PanelLevels } from "../PageShell";
@@ -94,12 +83,6 @@ function stateClass(state: string): string {
   return "ext-state ext-state-busy";
 }
 
-/** The same state as a design-system Badge tone. */
-function stateTone(state: string): "success" | "danger" | "warning" {
-  if (state === "ready") return "success";
-  if (state === "failed") return "danger";
-  return "warning";
-}
 
 function SettingsForm({
   extension,
@@ -139,7 +122,7 @@ function SettingsForm({
   };
 
   return (
-    <Card className="ext-settings">
+    <div className="ext-settings">
       {extension.settings.map((setting) => {
         const id = `ext-set-${extension.id}-${setting.key}`;
         // Rendering an unknown type as text would be a guess, and a guess
@@ -235,7 +218,7 @@ function SettingsForm({
         Applied the next time this extension’s page is opened. A frame already up
         keeps the values it launched with.
       </Text>
-    </Card>
+    </div>
   );
 }
 
@@ -283,18 +266,24 @@ function Problems({ entries }: { entries: string[] }) {
   );
 }
 
-function AgentTools({ tools }: { tools: { name: string; hints: string }[] }) {
-  if (tools.length === 0) return null;
+/** One section of the extension's page — Pages, Commands, Tools — in the
+ *  same vocabulary the plugin detail page lists a plugin's contents. */
+function ContentSection({
+  title,
+  count,
+  children,
+}: {
+  title: string;
+  count: number;
+  children: ReactNode;
+}) {
+  if (count === 0) return null;
   return (
-    <div className="ext-tools">
-      <div className="meta">Tools for the agent:</div>
-      <ul>
-        {tools.map((tool) => (
-          <li key={tool.name}>
-            <code>{tool.name}</code> <span className="meta">{tool.hints}</span>
-          </li>
-        ))}
-      </ul>
+    <div className="plugins-content-section">
+      <div className="plugins-content-head">
+        {title} <span className="plugins-content-count">{count}</span>
+      </div>
+      {children}
     </div>
   );
 }
@@ -346,75 +335,80 @@ function ExtensionDetailPage({
   extension: ExtensionSummary;
   onSave: (values: Record<string, Value>) => Promise<void>;
 }) {
-  const failed = extension.state === "failed";
+  const tools = extension.tools ?? [];
+  const hasContents =
+    extension.pages.length > 0 ||
+    extension.menu.length > 0 ||
+    tools.length > 0 ||
+    extension.settings.length > 0 ||
+    !!extension.web_url;
   return (
-    <div className="ext-detail">
-      <div className="ext-detail-hero">
-        <span className="ext-detail-icon" aria-hidden="true">
-          <EntityGlyph name={extension.name} size={46} />
+    <div className="plugin-detail">
+      <div className="plugin-detail-hero">
+        <span className="plugin-detail-icon" aria-hidden="true">
+          <EntityGlyph name={extension.name} size={52} />
         </span>
-        <div className="ext-detail-head">
-          <div className="ext-detail-title-row">
-            <Heading level={2} className="ext-detail-title">
-              {extension.name}
-            </Heading>
-            <Badge tone={stateTone(extension.state)}>{extension.state}</Badge>
+        <div className="plugin-detail-main">
+          <div className="plugin-detail-title-row">
+            <h2 className="plugin-detail-title">{extension.name}</h2>
+            <span className={stateClass(extension.state)}>{extension.state}</span>
+            {extension.version && <span className="plugins-version">{extension.version}</span>}
+            <span className="plugins-source">{extension.id}</span>
           </div>
-          <Text tone="muted">
-            {extension.id} · {extension.version}
-          </Text>
+          {extension.reason && <div className="plugin-detail-desc">{extension.reason}</div>}
         </div>
       </div>
 
-      {extension.reason && (
-        <Banner tone={failed ? "danger" : "neutral"}>{extension.reason}</Banner>
-      )}
       <SwitchedOff entries={extension.switched_off ?? []} />
       <SwitchedOff
         entries={extension.dropped ?? []}
         title="Prompt edits that land nowhere — another extension's override has no such section:"
       />
       {extension.faulty && (
-        <Banner tone="danger">Not responding: {extension.faulty}</Banner>
+        <div className="ext-switched-off" role="alert">
+          <div className="meta">Not responding: {extension.faulty}</div>
+        </div>
       )}
       <Problems entries={extension.problems ?? []} />
 
-      {extension.pages.length > 0 && (
-        <section className="ext-detail-section">
-          <div className="ext-detail-section-title">Pages</div>
-          <div className="ext-detail-rows">
+      {hasContents && (
+        <div className="plugins-contents">
+          <ContentSection title="Pages" count={extension.pages.length}>
             {extension.pages.map((p) => (
-              <div className="ext-detail-row" key={p.kind}>
-                <span className="ext-detail-row-main">{p.label}</span>
-                {p.sidebar && <Text tone="faint">in the sidebar</Text>}
+              <div className="plugins-content-row" key={p.kind}>
+                <span className="plugins-content-name">{p.label}</span>
+                {p.sidebar && <span className="plugins-content-meta">in the sidebar</span>}
               </div>
             ))}
-          </div>
-        </section>
-      )}
+          </ContentSection>
 
-      {extension.menu.length > 0 && (
-        <section className="ext-detail-section">
-          <div className="ext-detail-section-title">Commands</div>
-          <div className="ext-detail-rows">
+          <ContentSection title="Commands" count={extension.menu.length}>
             {extension.menu.map((c) => (
-              <div className="ext-detail-row" key={c.command}>
-                <code className="ext-detail-cmd">{c.command}</code>
-                <Text tone="muted">{c.desc}</Text>
+              <div className="plugins-content-row" key={c.command}>
+                <code className="plugins-content-name">{c.command}</code>
+                <span className="plugins-content-desc">{c.desc}</span>
               </div>
             ))}
-          </div>
-        </section>
-      )}
+          </ContentSection>
 
-      <AgentTools tools={extension.tools ?? []} />
-      <OpenOnWeb url={extension.web_url} name={extension.name} />
+          <ContentSection title="Tools for the agent" count={tools.length}>
+            {tools.map((t) => (
+              <div className="plugins-content-row" key={t.name}>
+                <code className="plugins-content-name">{t.name}</code>
+                <span className="plugins-content-desc">{t.hints}</span>
+              </div>
+            ))}
+          </ContentSection>
 
-      {extension.settings.length > 0 && (
-        <section className="ext-detail-section">
-          <div className="ext-detail-section-title">Settings</div>
-          <SettingsForm extension={extension} onSave={onSave} />
-        </section>
+          <OpenOnWeb url={extension.web_url} name={extension.name} />
+
+          {extension.settings.length > 0 && (
+            <div className="plugins-content-section">
+              <div className="plugins-content-head">Settings</div>
+              <SettingsForm extension={extension} onSave={onSave} />
+            </div>
+          )}
+        </div>
       )}
     </div>
   );

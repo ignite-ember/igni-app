@@ -8083,76 +8083,9 @@ button.mcp-server-head:focus-visible {
   color: var(--fg-faint);
 }
 
-/* The extension's own page, reached by opening a card. */
-.ext-detail {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-5);
-}
-
-.ext-detail-hero {
-  display: flex;
-  align-items: center;
-  gap: var(--space-5);
-}
-
-.ext-detail-head {
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.ext-detail-title-row {
-  display: flex;
-  align-items: center;
-  gap: var(--space-4);
-}
-
-.ext-detail-title {
-  margin: 0;
-  font-size: var(--text-lg);
-  font-weight: 700;
-}
-
-.ext-detail-section {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-}
-
-.ext-detail-section-title {
-  font-size: var(--text-sm);
-  font-weight: 600;
-  color: var(--fg-muted);
-}
-
-.ext-detail-rows {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-}
-
-.ext-detail-row {
-  display: flex;
-  align-items: baseline;
-  gap: var(--space-3);
-  font-size: var(--text-sm);
-}
-
-.ext-detail-row-main {
-  color: var(--fg);
-}
-
-.ext-detail-cmd {
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-  color: var(--fg);
-  background: var(--bg-inset);
-  border: 1px solid var(--border-soft);
-  border-radius: var(--radius-sm);
-  padding: 1px var(--space-2);
-}
+/* The extension detail page reuses the plugin detail's vocabulary
+   (`.plugin-detail-*`, `.plugins-content-*`) so the two read as one
+   surface; only the settings form's width is its own. */
 
 /* The add control: a quiet + that turns into a green check once added. */
 .plugins-add {
