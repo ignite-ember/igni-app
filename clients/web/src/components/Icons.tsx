@@ -1,5 +1,7 @@
 /** Inline SVG icons — UI chrome never uses emoji glyphs. */
 
+import { useId } from "react";
+
 
 interface IconProps {
   size?: number;
@@ -28,8 +30,10 @@ function Svg({ size = 16, children }: IconProps & { children: React.ReactNode })
   );
 }
 
-/** Brand icon — the white flame on its coral tile, same artwork as the favicon. */
+/** Brand icon — the white flame on its coral gradient tile, same artwork as the favicon. */
 export function FlameIcon({ size = 16 }: IconProps) {
+  // Its own gradient id: the icon is drawn more than once on a page.
+  const tile = useId();
   return (
     <svg
       width={size}
@@ -38,7 +42,14 @@ export function FlameIcon({ size = 16 }: IconProps) {
       aria-hidden="true"
       style={{ display: "block", flexShrink: 0 }}
     >
-      <rect width="64" height="64" rx="15" fill="#D98457" />
+      <defs>
+        <linearGradient id={tile} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#EB7F51" />
+          <stop offset=".5" stopColor="#E97341" />
+          <stop offset="1" stopColor="#EE6C38" />
+        </linearGradient>
+      </defs>
+      <rect width="64" height="64" rx="15" fill={`url(#${tile})`} />
       <path
         fill="#fff"
         fillRule="evenodd"
