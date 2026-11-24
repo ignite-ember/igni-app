@@ -181,7 +181,14 @@ export function PluginsCatalogDemo() {
 
   return (
     <div className="shell">
-      <main className="main main--paged">
+      <main className="main main--paged" style={{ position: "relative" }}>
+        <header className="app-header">
+          <div className="app-header-blur" aria-hidden="true" />
+          <div className="header-crumbs" id="app-header-crumbs">
+            <nav className="page-crumbs">Chat / plugins</nav>
+          </div>
+          <div className="header-spacer" />
+        </header>
         <div className="page">
           <div className="page-head">
             <h1 className="page-title">Plugins</h1>

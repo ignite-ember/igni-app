@@ -7656,6 +7656,26 @@ button.mcp-server-head:focus-visible {
   display: flex;
 }
 
+/* On a card-grid page (plugins, MCPs, extensions) a card scrolling up
+   must pass cleanly behind the header, not into a dark strip below the
+   rule. The header's margin below it left exactly that strip — a card's
+   top would clip there with the page's darker background above it. Drop
+   the margin so the scroll clips flush at the rule, make the header
+   opaque and raise it so the card goes behind it, and give the resting
+   content its air from the scroll's own top padding instead. */
+.page:has(.plugins-headerbar) > .page-head,
+.page:has(.plugins-grid) > .page-head {
+  position: relative;
+  z-index: 2;
+  background: var(--bg);
+  margin-bottom: 0;
+}
+
+.page:has(.plugins-headerbar) > .page-body > .page-measure,
+.page:has(.plugins-grid) > .page-body > .page-measure {
+  padding-top: var(--space-6);
+}
+
 .plugins-headerbar {
   display: flex;
   align-items: center;
