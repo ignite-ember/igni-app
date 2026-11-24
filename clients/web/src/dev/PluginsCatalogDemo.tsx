@@ -14,6 +14,7 @@ import {
   type SortKey,
 } from "../components/panels/plugins/catalogView";
 import { InstalledPlugins } from "../components/panels/plugins/installedPlugin";
+import { InstalledTab } from "../components/panels/plugins/InstalledTab";
 import { MarketplaceCatalog } from "../components/panels/plugins/marketplace";
 import { MarketplaceTab } from "../components/panels/plugins/MarketplaceTab";
 import { CatalogControls } from "../components/panels/plugins/PluginsChrome";
@@ -140,7 +141,37 @@ const CATALOG = MarketplaceCatalog.parse([
   },
 ]);
 
+const INSTALLED = InstalledPlugins.parse([
+  {
+    name: "commit-helper",
+    description: "Draft conventional commit messages from the staged diff.",
+    version: "1.3.0",
+    enabled: true,
+    source_root: "github.com/acme/commit-helper",
+    has_agents: true,
+    has_hooks: true,
+  },
+  {
+    name: "sql-explorer",
+    description: "Browse and query the project's database.",
+    version: "2.0.0",
+    enabled: true,
+    source_root: "github.com/acme/sql-explorer",
+    has_skills: true,
+    has_mcp: true,
+  },
+  {
+    name: "legacy-linter",
+    description: "An older linter, kept off until its rules are updated.",
+    version: "0.4.0",
+    enabled: false,
+    source_root: "github.com/acme/legacy-linter",
+    has_tools: true,
+  },
+]);
+
 export function PluginsCatalogDemo() {
+  const [view, setView] = useState<"marketplace" | "installed">("marketplace");
   const [query, setQuery] = useState("");
   const [sortBy, setSortBy] = useState<SortKey>("default");
   const [filterBy, setFilterBy] = useState<string>(ALL_CATEGORIES);
@@ -157,37 +188,59 @@ export function PluginsCatalogDemo() {
             <div className="page-head-extras">
               <div className="plugins-headerbar">
                 <div className="plugins-tabs">
-                  <button className="plugins-tab active">
+                  <button
+                    className={`plugins-tab ${view === "marketplace" ? "active" : ""}`}
+                    onClick={() => setView("marketplace")}
+                  >
                     Marketplace<span className="plugins-tab-count">{CATALOG.pluginCount}</span>
                   </button>
+                  <button
+                    className={`plugins-tab ${view === "installed" ? "active" : ""}`}
+                    onClick={() => setView("installed")}
+                  >
+                    Installed<span className="plugins-tab-count">{INSTALLED.count}</span>
+                  </button>
                 </div>
-                <CatalogControls
-                  pluginCount={CATALOG.pluginCount}
-                  marketCount={CATALOG.marketCount}
-                  query={query}
-                  onQueryChange={setQuery}
-                  categories={categories}
-                  sortBy={sortBy}
-                  onSortChange={setSortBy}
-                  filterBy={filterBy}
-                  onFilterChange={setFilterBy}
-                  refreshing={false}
-                  onRefresh={() => {}}
-                  onManage={() => {}}
-                />
+                {view === "marketplace" && (
+                  <CatalogControls
+                    pluginCount={CATALOG.pluginCount}
+                    marketCount={CATALOG.marketCount}
+                    query={query}
+                    onQueryChange={setQuery}
+                    categories={categories}
+                    sortBy={sortBy}
+                    onSortChange={setSortBy}
+                    filterBy={filterBy}
+                    onFilterChange={setFilterBy}
+                    refreshing={false}
+                    onRefresh={() => {}}
+                    onManage={() => {}}
+                  />
+                )}
               </div>
             </div>
           </div>
           <div className="page-body">
             <div className="page-measure">
-              <MarketplaceTab
-                catalog={CATALOG}
-                entries={entries}
-                installed={InstalledPlugins.EMPTY}
-                isRunning={() => false}
-                onInstall={() => {}}
-                onOpen={() => {}}
-              />
+              {view === "marketplace" ? (
+                <MarketplaceTab
+                  catalog={CATALOG}
+                  entries={entries}
+                  installed={INSTALLED}
+                  isRunning={() => false}
+                  onInstall={() => {}}
+                  onOpen={() => {}}
+                />
+              ) : (
+                <InstalledTab
+                  installed={INSTALLED}
+                  installRef=""
+                  onInstallRefChange={() => {}}
+                  installing={false}
+                  onInstall={() => {}}
+                  onOpen={() => {}}
+                />
+              )}
             </div>
           </div>
         </div>
