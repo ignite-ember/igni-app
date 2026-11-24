@@ -3,6 +3,8 @@
 
 import { CheckIcon } from "../../Icons";
 import { EntityGlyph } from "../../EntityGlyph";
+import { categoryLabel } from "./catalogView";
+import { CategoryIcon } from "./categoryIcon";
 import type { InstalledPlugins } from "./installedPlugin";
 import type { CatalogEntry, MarketplaceCatalog, MarketplacePlugin } from "./marketplace";
 import { PluginAction } from "./pluginAction";
@@ -84,8 +86,14 @@ export function MarketplaceTab({
                 </button>
               </div>
               {plugin.description && <p className="plugins-gcard-desc">{plugin.description}</p>}
-              {(showSource || plugin.version) && (
+              {(plugin.category || showSource || plugin.version) && (
                 <div className="plugins-gcard-foot">
+                  {plugin.category && (
+                    <span className="plugins-cat-chip">
+                      <CategoryIcon category={plugin.category} size={12} />
+                      {categoryLabel(plugin.category)}
+                    </span>
+                  )}
                   {showSource && <span className="plugins-source">{market}</span>}
                   {plugin.version && <span className="plugins-version">{plugin.version}</span>}
                 </div>

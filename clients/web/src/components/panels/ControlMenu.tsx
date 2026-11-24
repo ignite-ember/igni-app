@@ -22,7 +22,7 @@ export function ControlMenu<K extends string>({
   open: boolean;
   onToggle: () => void;
   onClose: () => void;
-  options: readonly { key: K; label: string }[];
+  options: readonly { key: K; label: string; icon?: ReactNode }[];
   current: K;
   onPick: (key: K) => void;
 }) {
@@ -54,7 +54,10 @@ export function ControlMenu<K extends string>({
                   onClose();
                 }}
               >
-                <span>{o.label}</span>
+                <span className="plugins-menu-item-label">
+                  {o.icon && <span className="plugins-menu-item-icon">{o.icon}</span>}
+                  {o.label}
+                </span>
                 {current === o.key && <CheckIcon size={12} />}
               </button>
             ))}

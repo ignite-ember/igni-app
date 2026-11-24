@@ -7767,6 +7767,39 @@ button.mcp-server-head:focus-visible {
   flex-shrink: 0;
 }
 
+/* The label side of a menu item, so a category's icon sits beside its
+   name while the selected-check stays on the right. */
+.plugins-menu-item-label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+/* The category glyph reads as a marker, not the accent-coloured check —
+   keep it muted so the check is the one orange mark in the row. */
+.plugins-menu-item-icon {
+  display: inline-flex;
+}
+
+.plugins-menu-item-icon svg {
+  color: var(--fg-muted);
+}
+
+/* A category chip on a plugin card: its glyph and name, quiet. */
+.plugins-cat-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--fg-muted);
+  font-size: var(--text-xs);
+}
+
+.plugins-cat-chip svg {
+  color: var(--fg-faint);
+  flex-shrink: 0;
+}
+
 /* Search as a pill that only appears once opened. */
 .plugins-searchbox {
   display: flex;

@@ -9,6 +9,7 @@ import { useEffect, useRef, useState } from "react";
 import { FilterIcon, GearIcon, RefreshIcon, SearchIcon, SortIcon, XIcon } from "../../Icons";
 import { ControlMenu } from "../ControlMenu";
 import { ALL_CATEGORIES, categoryLabel, SORT_OPTIONS, type SortKey } from "./catalogView";
+import { CategoryIcon } from "./categoryIcon";
 import type { Tab } from "./pluginsView";
 
 export function PluginsTabs({
@@ -89,7 +90,11 @@ export function CatalogControls({
 
   const filterOptions = [
     { key: ALL_CATEGORIES, label: "All categories" },
-    ...categories.map((c) => ({ key: c, label: categoryLabel(c) })),
+    ...categories.map((c) => ({
+      key: c,
+      label: categoryLabel(c),
+      icon: <CategoryIcon category={c} />,
+    })),
   ];
 
   return (
