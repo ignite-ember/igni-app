@@ -11103,14 +11103,51 @@ button.mcp-server-head:focus-visible {
    gap between fields; this just keeps the controls a readable width
    rather than letting a text input run the whole page. */
 .ext-settings {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
   max-width: 560px;
+}
+
+/* One family of controls: the select and the text input come from
+   different base styles (`.ui-select`, `.panel-input`), and side by side
+   they read as two forms. Same height, radius, surface and padding. */
+.ext-settings select.ui-select,
+.ext-settings input.panel-input {
+  /* `.panel-input` is `flex: 1` for toolbar rows; inside a Field's
+     column that turns into a zero basis and collapses the height. */
+  flex: none;
+  box-sizing: border-box;
+  width: 100%;
+  height: 38px;
+  padding: 0 var(--space-5);
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--fg);
+  font-size: var(--text-md);
+}
+
+.ext-settings select.ui-select:focus,
+.ext-settings input.panel-input:focus {
+  outline: none;
+  border-color: color-mix(in srgb, var(--igni-orange) 55%, var(--border));
 }
 
 .ext-settings-actions {
   display: flex;
   align-items: center;
   gap: var(--space-3);
-  margin-top: var(--space-1);
+  margin-top: var(--space-2);
+}
+
+/* Nothing to save yet is a quiet state, not a faded warning: a disabled
+   primary reads as neutral grey rather than washed-out orange. */
+.ext-settings-actions .btn-primary:disabled {
+  background: var(--bg-raised);
+  border-color: transparent;
+  color: var(--fg-faint);
+  opacity: 1;
 }
 
 .ext-settings-error {
