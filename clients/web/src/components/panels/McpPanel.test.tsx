@@ -222,7 +222,7 @@ describe("connecting and disconnecting", () => {
 });
 
 describe("what a server offers", () => {
-  it("takes the whole row when opened, and stops saying click to expand", async () => {
+  it("is marked open when opened, and stops saying click to expand", async () => {
     panelWith();
     fireEvent.click(await screen.findByText(/click to expand/));
     expect(document.querySelector(".mcp-server.is-open")).not.toBeNull();

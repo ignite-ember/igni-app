@@ -1,6 +1,7 @@
 /** The Installed tab: install from a git ref, and the installed plugins. */
 
 import { EntityGlyph } from "../../EntityGlyph";
+import { useMasonry } from "../useMasonry";
 import type { InstalledPlugin, InstalledPlugins } from "./installedPlugin";
 import { PluginCapabilities, PluginsSkeleton } from "./PluginParts";
 
@@ -19,6 +20,7 @@ export function InstalledTab({
   onInstall: (ref: string) => void;
   onOpen: (plugin: InstalledPlugin) => void;
 }) {
+  const flow = useMasonry();
   if (installed === null) return <PluginsSkeleton />;
   return (
     <>
@@ -46,7 +48,7 @@ export function InstalledTab({
           </div>
         </div>
       ) : (
-        <div className="plugins-grid plugins-grid--even">
+        <div className="plugins-grid plugins-grid--flow" ref={flow}>
           {installed.rows.map((p) => (
             <div
               className="plugins-gcard"

@@ -5,6 +5,7 @@ import { FilterIcon, NamedIcon, SortIcon } from "../Icons";
 import { ControlMenu } from "./ControlMenu";
 import { Drawer } from "./Drawer";
 import { PanelSearch } from "./PanelSearch";
+import { useMasonry } from "./useMasonry";
 import { ADD_SERVER_PROMPT } from "./mcp/addServerPrompt";
 import { McpServer } from "./mcp/mcpServer";
 import { McpServerEntry } from "./mcp/McpServerEntry";
@@ -54,6 +55,7 @@ export function McpPanel({
 }) {
   const { servers, approvals, busy, loadError, actionError, toggle, setToolEnabled, setApproval } =
     useMcpServers(client);
+  const flow = useMasonry();
   const [query, setQuery] = useState("");
   const [sortBy, setSortBy] = useState<McpSort>("default");
   const [filterBy, setFilterBy] = useState<McpFilter>("all");
@@ -139,7 +141,7 @@ export function McpPanel({
         </div>
       )}
       {shown.length > 0 && (
-        <div className="plugins-grid plugins-grid--even">
+        <div className="plugins-grid plugins-grid--flow" ref={flow}>
           {shown.map((s) => (
             <McpServerEntry
               key={s.name}

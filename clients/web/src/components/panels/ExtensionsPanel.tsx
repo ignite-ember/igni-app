@@ -9,6 +9,7 @@ import { OpenOnWeb } from "../../extensions/OpenOnWeb";
 import { ControlMenu } from "./ControlMenu";
 import { Drawer } from "./Drawer";
 import { PanelSearch } from "./PanelSearch";
+import { useMasonry } from "./useMasonry";
 
 type ExtSort = "default" | "name-asc" | "name-desc";
 type ExtFilter = "all" | "ready" | "failed" | "busy";
@@ -433,6 +434,7 @@ export function ExtensionsPanel({
   const [openMenu, setOpenMenu] = useState<"sort" | "filter" | null>(null);
   // Which extension's page is open, by id. `null` is the grid.
   const [selected, setSelected] = useState<string | null>(null);
+  const flow = useMasonry();
 
   const save = (id: string) => async (values: Record<string, Value>) => {
     const result = await client.rpc<{ extensions: ExtensionSummary[] }>(
@@ -522,7 +524,7 @@ export function ExtensionsPanel({
               <div className="plugins-empty-title">No extensions match</div>
             </div>
           )}
-          <div className="plugins-grid plugins-grid--even">
+          <div className="plugins-grid plugins-grid--flow" ref={flow}>
             {shown.map((extension) => (
               <ExtensionCard
                 key={extension.id}

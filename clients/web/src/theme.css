@@ -12066,14 +12066,20 @@ button.mcp-server-head:focus-visible {
   background: var(--bg-surface);
 }
 
-/* MCPs, Extensions and installed plugins, as the Plugins card grid: soft
-   filled cards in the same two-column grid. Cards in a row stretch to the
-   row's height, so the space between cards is the grid's gap and nothing
-   else — a short card no longer leaves extra room under itself. An opened
-   MCP server takes the whole row instead, so its tools do not stretch the
-   neighbour into a tall empty card. */
-.plugins-grid--even { align-items: stretch; }
-.plugins-grid--even > .mcp-server.is-open { grid-column: 1 / -1; }
+/* MCPs, Extensions and installed plugins flow as masonry: each card keeps
+   its own height and packs into the column that frees up first, so the
+   space between any two cards is the same gap — no card is stretched and
+   none leaves a hole under itself. `useMasonry` sets each card's row span
+   to its measured height plus the gap; the 1px rows make that exact, and
+   the vertical gap comes from the span, not `row-gap`. Without the hook
+   (no ResizeObserver) it is still a grid, just an uneven one. An opened
+   MCP server simply grows in its own column and the cards below it move
+   down — spanning both columns would leave a hole beside the card above. */
+.plugins-grid--flow {
+  grid-auto-rows: 1px;
+  row-gap: 0;
+  align-items: start;
+}
 
 .mcp-server {
   display: flex;
