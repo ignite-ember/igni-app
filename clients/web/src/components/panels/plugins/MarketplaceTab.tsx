@@ -66,7 +66,13 @@ export function MarketplaceTab({
             }}
           >
             <span className="plugins-gcard-icon" aria-hidden="true">
-              <EntityGlyph name={plugin.name} size={38} />
+              {plugin.category ? (
+                <span className="entity-glyph plugins-cat-avatar" style={{ width: 38, height: 38 }}>
+                  <CategoryIcon category={plugin.category} size={20} />
+                </span>
+              ) : (
+                <EntityGlyph name={plugin.name} size={38} />
+              )}
             </span>
             <div className="plugins-gcard-body">
               <div className="plugins-gcard-top">
@@ -89,10 +95,7 @@ export function MarketplaceTab({
               {(plugin.category || showSource || plugin.version) && (
                 <div className="plugins-gcard-foot">
                   {plugin.category && (
-                    <span className="plugins-cat-chip">
-                      <CategoryIcon category={plugin.category} size={12} />
-                      {categoryLabel(plugin.category)}
-                    </span>
+                    <span className="plugins-cat-chip">{categoryLabel(plugin.category)}</span>
                   )}
                   {showSource && <span className="plugins-source">{market}</span>}
                   {plugin.version && <span className="plugins-version">{plugin.version}</span>}
