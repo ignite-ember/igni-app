@@ -115,6 +115,27 @@ describe("the server list", () => {
     ]);
   });
 
+  it("reloads the config and the list on demand, without leaving the page", async () => {
+    const details: unknown[] = [GITHUB];
+    const { methods } = panelWith({ details });
+    await screen.findByText(/github/);
+    expect(screen.queryByText("jira")).toBeNull();
+
+    // A server is added to .mcp.json while the page is open.
+    details.push(DOWN);
+    fireEvent.click(screen.getByRole("button", { name: "Reload MCP config" }));
+
+    expect(await screen.findByText("jira")).toBeTruthy();
+    // ensure_mcp is what re-reads the files, so the reload asks it again.
+    expect(methods.filter((m) => m === "ensure_mcp")).toHaveLength(2);
+    expect(methods.filter((m) => m === "get_mcp_server_details")).toHaveLength(2);
+    await waitFor(() =>
+      expect(
+        (screen.getByRole("button", { name: "Reload MCP config" }) as HTMLButtonElement).disabled,
+      ).toBe(false),
+    );
+  });
+
   it("says when no server is configured", async () => {
     panelWith({ details: [] });
     expect(await screen.findByText("No MCP servers configured.")).toBeTruthy();

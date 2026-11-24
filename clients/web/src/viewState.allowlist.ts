@@ -363,7 +363,7 @@ export const VIEW_STATE: Record<string, Partial<Record<Category, string[]>>> = {
   },
   "components/panels/mcp/useMcpServers.ts": {
     data: ["servers", "approvals"],
-    pending: ["busy", "loadError", "actionError"],
+    pending: ["busy", "loadError", "actionError", "reloading"],
   },
   "components/panels/PluginsPanel.tsx": {
     page: ["view", "sortBy", "filterBy"],

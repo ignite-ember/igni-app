@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Skeleton } from "@ignite-ember/ui-react";
 import type { IgniClient } from "../../protocol/client";
-import { FilterIcon, NamedIcon, SortIcon } from "../Icons";
+import { FilterIcon, NamedIcon, RefreshIcon, SortIcon } from "../Icons";
 import { ControlMenu } from "./ControlMenu";
 import { Drawer } from "./Drawer";
 import { PanelSearch } from "./PanelSearch";
@@ -53,8 +53,18 @@ export function McpPanel({
   onClose: () => void;
   onAddServer: (seed: string) => void;
 }) {
-  const { servers, approvals, busy, loadError, actionError, toggle, setToolEnabled, setApproval } =
-    useMcpServers(client);
+  const {
+    servers,
+    approvals,
+    busy,
+    loadError,
+    actionError,
+    toggle,
+    setToolEnabled,
+    setApproval,
+    reload,
+    reloading,
+  } = useMcpServers(client);
   const flow = useMasonry();
   const [query, setQuery] = useState("");
   const [sortBy, setSortBy] = useState<McpSort>("default");
@@ -118,6 +128,15 @@ export function McpPanel({
               />
             </>
           )}
+          <button
+            className="kb-icon-btn"
+            disabled={reloading}
+            onClick={reload}
+            title="Reload .mcp.json — pick up servers added, edited or removed"
+            aria-label="Reload MCP config"
+          >
+            {reloading ? <span className="plugins-spinner" aria-hidden="true" /> : <RefreshIcon />}
+          </button>
           <button
             className="kb-icon-btn"
             onClick={() => onAddServer(ADD_SERVER_PROMPT)}

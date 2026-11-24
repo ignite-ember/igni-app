@@ -23,6 +23,11 @@ export interface McpServers {
   /** Approve a server and connect it, or withdraw its approval, which
    *  disconnects it. */
   setApproval: (serverName: string, approved: boolean) => void;
+  /** Re-read the `.mcp.json` files and the list: a server added, edited
+   *  or removed since the backend started takes effect. */
+  reload: () => void;
+  /** Whether a reload is in flight. */
+  reloading: boolean;
 }
 
 function reason(e: unknown): string {
@@ -35,7 +40,10 @@ export function useMcpServers(client: IgniClient): McpServers {
   const [busy, setBusy] = useState<string | null>(null);
   const [loadError, setLoadError] = useState("");
   const [actionError, setActionError] = useState("");
+  const [reloading, setReloading] = useState(false);
 
+  // `ensure_mcp` re-reads the config files on every call, so a refresh is
+  // also the reload; this only says it is happening.
   const refresh = useCallback(async () => {
     try {
       await client.rpc("ensure_mcp");
@@ -126,12 +134,24 @@ export function useMcpServers(client: IgniClient): McpServers {
     void refresh();
   };
 
+  const reload = async () => {
+    setReloading(true);
+    setActionError("");
+    try {
+      await refresh();
+    } finally {
+      setReloading(false);
+    }
+  };
+
   return {
     servers,
     approvals,
     busy,
     loadError,
     actionError,
+    reload: () => void reload(),
+    reloading,
     toggle: (server) => void toggle(server),
     setToolEnabled: (serverName, tool, enabled) =>
       void setToolEnabled(serverName, tool, enabled),
