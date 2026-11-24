@@ -2,6 +2,7 @@ import type { PageRoute } from "../chat/pageStack";
 import type { SidebarLayout } from "../chat/sidebarLayout";
 import type { AuthPhase } from "../chat/useShellStatus";
 import type { Sidebar as SidebarModel } from "../clientState";
+import type { SessionStates } from "../chat/sessionStates";
 import type { Contributions } from "../extensions/contributions";
 import type { NotificationCounts } from "../notifications/model";
 import type { IgniClient } from "../protocol/client";
@@ -13,6 +14,8 @@ export interface AppSidebarProps {
   sidebar: SidebarModel;
   layout: SidebarLayout;
   sessions: SessionEntry[];
+  /** What each chat is doing, and which are unread. */
+  states: SessionStates;
   currentId: string;
   contributions: Contributions;
   notificationCounts: NotificationCounts;
@@ -37,6 +40,7 @@ export function AppSidebar({
   sidebar,
   layout,
   sessions,
+  states,
   currentId,
   contributions,
   notificationCounts,
@@ -58,7 +62,7 @@ export function AppSidebar({
   return (
     <Sidebar
       open={sidebar.open}
-      sessions={sessions}
+      sessions={sessions.map((s) => ({ ...s, ...states.of(s.session_id) }))}
       currentId={currentId}
       links={contributions.sidebar()}
       activeLink={activeKind}

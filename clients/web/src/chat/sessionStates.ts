@@ -1,0 +1,129 @@
+/**
+ * Which chats are running, waiting on the person, or finished unseen —
+ * the sidebar's marks. Asked once with ``list_session_states`` when the
+ * connection opens, then moved only by ``session_states_changed``.
+ *
+ * Read state is the person's, kept by the backend across windows and
+ * devices: the chat on screen is marked seen with ``mark_session_seen``
+ * whenever it has news and the window is visible.
+ */
+
+import { useEffect, useRef, useState } from "react";
+
+import type { IgniClient } from "../protocol/client";
+import type { ServerMessage } from "../protocol/messages";
+import { WirePayload } from "../protocol/wirePayload";
+
+/** The push the backend sends whenever a chat's state or read mark moves. */
+export const STATES_CHANNEL = "session_states_changed";
+
+/** What a chat is doing. */
+export type ChatActivity = "running" | "waiting" | "idle";
+
+export interface ChatState {
+  activity: ChatActivity;
+  /** A run finished after the person last looked at the chat. */
+  unread: boolean;
+}
+
+const IDLE: ChatState = { activity: "idle", unread: false };
+
+function activityOf(value: unknown): ChatActivity {
+  return value === "running" || value === "waiting" ? value : "idle";
+}
+
+export class SessionStates {
+  static readonly NONE = new SessionStates(new Map());
+
+  constructor(private readonly byId: ReadonlyMap<string, ChatState>) {}
+
+  /** The states an answer or a push carries; `null` when it is not that shape. */
+  static parse(raw: unknown): SessionStates | null {
+    const payload = new WirePayload(raw);
+    if (!Array.isArray(payload.value("sessions"))) return null;
+    const byId = new Map<string, ChatState>();
+    for (const row of payload.list("sessions")) {
+      const r = new WirePayload(row);
+      const id = r.text("session_id");
+      if (!id) continue;
+      byId.set(id, { activity: activityOf(r.value("state")), unread: r.value("unread") === true });
+    }
+    return new SessionStates(byId);
+  }
+
+  /** The states `session_states_changed` carries, or `null` for anything else. */
+  static fromPush(message: ServerMessage): SessionStates | null {
+    if (message.type !== "push_notification" || message.channel !== STATES_CHANNEL) return null;
+    return SessionStates.parse(message.payload);
+  }
+
+  /** A chat not listed is idle and read. */
+  of(sessionId: string): ChatState {
+    return this.byId.get(sessionId) ?? IDLE;
+  }
+}
+
+/**
+ * The chats' states, kept current by the backend's pushes, with the chat
+ * on screen marked seen whenever it has news and the window is visible.
+ */
+export function useSessionStates(
+  client: Pick<IgniClient, "rpc" | "onEvent">,
+  connected: boolean,
+  currentId: string,
+): SessionStates {
+  const [states, setStates] = useState<SessionStates>(SessionStates.NONE);
+  // A push newer than the answer to the first ask wins over it.
+  const pushed = useRef(false);
+
+  useEffect(() => {
+    if (!connected) return;
+    let alive = true;
+    pushed.current = false;
+    void client
+      .rpc<unknown>("list_session_states")
+      .then((answer) => {
+        const next = SessionStates.parse(answer);
+        if (alive && next && !pushed.current) setStates(next);
+      })
+      .catch(() => {
+        // An older backend without the method: no chat is marked.
+      });
+    return () => {
+      alive = false;
+    };
+  }, [client, connected]);
+
+  useEffect(() => {
+    if (!connected) return;
+    return client.onEvent((message) => {
+      const next = SessionStates.fromPush(message);
+      if (!next) return;
+      pushed.current = true;
+      setStates(next);
+    });
+  }, [client, connected]);
+
+  // The chat on screen has news: the person is looking at it. Once per
+  // finish — a mark already asked for is not asked again until it lands.
+  const asked = useRef("");
+  const unreadHere = connected && !!currentId && states.of(currentId).unread;
+  useEffect(() => {
+    if (!unreadHere) {
+      asked.current = "";
+      return;
+    }
+    const mark = () => {
+      if (document.hidden || asked.current === currentId) return;
+      asked.current = currentId;
+      void client.rpc("mark_session_seen", { session_id: currentId }).catch(() => {
+        asked.current = "";
+      });
+    };
+    mark();
+    document.addEventListener("visibilitychange", mark);
+    return () => document.removeEventListener("visibilitychange", mark);
+  }, [client, currentId, unreadHere]);
+
+  return states;
+}

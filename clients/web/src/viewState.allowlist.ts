@@ -418,4 +418,7 @@ export const VIEW_STATE: Record<string, Partial<Record<Category, string[]>>> = {
   "notifications/model.ts": {
     data: ["counts"],
   },
+  "chat/sessionStates.ts": {
+    data: ["states"],
+  },
 };

@@ -6045,6 +6045,40 @@ button {
   line-height: 16px;
 }
 
+/* A chat whose run is working: a small turning ring in igni's orange,
+   in the slot the waiting pill and the unread dot use. */
+.session-item .session-running {
+  flex-shrink: 0;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  border: 1.5px solid color-mix(in srgb, var(--accent) 28%, transparent);
+  border-top-color: var(--accent);
+  animation: igni-spin 0.9s linear infinite;
+}
+
+/* A chat whose run finished while the person was elsewhere: a blue dot,
+   and its name as bright as the open chat's, until it is opened. Blue,
+   not the accent: orange already says "working" and "waiting". */
+.session-item .session-unread {
+  flex-shrink: 0;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent-blue);
+}
+
+.session-item.unread .session-name {
+  color: var(--fg);
+  font-weight: 600;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .session-item .session-running {
+    animation-duration: 2.4s;
+  }
+}
+
 /* ── Group pill + its "yours or theirs" popover ────────────────── */
 
 .group-pill-wrap {
