@@ -38,7 +38,7 @@ export function FlameIcon({ size = 16 }: IconProps) {
       aria-hidden="true"
       style={{ display: "block", flexShrink: 0 }}
     >
-      <rect width="64" height="64" rx="15" fill="#D97757" />
+      <rect width="64" height="64" rx="15" fill="#D98457" />
       <path
         fill="#fff"
         fillRule="evenodd"
