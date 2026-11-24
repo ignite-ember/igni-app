@@ -74,7 +74,7 @@ async function newChat(page: import("@playwright/test").Page) {
   const idBefore = (
     await page.locator(".session-ctx-id").innerText()
   ).trim();
-  await page.getByRole("button", { name: /New chat/i }).click();
+  await page.getByRole("button", { name: /^\+ New chat$/ }).click();
   // Emptiness measured by the absence of assistant blocks, not by the
   // absence of a token string: session *titles* in the sidebar carry
   // earlier tokens, and a text-absence assertion over a broad
@@ -276,7 +276,7 @@ test(
     await page.goto(`/?ws=${encodeURIComponent(liveBe.wsUrl)}`);
     await connected(page);
 
-    await page.getByRole("button", { name: /New chat/i }).click();
+    await page.getByRole("button", { name: /^\+ New chat$/ }).click();
     // Deliberately no wait for the rotation. The wait is the
     // workaround, and every other spec's `newChat()` uses it; this is
     // the one test that must not.

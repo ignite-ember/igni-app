@@ -57,7 +57,7 @@ async function newChat(page: Page) {
   const idBefore = (
     await page.locator(".session-ctx-id").innerText()
   ).trim();
-  await page.getByRole("button", { name: /New chat/i }).click();
+  await page.getByRole("button", { name: /^\+ New chat$/ }).click();
   await expect(page.locator(".msg-assistant")).toHaveCount(0, {
     timeout: 15_000,
   });

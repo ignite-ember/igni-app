@@ -211,7 +211,7 @@ test.describe("@ file mentions", () => {
     await connected(page);
     const before = await sessionId(page);
 
-    await page.getByRole("button", { name: /New chat/i }).click();
+    await page.getByRole("button", { name: /^\+ New chat$/ }).click();
 
     const editor = page.locator(".composer-editable");
     await editor.click();

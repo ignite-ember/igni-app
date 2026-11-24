@@ -337,7 +337,7 @@ test(
     await connected(page);
 
     // Its own session, so nothing a person cares about is destroyed.
-    await page.getByRole("button", { name: /New chat/i }).click();
+    await page.getByRole("button", { name: /^\+ New chat$/ }).click();
     await expect(page.locator(".msg-assistant")).toHaveCount(0, {
       timeout: 15_000,
     });
@@ -364,7 +364,7 @@ for (const { cmd, shows } of ANSWERS) {
     // Its own conversation. `/compact` and `/memory` read session
     // state, and running them against whatever the previous test left
     // behind makes the assertion depend on test order.
-    await page.getByRole("button", { name: /New chat/i }).click();
+    await page.getByRole("button", { name: /^\+ New chat$/ }).click();
 
     await runCommand(page, cmd);
     await shot(page, `ans${cmd.replace("/", "-")}`);
@@ -398,7 +398,7 @@ for (const { cmd, becomes } of MODES) {
     // drive.
     await page.goto(`/?ws=${encodeURIComponent(liveBe.wsUrl)}`);
     await connected(page);
-    await page.getByRole("button", { name: /New chat/i }).click();
+    await page.getByRole("button", { name: /^\+ New chat$/ }).click();
 
     await runCommand(page, cmd);
     const conversation = page.locator(".conversation");
@@ -434,7 +434,7 @@ test("/rename refuses to confirm a rename it did not make", async ({
   // unconditional. The sidebar never showed X and never would.
   await page.goto(`/?ws=${encodeURIComponent(liveBe.wsUrl)}`);
   await connected(page);
-  await page.getByRole("button", { name: /New chat/i }).click();
+  await page.getByRole("button", { name: /^\+ New chat$/ }).click();
 
   const name = `e2e-renamed-${Date.now()}`;
   await runCommand(page, `/rename ${name}`);

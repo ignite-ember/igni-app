@@ -126,7 +126,7 @@ async function connected(page: Page) {
 /** An empty transcript, so the welcome hero renders and `.msg-user`
  *  counts mean something. */
 async function emptyChat(page: Page) {
-  await page.getByRole("button", { name: /New chat/i }).click();
+  await page.getByRole("button", { name: /^\+ New chat$/ }).click();
   await expect(page.locator(".msg-assistant")).toHaveCount(0, {
     timeout: 15_000,
   });
