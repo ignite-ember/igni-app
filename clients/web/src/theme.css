@@ -8070,9 +8070,21 @@ button.mcp-server-head:focus-visible {
 
 /* An extension card: a soft clickable card like a plugin card. The whole
    card is the button, so it keeps the gcard's own pointer and hover; the
-   foot carries the id and a chevron that says it opens onto a page. */
+   foot carries the id and a chevron that says it opens onto a page.
+   A <button> takes the browser's own text colour and font rather than
+   inheriting, which left the id black on the dark card — so set both. */
+.plugins-gcard.ext-card {
+  color: var(--fg);
+  font: inherit;
+}
+
+.ext-card .meta {
+  color: var(--fg-faint);
+}
+
 .ext-card .ext-card-id {
   min-width: 0;
+  color: var(--fg-muted);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
