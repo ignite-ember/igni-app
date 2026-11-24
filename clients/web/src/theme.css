@@ -1241,59 +1241,74 @@ button {
    as a drag-tail, but that just made the opaque strip look
    twice as tall as needed; the header row itself is drag
    region enough on Tauri. */
-/* Over the conversation the top edge is a fade, not a wall: one blurred
-   layer that runs a little past the header and is masked out towards
-   its bottom, so a message scrolling up softens and dissolves instead
-   of being cut at a hard line. One layer, not the old six — that stack
-   is what cost the frames. It takes no clicks (the header itself stays
-   the drag region), so the tail below the header never blocks the
-   message under it. */
+/* Over the conversation the top edge is a fade, not a wall. The messages
+   themselves fade out (the mask on `.conversation` below), so nothing is
+   ever cut at a line; this layer only adds a soft blur on the same short
+   curve. It has no tint and no flat stretch — a near-opaque band is what
+   made a message seem to vanish at one point. One layer, not the old six
+   that cost the frames, and it takes no clicks (the header stays the
+   drag region). */
 .app-header-blur {
   position: absolute;
   top: 0;
   left: 0;
   right: 0;
-  /* A long tail and eased stops: a two-stop linear fade shows a visible
-     edge where it starts and stops, and bands on a dark background. The
-     stops follow an ease-out curve, so the fade has no line anywhere. */
-  height: calc(100% + 72px);
+  height: calc(100% + 24px);
   pointer-events: none;
   z-index: -1;
-  background: linear-gradient(
-    to bottom,
-    color-mix(in srgb, var(--bg) 94%, transparent) 0%,
-    color-mix(in srgb, var(--bg) 90%, transparent) 30%,
-    color-mix(in srgb, var(--bg) 78%, transparent) 45%,
-    color-mix(in srgb, var(--bg) 60%, transparent) 58%,
-    color-mix(in srgb, var(--bg) 40%, transparent) 70%,
-    color-mix(in srgb, var(--bg) 22%, transparent) 81%,
-    color-mix(in srgb, var(--bg) 9%, transparent) 91%,
-    transparent 100%
-  );
-  -webkit-backdrop-filter: blur(8px);
-  backdrop-filter: blur(8px);
-  /* The blur itself fades out on the same curve, so it never ends at a line. */
+  background: transparent;
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
   -webkit-mask-image: linear-gradient(
     to bottom,
     #000 0%,
-    #000 35%,
-    rgba(0, 0, 0, 0.85) 48%,
-    rgba(0, 0, 0, 0.62) 60%,
-    rgba(0, 0, 0, 0.38) 72%,
-    rgba(0, 0, 0, 0.18) 84%,
-    rgba(0, 0, 0, 0.05) 94%,
+    rgba(0, 0, 0, 0.9) 22%,
+    rgba(0, 0, 0, 0.7) 42%,
+    rgba(0, 0, 0, 0.45) 60%,
+    rgba(0, 0, 0, 0.22) 77%,
+    rgba(0, 0, 0, 0.07) 90%,
     transparent 100%
   );
   mask-image: linear-gradient(
     to bottom,
     #000 0%,
-    #000 35%,
-    rgba(0, 0, 0, 0.85) 48%,
-    rgba(0, 0, 0, 0.62) 60%,
-    rgba(0, 0, 0, 0.38) 72%,
-    rgba(0, 0, 0, 0.18) 84%,
-    rgba(0, 0, 0, 0.05) 94%,
+    rgba(0, 0, 0, 0.9) 22%,
+    rgba(0, 0, 0, 0.7) 42%,
+    rgba(0, 0, 0, 0.45) 60%,
+    rgba(0, 0, 0, 0.22) 77%,
+    rgba(0, 0, 0, 0.07) 90%,
     transparent 100%
+  );
+}
+
+/* The messages fade to nothing as they reach the top of the window, on a
+   smooth (smoothstep-shaped) curve over the top 76px — gone at the very
+   edge, fully there just below the header, and no point in between where
+   the opacity jumps. Cheaper than any blur: it is only a mask. */
+.conversation {
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    transparent 0px,
+    rgba(0, 0, 0, 0.03) 8px,
+    rgba(0, 0, 0, 0.12) 17px,
+    rgba(0, 0, 0, 0.27) 27px,
+    rgba(0, 0, 0, 0.46) 37px,
+    rgba(0, 0, 0, 0.65) 47px,
+    rgba(0, 0, 0, 0.82) 57px,
+    rgba(0, 0, 0, 0.94) 67px,
+    #000 76px
+  );
+  mask-image: linear-gradient(
+    to bottom,
+    transparent 0px,
+    rgba(0, 0, 0, 0.03) 8px,
+    rgba(0, 0, 0, 0.12) 17px,
+    rgba(0, 0, 0, 0.27) 27px,
+    rgba(0, 0, 0, 0.46) 37px,
+    rgba(0, 0, 0, 0.65) 47px,
+    rgba(0, 0, 0, 0.82) 57px,
+    rgba(0, 0, 0, 0.94) 67px,
+    #000 76px
   );
 }
 
