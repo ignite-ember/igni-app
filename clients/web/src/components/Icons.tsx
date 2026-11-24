@@ -29,7 +29,7 @@ function Svg({ size = 16, children }: IconProps & { children: React.ReactNode })
   );
 }
 
-/** Brand icon — the igni cat on its coral tile, same artwork as the favicon. */
+/** Brand mark — the igni cat on its coral tile, same artwork as the favicon. */
 export function FlameIcon({ size = 16 }: IconProps) {
   return (
     <img
