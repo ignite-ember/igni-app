@@ -138,7 +138,7 @@ test.describe("what the person does is a write to the model", () => {
     await expect.poll(() => writesOf(backend, window, "route").at(-1)).toEqual([]);
 
     const before = (backend.windows.state(window).sidebar as { open: boolean }).open;
-    await page.getByTitle("Toggle sessions").click();
+    await page.getByRole("button", { name: /^(Hide|Show) sidebar$/ }).click();
     await expect
       .poll(() => (backend.windows.state(window).sidebar as { open: boolean }).open)
       .toBe(!before);

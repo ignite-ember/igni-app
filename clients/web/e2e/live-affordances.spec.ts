@@ -112,6 +112,7 @@ const CARDS = [
   "/loop",
   "/mcp",
   "/plugins",
+  "/extensions",
 ];
 
 async function connected(page: Page) {
@@ -226,7 +227,7 @@ test.describe("header tools menu", () => {
 });
 
 test.describe("welcome cards", () => {
-  test("the hero offers exactly the nine cards", async ({ page, liveBe }) => {
+  test("the hero offers exactly its eight cards", async ({ page, liveBe }) => {
     await page.goto(`/?ws=${encodeURIComponent(liveBe.wsUrl)}`);
     await connected(page);
     await emptyChat(page);

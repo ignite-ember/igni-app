@@ -53,7 +53,7 @@ export async function send(page: Page, text: string): Promise<void> {
 
 /** Start from an empty transcript and wait until the session id rotated. */
 export async function newChat(page: Page): Promise<void> {
-  const chip = page.locator(".session-chip code");
+  const chip = page.locator(".session-ctx-id");
   const before = (await chip.innerText()).trim();
   await page.getByRole("button", { name: /New chat/i }).click();
   await expect(page.locator(".msg-assistant")).toHaveCount(0, { timeout: 15_000 });

@@ -101,7 +101,7 @@ const READ_ONLY: {
     where: ".sidebar:not(.closed)",
     shows: /session/i,
     before: async (page) => {
-      await page.getByTitle("Toggle sessions").click();
+      await page.getByRole("button", { name: /^(Hide|Show) sidebar$/ }).click();
       await expect(page.locator(".sidebar.closed")).toBeVisible();
     },
   },
@@ -311,7 +311,7 @@ test(
     // coin toss. This test failed that way in a full sweep and passed
     // alone, which is the signature of reading the wrong element
     // rather than of a broken fork.
-    const chip = page.locator(".session-chip code");
+    const chip = page.locator(".session-ctx-id");
     const idBefore = (await chip.innerText()).trim();
     expect(idBefore).toMatch(/^[0-9a-f]{6,}$/);
 

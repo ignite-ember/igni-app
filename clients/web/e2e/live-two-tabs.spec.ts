@@ -49,7 +49,7 @@ async function secondTab(context: BrowserContext, token: string | null): Promise
 }
 
 async function chip(page: Page): Promise<string> {
-  return (await page.locator(".session-chip code").innerText()).trim();
+  return (await page.locator(".session-ctx-id").innerText()).trim();
 }
 
 async function newChat(page: Page): Promise<void> {

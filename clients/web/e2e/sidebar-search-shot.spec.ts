@@ -1,4 +1,4 @@
-/** Throwaway capture of the chat-list search in the sidebar. @manual. */
+/** Throwaway capture of the chat search (Cmd/Ctrl+F, this chat or all chats). @manual. */
 
 import { test, expect } from "./fixtures/embed";
 import { signedInStatus, type FixtureBackend } from "./fixtures/backend";
@@ -18,6 +18,11 @@ function mock(be: FixtureBackend) {
   be.onRpc("get_login_state", () => ({ logged_in: true, email: "dev@acme.com" }));
   be.onRpc("get_cloud_plan", () => ({ full_name: "Ada Lovelace" }));
   be.onRpc("list_sessions", () => SESSIONS);
+  // Search opens only over a transcript with something in it.
+  be.onRpc("get_chat_history", () => [
+    { role: "user", content: "Why does the auth token refresh fail?", run_id: "r-1" },
+    { role: "assistant", content: "The refresh call drops the old token before the new one lands.", run_id: "r-1" },
+  ]);
 }
 
 test.use({ viewport: { width: 1300, height: 940 } });
@@ -27,12 +32,14 @@ test("sidebar chat search", { tag: "@manual" }, async ({ page, backend, appUrl }
   await page.goto(appUrl);
   await expect(page.locator(".composer-editable")).toBeVisible();
   await page.emulateMedia({ colorScheme: "dark" });
-  await expect(page.locator(".sidebar-search")).toBeVisible();
+  await expect(page.locator(".msg-assistant")).toBeVisible();
+  await page.keyboard.press("ControlOrMeta+f");
+  await expect(page.locator(".chat-search-bar")).toBeVisible();
   await page.waitForTimeout(200);
   await page.screenshot({ path: "account-shots/sidebar-search.png" });
 
-  // Type a filter.
-  await page.locator(".sidebar-search-input").fill("auth");
+  // Type a query.
+  await page.locator(".chat-search-input").fill("auth");
   await page.waitForTimeout(200);
   await page.screenshot({ path: "account-shots/sidebar-search-filtered.png" });
 });

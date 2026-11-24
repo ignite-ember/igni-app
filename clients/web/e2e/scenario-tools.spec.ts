@@ -99,13 +99,13 @@ test("TOOL-010 a pending approval is shown in a second tab and answered there", 
   const token = marker();
   await send(page, `${touch("second-tab.txt")} then say ${token}`);
   await expect(page.locator(".hitl-card")).toBeVisible({ timeout: 30_000 });
-  const session = (await page.locator(".session-chip code").innerText()).trim();
+  const session = (await page.locator(".session-ctx-id").innerText()).trim();
 
   const tab = await context.newPage();
   await open(tab, liveBe.wsUrl);
   // The second tab opens on the most recent session or offers it in the
   // sidebar; either way the pending call must be answerable from it.
-  const chip = (await tab.locator(".session-chip code").innerText()).trim();
+  const chip = (await tab.locator(".session-ctx-id").innerText()).trim();
   if (chip !== session) {
     await tab.locator(".sidebar, nav").getByText(session.slice(0, 6)).first().click();
   }

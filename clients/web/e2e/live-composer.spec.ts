@@ -43,15 +43,15 @@ async function connected(page: Page) {
   );
 }
 
-/** The session id, read from the footer chip itself.
+/** The session id, read from the footer's session dial itself.
  *
  *  Regexing `body.innerText()` for `session <hex>` also reads the
  *  sidebar, which lists an id next to every session in the project —
- *  hundreds of them on a backend that has been used. `.session-chip`
+ *  hundreds of them on a backend that has been used. `.session-ctx-id`
  *  is the one element that means "the session you are in".
  */
 async function sessionId(page: Page): Promise<string> {
-  return (await page.locator(".session-chip code").innerText()).trim();
+  return (await page.locator(".session-ctx-id").innerText()).trim();
 }
 
 /**

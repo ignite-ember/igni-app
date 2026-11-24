@@ -268,9 +268,17 @@ async function writeStubConfig(
  * decision is written into it through igni's own trust service — the same
  * record the dialog's "Trust" button writes. This also keeps the spawned
  * backend off the developer's real ``~/.igni``.
+ *
+ * The same home turns update checks off (``update_check_ttl: 0``). Left on,
+ * the backend asks PyPI for a newer igni-core, and whenever PyPI is ahead of
+ * the checkout under test — every release, until the checkout catches up —
+ * the web client opens "Update available", whose backdrop covers the page as
+ * the trust dialog's did. A test run must not depend on PyPI either way.
  */
 async function trustedHome(projectDir: string): Promise<string> {
   const home = await fsp.mkdtemp(path.join(os.tmpdir(), "igni-live-be-home-"));
+  await fsp.mkdir(path.join(home, ".igni"), { recursive: true });
+  await fsp.writeFile(path.join(home, ".igni", "config.yaml"), "update_check_ttl: 0\n", "utf8");
   await run(
     VENV_PYTHON,
     [

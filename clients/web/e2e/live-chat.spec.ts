@@ -72,7 +72,7 @@ function marker(): string {
 /** Start from an empty transcript, so nothing earlier can match. */
 async function newChat(page: import("@playwright/test").Page) {
   const idBefore = (
-    await page.locator(".session-chip code").innerText()
+    await page.locator(".session-ctx-id").innerText()
   ).trim();
   await page.getByRole("button", { name: /New chat/i }).click();
   // Emptiness measured by the absence of assistant blocks, not by the
@@ -99,7 +99,7 @@ async function newChat(page: import("@playwright/test").Page) {
   // named the wrong thing — cancelling, forking, tool calls.
   await expect
     .poll(
-      async () => (await page.locator(".session-chip code").innerText()).trim(),
+      async () => (await page.locator(".session-ctx-id").innerText()).trim(),
       {
         timeout: 30_000,
       },
