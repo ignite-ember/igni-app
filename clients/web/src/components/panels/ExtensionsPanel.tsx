@@ -1,4 +1,16 @@
 import { useMemo, useState } from "react";
+import {
+  Badge,
+  Banner,
+  Button,
+  Card,
+  Field,
+  Heading,
+  Input,
+  Select,
+  Switch,
+  Text,
+} from "@ignite-ember/ui-react";
 import { EntityGlyph } from "../EntityGlyph";
 import { FilterIcon, SortIcon } from "../Icons";
 import type { PanelLevels } from "../PageShell";
@@ -82,6 +94,13 @@ function stateClass(state: string): string {
   return "ext-state ext-state-busy";
 }
 
+/** The same state as a design-system Badge tone. */
+function stateTone(state: string): "success" | "danger" | "warning" {
+  if (state === "ready") return "success";
+  if (state === "failed") return "danger";
+  return "warning";
+}
+
 function SettingsForm({
   extension,
   onSave,
@@ -120,84 +139,103 @@ function SettingsForm({
   };
 
   return (
-    <div className="ext-settings">
-      {extension.settings.map((setting) => (
-        <label className="ext-setting" key={setting.key}>
-          <span className="ext-setting-label">{setting.label}</span>
-          {setting.type === "boolean" && (
-            <input
-              type="checkbox"
+    <Card className="ext-settings">
+      {extension.settings.map((setting) => {
+        const id = `ext-set-${extension.id}-${setting.key}`;
+        // Rendering an unknown type as text would be a guess, and a guess
+        // that saves is worse than one that does not.
+        if (!KNOWN_TYPES.has(setting.type)) {
+          return (
+            <Field key={setting.key} label={setting.label}>
+              <Text tone="muted">
+                needs a newer igni — this one does not know the type “{setting.type}”
+              </Text>
+            </Field>
+          );
+        }
+        if (setting.type === "boolean") {
+          return (
+            <Switch
+              key={setting.key}
               checked={draft[setting.key] === true}
-              onChange={(e) => set(setting.key, e.target.checked)}
+              onChange={(next) => set(setting.key, next)}
+              label={setting.label}
             />
-          )}
-          {setting.type === "number" && (
-            <input
-              className="panel-input"
-              type="number"
-              value={
-                Number.isNaN(draft[setting.key])
-                  ? ""
-                  : String(draft[setting.key])
-              }
-              onChange={(e) => set(setting.key, e.target.valueAsNumber)}
-            />
-          )}
-          {setting.type === "string" && (
-            <input
-              className="panel-input"
+          );
+        }
+        if (setting.type === "enum") {
+          return (
+            <Field key={setting.key} label={setting.label} htmlFor={id}>
+              <Select
+                id={id}
+                value={String(draft[setting.key] ?? "")}
+                onChange={(e) => set(setting.key, e.target.value)}
+              >
+                {setting.options.map((option) => (
+                  <option key={option} value={option}>
+                    {option}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+          );
+        }
+        if (setting.type === "number") {
+          // A cleared number input reads as `NaN`; sending it would store
+          // `null` and look like a reset, so name the field and refuse.
+          const bad = Number.isNaN(draft[setting.key]);
+          return (
+            <Field
+              key={setting.key}
+              label={setting.label}
+              htmlFor={id}
+              error={bad ? `${setting.label} needs a number` : undefined}
+            >
+              <Input
+                id={id}
+                type="number"
+                value={bad ? "" : String(draft[setting.key])}
+                onChange={(e) => set(setting.key, e.target.valueAsNumber)}
+              />
+            </Field>
+          );
+        }
+        return (
+          <Field key={setting.key} label={setting.label} htmlFor={id}>
+            <Input
+              id={id}
               type="text"
               value={String(draft[setting.key] ?? "")}
               onChange={(e) => set(setting.key, e.target.value)}
             />
-          )}
-          {setting.type === "enum" && (
-            <select
-              className="panel-input"
-              value={String(draft[setting.key] ?? "")}
-              onChange={(e) => set(setting.key, e.target.value)}
-            >
-              {setting.options.map((option) => (
-                <option key={option} value={option}>
-                  {option}
-                </option>
-              ))}
-            </select>
-          )}
-          {!KNOWN_TYPES.has(setting.type) && (
-            // Rendered as text would be a guess, and a guess that
-            // saves is worse than one that does not. The same rule
-            // the indicator follows for a tone it does not have.
-            <span className="meta">
-              needs a newer igni — this one does not know the type “
-              {setting.type}”
-            </span>
-          )}
-        </label>
-      ))}
+          </Field>
+        );
+      })}
       <div className="ext-settings-actions">
-        <button
-          className="btn btn-primary btn-sm"
+        <Button
+          variant="primary"
+          size="sm"
           disabled={!dirty || busy || broken.length > 0}
           onClick={() => void save()}
         >
           {busy ? "Saving…" : "Save"}
-        </button>
+        </Button>
         {dirty && !busy && (
-          <button className="btn btn-sm" onClick={() => setDraft(saved)}>
+          <Button variant="default" size="sm" onClick={() => setDraft(saved)}>
             Revert
-          </button>
+          </Button>
         )}
-        {broken.length > 0 && (
-          <span className="meta">{broken.join(", ")} needs a number</span>
+        {error && (
+          <Text tone="muted" className="ext-settings-error">
+            {error}
+          </Text>
         )}
-        {error && <span className="meta ext-settings-error">{error}</span>}
       </div>
-      <div className="meta">
-        Applied the next time this extension’s page is opened. A frame already
-        up keeps the values it launched with.
-      </div>
-    </div>
+      <Text tone="faint">
+        Applied the next time this extension’s page is opened. A frame already up
+        keeps the values it launched with.
+      </Text>
+    </Card>
   );
 }
 
@@ -317,17 +355,19 @@ function ExtensionDetailPage({
         </span>
         <div className="ext-detail-head">
           <div className="ext-detail-title-row">
-            <h2 className="ext-detail-title">{extension.name}</h2>
-            <span className={stateClass(extension.state)}>{extension.state}</span>
+            <Heading level={2} className="ext-detail-title">
+              {extension.name}
+            </Heading>
+            <Badge tone={stateTone(extension.state)}>{extension.state}</Badge>
           </div>
-          <div className="meta">
+          <Text tone="muted">
             {extension.id} · {extension.version}
-          </div>
+          </Text>
         </div>
       </div>
 
       {extension.reason && (
-        <div className={failed ? "msg-error" : "msg-info"}>{extension.reason}</div>
+        <Banner tone={failed ? "danger" : "neutral"}>{extension.reason}</Banner>
       )}
       <SwitchedOff entries={extension.switched_off ?? []} />
       <SwitchedOff
@@ -335,47 +375,46 @@ function ExtensionDetailPage({
         title="Prompt edits that land nowhere — another extension's override has no such section:"
       />
       {extension.faulty && (
-        <div className="ext-switched-off" role="alert">
-          <div className="meta">Not responding: {extension.faulty}</div>
-        </div>
+        <Banner tone="danger">Not responding: {extension.faulty}</Banner>
       )}
       <Problems entries={extension.problems ?? []} />
 
       {extension.pages.length > 0 && (
-        <div className="ext-detail-section">
+        <section className="ext-detail-section">
           <div className="ext-detail-section-title">Pages</div>
-          <ul className="ext-detail-list">
+          <div className="ext-detail-rows">
             {extension.pages.map((p) => (
-              <li key={p.kind}>
-                {p.label}
-                {p.sidebar && <span className="meta"> · in the sidebar</span>}
-              </li>
+              <div className="ext-detail-row" key={p.kind}>
+                <span className="ext-detail-row-main">{p.label}</span>
+                {p.sidebar && <Text tone="faint">in the sidebar</Text>}
+              </div>
             ))}
-          </ul>
-        </div>
+          </div>
+        </section>
       )}
 
       {extension.menu.length > 0 && (
-        <div className="ext-detail-section">
+        <section className="ext-detail-section">
           <div className="ext-detail-section-title">Commands</div>
-          <ul className="ext-detail-list">
+          <div className="ext-detail-rows">
             {extension.menu.map((c) => (
-              <li key={c.command}>
-                <code>{c.command}</code> <span className="meta">{c.desc}</span>
-              </li>
+              <div className="ext-detail-row" key={c.command}>
+                <code className="ext-detail-cmd">{c.command}</code>
+                <Text tone="muted">{c.desc}</Text>
+              </div>
             ))}
-          </ul>
-        </div>
+          </div>
+        </section>
       )}
 
       <AgentTools tools={extension.tools ?? []} />
       <OpenOnWeb url={extension.web_url} name={extension.name} />
 
       {extension.settings.length > 0 && (
-        <div className="ext-detail-section">
+        <section className="ext-detail-section">
           <div className="ext-detail-section-title">Settings</div>
           <SettingsForm extension={extension} onSave={onSave} />
-        </div>
+        </section>
       )}
     </div>
   );

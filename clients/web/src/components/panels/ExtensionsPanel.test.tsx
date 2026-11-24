@@ -207,7 +207,8 @@ describe("the form", () => {
     openDetail();
     expect(screen.getByDisplayValue("https://acme.test")).toBeTruthy();
     expect(screen.getByDisplayValue("3")).toBeTruthy();
-    expect(screen.getByRole("checkbox")).toBeTruthy();
+    // A boolean setting renders as a design-system Switch (role=switch).
+    expect(screen.getByRole("switch")).toBeTruthy();
     expect(screen.getByRole("combobox")).toBeTruthy();
   });
 
