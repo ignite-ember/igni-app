@@ -522,7 +522,7 @@ export function ExtensionsPanel({
               <div className="plugins-empty-title">No extensions match</div>
             </div>
           )}
-          <div className="plugins-grid plugins-grid--start">
+          <div className="plugins-grid plugins-grid--even">
             {shown.map((extension) => (
               <ExtensionCard
                 key={extension.id}

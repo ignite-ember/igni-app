@@ -14,49 +14,58 @@ import { ExtensionsPanel } from "../components/panels/ExtensionsPanel";
 import { McpPanel } from "../components/panels/McpPanel";
 import { PageContext } from "../components/PageShell";
 
+// The shapes the live backend returns: tool names carry the registry's
+// `mcp_<server>_` prefix, and a server that failed carries the
+// transport's raw error.
 const MCP_SERVERS = [
   {
     name: "github",
     connected: true,
     transport: "stdio",
-    tool_names: ["create_pr", "list_issues", "merge_pr"],
+    tool_names: ["mcp_github_list_issues", "mcp_github_create_pr", "mcp_github_merge_pr"],
     tool_descriptions: {
-      create_pr: "Open a pull request from the current branch.",
-      list_issues: "List open issues on a repository.",
-      merge_pr: "Merge an approved pull request.",
+      mcp_github_list_issues: "List open issues on a repository.",
+      mcp_github_create_pr: "Open a pull request from a branch.",
+      mcp_github_merge_pr: "Merge an approved pull request.",
     },
-    tools_disabled: [],
-    resources: [],
-    prompts: [],
+    tools_disabled: ["mcp_github_merge_pr"],
+    resources: [{ uri: "repo://acme/web", name: "repo_readme", description: "The web repository's README." }],
+    prompts: [{ name: "triage", description: "Triage an issue into a label and a priority.", arguments: ["issue"] }],
     error: "",
     policy_blocked: false,
   },
   {
     name: "postgres",
     connected: true,
-    transport: "sse",
-    tool_names: ["query", "list_tables"],
-    tool_descriptions: { query: "Run a read-only SQL query." },
-    tools_disabled: [],
-    resources: [{ uri: "schema://public", name: "public schema" }],
-    prompts: [],
-    error: "",
-    policy_blocked: false,
-  },
-  {
-    name: "sentry",
-    connected: true,
     transport: "stdio",
-    tool_names: ["list_errors", "resolve"],
-    tool_descriptions: { list_errors: "List unresolved errors in a project." },
-    tools_disabled: ["resolve"],
-    resources: [],
+    tool_names: ["mcp_postgres_query", "mcp_postgres_list_tables"],
+    tool_descriptions: {
+      mcp_postgres_query: "Run a read-only SQL query.",
+      mcp_postgres_list_tables: "List the tables in the public schema.",
+    },
+    tools_disabled: [],
+    resources: [{ uri: "schema://public", name: "public_schema" }],
     prompts: [],
     error: "",
     policy_blocked: false,
   },
   {
     name: "linear",
+    connected: true,
+    transport: "stdio",
+    tool_names: ["mcp_linear_list_tickets", "mcp_linear_create_ticket"],
+    tool_descriptions: {
+      mcp_linear_list_tickets: "List a team's open tickets.",
+      mcp_linear_create_ticket: "Create a ticket on a team.",
+    },
+    tools_disabled: [],
+    resources: [],
+    prompts: [{ name: "standup", description: "Summarise yesterday's ticket movement.", arguments: [] }],
+    error: "",
+    policy_blocked: false,
+  },
+  {
+    name: "sentry",
     connected: false,
     transport: "stdio",
     tool_names: [],
@@ -64,7 +73,7 @@ const MCP_SERVERS = [
     tools_disabled: [],
     resources: [],
     prompts: [],
-    error: "",
+    error: "[Errno 2] No such file or directory: 'mcp-server-sentry'",
     policy_blocked: false,
   },
   {
@@ -76,7 +85,7 @@ const MCP_SERVERS = [
     tools_disabled: [],
     resources: [],
     prompts: [],
-    error: "disconnected",
+    error: "",
     policy_blocked: false,
   },
 ];

@@ -144,9 +144,18 @@ describe("the server list", () => {
         "2 tools · 2 resources · 2 prompts — click to expand",
       ),
     ).toBeTruthy();
-    expect(screen.getByText("401 Unauthorized")).toBeTruthy();
+    // A refused credential reads as what to fix, keeping the status code.
+    expect(
+      screen.getByText(/refused the credentials \(401 Unauthorized\)\. Check its token/),
+    ).toBeTruthy();
     expect(screen.getByText("blocked by policy")).toBeTruthy();
     expect(screen.getByText("disconnected")).toBeTruthy();
+  });
+
+  it("keeps the transport's own words one hover away", async () => {
+    panelWith({ details: [DOWN] });
+    const line = await screen.findByText(/refused the credentials/);
+    expect(line.getAttribute("title")).toBe("401 Unauthorized");
   });
 
   it("does not let a policy-blocked server be connected", async () => {
@@ -213,6 +222,23 @@ describe("connecting and disconnecting", () => {
 });
 
 describe("what a server offers", () => {
+  it("takes the whole row when opened, and stops saying click to expand", async () => {
+    panelWith();
+    fireEvent.click(await screen.findByText(/click to expand/));
+    expect(document.querySelector(".mcp-server.is-open")).not.toBeNull();
+    expect(screen.queryByText(/click to expand/)).toBeNull();
+    expect(screen.getByText("2 tools · 2 resources · 2 prompts")).toBeTruthy();
+  });
+
+  it("does not repeat the card's own server as a tool's prefix", async () => {
+    panelWith();
+    fireEvent.click(await screen.findByText(/click to expand/));
+    // `github__create_issue` on the github card shows as `create_issue`
+    // with no `github` tag beside it.
+    expect(screen.getByText("create_issue")).toBeTruthy();
+    expect(document.querySelector(".mcp-tool-prefix")).toBeNull();
+  });
+
   it("expands into tools, resources and prompts", async () => {
     panelWith();
     fireEvent.click(await screen.findByText(/click to expand/));
@@ -241,7 +267,7 @@ describe("what a server offers", () => {
 
   it("does not expand a server with nothing to show", async () => {
     panelWith({ details: [DOWN] });
-    fireEvent.click(await screen.findByText("401 Unauthorized"));
+    fireEvent.click(await screen.findByText(/refused the credentials/));
     expect(document.querySelector(".mcp-server-body")).toBeNull();
     expect(document.querySelector("button.mcp-server-head")).toBeNull();
   });

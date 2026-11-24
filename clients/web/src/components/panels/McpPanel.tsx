@@ -139,7 +139,7 @@ export function McpPanel({
         </div>
       )}
       {shown.length > 0 && (
-        <div className="plugins-grid plugins-grid--start">
+        <div className="plugins-grid plugins-grid--even">
           {shown.map((s) => (
             <McpServerEntry
               key={s.name}

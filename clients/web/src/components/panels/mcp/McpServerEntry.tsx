@@ -87,24 +87,39 @@ export function McpServerEntry({
   const [open, setOpen] = useState(false);
   // Refused until approved: no connecting, and the line says why.
   const waiting = approval?.waiting === true && !server.connected;
+  // The dot: green when up, amber while waiting for approval, red when it
+  // failed with a reason, and a quiet grey when it is simply off.
+  const dot = waiting
+    ? "running mcp-waiting"
+    : { connected: "done", error: "error", idle: "mcp-idle" }[server.health];
   const heading = (
     <>
-      <span className="name">
-        <span
-          className={`tool-chevron mcp-server-chevron ${open ? "open" : ""}`}
-        >
-          {server.expandable ? <ChevronIcon /> : null}
-        </span>{" "}
-        <span
-          className={`tool-status ${server.connected ? "done" : waiting ? "running mcp-waiting" : "error"}`}
-        />{" "}
-        {server.name} <span className="meta">· {server.transport}</span>
+      <span className="name mcp-server-name">
+        <span className={`tool-status ${dot}`} aria-hidden="true" />
+        {server.name}
+        <span className="meta">· {server.transport}</span>
+        {server.expandable && (
+          <span className={`tool-chevron mcp-server-chevron ${open ? "open" : ""}`}>
+            <ChevronIcon />
+          </span>
+        )}
       </span>
-      <span className="meta">{waiting && approval ? approval.waitingStatus : server.status}</span>
+      <span
+        className="meta mcp-server-status"
+        // The plain sentence is what the card says; the transport's own
+        // words stay one hover away for whoever has to debug it.
+        title={!waiting && server.error ? server.error : undefined}
+      >
+        {waiting && approval
+          ? approval.waitingStatus
+          : open && server.connected
+            ? server.summary
+            : server.status}
+      </span>
     </>
   );
   return (
-    <div className="mcp-server">
+    <div className={`mcp-server${open ? " is-open" : ""}`}>
       <span className="plugins-gcard-icon" aria-hidden="true">
         <EntityGlyph name={server.name} size={38} />
       </span>
@@ -142,6 +157,7 @@ export function McpServerEntry({
               <ToolRow
                 key={t}
                 name={t}
+                server={server.name}
                 description={server.toolDescriptions[t]}
                 disabled={server.isToolDisabled(t)}
                 onToggle={(enabled) => onToolToggle(t, enabled)}

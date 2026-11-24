@@ -7351,6 +7351,31 @@ button.mcp-server-head:focus-visible {
   display: inline-flex;
 }
 
+/* The name line is a flex row so the status dot — an inline <span> —
+   takes its 8px instead of collapsing to nothing, and every name starts
+   at the same edge whether or not the server can be opened. */
+.mcp-server-name {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.mcp-server-name .tool-status {
+  display: inline-block;
+}
+
+/* Off, with nothing wrong: a quiet ring rather than the red of a failure. */
+.tool-status.mcp-idle {
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px var(--fg-faint);
+}
+
+.mcp-server-status {
+  color: var(--fg-muted);
+  line-height: 1.45;
+}
+
 .mcp-server-actions {
   display: flex;
   gap: var(--space-4);
@@ -12041,10 +12066,14 @@ button.mcp-server-head:focus-visible {
   background: var(--bg-surface);
 }
 
-/* MCPs and Extensions, as the Plugins card grid: soft filled cards in
-   the same two-column grid, top-aligned so an expanded card (a server's
-   tools, an extension's settings) does not stretch its neighbour. */
-.plugins-grid--start { align-items: start; }
+/* MCPs, Extensions and installed plugins, as the Plugins card grid: soft
+   filled cards in the same two-column grid. Cards in a row stretch to the
+   row's height, so the space between cards is the grid's gap and nothing
+   else — a short card no longer leaves extra room under itself. An opened
+   MCP server takes the whole row instead, so its tools do not stretch the
+   neighbour into a tall empty card. */
+.plugins-grid--even { align-items: stretch; }
+.plugins-grid--even > .mcp-server.is-open { grid-column: 1 / -1; }
 
 .mcp-server {
   display: flex;

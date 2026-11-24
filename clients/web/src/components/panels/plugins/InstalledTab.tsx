@@ -46,7 +46,7 @@ export function InstalledTab({
           </div>
         </div>
       ) : (
-        <div className="plugins-grid plugins-grid--start">
+        <div className="plugins-grid plugins-grid--even">
           {installed.rows.map((p) => (
             <div
               className="plugins-gcard"
