@@ -8385,14 +8385,35 @@ button.mcp-server-head:focus-visible {
   margin-bottom: var(--space-7);
 }
 
+/* The install field reads like the chat composer — raised above the
+   page rather than inset into it, taller, and the same soft rounded
+   box — so it is the obvious place to type, not a thin dark slot. */
 .plugins-install-row .panel-input,
 .plugins-install-row .btn {
-  height: 31px;
+  height: auto;
+  min-height: 44px;
   box-sizing: border-box;
 }
 
 .plugins-install-row .panel-input {
   flex: 1;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.12);
+  padding: var(--space-3) var(--space-5);
+  font-size: var(--text-lg);
+}
+
+.plugins-install-row .panel-input:focus {
+  border-color: color-mix(in srgb, var(--igni-orange) 55%, var(--border));
+}
+
+.plugins-install-row .btn {
+  flex-shrink: 0;
+  border-radius: var(--radius-lg);
+  padding: 0 var(--space-6);
+  font-size: var(--text-md);
 }
 
 .plugins-section-head {
