@@ -47,9 +47,9 @@ async function connected(page: Page): Promise<void> {
 
 /** Start from an empty transcript, once the session id has rotated. */
 async function newChat(page: Page): Promise<void> {
-  const chip = page.locator(".session-chip code");
+  const chip = page.locator(".session-ctx-id");
   const before = (await chip.innerText()).trim();
-  await page.getByRole("button", { name: /New chat/i }).click();
+  await page.getByRole("button", { name: /^\+ New chat$/ }).click();
   await expect(page.locator(".msg-assistant")).toHaveCount(0, { timeout: 15_000 });
   await expect.poll(async () => (await chip.innerText()).trim(), { timeout: 30_000 }).not.toBe(before);
 }

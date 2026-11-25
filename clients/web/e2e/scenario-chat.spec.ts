@@ -189,8 +189,8 @@ test("CHAT-027 two tabs of one browser on one backend both work", async ({ page,
   const other = await context.newPage();
   await open(other, liveBe.wsUrl);
   await newChat(other);
-  const a = (await page.locator(".session-chip code").innerText()).trim();
-  const b = (await other.locator(".session-chip code").innerText()).trim();
+  const a = (await page.locator(".session-ctx-id").innerText()).trim();
+  const b = (await other.locator(".session-ctx-id").innerText()).trim();
   expect(b, "the second tab is on the first tab's session").not.toBe(a);
 
   const ta = marker();
@@ -234,10 +234,10 @@ test("SESS-018 a conversation is still there after a reload", async ({ page, liv
   const token = marker();
   await send(page, `Reply with exactly ${token}.`);
   await assistantSaid(page, token);
-  const session = (await page.locator(".session-chip code").innerText()).trim();
+  const session = (await page.locator(".session-ctx-id").innerText()).trim();
   await page.reload();
   await connected(page);
-  await expect(page.locator(".session-chip code")).toHaveText(session, { timeout: 15_000 });
+  await expect(page.locator(".session-ctx-id")).toHaveText(session, { timeout: 15_000 });
   await assistantSaid(page, token, 15_000);
 });
 

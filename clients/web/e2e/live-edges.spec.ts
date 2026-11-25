@@ -55,9 +55,9 @@ async function connected(page: Page) {
 
 async function newChat(page: Page) {
   const idBefore = (
-    await page.locator(".session-chip code").innerText()
+    await page.locator(".session-ctx-id").innerText()
   ).trim();
-  await page.getByRole("button", { name: /New chat/i }).click();
+  await page.getByRole("button", { name: /^\+ New chat$/ }).click();
   await expect(page.locator(".msg-assistant")).toHaveCount(0, {
     timeout: 15_000,
   });
@@ -78,7 +78,7 @@ async function newChat(page: Page) {
   // named the wrong thing — cancelling, forking, tool calls.
   await expect
     .poll(
-      async () => (await page.locator(".session-chip code").innerText()).trim(),
+      async () => (await page.locator(".session-ctx-id").innerText()).trim(),
       {
         timeout: 30_000,
       },

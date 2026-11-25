@@ -112,6 +112,7 @@ const CARDS = [
   "/loop",
   "/mcp",
   "/plugins",
+  "/extensions",
 ];
 
 async function connected(page: Page) {
@@ -125,7 +126,7 @@ async function connected(page: Page) {
 /** An empty transcript, so the welcome hero renders and `.msg-user`
  *  counts mean something. */
 async function emptyChat(page: Page) {
-  await page.getByRole("button", { name: /New chat/i }).click();
+  await page.getByRole("button", { name: /^\+ New chat$/ }).click();
   await expect(page.locator(".msg-assistant")).toHaveCount(0, {
     timeout: 15_000,
   });
@@ -226,7 +227,7 @@ test.describe("header tools menu", () => {
 });
 
 test.describe("welcome cards", () => {
-  test("the hero offers exactly the nine cards", async ({ page, liveBe }) => {
+  test("the hero offers exactly its eight cards", async ({ page, liveBe }) => {
     await page.goto(`/?ws=${encodeURIComponent(liveBe.wsUrl)}`);
     await connected(page);
     await emptyChat(page);
