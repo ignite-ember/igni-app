@@ -11,7 +11,7 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 
 // ``vi.hoisted`` runs BEFORE the static imports below. The
 // embedded ThemeToggle reads localStorage at module load
@@ -61,7 +61,13 @@ vi.hoisted(() => {
     FakeResizeObserver;
 });
 
+// The cat's renderer needs a canvas; the sidebar's own behaviour is what is tested here.
+vi.mock("open-bot-avatar/dom", () => ({
+  mountAvatar: () => ({ update: () => undefined, destroy: () => undefined }),
+}));
+
 import { Sidebar, type SessionEntry } from "./Sidebar";
+import { setCatShown } from "./catSetting";
 
 afterEach(() => {
   cleanup();
@@ -135,6 +141,33 @@ describe("Sidebar — open/closed state", () => {
     expect(container.querySelector(".sidebar")?.className).not.toContain(
       "closed",
     );
+  });
+});
+
+describe("Sidebar — the cat beside New chat", () => {
+  it("draws no cat without a look", () => {
+    const { container } = render(<Sidebar {...defaultProps()} />);
+    expect(container.querySelector(".sidebar-bot-avatar")).toBeNull();
+  });
+
+  it("draws no cat when this device hid it", () => {
+    act(() => setCatShown(false));
+    const { container } = render(
+      <Sidebar {...defaultProps({ avatar: { state: "idle", mood: "neutral" } })} />,
+    );
+    expect(container.querySelector(".sidebar-bot-avatar")).toBeNull();
+    act(() => setCatShown(true));
+    expect(container.querySelector(".sidebar-bot-avatar")).not.toBeNull();
+  });
+
+  it("draws the cat to the left of New chat, in the look's state", () => {
+    const { container } = render(
+      <Sidebar {...defaultProps({ avatar: { state: "working", mood: "neutral" } })} />,
+    );
+    const head = container.querySelector(".sidebar-head");
+    const cat = head?.querySelector(".sidebar-bot-avatar");
+    expect(cat?.getAttribute("data-state")).toBe("working");
+    expect(cat?.nextElementSibling?.classList.contains("sidebar-new-chat")).toBe(true);
   });
 });
 

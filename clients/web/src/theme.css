@@ -414,6 +414,19 @@ button {
   background: var(--bg-raised);
 }
 
+/* The cat beside New chat (an Open Bot Avatar): it takes the auto margin
+   so the pair sits at the right edge, the cat on the left. */
+.sidebar-head .sidebar-bot-avatar {
+  flex: 0 0 auto;
+  margin-left: auto;
+  /* Taller than the button: it reaches into the row's padding rather
+     than growing the row. */
+  margin-block: -1px;
+}
+.sidebar-head .sidebar-bot-avatar + .sidebar-new-chat {
+  margin-left: 0;
+}
+
 .theme-toggle {
   appearance: none;
   width: 24px;
@@ -8013,6 +8026,39 @@ button.mcp-server-head:focus-visible {
   flex-shrink: 0;
 }
 
+/* The label side of a menu item, so a category's icon sits beside its
+   name while the selected-check stays on the right. */
+.plugins-menu-item-label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+/* The category glyph reads as a marker, not the accent-coloured check —
+   keep it muted so the check is the one orange mark in the row. */
+.plugins-menu-item-icon {
+  display: inline-flex;
+}
+
+.plugins-menu-item-icon svg {
+  color: var(--fg-muted);
+}
+
+/* A category chip on a plugin card: its glyph and name, quiet. */
+.plugins-cat-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--fg-muted);
+  font-size: var(--text-xs);
+}
+
+.plugins-cat-chip svg {
+  color: var(--fg-faint);
+  flex-shrink: 0;
+}
+
 /* Search as a pill that only appears once opened. */
 .plugins-searchbox {
   display: flex;
@@ -11426,6 +11472,46 @@ button.mcp-server-head:focus-visible {
 
 .account-menu-theme .theme-toggle {
   margin-left: auto;
+}
+
+/* The switch that shows or hides the sidebar's cat. */
+.cat-switch {
+  margin-left: auto;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  display: inline-flex;
+}
+.cat-switch-track {
+  position: relative;
+  width: 26px;
+  height: 14px;
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--fg-faint) 35%, transparent);
+  transition: background 0.18s;
+}
+.cat-switch-thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 10px;
+  height: 10px;
+  border-radius: var(--radius-pill);
+  background: var(--fg);
+  transition: transform 0.18s, background 0.18s;
+}
+.cat-switch[aria-checked="true"] .cat-switch-track {
+  background: var(--accent);
+}
+.cat-switch[aria-checked="true"] .cat-switch-thumb {
+  transform: translateX(12px);
+  background: #fff;
+}
+.cat-switch:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: var(--radius-pill);
 }
 
 /* The igni flame, wordmark and build, at the top of the menu — the
