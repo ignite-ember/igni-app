@@ -29,6 +29,7 @@ import type {
   PushChannelEventOf,
   SchedulerEvent,
   TodosUpdated,
+  UserAppreciation,
   WindowModelChanged,
   WorkflowPush,
 } from "../protocol/pushChannels";
@@ -37,6 +38,7 @@ import type { ChatItemFactory } from "./chatItemFactory";
 import type { ChatTranscript } from "./chatTranscript";
 import { HttpRetryAttemptEvent, HttpRetrySucceededEvent } from "./httpRetryEvents";
 import { PlanTaskList } from "./planTasks";
+import { UserAppreciationEvent } from "./userAppreciationEvents";
 import { applyVisualizationDelta } from "./visualizationStream";
 
 /** How much of a legacy progress line lands in the card. */
@@ -51,7 +53,7 @@ export interface PushChannelRouterDeps {
   notifier: Pick<Notifier, "notify">;
   host: Pick<Host, "openExternal">;
   refreshSessions: () => Promise<void>;
-  /** Where the retry banner's events are dispatched. */
+  /** Where the retry banner's and the appreciation events are dispatched. */
   events: Pick<EventTarget, "dispatchEvent">;
 }
 
@@ -76,6 +78,7 @@ export class PushChannelRouter {
     plan_submitted: (ev) => this.onPlanSubmitted(ev),
     plan_decided: (ev) => this.onPlanDecided(ev),
     todos_updated: (ev) => this.onTodosUpdated(ev),
+    user_appreciation: (ev) => this.onUserAppreciation(ev),
     // Addressed to extensions' frames, which hear it through useExtensionTraffic.
     host_signal: () => {},
   };
@@ -182,6 +185,11 @@ export class PushChannelRouter {
         it.kind === "plan" ? { ...it, tasks: new PlanTaskList(it.tasks).mergeTodos(ev.todos).tasks } : it,
       ),
     );
+  }
+
+  /** The person thanked or praised igni: whoever shows that chat may smile. */
+  private onUserAppreciation(ev: UserAppreciation): void {
+    this.deps.events.dispatchEvent(new UserAppreciationEvent(ev.sessionId, ev.kind));
   }
 
   private applyEnvelope(envelope: OrchestrateEventEnvelope): void {

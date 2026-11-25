@@ -171,4 +171,22 @@ describe("parsePushChannel", () => {
     expect(parse("host_signal", { signal: "chat.run_started" })).toBeNull();
     expect(parse("host_signal", { extension_id: "acme.one", signal: 3 })).toBeNull();
   });
+
+  it("reads user_appreciation, and refuses one with no session or an unknown kind", () => {
+    expect(parse("user_appreciation", { session_id: "s1", kind: "gratitude" })).toEqual({
+      channel: "user_appreciation",
+      sessionId: "s1",
+      kind: "gratitude",
+    });
+    expect(parse("user_appreciation", { session_id: "s1", kind: "compliment" })).toEqual({
+      channel: "user_appreciation",
+      sessionId: "s1",
+      kind: "compliment",
+    });
+    expect(parse("user_appreciation", { session_id: "s1", kind: "neither" })).toBeNull();
+    expect(parse("user_appreciation", { session_id: "s1" })).toBeNull();
+    expect(parse("user_appreciation", { session_id: "", kind: "gratitude" })).toBeNull();
+    expect(parse("user_appreciation", { session_id: 7, kind: "gratitude" })).toBeNull();
+    expect(parse("user_appreciation", { kind: "gratitude" })).toBeNull();
+  });
 });

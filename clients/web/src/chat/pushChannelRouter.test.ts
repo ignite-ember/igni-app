@@ -9,6 +9,7 @@ import { ChatItemIds } from "./chatItemIds";
 import { ChatTranscript } from "./chatTranscript";
 import { HttpRetryAttemptEvent, HttpRetrySucceededEvent } from "./httpRetryEvents";
 import { PROGRESS_LINE_CHARS, PushChannelRouter } from "./pushChannelRouter";
+import { USER_APPRECIATION_EVENT, UserAppreciationEvent } from "./userAppreciationEvents";
 
 function harness(initial: ChatItem[] = [], status: StatusUpdate | null = null) {
   const chatItems = new ChatItemFactory(new ChatItemIds());
@@ -136,6 +137,18 @@ describe("PushChannelRouter", () => {
     expect(attempt).toBeInstanceOf(HttpRetryAttemptEvent);
     expect(attempt).toMatchObject({ attempt: 1, delaySeconds: 2, url: "u" });
     expect(succeeded).toBeInstanceOf(HttpRetrySucceededEvent);
+  });
+
+  it("dispatches the person's thanks or praise as an appreciation event for its session", () => {
+    const { deps, state, route } = harness();
+    route("user_appreciation", { session_id: "s1", kind: "gratitude" });
+    route("user_appreciation", { session_id: "s2", kind: "compliment" });
+    const [thanks, praise] = deps.events.dispatchEvent.mock.calls.map((c) => c[0]);
+    expect(thanks).toBeInstanceOf(UserAppreciationEvent);
+    expect(thanks).toMatchObject({ type: USER_APPRECIATION_EVENT, sessionId: "s1", kind: "gratitude" });
+    expect(praise).toMatchObject({ type: USER_APPRECIATION_EVENT, sessionId: "s2", kind: "compliment" });
+    expect(state.items).toEqual([]);
+    expect(deps.notifier.notify).not.toHaveBeenCalled();
   });
 
   it("appends a submitted plan, then flips it when decided", () => {
