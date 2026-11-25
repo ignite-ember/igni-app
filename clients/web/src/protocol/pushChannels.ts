@@ -127,15 +127,15 @@ export interface TodosUpdated {
   todos: unknown;
 }
 
-/** What Laya heard in a person's message that appreciates igni. */
-export const APPRECIATION_KINDS = ["gratitude", "compliment"] as const;
-export type AppreciationKind = (typeof APPRECIATION_KINDS)[number];
+/** What Laya heard in a person's message to igni: thanks, praise or an insult. */
+export const SENTIMENT_KINDS = ["gratitude", "compliment", "insult"] as const;
+export type SentimentKind = (typeof SENTIMENT_KINDS)[number];
 
-/** Laya read the person's message, in ``sessionId``, as thanks or praise for igni. */
-export interface UserAppreciation {
-  channel: "user_appreciation";
+/** Laya read the person's message, in ``sessionId``, as thanks, praise or an insult for igni. */
+export interface UserSentiment {
+  channel: "user_sentiment";
   sessionId: string;
-  kind: AppreciationKind;
+  kind: SentimentKind;
 }
 
 /** A host-model signal an extension's page subscribed to, already
@@ -163,7 +163,7 @@ export type PushChannelEvent =
   | PlanSubmitted
   | PlanDecided
   | TodosUpdated
-  | UserAppreciation
+  | UserSentiment
   | HostSignal;
 
 export type PushChannel = PushChannelEvent["channel"];
@@ -269,10 +269,10 @@ const PARSERS: Parsers = {
       : null;
   },
   todos_updated: (p) => ({ channel: "todos_updated", todos: p.value("todos") }),
-  user_appreciation: (p) => {
+  user_sentiment: (p) => {
     const sessionId = p.optionalString("session_id");
-    const kind = APPRECIATION_KINDS.find((k) => k === p.value("kind"));
-    return sessionId && kind ? { channel: "user_appreciation", sessionId, kind } : null;
+    const kind = SENTIMENT_KINDS.find((k) => k === p.value("kind"));
+    return sessionId && kind ? { channel: "user_sentiment", sessionId, kind } : null;
   },
   host_signal: (p) => {
     const extensionId = p.optionalString("extension_id");

@@ -29,7 +29,7 @@ import type {
   PushChannelEventOf,
   SchedulerEvent,
   TodosUpdated,
-  UserAppreciation,
+  UserSentiment,
   WindowModelChanged,
   WorkflowPush,
 } from "../protocol/pushChannels";
@@ -38,7 +38,7 @@ import type { ChatItemFactory } from "./chatItemFactory";
 import type { ChatTranscript } from "./chatTranscript";
 import { HttpRetryAttemptEvent, HttpRetrySucceededEvent } from "./httpRetryEvents";
 import { PlanTaskList } from "./planTasks";
-import { UserAppreciationEvent } from "./userAppreciationEvents";
+import { UserSentimentEvent } from "./userSentimentEvents";
 import { applyVisualizationDelta } from "./visualizationStream";
 
 /** How much of a legacy progress line lands in the card. */
@@ -53,7 +53,7 @@ export interface PushChannelRouterDeps {
   notifier: Pick<Notifier, "notify">;
   host: Pick<Host, "openExternal">;
   refreshSessions: () => Promise<void>;
-  /** Where the retry banner's and the appreciation events are dispatched. */
+  /** Where the retry banner's and the sentiment events are dispatched. */
   events: Pick<EventTarget, "dispatchEvent">;
 }
 
@@ -78,7 +78,7 @@ export class PushChannelRouter {
     plan_submitted: (ev) => this.onPlanSubmitted(ev),
     plan_decided: (ev) => this.onPlanDecided(ev),
     todos_updated: (ev) => this.onTodosUpdated(ev),
-    user_appreciation: (ev) => this.onUserAppreciation(ev),
+    user_sentiment: (ev) => this.onUserSentiment(ev),
     // Addressed to extensions' frames, which hear it through useExtensionTraffic.
     host_signal: () => {},
   };
@@ -187,9 +187,9 @@ export class PushChannelRouter {
     );
   }
 
-  /** The person thanked or praised igni: whoever shows that chat may smile. */
-  private onUserAppreciation(ev: UserAppreciation): void {
-    this.deps.events.dispatchEvent(new UserAppreciationEvent(ev.sessionId, ev.kind));
+  /** The person thanked, praised or insulted igni: whoever shows that chat may react. */
+  private onUserSentiment(ev: UserSentiment): void {
+    this.deps.events.dispatchEvent(new UserSentimentEvent(ev.sessionId, ev.kind));
   }
 
   private applyEnvelope(envelope: OrchestrateEventEnvelope): void {

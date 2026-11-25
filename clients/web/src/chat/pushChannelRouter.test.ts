@@ -9,7 +9,7 @@ import { ChatItemIds } from "./chatItemIds";
 import { ChatTranscript } from "./chatTranscript";
 import { HttpRetryAttemptEvent, HttpRetrySucceededEvent } from "./httpRetryEvents";
 import { PROGRESS_LINE_CHARS, PushChannelRouter } from "./pushChannelRouter";
-import { USER_APPRECIATION_EVENT, UserAppreciationEvent } from "./userAppreciationEvents";
+import { USER_SENTIMENT_EVENT, UserSentimentEvent } from "./userSentimentEvents";
 
 function harness(initial: ChatItem[] = [], status: StatusUpdate | null = null) {
   const chatItems = new ChatItemFactory(new ChatItemIds());
@@ -139,14 +139,16 @@ describe("PushChannelRouter", () => {
     expect(succeeded).toBeInstanceOf(HttpRetrySucceededEvent);
   });
 
-  it("dispatches the person's thanks or praise as an appreciation event for its session", () => {
+  it("dispatches the person's thanks, praise or insult as a sentiment event for its session", () => {
     const { deps, state, route } = harness();
-    route("user_appreciation", { session_id: "s1", kind: "gratitude" });
-    route("user_appreciation", { session_id: "s2", kind: "compliment" });
-    const [thanks, praise] = deps.events.dispatchEvent.mock.calls.map((c) => c[0]);
-    expect(thanks).toBeInstanceOf(UserAppreciationEvent);
-    expect(thanks).toMatchObject({ type: USER_APPRECIATION_EVENT, sessionId: "s1", kind: "gratitude" });
-    expect(praise).toMatchObject({ type: USER_APPRECIATION_EVENT, sessionId: "s2", kind: "compliment" });
+    route("user_sentiment", { session_id: "s1", kind: "gratitude" });
+    route("user_sentiment", { session_id: "s2", kind: "compliment" });
+    route("user_sentiment", { session_id: "s1", kind: "insult" });
+    const [thanks, praise, insult] = deps.events.dispatchEvent.mock.calls.map((c) => c[0]);
+    expect(thanks).toBeInstanceOf(UserSentimentEvent);
+    expect(thanks).toMatchObject({ type: USER_SENTIMENT_EVENT, sessionId: "s1", kind: "gratitude" });
+    expect(praise).toMatchObject({ type: USER_SENTIMENT_EVENT, sessionId: "s2", kind: "compliment" });
+    expect(insult).toMatchObject({ type: USER_SENTIMENT_EVENT, sessionId: "s1", kind: "insult" });
     expect(state.items).toEqual([]);
     expect(deps.notifier.notify).not.toHaveBeenCalled();
   });
