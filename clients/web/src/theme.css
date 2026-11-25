@@ -1,19 +1,19 @@
 /* igni chat UI.
    Layout language: Claude-chat-like — calm neutral surfaces, one
    centered reading column, pill composer docked at the bottom.
-   Brand accents from the portal LandingPage: ember orange #F97316 →
+   Brand accents: the igni icon's orange #EE6138 →
    red #DC2626 gradient, monospace for tool/terminal content. */
 
 :root {
   /* Ember orange accent. `--accent` is the fill token components read. */
-  --igni-orange: #f97316;
-  --igni-orange-hover: #fb923c;
-  --accent: #f97316;
+  --igni-orange: #ee6138;
+  --igni-orange-hover: #f18160;
+  --accent: #ee6138;
   --igni-red: #dc2626;
-  --igni-gradient: linear-gradient(135deg, #f97316, #dc2626);
+  --igni-gradient: linear-gradient(135deg, #ee6138, #dc2626);
   --igni-gradient-soft: linear-gradient(
     135deg,
-    rgba(249, 115, 22, 0.1),
+    rgba(238, 97, 56, 0.1),
     rgba(220, 38, 38, 0.06)
   );
 
@@ -53,7 +53,7 @@
   --accent-blue-text: #8eb9f9;
   --accent-green-text: #7cc57f;
   --accent-red-text: #f09393;
-  --accent-orange-text: #fb9c5a;
+  --accent-orange-text: #f5a088;
   --danger-text: #f28376;
 
   /* ── Type scale ─────────────────────────────────────────────────
@@ -132,8 +132,8 @@
   --accent-blue-text: #085dc2;
   --accent-green-text: #177332;
   --accent-red-text: #be1f2a;
-  --accent-orange-text: #a24a0e;
-  --accent: #f97316;
+  --accent-orange-text: #9d4025;
+  --accent: #ee6138;
   --danger-text: #be1f2a;
   --shadow-pop: 0 12px 40px rgba(0, 0, 0, 0.14);
   /* Darker than ``--border`` so the thumb reads clearly against the
@@ -165,8 +165,8 @@
     --accent-blue-text: #085dc2;
     --accent-green-text: #177332;
     --accent-red-text: #be1f2a;
-    --accent-orange-text: #a24a0e;
-    --accent: #f97316;
+    --accent-orange-text: #9d4025;
+    --accent: #ee6138;
   --danger-text: #be1f2a;
     --shadow-pop: 0 12px 40px rgba(0, 0, 0, 0.14);
     --scroll-thumb: #b8b5ad;
@@ -831,7 +831,7 @@ button {
 }
 
 .update-banner a {
-  color: var(--accent-orange-text, #fb9c5a);
+  color: var(--accent-orange-text, #f5a088);
   font-weight: 600;
 }
 
@@ -918,7 +918,7 @@ button {
   font-size: var(--text-sm);
   font-weight: 600;
   font-family: var(--font-ui);
-  color: var(--accent-orange-text, #fb9c5a);
+  color: var(--accent-orange-text, #f5a088);
   background: color-mix(in srgb, var(--igni-orange) 14%, transparent);
   border: 1px solid color-mix(in srgb, var(--igni-orange) 50%, transparent);
   cursor: pointer;
@@ -927,7 +927,7 @@ button {
 }
 .brand-update:hover {
   background: color-mix(in srgb, var(--igni-orange) 22%, transparent);
-  border-color: var(--accent-orange-text, #fb9c5a);
+  border-color: var(--accent-orange-text, #f5a088);
 }
 
 /* ── Header ─────────────────────────────────────────────────────── */
@@ -1409,8 +1409,8 @@ button {
 }
 
 .scroll-to-bottom:hover {
-  color: var(--accent-orange-text, #fb9c5a);
-  border-color: var(--accent-orange-text, #fb9c5a);
+  color: var(--accent-orange-text, #f5a088);
+  border-color: var(--accent-orange-text, #f5a088);
   transform: translateX(-50%) translateY(-1px);
 }
 
@@ -1444,7 +1444,7 @@ button {
 .col.streaming > .msg-assistant:last-child::after,
 .chat-row.streaming > .msg-assistant::after {
   content: "▍";
-  color: var(--accent-orange-text, #fb9c5a);
+  color: var(--accent-orange-text, #f5a088);
   animation: caret-blink 1s steps(2) infinite;
   margin-left: var(--space-1);
 }
@@ -1561,7 +1561,7 @@ button {
 .chip-search.active {
   background: color-mix(in srgb, var(--igni-orange) 18%, transparent);
   border-color: color-mix(in srgb, var(--igni-orange) 55%, transparent);
-  color: var(--accent-orange-text, #fb9c5a);
+  color: var(--accent-orange-text, #f5a088);
   box-shadow: 0 0 12px 0 color-mix(in srgb, var(--igni-orange) 35%, transparent);
 }
 
@@ -1880,7 +1880,7 @@ button {
 }
 
 .welcome-cap:focus-visible {
-  outline: 2px solid var(--accent-orange-text, #fb9c5a);
+  outline: 2px solid var(--accent-orange-text, #f5a088);
   outline-offset: 2px;
 }
 
@@ -1893,7 +1893,7 @@ button {
 .welcome-cap code {
   font-weight: 600;
   font-size: var(--text-sm);
-  color: var(--accent-orange-text, #fb9c5a);
+  color: var(--accent-orange-text, #f5a088);
 }
 
 .welcome-cap span {
@@ -2094,7 +2094,7 @@ button {
 .msg-user.mode-shell {
   background: color-mix(in srgb, var(--igni-orange) 14%, transparent);
   border: 1px solid color-mix(in srgb, var(--igni-orange) 40%, transparent);
-  color: var(--accent-orange-text, #fb9c5a);
+  color: var(--accent-orange-text, #f5a088);
   font-family: var(--font-mono);
   font-size: var(--text-md);
   font-weight: 700;
@@ -2701,7 +2701,7 @@ button {
 }
 
 .shell-output .prompt-line {
-  color: var(--accent-orange-text, #fb9c5a);
+  color: var(--accent-orange-text, #f5a088);
   font-weight: 600;
 }
 
@@ -2970,7 +2970,7 @@ button {
   border-left-color: var(--accent-red-text);
 }
 .orch-agent.card.status-paused {
-  border-left-color: var(--accent-orange-text, #fb9c5a);
+  border-left-color: var(--accent-orange-text, #f5a088);
 }
 
 .orch-agent-head {
@@ -3087,7 +3087,7 @@ button {
   background: color-mix(in srgb, var(--accent-red, #e54848) 14%, transparent);
 }
 .orch-agent-status.status-paused {
-  color: var(--accent-orange-text, #fb9c5a);
+  color: var(--accent-orange-text, #f5a088);
   background: color-mix(in srgb, var(--igni-orange) 14%, transparent);
 }
 
@@ -3227,7 +3227,7 @@ button {
   cursor: pointer;
   border: 1px solid color-mix(in srgb, var(--igni-orange) 40%, transparent);
   background: color-mix(in srgb, var(--igni-orange) 12%, transparent);
-  color: var(--accent-orange-text, #fb9c5a);
+  color: var(--accent-orange-text, #f5a088);
   flex-shrink: 0;
 }
 
@@ -3259,7 +3259,7 @@ button {
 }
 
 .orch-retry-label strong {
-  color: var(--accent-orange-text, #fb9c5a);
+  color: var(--accent-orange-text, #f5a088);
   font-family: var(--font-mono);
   font-weight: 600;
 }
@@ -3280,7 +3280,7 @@ button {
 
 .orch-retry-textarea:focus {
   outline: none;
-  border-color: var(--accent-orange-text, #fb9c5a);
+  border-color: var(--accent-orange-text, #f5a088);
   background: var(--bg-raised);
 }
 
@@ -3559,7 +3559,7 @@ button {
   gap: var(--space-3);
   padding: 2px 9px;
   background: color-mix(in srgb, var(--igni-orange) 18%, transparent);
-  color: var(--accent-orange-text, #fb9c5a);
+  color: var(--accent-orange-text, #f5a088);
   font-size: var(--text-sm);
   letter-spacing: 0.02em;
   text-transform: uppercase;
@@ -3598,7 +3598,7 @@ button {
 .loop-iteration-slash {
   font-family: var(--font-mono);
   font-weight: 700;
-  color: var(--accent-orange-text, #fb9c5a);
+  color: var(--accent-orange-text, #f5a088);
 }
 
 /* ── /compact result card ───────────────────────────────────────── */
@@ -3655,7 +3655,7 @@ button {
   height: 22px;
   padding: 0 var(--space-5);
   background: color-mix(in srgb, var(--accent-orange, #f59e0b) 18%, transparent);
-  color: var(--accent-orange-text, #fb9c5a);
+  color: var(--accent-orange-text, #f5a088);
   border: 1px solid color-mix(in srgb, var(--accent-orange, #f59e0b) 40%, transparent);
   letter-spacing: 0.05em;
   text-transform: uppercase;
@@ -3822,7 +3822,7 @@ button {
   height: 22px;
   border-radius: 6px;
   background: color-mix(in srgb, var(--accent-orange, #f59e0b) 22%, transparent);
-  color: var(--accent-orange-text, #fb9c5a);
+  color: var(--accent-orange-text, #f5a088);
   font-weight: 700;
   font-size: var(--text-md);
 }
@@ -3832,7 +3832,7 @@ button {
   font-weight: 700;
   letter-spacing: 0.02em;
   text-transform: uppercase;
-  color: var(--accent-orange-text, #fb9c5a);
+  color: var(--accent-orange-text, #f5a088);
 }
 
 .plan-card--approved .plan-card-badge {
@@ -3907,7 +3907,7 @@ button {
 
 .plan-card-task--in_progress .plan-card-task-marker {
   background: color-mix(in srgb, var(--accent-orange, #f59e0b) 22%, transparent);
-  color: var(--accent-orange-text, #fb9c5a);
+  color: var(--accent-orange-text, #f5a088);
   /* Same pulse cadence as the PlanBadge dot so the two
      in-progress signals visually rhyme — the eye picks up
      a single rhythm across the screen. */
@@ -4334,7 +4334,7 @@ button {
 
 .panel-input:focus {
   outline: none;
-  border-color: var(--accent-orange-text, #fb9c5a);
+  border-color: var(--accent-orange-text, #f5a088);
 }
 
 .panel-results {
@@ -4370,7 +4370,7 @@ button {
 
 .dir-path-input:focus {
   outline: none;
-  border-color: var(--accent-orange-text, #fb9c5a);
+  border-color: var(--accent-orange-text, #f5a088);
 }
 
 .dir-list {
@@ -4384,7 +4384,7 @@ button {
 }
 
 .dir-icon {
-  color: var(--accent-orange-text, #fb9c5a);
+  color: var(--accent-orange-text, #f5a088);
   font-size: var(--text-2xs);
   width: 12px;
 }
@@ -4414,7 +4414,7 @@ button {
 }
 
 .remote-draft-pen {
-  color: var(--accent-orange-text, #fb9c5a);
+  color: var(--accent-orange-text, #f5a088);
   font-style: normal;
 }
 
@@ -4423,7 +4423,7 @@ button {
 }
 
 .remote-caret {
-  color: var(--accent-orange-text, #fb9c5a);
+  color: var(--accent-orange-text, #f5a088);
   animation: caret-blink 1s steps(2) infinite;
 }
 
@@ -4448,8 +4448,8 @@ button {
 
 .slash-btn:hover,
 .slash-btn.open {
-  border-color: var(--accent-orange-text, #fb9c5a);
-  color: var(--accent-orange-text, #fb9c5a);
+  border-color: var(--accent-orange-text, #f5a088);
+  color: var(--accent-orange-text, #f5a088);
 }
 
 .slash-btn.open {
@@ -4464,7 +4464,7 @@ button {
   border-radius: var(--radius-pill);
   background: var(--igni-gradient-soft);
   border: 1px solid color-mix(in srgb, var(--igni-orange) 45%, transparent);
-  color: var(--accent-orange-text, #fb9c5a);
+  color: var(--accent-orange-text, #f5a088);
 }
 
 /* TUI parity: "/" command mode is lit cyan (the TUI's "/" prompt). */
@@ -5012,7 +5012,7 @@ button {
 }
 
 .btn-primary:hover:not(:disabled) {
-  box-shadow: 0 6px 18px rgba(249, 115, 22, 0.3);
+  box-shadow: 0 6px 18px rgba(238, 97, 56, 0.3);
   background: var(--igni-gradient);
 }
 
@@ -5855,7 +5855,7 @@ button {
   background: transparent;
   padding: var(--space-1) var(--space-2);
   font-size: var(--text-lg);
-  color: var(--accent-orange-text, #fb9c5a);
+  color: var(--accent-orange-text, #f5a088);
   cursor: pointer;
   border-radius: 6px;
 }
@@ -5883,7 +5883,7 @@ button {
 }
 
 .mini-tag.ephemeral {
-  color: var(--accent-orange-text, #fb9c5a);
+  color: var(--accent-orange-text, #f5a088);
   border-color: color-mix(in srgb, var(--igni-orange) 40%, transparent);
 }
 
@@ -6250,7 +6250,7 @@ button {
 }
 
 .watcher-pill:hover {
-  border-color: var(--accent-orange-text, #fb9c5a);
+  border-color: var(--accent-orange-text, #f5a088);
   background: color-mix(in srgb, var(--igni-orange) 6%, var(--bg-surface));
 }
 
@@ -6723,7 +6723,7 @@ button {
 }
 
 .task-filter.active .task-filter-count {
-  color: var(--accent-orange-text, #fb9c5a);
+  color: var(--accent-orange-text, #f5a088);
   background: color-mix(in srgb, var(--igni-orange) 14%, transparent);
 }
 
@@ -6743,7 +6743,7 @@ button {
 
 .task-search:focus {
   outline: none;
-  border-color: var(--accent-orange-text, #fb9c5a);
+  border-color: var(--accent-orange-text, #f5a088);
 }
 
 /* Composer textarea tints to match the rendered mode bubbles. */
@@ -6755,7 +6755,7 @@ button {
 }
 
 .composer-input.mode-shell {
-  color: var(--accent-orange-text, #fb9c5a);
+  color: var(--accent-orange-text, #f5a088);
   font-family: var(--font-mono);
   font-weight: 700;
   letter-spacing: 0.01em;
@@ -6810,7 +6810,7 @@ button {
 .file-pill.code-pill {
   background: color-mix(in srgb, var(--igni-orange) 12%, transparent);
   border-color: color-mix(in srgb, var(--igni-orange) 35%, transparent);
-  color: var(--accent-orange-text, #fb9c5a);
+  color: var(--accent-orange-text, #f5a088);
 }
 
 .file-pill.code-pill:hover {
@@ -7084,7 +7084,7 @@ button {
 
 /* Composer drag-and-drop highlight + uploading chip. */
 .composer-zone.drag-hot .composer {
-  border-color: var(--accent-orange-text, #fb9c5a);
+  border-color: var(--accent-orange-text, #f5a088);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--igni-orange) 22%, transparent);
 }
 
@@ -7196,7 +7196,7 @@ button {
   line-height: 1.5;
   color: var(--fg);
   outline: none;
-  caret-color: var(--accent-orange-text, #fb9c5a);
+  caret-color: var(--accent-orange-text, #f5a088);
   white-space: pre-wrap;
   word-break: break-word;
 }
@@ -7208,7 +7208,7 @@ button {
 }
 
 .composer-editable.mode-shell {
-  color: var(--accent-orange-text, #fb9c5a);
+  color: var(--accent-orange-text, #f5a088);
   font-family: var(--font-mono);
   font-weight: 700;
 }
@@ -7416,7 +7416,7 @@ button {
   border-left: 3px solid var(--igni-orange);
   border-radius: 8px;
   padding: 9px 12px;
-  color: var(--accent-orange-text, #fb9c5a);
+  color: var(--accent-orange-text, #f5a088);
   white-space: pre-wrap;
   word-break: break-word;
   /* Match the pre/diff blocks — cap height so a giant one-liner
@@ -7632,8 +7632,8 @@ button.mcp-server-head:focus-visible {
   width: 22px;
   height: 22px;
   border-radius: var(--radius-sm);
-  background: color-mix(in srgb, var(--accent, #f97316) 12%, transparent);
-  color: var(--accent, #f97316);
+  background: color-mix(in srgb, var(--accent, #ee6138) 12%, transparent);
+  color: var(--accent, #ee6138);
   flex-shrink: 0;
   margin-top: 1px;
 }
@@ -7693,7 +7693,7 @@ button.mcp-server-head:focus-visible {
   appearance: none;
   background: transparent;
   border: none;
-  color: var(--accent, #f97316);
+  color: var(--accent, #ee6138);
   font-size: var(--text-sm);
   font-weight: 600;
   padding: var(--space-1) 0;
@@ -7759,17 +7759,17 @@ button.mcp-server-head:focus-visible {
 }
 
 .mcp-tool-switch.is-on .mcp-tool-switch-track {
-  background: color-mix(in srgb, var(--accent, #f97316) 30%, transparent);
-  border-color: var(--accent, #f97316);
+  background: color-mix(in srgb, var(--accent, #ee6138) 30%, transparent);
+  border-color: var(--accent, #ee6138);
 }
 
 .mcp-tool-switch.is-on .mcp-tool-switch-thumb {
   transform: translateX(12px);
-  background: var(--accent, #f97316);
+  background: var(--accent, #ee6138);
 }
 
 .mcp-tool-switch:focus-visible .mcp-tool-switch-track {
-  outline: 2px solid color-mix(in srgb, var(--accent, #f97316) 40%, transparent);
+  outline: 2px solid color-mix(in srgb, var(--accent, #ee6138) 40%, transparent);
   outline-offset: 2px;
 }
 
@@ -7976,7 +7976,7 @@ button.mcp-server-head:focus-visible {
 }
 
 .plugins-menu-item svg {
-  color: var(--accent, #f97316);
+  color: var(--accent, #ee6138);
   flex-shrink: 0;
 }
 
@@ -8430,9 +8430,9 @@ button.mcp-server-head:focus-visible {
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: var(--accent, #f97316);
+  color: var(--accent, #ee6138);
   padding: 1px 6px;
-  background: color-mix(in srgb, var(--accent, #f97316) 10%, transparent);
+  background: color-mix(in srgb, var(--accent, #ee6138) 10%, transparent);
   border-radius: 4px;
 }
 
@@ -8636,7 +8636,7 @@ button.mcp-server-head:focus-visible {
 }
 
 .plugins-card-clickable:hover {
-  border-color: var(--accent, #f97316);
+  border-color: var(--accent, #ee6138);
 }
 
 .plugins-chevron-end {
@@ -8750,7 +8750,7 @@ button.mcp-server-head:focus-visible {
 }
 
 .plugins-source-link a {
-  color: var(--accent, #f97316);
+  color: var(--accent, #ee6138);
   font-size: var(--text-sm);
   text-decoration: none;
   word-break: break-all;
@@ -9064,7 +9064,7 @@ button.mcp-server-head:focus-visible {
 }
 
 .kb-detail-source a {
-  color: var(--accent, #f97316);
+  color: var(--accent, #ee6138);
   text-decoration: none;
 }
 
@@ -9289,7 +9289,7 @@ button.mcp-server-head:focus-visible {
 }
 
 .plugins-readme a {
-  color: var(--accent, #f97316);
+  color: var(--accent, #ee6138);
   text-decoration: none;
 }
 
@@ -9525,7 +9525,7 @@ button.mcp-server-head:focus-visible {
 
 .hooks-row-link:hover .hooks-row-ident {
   text-decoration: underline;
-  color: var(--accent-orange-text, #fb9c5a);
+  color: var(--accent-orange-text, #f5a088);
 }
 
 /* File preview (plain-browser fallback for host.openFile) */
@@ -9618,7 +9618,7 @@ button.mcp-server-head:focus-visible {
 }
 
 .watcher-row--selected {
-  border-color: var(--accent-orange-text, #fb9c5a);
+  border-color: var(--accent-orange-text, #f5a088);
   background: color-mix(in srgb, var(--igni-orange) 6%, var(--bg-surface));
 }
 
@@ -9722,7 +9722,7 @@ button.mcp-server-head:focus-visible {
 
 .watcher-filter:focus {
   outline: none;
-  border-color: var(--accent-orange-text, #fb9c5a);
+  border-color: var(--accent-orange-text, #f5a088);
 }
 
 .watcher-resume {
@@ -9732,7 +9732,7 @@ button.mcp-server-head:focus-visible {
 }
 
 .watcher-row-toggle:focus-visible {
-  outline: 2px solid var(--accent-orange-text, #fb9c5a);
+  outline: 2px solid var(--accent-orange-text, #f5a088);
   outline-offset: 2px;
 }
 
@@ -10084,7 +10084,7 @@ button.mcp-server-head:focus-visible {
   font-family: var(--mono, ui-monospace, monospace);
   font-size: var(--text-sm);
   font-weight: 600;
-  color: var(--accent-orange-text, #fb9c5a);
+  color: var(--accent-orange-text, #f5a088);
   white-space: nowrap;
 }
 
@@ -10129,7 +10129,7 @@ button.mcp-server-head:focus-visible {
 }
 
 .ctx-bar-runs {
-  background: var(--accent, #f97316);
+  background: var(--accent, #ee6138);
 }
 
 .ctx-bar-floor {
@@ -10145,7 +10145,7 @@ button.mcp-server-head:focus-visible {
 }
 
 .ctx-key-runs {
-  background: var(--accent, #f97316);
+  background: var(--accent, #ee6138);
 }
 
 .ctx-key-floor {
@@ -10203,7 +10203,7 @@ button.mcp-server-head:focus-visible {
 }
 
 .workflow-card:hover {
-  border-color: var(--accent, #f97316);
+  border-color: var(--accent, #ee6138);
   background: var(--bg-surface);
 }
 
