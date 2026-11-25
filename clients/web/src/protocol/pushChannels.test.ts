@@ -172,26 +172,36 @@ describe("parsePushChannel", () => {
     expect(parse("host_signal", { extension_id: "acme.one", signal: 3 })).toBeNull();
   });
 
-  it("reads user_sentiment, and refuses one with no session or an unknown kind", () => {
-    expect(parse("user_sentiment", { session_id: "s1", kind: "gratitude" })).toEqual({
+  it("reads user_sentiment with its runs, and refuses one with no session, sentiment or confidence", () => {
+    const full = { session_id: "s1", confidence: 0.91, message_run_id: "r-2", reply_run_id: "r-1" };
+    expect(parse("user_sentiment", { ...full, sentiment: "positive" })).toEqual({
       channel: "user_sentiment",
       sessionId: "s1",
-      kind: "gratitude",
+      sentiment: "positive",
+      confidence: 0.91,
+      messageRunId: "r-2",
+      replyRunId: "r-1",
     });
-    expect(parse("user_sentiment", { session_id: "s1", kind: "compliment" })).toEqual({
-      channel: "user_sentiment",
-      sessionId: "s1",
-      kind: "compliment",
+    expect(parse("user_sentiment", { ...full, sentiment: "negative" })).toMatchObject({
+      sentiment: "negative",
     });
-    expect(parse("user_sentiment", { session_id: "s1", kind: "insult" })).toEqual({
-      channel: "user_sentiment",
-      sessionId: "s1",
-      kind: "insult",
-    });
-    expect(parse("user_sentiment", { session_id: "s1", kind: "neither" })).toBeNull();
-    expect(parse("user_sentiment", { session_id: "s1" })).toBeNull();
-    expect(parse("user_sentiment", { session_id: "", kind: "gratitude" })).toBeNull();
-    expect(parse("user_sentiment", { session_id: 7, kind: "gratitude" })).toBeNull();
-    expect(parse("user_sentiment", { kind: "gratitude" })).toBeNull();
+    expect(
+      parse("user_sentiment", {
+        session_id: "s1",
+        sentiment: "positive",
+        confidence: 0.7,
+        message_run_id: null,
+        reply_run_id: null,
+      }),
+    ).toMatchObject({ messageRunId: null, replyRunId: null });
+    expect(
+      parse("user_sentiment", { session_id: "s1", sentiment: "positive", confidence: 0.7 }),
+    ).toMatchObject({ messageRunId: null, replyRunId: null });
+    expect(parse("user_sentiment", { ...full, sentiment: "neutral" })).toBeNull();
+    expect(parse("user_sentiment", { ...full })).toBeNull();
+    expect(parse("user_sentiment", { ...full, sentiment: "positive", confidence: "high" })).toBeNull();
+    expect(parse("user_sentiment", { ...full, sentiment: "positive", confidence: undefined })).toBeNull();
+    expect(parse("user_sentiment", { ...full, sentiment: "positive", session_id: "" })).toBeNull();
+    expect(parse("user_sentiment", { ...full, sentiment: "positive", session_id: 7 })).toBeNull();
   });
 });

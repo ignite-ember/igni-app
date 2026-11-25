@@ -187,9 +187,9 @@ export class PushChannelRouter {
     );
   }
 
-  /** The person thanked, praised or insulted igni: whoever shows that chat may react. */
+  /** The person was pleased or displeased with igni: whoever shows that chat may react. */
   private onUserSentiment(ev: UserSentiment): void {
-    this.deps.events.dispatchEvent(new UserSentimentEvent(ev.sessionId, ev.kind));
+    this.deps.events.dispatchEvent(new UserSentimentEvent(ev));
   }
 
   private applyEnvelope(envelope: OrchestrateEventEnvelope): void {

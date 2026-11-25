@@ -10,12 +10,34 @@ import {
 
 afterEach(cleanup);
 
+function sentiment(sessionId: string, value: "positive" | "negative" = "positive"): UserSentimentEvent {
+  return new UserSentimentEvent({
+    sessionId,
+    sentiment: value,
+    confidence: 0.9,
+    messageRunId: "r-2",
+    replyRunId: "r-1",
+  });
+}
+
 describe("UserSentimentEvent", () => {
-  it("carries the session and the kind under its own event name", () => {
-    const ev = new UserSentimentEvent("s1", "compliment");
+  it("carries the session, the sentiment, the confidence and the runs under its own event name", () => {
+    const ev = new UserSentimentEvent({
+      sessionId: "s1",
+      sentiment: "negative",
+      confidence: 0.84,
+      messageRunId: "r-2",
+      replyRunId: null,
+    });
     expect(ev.type).toBe(USER_SENTIMENT_EVENT);
     expect(USER_SENTIMENT_EVENT).toBe("ember:user_sentiment");
-    expect([ev.sessionId, ev.kind]).toEqual(["s1", "compliment"]);
+    expect([ev.sessionId, ev.sentiment, ev.confidence, ev.messageRunId, ev.replyRunId]).toEqual([
+      "s1",
+      "negative",
+      0.84,
+      "r-2",
+      null,
+    ]);
   });
 });
 
@@ -23,7 +45,7 @@ describe("useUserSentiment", () => {
   it("hears its own chat's sentiment, on the window by default", () => {
     const heard = vi.fn();
     renderHook(() => useUserSentiment("s1", heard));
-    const ev = new UserSentimentEvent("s1", "gratitude");
+    const ev = sentiment("s1");
     window.dispatchEvent(ev);
     expect(heard).toHaveBeenCalledTimes(1);
     expect(heard).toHaveBeenCalledWith(ev);
@@ -32,7 +54,7 @@ describe("useUserSentiment", () => {
   it("ignores another chat's, and a plain event under the same name", () => {
     const heard = vi.fn();
     renderHook(() => useUserSentiment("s1", heard));
-    window.dispatchEvent(new UserSentimentEvent("s2", "gratitude"));
+    window.dispatchEvent(sentiment("s2"));
     window.dispatchEvent(new Event(USER_SENTIMENT_EVENT));
     expect(heard).not.toHaveBeenCalled();
   });
@@ -44,8 +66,8 @@ describe("useUserSentiment", () => {
       initialProps: { id: "s1" },
     });
     hook.rerender({ id: "s2" });
-    target.dispatchEvent(new UserSentimentEvent("s1", "gratitude"));
-    target.dispatchEvent(new UserSentimentEvent("s2", "compliment"));
+    target.dispatchEvent(sentiment("s1"));
+    target.dispatchEvent(sentiment("s2"));
     expect(heard.mock.calls.map(([ev]) => ev.sessionId)).toEqual(["s2"]);
   });
 
@@ -58,7 +80,7 @@ describe("useUserSentiment", () => {
       initialProps: { cb: first },
     });
     hook.rerender({ cb: second });
-    target.dispatchEvent(new UserSentimentEvent("s1", "gratitude"));
+    target.dispatchEvent(sentiment("s1"));
     expect(first).not.toHaveBeenCalled();
     expect(second).toHaveBeenCalledTimes(1);
     expect(add).toHaveBeenCalledTimes(1);
@@ -69,7 +91,7 @@ describe("useUserSentiment", () => {
     const target = new EventTarget();
     const hook = renderHook(() => useUserSentiment("s1", heard, target));
     hook.unmount();
-    target.dispatchEvent(new UserSentimentEvent("s1", "gratitude"));
+    target.dispatchEvent(sentiment("s1"));
     expect(heard).not.toHaveBeenCalled();
   });
 });

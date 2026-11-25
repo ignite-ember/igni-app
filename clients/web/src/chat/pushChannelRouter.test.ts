@@ -139,16 +139,39 @@ describe("PushChannelRouter", () => {
     expect(succeeded).toBeInstanceOf(HttpRetrySucceededEvent);
   });
 
-  it("dispatches the person's thanks, praise or insult as a sentiment event for its session", () => {
+  it("dispatches how the person feels about igni as a sentiment event, with its runs", () => {
     const { deps, state, route } = harness();
-    route("user_sentiment", { session_id: "s1", kind: "gratitude" });
-    route("user_sentiment", { session_id: "s2", kind: "compliment" });
-    route("user_sentiment", { session_id: "s1", kind: "insult" });
-    const [thanks, praise, insult] = deps.events.dispatchEvent.mock.calls.map((c) => c[0]);
-    expect(thanks).toBeInstanceOf(UserSentimentEvent);
-    expect(thanks).toMatchObject({ type: USER_SENTIMENT_EVENT, sessionId: "s1", kind: "gratitude" });
-    expect(praise).toMatchObject({ type: USER_SENTIMENT_EVENT, sessionId: "s2", kind: "compliment" });
-    expect(insult).toMatchObject({ type: USER_SENTIMENT_EVENT, sessionId: "s1", kind: "insult" });
+    route("user_sentiment", {
+      session_id: "s1",
+      sentiment: "positive",
+      confidence: 0.95,
+      message_run_id: "r-2",
+      reply_run_id: "r-1",
+    });
+    route("user_sentiment", {
+      session_id: "s2",
+      sentiment: "negative",
+      confidence: 0.84,
+      message_run_id: null,
+      reply_run_id: null,
+    });
+    const [pleased, displeased] = deps.events.dispatchEvent.mock.calls.map((c) => c[0]);
+    expect(pleased).toBeInstanceOf(UserSentimentEvent);
+    expect(pleased).toMatchObject({
+      type: USER_SENTIMENT_EVENT,
+      sessionId: "s1",
+      sentiment: "positive",
+      confidence: 0.95,
+      messageRunId: "r-2",
+      replyRunId: "r-1",
+    });
+    expect(displeased).toMatchObject({
+      sessionId: "s2",
+      sentiment: "negative",
+      confidence: 0.84,
+      messageRunId: null,
+      replyRunId: null,
+    });
     expect(state.items).toEqual([]);
     expect(deps.notifier.notify).not.toHaveBeenCalled();
   });

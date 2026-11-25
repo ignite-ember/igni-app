@@ -1,26 +1,34 @@
 /**
  * The window event the push-channel router dispatches when Laya reads a
- * person's message as thanks, praise or an insult for igni, and the hook a view
+ * person's message as pleased or displeased with igni, and the hook a view
  * subscribes to it with.
  */
 
 import { useEffect, useRef } from "react";
 
-import type { SentimentKind } from "../protocol/pushChannels";
+import type { UserSentiment } from "../protocol/pushChannels";
 
 export const USER_SENTIMENT_EVENT = "ember:user_sentiment";
 
-/** The person's message in ``sessionId`` thanked, praised or insulted igni. */
+/** The person's message in ``sessionId`` was pleased or displeased with igni. */
 export class UserSentimentEvent extends Event {
-  constructor(
-    readonly sessionId: string,
-    readonly kind: SentimentKind,
-  ) {
+  readonly sessionId: string;
+  readonly sentiment: UserSentiment["sentiment"];
+  readonly confidence: number;
+  readonly messageRunId: string | null;
+  readonly replyRunId: string | null;
+
+  constructor(push: Omit<UserSentiment, "channel">) {
     super(USER_SENTIMENT_EVENT);
+    this.sessionId = push.sessionId;
+    this.sentiment = push.sentiment;
+    this.confidence = push.confidence;
+    this.messageRunId = push.messageRunId;
+    this.replyRunId = push.replyRunId;
   }
 }
 
-/** Calls ``onSentiment`` each time the chat ``sessionId`` thanks, praises or insults igni. */
+/** Calls ``onSentiment`` each time the chat ``sessionId`` is pleased or displeased with igni. */
 export function useUserSentiment(
   sessionId: string,
   onSentiment: (ev: UserSentimentEvent) => void,
