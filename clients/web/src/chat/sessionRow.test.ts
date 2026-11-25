@@ -25,6 +25,7 @@ describe("SessionRow", () => {
       detail: "s1",
       has_paused_run: false,
       folder: "",
+      last_message_at: 0,
     });
     expect(new SessionRow("s1", "", 0).toEntry().name).toBe("s1");
     const dated = new SessionRow("s1", "", 1_700_000_000).toEntry();
@@ -49,5 +50,14 @@ describe("SessionRow", () => {
     expect(SessionRow.parse({ session_id: "s1", has_paused_run: "true" }).hasPausedRun).toBe(false);
     expect(SessionRow.parse({ session_id: "s1", has_paused_run: 1 }).hasPausedRun).toBe(false);
     expect(SessionRow.parse({ session_id: "s1", has_paused_run: null }).hasPausedRun).toBe(false);
+  });
+
+  it("places an entry by its last message, else by when it last changed", () => {
+    const row = SessionRow.parse({ session_id: "s1", updated_at: 10, last_message_at: 12_345 });
+    expect(row.lastMessageAt).toBe(12_345);
+    expect(row.toEntry().last_message_at).toBe(12_345);
+    // Seconds become milliseconds, so the two orders agree.
+    expect(SessionRow.parse({ session_id: "s1", updated_at: 10 }).toEntry().last_message_at).toBe(10_000);
+    expect(SessionRow.parse({ session_id: "s1", last_message_at: "soon" }).lastMessageAt).toBe(0);
   });
 });

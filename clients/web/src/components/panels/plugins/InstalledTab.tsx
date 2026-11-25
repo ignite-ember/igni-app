@@ -1,5 +1,7 @@
 /** The Installed tab: install from a git ref, and the installed plugins. */
 
+import { EntityGlyph } from "../../EntityGlyph";
+import { useMasonry } from "../useMasonry";
 import type { InstalledPlugin, InstalledPlugins } from "./installedPlugin";
 import { PluginCapabilities, PluginsSkeleton } from "./PluginParts";
 
@@ -18,6 +20,7 @@ export function InstalledTab({
   onInstall: (ref: string) => void;
   onOpen: (plugin: InstalledPlugin) => void;
 }) {
+  const flow = useMasonry();
   if (installed === null) return <PluginsSkeleton />;
   return (
     <>
@@ -45,24 +48,43 @@ export function InstalledTab({
           </div>
         </div>
       ) : (
-        <div className="plugins-list">
+        <div className="plugins-grid plugins-grid--flow" ref={flow}>
           {installed.rows.map((p) => (
             <div
-              className="plugins-card plugins-card-clickable"
+              className="plugins-gcard"
               key={p.name}
+              role="button"
+              tabIndex={0}
               onClick={() => onOpen(p)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  onOpen(p);
+                }
+              }}
             >
-              <div className="plugins-card-head">
-                <div className="plugins-card-title">
-                  <span className={`plugins-status ${p.enabled ? "is-on" : "is-off"}`} />
-                  <span className="plugins-name">{p.name}</span>
-                  {p.version && <span className="plugins-version">{p.version}</span>}
-                  {p.sourceRoot && <span className="plugins-source">{p.sourceRoot}</span>}
+              <span className="plugins-gcard-icon" aria-hidden="true">
+                <EntityGlyph name={p.name} size={38} />
+              </span>
+              <div className="plugins-gcard-body">
+                <div className="plugins-gcard-top">
+                  <span className="plugins-name">
+                    <span className={`plugins-status ${p.enabled ? "is-on" : "is-off"}`} /> {p.name}
+                    {p.version && <span className="meta"> · {p.version}</span>}
+                  </span>
+                  <span className="plugins-chevron-end" aria-hidden="true">
+                    ›
+                  </span>
                 </div>
-                <span className="plugins-chevron-end">›</span>
+                {p.description && <p className="plugins-gcard-desc">{p.description}</p>}
+                <PluginCapabilities plugin={p} />
+                {(p.sourceRoot || !p.enabled) && (
+                  <div className="plugins-gcard-foot">
+                    {!p.enabled && <span className="plugins-cat-chip">disabled</span>}
+                    {p.sourceRoot && <span className="plugins-source">{p.sourceRoot}</span>}
+                  </div>
+                )}
               </div>
-              {p.description && <div className="plugins-desc">{p.description}</div>}
-              <PluginCapabilities plugin={p} />
             </div>
           ))}
         </div>

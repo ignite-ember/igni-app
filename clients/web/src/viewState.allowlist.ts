@@ -326,8 +326,18 @@ export const VIEW_STATE: Record<string, Partial<Record<Category, string[]>>> = {
     pending: ["loading"],
   },
   "components/panels/ExtensionsPanel.tsx": {
-    field: ["draft"],
+    field: ["draft", "query"],
     pending: ["busy", "error"],
+    page: ["sortBy", "filterBy", "selected"],
+    menu: ["openMenu"],
+  },
+  "components/panels/McpPanel.tsx": {
+    field: ["query"],
+    page: ["sortBy", "filterBy"],
+    menu: ["openMenu"],
+  },
+  "components/panels/PanelSearch.tsx": {
+    disclosure: ["expanded"],
   },
   "components/panels/HooksPanel.tsx": {
     data: ["rows"],
@@ -353,7 +363,7 @@ export const VIEW_STATE: Record<string, Partial<Record<Category, string[]>>> = {
   },
   "components/panels/mcp/useMcpServers.ts": {
     data: ["servers", "approvals"],
-    pending: ["busy", "loadError", "actionError"],
+    pending: ["busy", "loadError", "actionError", "reloading"],
   },
   "components/panels/PluginsPanel.tsx": {
     page: ["view", "sortBy", "filterBy"],
@@ -407,5 +417,8 @@ export const VIEW_STATE: Record<string, Partial<Record<Category, string[]>>> = {
   },
   "notifications/model.ts": {
     data: ["counts"],
+  },
+  "chat/sessionStates.ts": {
+    data: ["states"],
   },
 };

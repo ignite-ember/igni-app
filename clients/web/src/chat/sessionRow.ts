@@ -27,13 +27,23 @@ export class SessionRow {
     /** The project folder this chat is bound to; empty when unknown.
      *  The sidebar groups chats by it. */
     readonly folder: string = "",
+    /** When a message last went in or a reply came out, in milliseconds;
+     *  ``0`` when the backend has not recorded one. */
+    readonly lastMessageAt: number = 0,
   ) {}
 
   static parse(raw: unknown): SessionRow {
     const p = new WirePayload(raw);
     const id = String(p.value("session_id") ?? p.value("id") ?? "");
     const ts = Number(p.value("updated_at") ?? p.value("created_at") ?? 0) || 0;
-    return new SessionRow(id, p.text("name"), ts, p.value("has_paused_run") === true, p.text("project_dir"));
+    return new SessionRow(
+      id,
+      p.text("name"),
+      ts,
+      p.value("has_paused_run") === true,
+      p.text("project_dir"),
+      Number(p.value("last_message_at")) || 0,
+    );
   }
 
   /** The rows of an answer: wrapped (``{sessions: [...]}``, as the
@@ -55,6 +65,8 @@ export class SessionRow {
       detail: [this.sessionId, when].filter(Boolean).join(" · "),
       has_paused_run: this.hasPausedRun,
       folder: this.folder,
+      // The sidebar's order: the last message, else when the chat changed.
+      last_message_at: this.lastMessageAt || this.updatedAt * 1000,
     };
   }
 }

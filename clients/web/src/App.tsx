@@ -7,6 +7,7 @@ import { useHitl } from "./chat/useHitl";
 import { useObserver } from "./chat/useObserver";
 import { useRunPhase } from "./chat/useRunPhase";
 import { useSessionBinding } from "./chat/useSessionBinding";
+import { useSessionStates } from "./chat/sessionStates";
 import { useChatPorts, useSessionStartup, useShellHandlers } from "./chat/useShellCollaborators";
 import { useShellStatus, useStatusPoll } from "./chat/useShellStatus";
 import { useStampCancelledReply, useTranscriptState } from "./chat/useTranscriptState";
@@ -99,6 +100,8 @@ export default function App() {
   const backend = useBackendState();
   const composerReady = connected && sessionBound && backend?.state !== "cloud_needs_sign_in";
   useLocalActivity(sessionId, run.processing, hitl.pending?.length ?? 0);
+  // Which chats are working, waiting or unread — the sidebar's marks.
+  const sessionStates = useSessionStates(client, connected, sessionId);
 
   const { groupName, groupMark } = useGroupBranding(status?.theme);
 
@@ -185,6 +188,7 @@ export default function App() {
         sidebar={sidebar}
         layout={layout}
         sessions={sessions}
+        states={sessionStates}
         currentId={sessionId}
         contributions={contributions}
         notificationCounts={notificationCounts}

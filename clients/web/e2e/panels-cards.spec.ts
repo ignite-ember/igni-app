@@ -111,7 +111,7 @@ test("panels card lists", { tag: "@manual" }, async ({ page, backend, appUrl }) 
   await page.emulateMedia({ colorScheme: "light" });
 
   await page.locator(".sidebar-link", { hasText: "Extensions" }).click();
-  await expect(page.locator(".ext-row").first()).toBeVisible();
+  await expect(page.locator(".ext-card").first()).toBeVisible();
   await page.waitForTimeout(300);
   await page.screenshot({ path: "account-shots/extensions-light.png" });
   await page.emulateMedia({ colorScheme: "dark" });

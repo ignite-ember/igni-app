@@ -102,6 +102,16 @@ function panelWith(
   return { rpc, onChanged };
 }
 
+/** Open an extension's page by clicking its card — the settings and
+ *  notices live there now, not inline on the grid. */
+function openDetail(name: string | RegExp = /Compliance Scanner/) {
+  fireEvent.click(
+    screen.getByRole("button", {
+      name: typeof name === "string" ? new RegExp(name) : name,
+    }),
+  );
+}
+
 describe("what is installed", () => {
   it("says so when nothing is", () => {
     panelWith([]);
@@ -145,6 +155,7 @@ describe("what is installed", () => {
         ],
       }),
     ]);
+    openDetail();
     expect(screen.getByText("prompt:main#workflow")).toBeTruthy();
     expect(screen.getByText(/decided by admin@acme.test/)).toBeTruthy();
   });
@@ -160,6 +171,7 @@ describe("what is installed", () => {
         ],
       }),
     ]);
+    openDetail();
     expect(screen.getByText("prompt:main+our_review")).toBeTruthy();
     expect(screen.getByText(/land nowhere/)).toBeTruthy();
     expect(screen.getByText(/has no section 'workflow'/)).toBeTruthy();
@@ -177,6 +189,7 @@ describe("what is installed", () => {
           "Compliance Scanner isn't responding: 3 calls in a row timed out or crashed",
       }),
     ]);
+    openDetail();
     expect(screen.getByRole("alert").textContent).toMatch(
       /Not responding: Compliance Scanner isn't responding/,
     );
@@ -191,14 +204,17 @@ describe("what is installed", () => {
 describe("the form", () => {
   it("renders a control per declared type", () => {
     panelWith([WITH_SETTINGS]);
+    openDetail();
     expect(screen.getByDisplayValue("https://acme.test")).toBeTruthy();
     expect(screen.getByDisplayValue("3")).toBeTruthy();
-    expect(screen.getByRole("checkbox")).toBeTruthy();
+    // A boolean setting renders as a design-system Switch (role=switch).
+    expect(screen.getByRole("switch")).toBeTruthy();
     expect(screen.getByRole("combobox")).toBeTruthy();
   });
 
   it("starts clean, so Save is not offered until something changes", () => {
     panelWith([WITH_SETTINGS]);
+    openDetail();
     expect(
       screen.getByRole("button", { name: "Save" }).hasAttribute("disabled"),
     ).toBe(true);
@@ -206,6 +222,7 @@ describe("the form", () => {
 
   it("sends only this extension's values, keyed as declared", async () => {
     const { rpc, onChanged } = panelWith([WITH_SETTINGS], [WITH_SETTINGS]);
+    openDetail();
     fireEvent.change(screen.getByDisplayValue("https://acme.test"), {
       target: { value: "https://other.test" },
     });
@@ -229,6 +246,7 @@ describe("the form", () => {
     // store `null`, which reads as somebody having reset the
     // setting — so the form names the field and will not save.
     const { rpc } = panelWith([WITH_SETTINGS]);
+    openDetail();
     fireEvent.change(screen.getByDisplayValue("3"), { target: { value: "" } });
     await waitFor(() =>
       expect(screen.getByText(/Retries needs a number/)).toBeTruthy(),
@@ -241,6 +259,7 @@ describe("the form", () => {
 
   it("reverts to what was saved", () => {
     panelWith([WITH_SETTINGS]);
+    openDetail();
     fireEvent.change(screen.getByDisplayValue("https://acme.test"), {
       target: { value: "typed by mistake" },
     });
@@ -263,6 +282,7 @@ describe("the form", () => {
         onClose={() => {}}
       />,
     );
+    openDetail();
     fireEvent.change(screen.getByDisplayValue("https://acme.test"), {
       target: { value: "https://other.test" },
     });
@@ -283,6 +303,7 @@ describe("the form", () => {
         values: {},
       }),
     ]);
+    openDetail();
     expect(screen.getByText(/needs a newer igni/)).toBeTruthy();
   });
 
@@ -304,6 +325,7 @@ describe("the form", () => {
         values: {},
       }),
     ]);
+    openDetail();
     expect(screen.getByDisplayValue("7")).toBeTruthy();
   });
 });
