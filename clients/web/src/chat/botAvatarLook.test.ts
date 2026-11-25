@@ -23,7 +23,14 @@ import { SessionStates } from "./sessionStates";
 import { UserSentimentEvent } from "./userSentimentEvents";
 
 function sentimentEvent(sessionId: string, sentiment: "positive" | "negative"): UserSentimentEvent {
-  return new UserSentimentEvent({ sessionId, sentiment, confidence: 0.9, messageRunId: "r-2", replyRunId: "r-1" });
+  return new UserSentimentEvent({
+    sessionId,
+    sentiment,
+    confidence: 0.9,
+    messageRunId: "r-2",
+    replyRunId: "r-1",
+    aspects: null,
+  });
 }
 
 function states(...rows: [string, string][]): SessionStates {

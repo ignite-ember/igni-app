@@ -28,6 +28,7 @@ import {
   parseOrchestrateEvent,
   type OrchestrateEventEnvelope,
 } from "./orchestrateEvents";
+import { parseSentimentAspects, type SentimentAspects } from "./sentimentAspects";
 import { WirePayload } from "./wirePayload";
 import { parseWorkflowEvent, type WorkflowEvent } from "./workflowEvents";
 
@@ -142,6 +143,8 @@ export interface UserSentiment {
   messageRunId: string | null;
   /** The run whose reply the message reacts to; ``null`` when the session had none. */
   replyRunId: string | null;
+  /** Every question Laya answered, with every probability; ``null`` when the push has none. */
+  aspects: SentimentAspects | null;
 }
 
 /** A host-model signal an extension's page subscribed to, already
@@ -287,6 +290,7 @@ const PARSERS: Parsers = {
       confidence,
       messageRunId: p.optionalString("message_run_id") || null,
       replyRunId: p.optionalString("reply_run_id") || null,
+      aspects: parseSentimentAspects(p.value("aspects")),
     };
   },
   host_signal: (p) => {

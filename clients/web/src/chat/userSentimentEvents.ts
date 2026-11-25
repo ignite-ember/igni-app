@@ -17,6 +17,7 @@ export class UserSentimentEvent extends Event {
   readonly confidence: number;
   readonly messageRunId: string | null;
   readonly replyRunId: string | null;
+  readonly aspects: UserSentiment["aspects"];
 
   constructor(push: Omit<UserSentiment, "channel">) {
     super(USER_SENTIMENT_EVENT);
@@ -25,6 +26,7 @@ export class UserSentimentEvent extends Event {
     this.confidence = push.confidence;
     this.messageRunId = push.messageRunId;
     this.replyRunId = push.replyRunId;
+    this.aspects = push.aspects;
   }
 }
 

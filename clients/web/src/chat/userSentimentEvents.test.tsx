@@ -17,6 +17,7 @@ function sentiment(sessionId: string, value: "positive" | "negative" = "positive
     confidence: 0.9,
     messageRunId: "r-2",
     replyRunId: "r-1",
+    aspects: null,
   });
 }
 
@@ -28,9 +29,11 @@ describe("UserSentimentEvent", () => {
       confidence: 0.84,
       messageRunId: "r-2",
       replyRunId: null,
+      aspects: null,
     });
     expect(ev.type).toBe(USER_SENTIMENT_EVENT);
     expect(USER_SENTIMENT_EVENT).toBe("ember:user_sentiment");
+    expect(ev.aspects).toBeNull();
     expect([ev.sessionId, ev.sentiment, ev.confidence, ev.messageRunId, ev.replyRunId]).toEqual([
       "s1",
       "negative",
@@ -38,6 +41,31 @@ describe("UserSentimentEvent", () => {
       "r-2",
       null,
     ]);
+  });
+});
+
+describe("UserSentimentEvent aspects", () => {
+  it("carries the aspects it was given", () => {
+    const aspect = { answer: "no", probabilities: [{ label: "no", probability: 1 }] };
+    const aspects = {
+      feeling: aspect,
+      gesture: aspect,
+      negativeReason: aspect,
+      positiveReason: aspect,
+      repeat: aspect,
+      redoRequested: aspect,
+      taskDone: aspect,
+      intensity: aspect,
+    };
+    const ev = new UserSentimentEvent({
+      sessionId: "s1",
+      sentiment: "positive",
+      confidence: 0.9,
+      messageRunId: null,
+      replyRunId: null,
+      aspects,
+    });
+    expect(ev.aspects).toBe(aspects);
   });
 });
 

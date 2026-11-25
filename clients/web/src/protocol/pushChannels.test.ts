@@ -181,6 +181,7 @@ describe("parsePushChannel", () => {
       confidence: 0.91,
       messageRunId: "r-2",
       replyRunId: "r-1",
+      aspects: null,
     });
     expect(parse("user_sentiment", { ...full, sentiment: "negative" })).toMatchObject({
       sentiment: "negative",
@@ -203,5 +204,18 @@ describe("parsePushChannel", () => {
     expect(parse("user_sentiment", { ...full, sentiment: "positive", confidence: undefined })).toBeNull();
     expect(parse("user_sentiment", { ...full, sentiment: "positive", session_id: "" })).toBeNull();
     expect(parse("user_sentiment", { ...full, sentiment: "positive", session_id: 7 })).toBeNull();
+  });
+
+  it("reads user_sentiment's aspects, and leaves them null when malformed", () => {
+    const aspect = { answer: "yes", probabilities: [{ label: "yes", probability: 0.8 }, { label: "no", probability: 0.2 }] };
+    const aspects = Object.fromEntries(
+      ["feeling", "gesture", "negative_reason", "positive_reason", "repeat", "redo_requested", "task_done", "intensity"].map(
+        (name) => [name, aspect],
+      ),
+    );
+    const base = { session_id: "s1", sentiment: "negative", confidence: 0.9 };
+    const parsed = parse("user_sentiment", { ...base, aspects });
+    expect(parsed).toMatchObject({ aspects: { negativeReason: aspect, redoRequested: aspect, taskDone: aspect } });
+    expect(parse("user_sentiment", { ...base, aspects: { feeling: aspect } })).toMatchObject({ aspects: null });
   });
 });

@@ -164,6 +164,7 @@ describe("PushChannelRouter", () => {
       confidence: 0.95,
       messageRunId: "r-2",
       replyRunId: "r-1",
+      aspects: null,
     });
     expect(displeased).toMatchObject({
       sessionId: "s2",
