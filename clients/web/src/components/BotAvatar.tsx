@@ -33,6 +33,23 @@ const LABELS: Record<AvatarLook["state"], string> = {
   done: "igni finished",
 };
 
+/**
+ * The fur is WebGL2. On a software renderer (no GPU, a headless browser) one
+ * live cat keeps the main thread busy, so there the cat sits still.
+ */
+function hasHardwareWebGL(): boolean {
+  try {
+    const gl = document.createElement("canvas").getContext("webgl2");
+    if (!gl) return false;
+    const info = gl.getExtension("WEBGL_debug_renderer_info");
+    const renderer = String(gl.getParameter(info ? info.UNMASKED_RENDERER_WEBGL : gl.RENDERER));
+    gl.getExtension("WEBGL_lose_context")?.loseContext();
+    return !/swiftshader|llvmpipe|software/i.test(renderer);
+  } catch {
+    return false;
+  }
+}
+
 export function BotAvatar({ look, size = 30 }: { look: AvatarLook; size?: number }) {
   const host = useRef<HTMLDivElement>(null);
   const avatar = useRef<MountedAvatar | null>(null);
@@ -44,7 +61,7 @@ export function BotAvatar({ look, size = 30 }: { look: AvatarLook; size?: number
         definition: CAT,
         color: CAT_COLOR,
         material: "fluffy",
-        followPointer: true,
+        ...(hasHardwareWebGL() ? { followPointer: true } : { still: true }),
         ...look,
         label: LABELS[look.state],
       });

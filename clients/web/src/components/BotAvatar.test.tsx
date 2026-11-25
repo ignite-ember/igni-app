@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 /**
  * ``BotAvatar`` mounts the fluffy gallery cat once, passes each new look
- * to it, tears it down on unmount, and leaves the sidebar working when
- * the renderer cannot mount.
+ * to it, tears it down on unmount, sits still on a software renderer, and
+ * leaves the sidebar working when the renderer cannot mount.
  */
 import { cleanup, render } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -16,13 +16,25 @@ vi.mock("open-bot-avatar/dom", () => ({ mountAvatar }));
 
 import { BotAvatar } from "./BotAvatar";
 
+/** Makes ``canvas.getContext("webgl2")`` report ``renderer`` as its GPU. */
+function stubRenderer(renderer: string) {
+  const gl = {
+    RENDERER: 1,
+    getExtension: vi.fn(() => null),
+    getParameter: vi.fn(() => renderer),
+  };
+  vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(gl as unknown as RenderingContext);
+}
+
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
+  vi.restoreAllMocks();
 });
 
 describe("BotAvatar", () => {
   it("mounts the fluffy amber cat once, following the pointer, with the look's state", () => {
+    stubRenderer("ANGLE (Apple, Apple M3, OpenGL 4.1)");
     const { container } = render(<BotAvatar look={{ state: "thinking", mood: "neutral" }} />);
     expect(mountAvatar).toHaveBeenCalledTimes(1);
     const [host, options] = mountAvatar.mock.calls[0] as unknown as [HTMLElement, Record<string, unknown>];
@@ -38,6 +50,24 @@ describe("BotAvatar", () => {
     expect((options.definition as { id: string }).id).toBe("cat");
     expect(host.getAttribute("data-state")).toBe("thinking");
     expect(host.style.width).toBe("30px");
+  });
+
+  it.each(["Google SwiftShader", "llvmpipe (LLVM 17.0.6, 256 bits)", "Software Renderer"])(
+    "sits still instead of following the pointer on %s",
+    (renderer) => {
+      stubRenderer(renderer);
+      render(<BotAvatar look={{ state: "working", mood: "neutral" }} />);
+      const options = (mountAvatar.mock.calls[0] as unknown as [HTMLElement, Record<string, unknown>])[1];
+      expect(options).toMatchObject({ still: true, state: "working" });
+      expect(options).not.toHaveProperty("followPointer");
+    },
+  );
+
+  it("sits still when there is no WebGL2 at all", () => {
+    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(null);
+    render(<BotAvatar look={{ state: "idle", mood: "neutral" }} />);
+    const options = (mountAvatar.mock.calls[0] as unknown as [HTMLElement, Record<string, unknown>])[1];
+    expect(options).toMatchObject({ still: true });
   });
 
   it("passes a new look to the mounted cat instead of mounting again", () => {
