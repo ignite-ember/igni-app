@@ -189,11 +189,11 @@ test("SESS-005 a cleared session is still there to reopen from the sidebar", asy
   await send(page, `Reply with exactly ${token}.`);
   await assistantSaid(page, token);
   await idle(page);
-  const old = (await page.locator(".session-chip code").innerText()).trim();
+  const old = (await page.locator(".session-ctx-id").innerText()).trim();
   await newChat(page);
   await expect(page.locator(".conversation")).not.toContainText(token);
   await page.locator(".sidebar, nav, aside").getByText(old.slice(0, 8)).first().click();
-  await expect(page.locator(".session-chip code")).toHaveText(old, { timeout: 15_000 });
+  await expect(page.locator(".session-ctx-id")).toHaveText(old, { timeout: 15_000 });
   await assistantSaid(page, token, 15_000);
 });
 

@@ -101,16 +101,19 @@ function ClampedText({ children }: { children: string }) {
 
 export function ToolRow({
   name,
+  server,
   description,
   disabled,
   onToggle,
 }: {
   name: string;
+  /** The server it belongs to, so its registry prefix can be split off. */
+  server?: string;
   description?: string;
   disabled: boolean;
   onToggle: (enabled: boolean) => void;
 }) {
-  const { short, prefix } = McpToolName.of(name);
+  const { short, prefix } = McpToolName.of(name, server);
   return (
     <div className={`mcp-tool-row ${disabled ? "is-disabled" : ""}`}>
       <span className="mcp-tool-icon">
@@ -119,7 +122,9 @@ export function ToolRow({
       <div className="mcp-tool-body">
         <div className="mcp-tool-name">
           <code>{short}</code>
-          {prefix && <span className="mcp-tool-prefix">{prefix}</span>}
+          {/* The card already names its server; repeat a prefix only when
+              it is some other server's. */}
+          {prefix && prefix !== server && <span className="mcp-tool-prefix">{prefix}</span>}
           {disabled && <span className="mcp-tool-tag">off</span>}
         </div>
         {description && <ClampedText>{description}</ClampedText>}

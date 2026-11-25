@@ -251,6 +251,112 @@ describe("Sidebar — session list", () => {
     expect(onPick).toHaveBeenCalledWith("waiting-1");
   });
 
+  describe("the chats' live marks", () => {
+    const row = (name: string) =>
+      Array.from(document.querySelectorAll(".session-item")).find((r) =>
+        r.textContent?.includes(name),
+      ) as HTMLElement;
+
+    it("turns a ring on a chat that is working, and only there", () => {
+      render(
+        <Sidebar
+          {...defaultProps({
+            sessions: [
+              { session_id: "busy-1", name: "Alpha", activity: "running" },
+              { session_id: "quiet-2", name: "Beta" },
+            ],
+          })}
+        />,
+      );
+      const ring = screen.getByRole("img", { name: "Working" });
+      expect(row("Alpha").contains(ring)).toBe(true);
+      expect(row("Beta").querySelector(".session-running")).toBeNull();
+    });
+
+    it("says waiting when the live state says so, without the list's flag", () => {
+      render(
+        <Sidebar
+          {...defaultProps({
+            sessions: [{ session_id: "asks-1", name: "Alpha", activity: "waiting" }],
+          })}
+        />,
+      );
+      expect(screen.getByRole("img", { name: "Waiting for your answer" })).toBeTruthy();
+    });
+
+    it("shows a working chat as working, not waiting, whatever the list said", () => {
+      render(
+        <Sidebar
+          {...defaultProps({
+            sessions: [
+              { session_id: "busy-1", name: "Alpha", activity: "running", has_paused_run: true },
+            ],
+          })}
+        />,
+      );
+      expect(screen.getByRole("img", { name: "Working" })).toBeTruthy();
+      expect(screen.queryByRole("img", { name: "Waiting for your answer" })).toBeNull();
+    });
+
+    it("dots a chat that finished unseen and brightens its name", () => {
+      render(
+        <Sidebar
+          {...defaultProps({
+            sessions: [
+              { session_id: "done-1", name: "Alpha", unread: true },
+              { session_id: "read-2", name: "Beta" },
+            ],
+          })}
+        />,
+      );
+      const dot = screen.getByRole("img", { name: "New reply" });
+      expect(row("Alpha").contains(dot)).toBe(true);
+      expect(row("Alpha").classList.contains("unread")).toBe(true);
+      expect(row("Beta").classList.contains("unread")).toBe(false);
+    });
+
+    it("never dots the chat on screen: it is being read", () => {
+      render(
+        <Sidebar
+          {...defaultProps({
+            currentId: "done-1",
+            sessions: [{ session_id: "done-1", name: "Alpha", unread: true }],
+          })}
+        />,
+      );
+      expect(screen.queryByRole("img", { name: "New reply" })).toBeNull();
+      expect(row("Alpha").classList.contains("unread")).toBe(false);
+    });
+
+    it("lets working or waiting speak over unread", () => {
+      render(
+        <Sidebar
+          {...defaultProps({
+            sessions: [
+              { session_id: "a", name: "Alpha", activity: "running", unread: true },
+              { session_id: "b", name: "Beta", activity: "waiting", unread: true },
+            ],
+          })}
+        />,
+      );
+      expect(screen.queryByRole("img", { name: "New reply" })).toBeNull();
+    });
+
+    it("opens the chat when its mark is clicked", () => {
+      const onPick = vi.fn();
+      render(
+        <Sidebar
+          {...defaultProps({
+            onPick,
+            sessions: [{ session_id: "done-1", name: "Alpha", unread: true }],
+          })}
+        />,
+      );
+      fireEvent.click(screen.getByRole("img", { name: "New reply" }));
+      expect(onPick).toHaveBeenCalledWith("done-1");
+    });
+  });
+
   it("New chat button calls onNewChat", () => {
     const onNewChat = vi.fn();
     render(<Sidebar {...defaultProps({ onNewChat })} />);

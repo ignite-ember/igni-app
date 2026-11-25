@@ -7,6 +7,7 @@ import type { AuthPhase } from "../chat/useShellStatus";
 import { badgeText } from "../notifications/model";
 import type { IgniClient } from "../protocol/client";
 import type { StatusUpdate } from "../protocol/messages";
+import type { ChatActivity } from "../chat/sessionStates";
 
 export interface SessionEntry {
   session_id: string;
@@ -20,6 +21,14 @@ export interface SessionEntry {
   /** The project folder the chat is bound to; the sidebar groups by it.
    *  Empty when the backend reports none. */
   folder?: string;
+  /** What the chat is doing now (``session_states_changed``); idle when
+   *  the backend does not say. */
+  activity?: ChatActivity;
+  /** A run finished after the person last looked at the chat. */
+  unread?: boolean;
+  /** When a message last went in or a reply came out, in milliseconds:
+   *  the list is newest first by it. */
+  last_message_at?: number;
 }
 
 export interface SidebarLink {
@@ -302,27 +311,50 @@ export function Sidebar({
                     </button>
                   </div>
                   {!isCollapsed &&
-                    g.sessions.map((s) => (
-                      <div
-                        key={s.session_id}
-                        className={`session-item ${s.session_id === currentId ? "current" : ""}`}
-                        title={s.detail || s.name}
-                        onClick={() => onPick(s.session_id)}
-                      >
-                        <span className="session-name">{s.name || s.session_id}</span>
-                        {s.has_paused_run && (
-                          <span
-                            className="session-waiting"
-                            role="img"
-                            aria-label="Waiting for your answer"
-                            title="Waiting for your answer"
-                          >
-                            waiting
-                          </span>
-                        )}
-                        <span className="session-id">{s.session_id.slice(0, 8)}</span>
-                      </div>
-                    ))}
+                    g.sessions.map((s) => {
+                      const current = s.session_id === currentId;
+                      const running = s.activity === "running";
+                      const waiting = !running && (s.has_paused_run || s.activity === "waiting");
+                      // The chat on screen is being read as it finishes.
+                      const unread = !!s.unread && !current && !running && !waiting;
+                      return (
+                        <div
+                          key={s.session_id}
+                          className={`session-item${current ? " current" : ""}${unread ? " unread" : ""}`}
+                          title={s.detail || s.name}
+                          onClick={() => onPick(s.session_id)}
+                        >
+                          <span className="session-name">{s.name || s.session_id}</span>
+                          {running && (
+                            <span
+                              className="session-running"
+                              role="img"
+                              aria-label="Working"
+                              title="Working"
+                            />
+                          )}
+                          {waiting && (
+                            <span
+                              className="session-waiting"
+                              role="img"
+                              aria-label="Waiting for your answer"
+                              title="Waiting for your answer"
+                            >
+                              waiting
+                            </span>
+                          )}
+                          {unread && (
+                            <span
+                              className="session-unread"
+                              role="img"
+                              aria-label="New reply"
+                              title="Finished — not opened yet"
+                            />
+                          )}
+                          <span className="session-id">{s.session_id.slice(0, 8)}</span>
+                        </div>
+                      );
+                    })}
                 </div>
               );
             })}

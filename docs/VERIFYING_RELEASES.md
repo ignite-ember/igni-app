@@ -21,17 +21,17 @@ general version, with the air-gapped procedure and the signing details, is
 | `latest.json` | what the updater reads: for each installer kind (macOS app, AppImage, .msi, NSIS setup), the payload's URL and its signature, and the version |
 | `SHA256SUMS` | the SHA-256 of every other file on the release, SBOMs included |
 | `SHA256SUMS.sig` | a cosign signature over `SHA256SUMS`. **Absent until the key ceremony has happened** |
-| `igni-1.0.5.provenance.sigstore.json` | the build-provenance attestation for every file in `SHA256SUMS`, as a Sigstore bundle, for offline verification |
-| `igni-desktop-1.0.5.cdx.json` | the CycloneDX SBOM of the desktop app: the Tauri shell's crates and the web UI's npm packages |
+| `igni-1.0.6.provenance.sigstore.json` | the build-provenance attestation for every file in `SHA256SUMS`, as a Sigstore bundle, for offline verification |
+| `igni-desktop-1.0.6.cdx.json` | the CycloneDX SBOM of the desktop app: the Tauri shell's crates and the web UI's npm packages |
 
-The backend the app installs on first launch (`igni-core==1.0.5`) is **not**
+The backend the app installs on first launch (`igni-core==1.0.6`) is **not**
 on this release — it is released from
 [igni-core](https://github.com/ignite-ember/igni-core/releases), and has its
 own checksums, SBOM and provenance. The desktop SBOM covers the app; the
 backend's is the one in igni-core's release.
 
-To scan the desktop SBOM: `trivy sbom igni-desktop-1.0.5.cdx.json`, or
-`grype sbom:igni-desktop-1.0.5.cdx.json`.
+To scan the desktop SBOM: `trivy sbom igni-desktop-1.0.6.cdx.json`, or
+`grype sbom:igni-desktop-1.0.6.cdx.json`.
 
 ## 1. Checksums
 
@@ -60,7 +60,7 @@ To also insist on the workflow and the tag that built it:
 gh attestation verify igni-desktop-installer.dmg \
   --repo ignite-ember/igni-app \
   --signer-workflow ignite-ember/igni-app/.github/workflows/release.yml \
-  --source-ref refs/tags/v1.0.5
+  --source-ref refs/tags/v1.0.6
 ```
 
 Every file at once:
@@ -84,8 +84,8 @@ public keys and certificate authorities the bundle chains to).
 **On a connected machine**, once per release:
 
 ```bash
-gh release download v1.0.5 --repo ignite-ember/igni-app --dir igni-app-1.0.5
-gh attestation trusted-root > igni-app-1.0.5/trusted_root.jsonl
+gh release download v1.0.6 --repo ignite-ember/igni-app --dir igni-app-1.0.6
+gh attestation trusted-root > igni-app-1.0.6/trusted_root.jsonl
 ```
 
 `trusted_root.jsonl` is not a secret and changes rarely — only when Sigstore
@@ -96,11 +96,11 @@ keys the release was signed under.
 or later; with `--bundle` and `--custom-trusted-root` it contacts nothing):
 
 ```bash
-cd igni-app-1.0.5
+cd igni-app-1.0.6
 sha256sum --check --ignore-missing SHA256SUMS
 gh attestation verify igni-desktop-installer.dmg \
   --repo ignite-ember/igni-app \
-  --bundle igni-1.0.5.provenance.sigstore.json \
+  --bundle igni-1.0.6.provenance.sigstore.json \
   --custom-trusted-root trusted_root.jsonl
 ```
 

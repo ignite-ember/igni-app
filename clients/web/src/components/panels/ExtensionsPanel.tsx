@@ -1,9 +1,30 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
+import { Button, Field, Input, Select, Switch, Text } from "@ignite-ember/ui-react";
 import { EntityGlyph } from "../EntityGlyph";
+import { FilterIcon, SortIcon } from "../Icons";
+import type { PanelLevels } from "../PageShell";
 import type { IgniClient } from "../../protocol/client";
 import type { ExtensionSummary } from "../../extensions/ExtensionPage";
 import { OpenOnWeb } from "../../extensions/OpenOnWeb";
+import { ControlMenu } from "./ControlMenu";
 import { Drawer } from "./Drawer";
+import { PanelSearch } from "./PanelSearch";
+import { useMasonry } from "./useMasonry";
+
+type ExtSort = "default" | "name-asc" | "name-desc";
+type ExtFilter = "all" | "ready" | "failed" | "busy";
+
+const EXT_SORTS: readonly { key: ExtSort; label: string }[] = [
+  { key: "default", label: "Default" },
+  { key: "name-asc", label: "Name A→Z" },
+  { key: "name-desc", label: "Name Z→A" },
+];
+const EXT_FILTERS: readonly { key: ExtFilter; label: string }[] = [
+  { key: "all", label: "All extensions" },
+  { key: "ready", label: "Ready" },
+  { key: "failed", label: "Failed" },
+  { key: "busy", label: "Starting" },
+];
 
 /**
  * What is installed, why it is not working, and what it can be set to.
@@ -63,6 +84,7 @@ function stateClass(state: string): string {
   return "ext-state ext-state-busy";
 }
 
+
 function SettingsForm({
   extension,
   onSave,
@@ -102,82 +124,101 @@ function SettingsForm({
 
   return (
     <div className="ext-settings">
-      {extension.settings.map((setting) => (
-        <label className="ext-setting" key={setting.key}>
-          <span className="ext-setting-label">{setting.label}</span>
-          {setting.type === "boolean" && (
-            <input
-              type="checkbox"
+      {extension.settings.map((setting) => {
+        const id = `ext-set-${extension.id}-${setting.key}`;
+        // Rendering an unknown type as text would be a guess, and a guess
+        // that saves is worse than one that does not.
+        if (!KNOWN_TYPES.has(setting.type)) {
+          return (
+            <Field key={setting.key} label={setting.label}>
+              <Text tone="muted">
+                needs a newer igni — this one does not know the type “{setting.type}”
+              </Text>
+            </Field>
+          );
+        }
+        if (setting.type === "boolean") {
+          return (
+            <Switch
+              key={setting.key}
               checked={draft[setting.key] === true}
-              onChange={(e) => set(setting.key, e.target.checked)}
+              onChange={(next) => set(setting.key, next)}
+              label={setting.label}
             />
-          )}
-          {setting.type === "number" && (
-            <input
-              className="panel-input"
-              type="number"
-              value={
-                Number.isNaN(draft[setting.key])
-                  ? ""
-                  : String(draft[setting.key])
-              }
-              onChange={(e) => set(setting.key, e.target.valueAsNumber)}
-            />
-          )}
-          {setting.type === "string" && (
-            <input
-              className="panel-input"
+          );
+        }
+        if (setting.type === "enum") {
+          return (
+            <Field key={setting.key} label={setting.label} htmlFor={id}>
+              <Select
+                id={id}
+                value={String(draft[setting.key] ?? "")}
+                onChange={(e) => set(setting.key, e.target.value)}
+              >
+                {setting.options.map((option) => (
+                  <option key={option} value={option}>
+                    {option}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+          );
+        }
+        if (setting.type === "number") {
+          // A cleared number input reads as `NaN`; sending it would store
+          // `null` and look like a reset, so name the field and refuse.
+          const bad = Number.isNaN(draft[setting.key]);
+          return (
+            <Field
+              key={setting.key}
+              label={setting.label}
+              htmlFor={id}
+              error={bad ? `${setting.label} needs a number` : undefined}
+            >
+              <Input
+                id={id}
+                type="number"
+                value={bad ? "" : String(draft[setting.key])}
+                onChange={(e) => set(setting.key, e.target.valueAsNumber)}
+              />
+            </Field>
+          );
+        }
+        return (
+          <Field key={setting.key} label={setting.label} htmlFor={id}>
+            <Input
+              id={id}
               type="text"
               value={String(draft[setting.key] ?? "")}
               onChange={(e) => set(setting.key, e.target.value)}
             />
-          )}
-          {setting.type === "enum" && (
-            <select
-              className="panel-input"
-              value={String(draft[setting.key] ?? "")}
-              onChange={(e) => set(setting.key, e.target.value)}
-            >
-              {setting.options.map((option) => (
-                <option key={option} value={option}>
-                  {option}
-                </option>
-              ))}
-            </select>
-          )}
-          {!KNOWN_TYPES.has(setting.type) && (
-            // Rendered as text would be a guess, and a guess that
-            // saves is worse than one that does not. The same rule
-            // the indicator follows for a tone it does not have.
-            <span className="meta">
-              needs a newer igni — this one does not know the type “
-              {setting.type}”
-            </span>
-          )}
-        </label>
-      ))}
+          </Field>
+        );
+      })}
       <div className="ext-settings-actions">
-        <button
-          className="btn btn-primary btn-sm"
+        <Button
+          variant="primary"
+          size="sm"
           disabled={!dirty || busy || broken.length > 0}
           onClick={() => void save()}
         >
           {busy ? "Saving…" : "Save"}
-        </button>
+        </Button>
         {dirty && !busy && (
-          <button className="btn btn-sm" onClick={() => setDraft(saved)}>
+          <Button variant="default" size="sm" onClick={() => setDraft(saved)}>
             Revert
-          </button>
+          </Button>
         )}
-        {broken.length > 0 && (
-          <span className="meta">{broken.join(", ")} needs a number</span>
+        {error && (
+          <Text tone="muted" className="ext-settings-error">
+            {error}
+          </Text>
         )}
-        {error && <span className="meta ext-settings-error">{error}</span>}
       </div>
-      <div className="meta">
-        Applied the next time this extension’s page is opened. A frame already
-        up keeps the values it launched with.
-      </div>
+      <Text tone="faint">
+        Applied the next time this extension’s page is opened. A frame already up
+        keeps the values it launched with.
+      </Text>
     </div>
   );
 }
@@ -226,18 +267,150 @@ function Problems({ entries }: { entries: string[] }) {
   );
 }
 
-function AgentTools({ tools }: { tools: { name: string; hints: string }[] }) {
-  if (tools.length === 0) return null;
+/** One section of the extension's page — Pages, Commands, Tools — in the
+ *  same vocabulary the plugin detail page lists a plugin's contents. */
+function ContentSection({
+  title,
+  count,
+  children,
+}: {
+  title: string;
+  count: number;
+  children: ReactNode;
+}) {
+  if (count === 0) return null;
   return (
-    <div className="ext-tools">
-      <div className="meta">Tools for the agent:</div>
-      <ul>
-        {tools.map((tool) => (
-          <li key={tool.name}>
-            <code>{tool.name}</code> <span className="meta">{tool.hints}</span>
-          </li>
-        ))}
-      </ul>
+    <div className="plugins-content-section">
+      <div className="plugins-content-head">
+        {title} <span className="plugins-content-count">{count}</span>
+      </div>
+      {children}
+    </div>
+  );
+}
+
+/** A compact extension card. The whole card is one control: clicking it
+ *  opens the extension's own page, the way a plugin card does. Collapsed,
+ *  it is just name, version, state and a one-line summary, so the grid
+ *  reads as a row of cards rather than a stack of open forms. */
+function ExtensionCard({
+  extension,
+  onOpen,
+}: {
+  extension: ExtensionSummary;
+  onOpen: () => void;
+}) {
+  // A real line only — the reason it failed, or what its command does.
+  // Not the id, which already sits in the foot.
+  const desc = extension.reason || extension.menu[0]?.desc || "";
+  return (
+    <button type="button" className="plugins-gcard ext-card" onClick={onOpen}>
+      <span className="plugins-gcard-icon" aria-hidden="true">
+        <EntityGlyph name={extension.name} size={38} />
+      </span>
+      <span className="plugins-gcard-body">
+        <span className="plugins-gcard-top">
+          <span className="plugins-name name">
+            {extension.name} <span className="meta">· {extension.version}</span>
+          </span>
+          <span className={stateClass(extension.state)}>{extension.state}</span>
+        </span>
+        {desc && <span className="plugins-gcard-desc">{desc}</span>}
+        <span className="plugins-gcard-foot">
+          <span className="meta ext-card-id">{extension.id}</span>
+          <span className="plugins-chevron-end" aria-hidden="true">
+            ›
+          </span>
+        </span>
+      </span>
+    </button>
+  );
+}
+
+/** One extension in full: its state, why it is not working, what it
+ *  contributes, and its settings — the page a card opens onto. */
+function ExtensionDetailPage({
+  extension,
+  onSave,
+}: {
+  extension: ExtensionSummary;
+  onSave: (values: Record<string, Value>) => Promise<void>;
+}) {
+  const tools = extension.tools ?? [];
+  const hasContents =
+    extension.pages.length > 0 ||
+    extension.menu.length > 0 ||
+    tools.length > 0 ||
+    extension.settings.length > 0 ||
+    !!extension.web_url;
+  return (
+    <div className="plugin-detail">
+      <div className="plugin-detail-hero">
+        <span className="plugin-detail-icon" aria-hidden="true">
+          <EntityGlyph name={extension.name} size={52} />
+        </span>
+        <div className="plugin-detail-main">
+          <div className="plugin-detail-title-row">
+            <h2 className="plugin-detail-title">{extension.name}</h2>
+            <span className={stateClass(extension.state)}>{extension.state}</span>
+            {extension.version && <span className="plugins-version">{extension.version}</span>}
+            <span className="plugins-source">{extension.id}</span>
+          </div>
+          {extension.reason && <div className="plugin-detail-desc">{extension.reason}</div>}
+        </div>
+      </div>
+
+      <SwitchedOff entries={extension.switched_off ?? []} />
+      <SwitchedOff
+        entries={extension.dropped ?? []}
+        title="Prompt edits that land nowhere — another extension's override has no such section:"
+      />
+      {extension.faulty && (
+        <div className="ext-switched-off" role="alert">
+          <div className="meta">Not responding: {extension.faulty}</div>
+        </div>
+      )}
+      <Problems entries={extension.problems ?? []} />
+
+      {hasContents && (
+        <div className="plugins-contents">
+          <ContentSection title="Pages" count={extension.pages.length}>
+            {extension.pages.map((p) => (
+              <div className="plugins-content-row" key={p.kind}>
+                <span className="plugins-content-name">{p.label}</span>
+                {p.sidebar && <span className="plugins-content-meta">in the sidebar</span>}
+              </div>
+            ))}
+          </ContentSection>
+
+          <ContentSection title="Commands" count={extension.menu.length}>
+            {extension.menu.map((c) => (
+              <div className="plugins-content-row" key={c.command}>
+                <code className="plugins-content-name">{c.command}</code>
+                <span className="plugins-content-desc">{c.desc}</span>
+              </div>
+            ))}
+          </ContentSection>
+
+          <ContentSection title="Tools for the agent" count={tools.length}>
+            {tools.map((t) => (
+              <div className="plugins-content-row" key={t.name}>
+                <code className="plugins-content-name">{t.name}</code>
+                <span className="plugins-content-desc">{t.hints}</span>
+              </div>
+            ))}
+          </ContentSection>
+
+          <OpenOnWeb url={extension.web_url} name={extension.name} />
+
+          {extension.settings.length > 0 && (
+            <div className="plugins-content-section">
+              <div className="plugins-content-head">Settings</div>
+              <SettingsForm extension={extension} onSave={onSave} />
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -255,63 +428,113 @@ export function ExtensionsPanel({
   onChanged: (extensions: ExtensionSummary[]) => void;
   onClose: () => void;
 }) {
+  const [query, setQuery] = useState("");
+  const [sortBy, setSortBy] = useState<ExtSort>("default");
+  const [filterBy, setFilterBy] = useState<ExtFilter>("all");
+  const [openMenu, setOpenMenu] = useState<"sort" | "filter" | null>(null);
+  // Which extension's page is open, by id. `null` is the grid.
+  const [selected, setSelected] = useState<string | null>(null);
+  const flow = useMasonry();
+
+  const save = (id: string) => async (values: Record<string, Value>) => {
+    const result = await client.rpc<{ extensions: ExtensionSummary[] }>(
+      "set_extension_settings",
+      { extension_id: id, values },
+    );
+    onChanged(result.extensions);
+  };
+
+  // Resolved live so a settings save (a fresh list) re-reads the open one.
+  const current = selected ? (extensions.find((e) => e.id === selected) ?? null) : null;
+
+  // One crumb below "Extensions" while a page is open, so the trail reads
+  // "… / Extensions / <name>" and back returns to the grid.
+  const levels = useMemo<PanelLevels | undefined>(
+    () =>
+      current ? { labels: [current.name], onTruncate: () => setSelected(null) } : undefined,
+    [current],
+  );
+
+  const term = query.trim().toLowerCase();
+  const matchesFilter = (e: ExtensionSummary): boolean => {
+    if (filterBy === "all") return true;
+    if (filterBy === "busy") return e.state !== "ready" && e.state !== "failed";
+    return e.state === filterBy;
+  };
+  let shown = extensions.filter(
+    (e) =>
+      (!term || e.name.toLowerCase().includes(term) || e.id.toLowerCase().includes(term)) &&
+      matchesFilter(e),
+  );
+  if (sortBy === "name-asc") shown = [...shown].sort((a, b) => a.name.localeCompare(b.name));
+  else if (sortBy === "name-desc") shown = [...shown].sort((a, b) => b.name.localeCompare(a.name));
+
   return (
-    <Drawer title="Extensions" onClose={onClose}>
-      {extensions.length === 0 && (
-        <div className="msg-info">
-          No extensions installed. They arrive from your organisation&apos;s
-          services when you are signed in to igni.
-        </div>
-      )}
-      {extensions.map((extension) => (
-        <div className="row ext-row" key={extension.id}>
-          <span className="ext-icon" aria-hidden="true">
-            <EntityGlyph name={extension.name} size={38} />
-          </span>
-          <div className="ext-body">
-            <div className="ext-head">
-              <div className="ext-title">
-                <div className="name">
-                  {extension.name}{" "}
-                  <span className="meta">· {extension.version}</span>
-                </div>
-                <div className="meta">{extension.id}</div>
-              </div>
-              <span className={stateClass(extension.state)}>
-                {extension.state}
-              </span>
-            </div>
-            {extension.reason && <div className="meta">{extension.reason}</div>}
-            <SwitchedOff entries={extension.switched_off ?? []} />
-            <SwitchedOff
-              entries={extension.dropped ?? []}
-              title="Prompt edits that land nowhere — another extension's override has no such section:"
+    <Drawer
+      title="Extensions"
+      levels={levels}
+      onClose={onClose}
+      headerExtras={
+        !current && extensions.length > 0 ? (
+          <div className="plugins-controls">
+            <PanelSearch
+              value={query}
+              onChange={setQuery}
+              label="Search extensions"
+              placeholder={`Search ${extensions.length} extension${extensions.length === 1 ? "" : "s"}…`}
             />
-            {extension.faulty && (
-              <div className="ext-switched-off" role="alert">
-                <div className="meta">Not responding: {extension.faulty}</div>
-              </div>
-            )}
-            <Problems entries={extension.problems ?? []} />
-            <AgentTools tools={extension.tools ?? []} />
-            <OpenOnWeb url={extension.web_url} name={extension.name} />
-            {extension.settings.length > 0 && (
-              <SettingsForm
-                extension={extension}
-                onSave={async (values) => {
-                  const result = await client.rpc<{
-                    extensions: ExtensionSummary[];
-                  }>("set_extension_settings", {
-                    extension_id: extension.id,
-                    values,
-                  });
-                  onChanged(result.extensions);
-                }}
-              />
-            )}
+            <ControlMenu
+              label="Filter"
+              icon={<FilterIcon />}
+              active={filterBy !== "all"}
+              open={openMenu === "filter"}
+              onToggle={() => setOpenMenu(openMenu === "filter" ? null : "filter")}
+              onClose={() => setOpenMenu(null)}
+              options={EXT_FILTERS}
+              current={filterBy}
+              onPick={setFilterBy}
+            />
+            <ControlMenu
+              label="Sort"
+              icon={<SortIcon />}
+              active={sortBy !== "default"}
+              open={openMenu === "sort"}
+              onToggle={() => setOpenMenu(openMenu === "sort" ? null : "sort")}
+              onClose={() => setOpenMenu(null)}
+              options={EXT_SORTS}
+              current={sortBy}
+              onPick={setSortBy}
+            />
           </div>
-        </div>
-      ))}
+        ) : undefined
+      }
+    >
+      {current ? (
+        <ExtensionDetailPage extension={current} onSave={save(current.id)} />
+      ) : (
+        <>
+          {extensions.length === 0 && (
+            <div className="msg-info">
+              No extensions installed. They arrive from your organisation&apos;s
+              services when you are signed in to igni.
+            </div>
+          )}
+          {extensions.length > 0 && shown.length === 0 && (
+            <div className="plugins-empty">
+              <div className="plugins-empty-title">No extensions match</div>
+            </div>
+          )}
+          <div className="plugins-grid plugins-grid--flow" ref={flow}>
+            {shown.map((extension) => (
+              <ExtensionCard
+                key={extension.id}
+                extension={extension}
+                onOpen={() => setSelected(extension.id)}
+              />
+            ))}
+          </div>
+        </>
+      )}
     </Drawer>
   );
 }

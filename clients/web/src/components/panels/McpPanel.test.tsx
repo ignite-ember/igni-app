@@ -115,6 +115,27 @@ describe("the server list", () => {
     ]);
   });
 
+  it("reloads the config and the list on demand, without leaving the page", async () => {
+    const details: unknown[] = [GITHUB];
+    const { methods } = panelWith({ details });
+    await screen.findByText(/github/);
+    expect(screen.queryByText("jira")).toBeNull();
+
+    // A server is added to .mcp.json while the page is open.
+    details.push(DOWN);
+    fireEvent.click(screen.getByRole("button", { name: "Reload MCP config" }));
+
+    expect(await screen.findByText("jira")).toBeTruthy();
+    // ensure_mcp is what re-reads the files, so the reload asks it again.
+    expect(methods.filter((m) => m === "ensure_mcp")).toHaveLength(2);
+    expect(methods.filter((m) => m === "get_mcp_server_details")).toHaveLength(2);
+    await waitFor(() =>
+      expect(
+        (screen.getByRole("button", { name: "Reload MCP config" }) as HTMLButtonElement).disabled,
+      ).toBe(false),
+    );
+  });
+
   it("says when no server is configured", async () => {
     panelWith({ details: [] });
     expect(await screen.findByText("No MCP servers configured.")).toBeTruthy();
@@ -144,9 +165,18 @@ describe("the server list", () => {
         "2 tools · 2 resources · 2 prompts — click to expand",
       ),
     ).toBeTruthy();
-    expect(screen.getByText("401 Unauthorized")).toBeTruthy();
+    // A refused credential reads as what to fix, keeping the status code.
+    expect(
+      screen.getByText(/refused the credentials \(401 Unauthorized\)\. Check its token/),
+    ).toBeTruthy();
     expect(screen.getByText("blocked by policy")).toBeTruthy();
     expect(screen.getByText("disconnected")).toBeTruthy();
+  });
+
+  it("keeps the transport's own words one hover away", async () => {
+    panelWith({ details: [DOWN] });
+    const line = await screen.findByText(/refused the credentials/);
+    expect(line.getAttribute("title")).toBe("401 Unauthorized");
   });
 
   it("does not let a policy-blocked server be connected", async () => {
@@ -160,7 +190,7 @@ describe("the server list", () => {
 
   it("hands the composer a setup prompt rather than a form", async () => {
     const { onAddServer } = panelWith();
-    fireEvent.click(screen.getByRole("button", { name: "+ Add server" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add an MCP server" }));
     const [seed] = onAddServer.mock.calls[0];
     expect(seed).toMatch(/Help me set up a new MCP server/);
     expect(seed).toMatch(/mcpServers/);
@@ -213,6 +243,23 @@ describe("connecting and disconnecting", () => {
 });
 
 describe("what a server offers", () => {
+  it("is marked open when opened, and stops saying click to expand", async () => {
+    panelWith();
+    fireEvent.click(await screen.findByText(/click to expand/));
+    expect(document.querySelector(".mcp-server.is-open")).not.toBeNull();
+    expect(screen.queryByText(/click to expand/)).toBeNull();
+    expect(screen.getByText("2 tools · 2 resources · 2 prompts")).toBeTruthy();
+  });
+
+  it("does not repeat the card's own server as a tool's prefix", async () => {
+    panelWith();
+    fireEvent.click(await screen.findByText(/click to expand/));
+    // `github__create_issue` on the github card shows as `create_issue`
+    // with no `github` tag beside it.
+    expect(screen.getByText("create_issue")).toBeTruthy();
+    expect(document.querySelector(".mcp-tool-prefix")).toBeNull();
+  });
+
   it("expands into tools, resources and prompts", async () => {
     panelWith();
     fireEvent.click(await screen.findByText(/click to expand/));
@@ -241,7 +288,7 @@ describe("what a server offers", () => {
 
   it("does not expand a server with nothing to show", async () => {
     panelWith({ details: [DOWN] });
-    fireEvent.click(await screen.findByText("401 Unauthorized"));
+    fireEvent.click(await screen.findByText(/refused the credentials/));
     expect(document.querySelector(".mcp-server-body")).toBeNull();
     expect(document.querySelector("button.mcp-server-head")).toBeNull();
   });

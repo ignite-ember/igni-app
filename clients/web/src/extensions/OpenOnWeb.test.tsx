@@ -3,7 +3,7 @@
  * "Open on the web": an extension's home page — its service's
  * `client_uri` — shown where the extension is, and only when known.
  */
-import { cleanup, render } from "@testing-library/react";
+import { cleanup, fireEvent, render } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { ExtensionsPanel } from "../components/panels/ExtensionsPanel";
@@ -65,8 +65,10 @@ describe("Open on the web", () => {
     expect(container.firstElementChild?.tagName).toBe("IFRAME");
   });
 
-  it("is on the extension's row in the extensions panel", () => {
-    const { getAllByRole } = render(
+  // The card is one button that opens the extension's page, so the link
+  // lives on that page — a link inside a button would be invalid markup.
+  it("is on the extension's page in the extensions panel, and only when known", () => {
+    const view = render(
       <ExtensionsPanel
         client={{} as IgniClient}
         extensions={[summary({ web_url: "https://reviewer.acme.test" }), summary({ id: "acme.dev", name: "Dev" })]}
@@ -74,7 +76,24 @@ describe("Open on the web", () => {
         onClose={() => {}}
       />,
     );
-    const links = getAllByRole("link");
-    expect(links.map((l) => l.getAttribute("aria-label"))).toEqual(["Open Reviewer on the web"]);
+    // Not on the grid of cards.
+    expect(view.queryAllByRole("link")).toEqual([]);
+
+    fireEvent.click(view.getByRole("button", { name: /Reviewer/ }));
+    expect(view.getAllByRole("link").map((l) => l.getAttribute("aria-label"))).toEqual([
+      "Open Reviewer on the web",
+    ]);
+    cleanup();
+
+    const other = render(
+      <ExtensionsPanel
+        client={{} as IgniClient}
+        extensions={[summary({ id: "acme.dev", name: "Dev" })]}
+        onChanged={() => {}}
+        onClose={() => {}}
+      />,
+    );
+    fireEvent.click(other.getByRole("button", { name: /Dev/ }));
+    expect(other.queryAllByRole("link")).toEqual([]);
   });
 });

@@ -50,8 +50,10 @@ export class McpPrompt {
   }
 }
 
-/** A tool's name with the server prefix Agno adds split off
- *  (``filesystem__read_file`` → ``read_file`` and ``filesystem``). */
+/** A tool's name with its server prefix split off. Two spellings reach
+ *  the panel: the registry's ``mcp_<server>_<tool>`` (igni-core's
+ *  ``tool_name_prefix``), which needs the server's name to split since
+ *  both halves may contain ``_``, and the older ``<server>__<tool>``. */
 export class McpToolName {
   private static readonly PREFIXED = /^([a-zA-Z0-9_-]+)__(.+)$/;
 
@@ -60,7 +62,13 @@ export class McpToolName {
     readonly prefix?: string,
   ) {}
 
-  static of(full: string): McpToolName {
+  static of(full: string, server?: string): McpToolName {
+    if (server) {
+      const registered = `mcp_${server}_`;
+      if (full.startsWith(registered) && full.length > registered.length) {
+        return new McpToolName(full.slice(registered.length), server);
+      }
+    }
     const m = full.match(McpToolName.PREFIXED);
     return m ? new McpToolName(m[2], m[1]) : new McpToolName(full);
   }
@@ -129,7 +137,13 @@ export class McpServer {
   get status(): string {
     if (this.policyBlocked) return "blocked by policy";
     if (this.connected) return `${this.summary} — click to expand`;
-    return this.error || "disconnected";
+    return this.error ? friendlyError(this.error) : "disconnected";
+  }
+
+  /** Which dot the card shows: up, down with a reason, or simply off. */
+  get health(): "connected" | "error" | "idle" {
+    if (this.connected) return "connected";
+    return this.error || this.policyBlocked ? "error" : "idle";
   }
 
   isToolDisabled(tool: string): boolean {
@@ -154,6 +168,31 @@ export class McpServer {
       this.policyBlocked,
     );
   }
+}
+
+/** A connection error as a sentence a person can act on.
+ *
+ *  The backend hands up whatever the transport raised — a Python
+ *  `[Errno 2] …` or an httpx message. The common ones get a plain
+ *  sentence that says what to check; anything else is shown as it came,
+ *  since a guess is worse than the original. The raw text stays on the
+ *  server for a tooltip. */
+export function friendlyError(raw: string): string {
+  const missing = raw.match(/\[Errno 2\] No such file or directory: '([^']+)'/);
+  if (missing) {
+    return `Couldn't start “${missing[1]}”: command not found. Install it, or fix the command in .mcp.json.`;
+  }
+  if (/All connection attempts failed|Connection refused|ConnectError|Name or service not known/i.test(raw)) {
+    return "Couldn't reach the server — nothing answered at its address. Check it is running, or fix the url in .mcp.json.";
+  }
+  if (/timed? ?out|TimeoutError/i.test(raw)) {
+    return "The server didn't answer in time. Check it is running and reachable.";
+  }
+  const status = raw.match(/\b(401|403)\b/);
+  if (status) {
+    return `The server refused the credentials (${raw.trim()}). Check its token in .mcp.json.`;
+  }
+  return raw;
 }
 
 function stringList(p: WirePayload, key: string): string[] {

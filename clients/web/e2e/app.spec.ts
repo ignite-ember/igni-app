@@ -591,14 +591,15 @@ test.describe("session bootstrap", () => {
       /Message (Ember|igni)/,
       { timeout: 10_000 },
     );
-    // The session chip in the footer displays only the FIRST 8
-    // CHARS of the id (see ``StatusBits.tsx:_short``). The full
-    // id rides on the ``title`` attribute as ``Copy <id>`` for
-    // click-to-copy. Check both: the truncated text proves the
-    // chip rendered, the title proves the WHOLE id flowed
-    // end-to-end without silent truncation upstream.
-    const chip = page.locator(".session-chip");
-    await expect(chip).toContainText("fixture-");
-    await expect(chip).toHaveAttribute("title", /Copy fixture-sess-xyz/);
+    // The session dial in the footer displays only the FIRST 8
+    // CHARS of the id (see ``StatusBits.tsx:SessionContext``). The
+    // full id rides on the popover's copy button as ``Copy <id>``.
+    // Check both: the truncated text proves the dial rendered, the
+    // title proves the WHOLE id flowed end-to-end without silent
+    // truncation upstream.
+    const dial = page.locator(".session-ctx");
+    await expect(dial).toContainText("fixture-");
+    await dial.click();
+    await expect(page.locator(".session-ctx-copy")).toHaveAttribute("title", /Copy fixture-sess-xyz/);
   });
 });

@@ -3,6 +3,8 @@
 
 import { CheckIcon } from "../../Icons";
 import { EntityGlyph } from "../../EntityGlyph";
+import { categoryLabel } from "./catalogView";
+import { CategoryIcon } from "./categoryIcon";
 import type { InstalledPlugins } from "./installedPlugin";
 import type { CatalogEntry, MarketplaceCatalog, MarketplacePlugin } from "./marketplace";
 import { PluginAction } from "./pluginAction";
@@ -64,7 +66,13 @@ export function MarketplaceTab({
             }}
           >
             <span className="plugins-gcard-icon" aria-hidden="true">
-              <EntityGlyph name={plugin.name} size={38} />
+              {plugin.category ? (
+                <span className="entity-glyph plugins-cat-avatar" style={{ width: 38, height: 38 }}>
+                  <CategoryIcon category={plugin.category} size={20} />
+                </span>
+              ) : (
+                <EntityGlyph name={plugin.name} size={38} />
+              )}
             </span>
             <div className="plugins-gcard-body">
               <div className="plugins-gcard-top">
@@ -84,8 +92,11 @@ export function MarketplaceTab({
                 </button>
               </div>
               {plugin.description && <p className="plugins-gcard-desc">{plugin.description}</p>}
-              {(showSource || plugin.version) && (
+              {(plugin.category || showSource || plugin.version) && (
                 <div className="plugins-gcard-foot">
+                  {plugin.category && (
+                    <span className="plugins-cat-chip">{categoryLabel(plugin.category)}</span>
+                  )}
                   {showSource && <span className="plugins-source">{market}</span>}
                   {plugin.version && <span className="plugins-version">{plugin.version}</span>}
                 </div>

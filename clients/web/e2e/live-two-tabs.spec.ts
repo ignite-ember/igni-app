@@ -49,12 +49,12 @@ async function secondTab(context: BrowserContext, token: string | null): Promise
 }
 
 async function chip(page: Page): Promise<string> {
-  return (await page.locator(".session-chip code").innerText()).trim();
+  return (await page.locator(".session-ctx-id").innerText()).trim();
 }
 
 async function newChat(page: Page): Promise<void> {
   const before = await chip(page);
-  await page.getByRole("button", { name: /New chat/i }).click();
+  await page.getByRole("button", { name: /^\+ New chat$/ }).click();
   await expect.poll(() => chip(page), { timeout: 30_000 }).not.toBe(before);
 }
 
