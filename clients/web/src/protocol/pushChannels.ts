@@ -28,6 +28,7 @@ import {
   parseOrchestrateEvent,
   type OrchestrateEventEnvelope,
 } from "./orchestrateEvents";
+import { parseSentimentAspects, type SentimentAspects } from "./sentimentAspects";
 import { WirePayload } from "./wirePayload";
 import { parseWorkflowEvent, type WorkflowEvent } from "./workflowEvents";
 
@@ -127,6 +128,25 @@ export interface TodosUpdated {
   todos: unknown;
 }
 
+/** How the person feels about igni or its last answer; neutral is never pushed. */
+export const SENTIMENTS = ["positive", "negative"] as const;
+export type Sentiment = (typeof SENTIMENTS)[number];
+
+/** Laya read the person's message, in ``sessionId``, as pleased or displeased with igni. */
+export interface UserSentiment {
+  channel: "user_sentiment";
+  sessionId: string;
+  sentiment: Sentiment;
+  /** How sure Laya is, from 0 to 1. */
+  confidence: number;
+  /** The run the judged message started; ``null`` when none started. */
+  messageRunId: string | null;
+  /** The run whose reply the message reacts to; ``null`` when the session had none. */
+  replyRunId: string | null;
+  /** Every question Laya answered, with every probability; ``null`` when the push has none. */
+  aspects: SentimentAspects | null;
+}
+
 /** A host-model signal an extension's page subscribed to, already
  *  filtered by the backend to the extensions entitled to hear it. */
 export interface HostSignal {
@@ -152,6 +172,7 @@ export type PushChannelEvent =
   | PlanSubmitted
   | PlanDecided
   | TodosUpdated
+  | UserSentiment
   | HostSignal;
 
 export type PushChannel = PushChannelEvent["channel"];
@@ -257,6 +278,21 @@ const PARSERS: Parsers = {
       : null;
   },
   todos_updated: (p) => ({ channel: "todos_updated", todos: p.value("todos") }),
+  user_sentiment: (p) => {
+    const sessionId = p.optionalString("session_id");
+    const sentiment = SENTIMENTS.find((s) => s === p.value("sentiment"));
+    const confidence = p.optionalNumber("confidence");
+    if (!sessionId || !sentiment || confidence === undefined) return null;
+    return {
+      channel: "user_sentiment",
+      sessionId,
+      sentiment,
+      confidence,
+      messageRunId: p.optionalString("message_run_id") || null,
+      replyRunId: p.optionalString("reply_run_id") || null,
+      aspects: parseSentimentAspects(p.value("aspects")),
+    };
+  },
   host_signal: (p) => {
     const extensionId = p.optionalString("extension_id");
     const signal = p.optionalString("signal");

@@ -11,6 +11,7 @@ import type { GroupBadge } from "./GroupIndicator";
 import { FlameIcon } from "./Icons";
 import { BackendVersionChip } from "./StatusBits";
 import { ThemeToggle } from "./ThemeToggle";
+import { CatSwitch } from "./CatSwitch";
 
 /**
  * The account chip and its menu: who is signed in, and Log out.
@@ -143,6 +144,10 @@ export function AccountMenu({
             <div className="popup-item account-menu-theme">
               <span className="cmd">Appearance</span>
               <ThemeToggle />
+            </div>
+            <div className="popup-item account-menu-theme">
+              <span className="cmd">Cat in the header</span>
+              <CatSwitch />
             </div>
             <div className="account-menu-sep" />
             <div

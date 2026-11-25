@@ -3,6 +3,7 @@ import type { SidebarLayout } from "../chat/sidebarLayout";
 import type { AuthPhase } from "../chat/useShellStatus";
 import type { Sidebar as SidebarModel } from "../clientState";
 import type { SessionStates } from "../chat/sessionStates";
+import type { AvatarLook } from "../chat/botAvatarLook";
 import type { Contributions } from "../extensions/contributions";
 import type { NotificationCounts } from "../notifications/model";
 import type { IgniClient } from "../protocol/client";
@@ -31,6 +32,8 @@ export interface AppSidebarProps {
   auth?: AuthPhase;
   onLogIn: () => void;
   onLogOut: () => void;
+  /** What the cat beside New chat shows. */
+  avatar?: AvatarLook;
 }
 
 /** The window's sidebar: igni's and the extensions' destinations, each
@@ -54,6 +57,7 @@ export function AppSidebar({
   auth,
   onLogIn,
   onLogOut,
+  avatar,
 }: AppSidebarProps) {
   const openLink = (kind: string) => {
     const link = contributions.sidebar().find((l) => l.kind === kind);
@@ -79,6 +83,7 @@ export function AppSidebar({
       auth={auth}
       onLogIn={onLogIn}
       onLogOut={onLogOut}
+      avatar={avatar}
     />
   );
 }
