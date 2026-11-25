@@ -76,6 +76,21 @@ export class SessionStates {
     return this.byId.get(sessionId) ?? IDLE;
   }
 
+  /** The chats other than ``currentId`` that are running or waiting. */
+  activeElsewhere(currentId: string): string[] {
+    return [...this.byId]
+      .filter(([id, s]) => id !== currentId && s.activity !== "idle")
+      .map(([id]) => id);
+  }
+
+  /** What the other chats are doing: waiting when any waits on the
+   *  person, else running when any runs. */
+  elsewhere(currentId: string): ChatActivity {
+    const others = this.activeElsewhere(currentId).map((id) => this.of(id).activity);
+    if (others.includes("waiting")) return "waiting";
+    return others.length > 0 ? "running" : "idle";
+  }
+
   /** These states, told after this: its marks, and the newest time of each chat. */
   followedBy(next: SessionStates): SessionStates {
     const lastMessage = new Map(this.lastMessage);

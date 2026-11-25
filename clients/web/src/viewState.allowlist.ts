@@ -421,4 +421,7 @@ export const VIEW_STATE: Record<string, Partial<Record<Category, string[]>>> = {
   "chat/sessionStates.ts": {
     data: ["states"],
   },
+  "chat/botAvatarLook.ts": {
+    animation: ["moment", "reaction", "tick"],
+  },
 };

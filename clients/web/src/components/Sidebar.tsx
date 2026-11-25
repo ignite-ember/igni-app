@@ -8,6 +8,9 @@ import { badgeText } from "../notifications/model";
 import type { IgniClient } from "../protocol/client";
 import type { StatusUpdate } from "../protocol/messages";
 import type { ChatActivity } from "../chat/sessionStates";
+import type { AvatarLook } from "../chat/botAvatarLook";
+import { BotAvatar } from "./BotAvatar";
+import { useCatShown } from "./catSetting";
 
 export interface SessionEntry {
   session_id: string;
@@ -99,6 +102,7 @@ export function Sidebar({
   auth,
   onLogIn,
   onLogOut,
+  avatar,
 }: {
   open: boolean;
   sessions: SessionEntry[];
@@ -134,8 +138,11 @@ export function Sidebar({
   auth?: AuthPhase;
   onLogIn: () => void;
   onLogOut: () => void;
+  /** The cat beside New chat, showing what igni is doing; absent draws none. */
+  avatar?: AvatarLook;
 }) {
   const groupBadge = useGroupBadge(client);
+  const [catShown] = useCatShown();
   // Which folder groups are collapsed (by folder key).
   const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
   const toggleGroup = (folder: string) =>
@@ -217,6 +224,7 @@ export function Sidebar({
               title bar (traffic-light gutter + drag region); the button
               is excluded from the drag region so it stays clickable. */}
           <div className="sidebar-head">
+            {avatar && catShown && <BotAvatar look={avatar} />}
             <button className="btn sidebar-new-chat" onClick={onNewChat}>
               + New chat
             </button>

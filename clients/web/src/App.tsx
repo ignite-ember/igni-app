@@ -8,6 +8,7 @@ import { useObserver } from "./chat/useObserver";
 import { useRunPhase } from "./chat/useRunPhase";
 import { useSessionBinding } from "./chat/useSessionBinding";
 import { useSessionStates } from "./chat/sessionStates";
+import { useBotAvatarLook } from "./chat/botAvatarLook";
 import { useChatPorts, useSessionStartup, useShellHandlers } from "./chat/useShellCollaborators";
 import { useShellStatus, useStatusPoll } from "./chat/useShellStatus";
 import { useStampCancelledReply, useTranscriptState } from "./chat/useTranscriptState";
@@ -102,6 +103,7 @@ export default function App() {
   useLocalActivity(sessionId, run.processing, hitl.pending?.length ?? 0);
   // Which chats are working, waiting or unread — the sidebar's marks.
   const sessionStates = useSessionStates(client, connected, sessionId);
+  const avatarLook = useBotAvatarLook(run.runPhase, sessionStates, sessionId);
 
   const { groupName, groupMark } = useGroupBranding(status?.theme);
 
@@ -189,6 +191,7 @@ export default function App() {
         layout={layout}
         sessions={sessions}
         states={sessionStates}
+        avatar={avatarLook}
         currentId={sessionId}
         contributions={contributions}
         notificationCounts={notificationCounts}
