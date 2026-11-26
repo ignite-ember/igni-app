@@ -334,7 +334,6 @@ export const VIEW_STATE: Record<string, Partial<Record<Category, string[]>>> = {
   "components/panels/McpPanel.tsx": {
     field: ["query"],
     page: ["sortBy", "filterBy"],
-    menu: ["openMenu"],
   },
   "components/panels/PanelSearch.tsx": {
     disclosure: ["expanded"],
@@ -369,8 +368,7 @@ export const VIEW_STATE: Record<string, Partial<Record<Category, string[]>>> = {
     page: ["view", "sortBy", "filterBy"],
     field: ["installRef", "marketUrl", "query"],
   },
-  "components/panels/plugins/PluginsChrome.tsx": {
-    disclosure: ["expanded"],
+  "components/page/PageHeaderControls.tsx": {
     menu: ["openMenu"],
   },
   "components/panels/plugins/usePlugins.ts": {

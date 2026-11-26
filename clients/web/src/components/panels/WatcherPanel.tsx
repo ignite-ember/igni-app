@@ -11,6 +11,7 @@ import { useNow } from "./watcher/useNow";
 import { useWatcher } from "./watcher/useWatcher";
 import { WatcherRow } from "./watcher/WatcherRow";
 import { WatcherTail } from "./watcher/WatcherTail";
+import { PageEmpty } from "../page/PageEmpty";
 
 export function WatcherPanel({ client, onClose }: { client: IgniClient; onClose: () => void }) {
   const watcher = useWatcher(client);
@@ -39,10 +40,15 @@ export function WatcherPanel({ client, onClose }: { client: IgniClient; onClose:
       {watcher.loadError && <div className="msg-error">{watcher.loadError}</div>}
       {watcher.actionError && <div className="msg-error">{watcher.actionError}</div>}
       {table.rows.size === 0 ? (
-        <div className="msg-info">
-          Nothing has run here yet. Anything you start with <code>$ </code> — or that the agent backgrounds itself —
-          shows up here while it runs, and stays afterwards with its exit code.
-        </div>
+        <PageEmpty
+          title="Nothing has run here yet"
+          hint={
+            <>
+              Anything you start with <code>$ </code> — or that the agent backgrounds itself — shows up here while
+              it runs, and stays afterwards with its exit code.
+            </>
+          }
+        />
       ) : (
         <div className={`watcher-layout ${selected ? "watcher-layout--split" : "watcher-layout--list-only"}`}>
           <ul className="watcher-list">

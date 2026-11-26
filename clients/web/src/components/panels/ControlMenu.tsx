@@ -27,7 +27,7 @@ export function ControlMenu<K extends string>({
   onPick: (key: K) => void;
 }) {
   return (
-    <div className="plugins-menu-wrap">
+    <div className="control-menu-wrap">
       <button
         className={`kb-icon-btn${active ? " is-active" : ""}`}
         aria-label={label}
@@ -40,22 +40,22 @@ export function ControlMenu<K extends string>({
       </button>
       {open && (
         <>
-          <div className="plugins-menu-backdrop" onClick={onClose} />
-          <div className="plugins-menu" role="menu">
-            <div className="plugins-menu-head">{label}</div>
+          <div className="control-menu-backdrop" onClick={onClose} />
+          <div className="control-menu" role="menu">
+            <div className="control-menu-head">{label}</div>
             {options.map((o) => (
               <button
                 key={o.key}
                 role="menuitemradio"
                 aria-checked={current === o.key}
-                className={`plugins-menu-item${current === o.key ? " active" : ""}`}
+                className={`control-menu-item${current === o.key ? " active" : ""}`}
                 onClick={() => {
                   onPick(o.key);
                   onClose();
                 }}
               >
-                <span className="plugins-menu-item-label">
-                  {o.icon && <span className="plugins-menu-item-icon">{o.icon}</span>}
+                <span className="control-menu-item-label">
+                  {o.icon && <span className="control-menu-item-icon">{o.icon}</span>}
                   {o.label}
                 </span>
                 {current === o.key && <CheckIcon size={12} />}

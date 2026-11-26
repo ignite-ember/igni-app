@@ -120,10 +120,10 @@ export function McpServerEntry({
   );
   return (
     <div className={`mcp-server${open ? " is-open" : ""}`}>
-      <span className="plugins-gcard-icon" aria-hidden="true">
+      <span className="entity-card-icon" aria-hidden="true">
         <EntityGlyph name={server.name} size={38} />
       </span>
-      <div className="plugins-gcard-body mcp-server-main">
+      <div className="entity-card-body mcp-server-main">
       <div className="row mcp-server-row">
         {server.expandable ? (
           <button

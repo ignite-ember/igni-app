@@ -34,11 +34,11 @@ export function PanelSearch({
     );
   }
   return (
-    <div className="plugins-searchbox">
+    <div className="page-search">
       <SearchIcon size={13} />
       <input
         ref={inputRef}
-        className="plugins-searchbox-input"
+        className="page-search-input"
         placeholder={placeholder}
         aria-label={label}
         value={value}
@@ -51,7 +51,7 @@ export function PanelSearch({
         }}
       />
       <button
-        className="plugins-searchbox-clear"
+        className="page-search-clear"
         aria-label="Close search"
         onClick={() => {
           onChange("");

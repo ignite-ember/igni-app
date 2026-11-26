@@ -3,6 +3,8 @@ import ReactMarkdown from "react-markdown";
 import type { IgniClient } from "../../protocol/client";
 import { Drawer } from "./Drawer";
 import { ChevronIcon } from "../Icons";
+import { PageEmpty } from "../page/PageEmpty";
+import { PageLoading } from "../page/PageLoading";
 
 interface ScheduledTask {
   id?: string;
@@ -210,15 +212,18 @@ export function SchedulePanel({
       toolbar={toolbar}
       onClose={onClose}
     >
-      {tasks === null && <div className="msg-info">Loading…</div>}
+      {tasks === null && <PageLoading />}
       {tasks?.length === 0 && (
-        <div className="msg-info">
-          Nothing scheduled. Use <code>/schedule &lt;description&gt; every &lt;time&gt;</code>.
-        </div>
+        <PageEmpty
+          title="Nothing scheduled"
+          hint={
+            <>
+              Use <code>/schedule &lt;description&gt; every &lt;time&gt;</code>.
+            </>
+          }
+        />
       )}
-      {tasks && tasks.length > 0 && visible.length === 0 && (
-        <div className="msg-info">No tasks match.</div>
-      )}
+      {tasks && tasks.length > 0 && visible.length === 0 && <PageEmpty title="No tasks match" />}
       {visible.map((t, i) => (
         <TaskRow key={t.id || i} task={t} onCancel={() => void cancel(t)} />
       ))}

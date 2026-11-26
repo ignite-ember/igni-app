@@ -1,7 +1,7 @@
 /** A masonry flow for a card grid: cards keep their own height and pack
  *  into whichever column frees up first, with the same gap everywhere.
  *
- *  The grid has 1px rows (`.plugins-grid--flow`); each card spans its
+ *  The grid has 1px rows (`.card-grid--flow`); each card spans its
  *  measured height plus the gap. Auto-placement then puts every card in
  *  the first row where a column is free — the shortest column — while
  *  keeping the cards' left-to-right order, so a sort still reads as

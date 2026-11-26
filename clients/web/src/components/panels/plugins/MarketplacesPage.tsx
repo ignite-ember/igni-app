@@ -1,8 +1,8 @@
 /** Marketplace management: register one by URL, refresh or unregister. */
 
+import { CardGridSkeleton } from "../../page/CardGridSkeleton";
 import type { MarketplaceCatalog } from "./marketplace";
 import { PluginAction } from "./pluginAction";
-import { PluginsSkeleton } from "./PluginParts";
 
 export function MarketplacesPage({
   catalog,
@@ -21,7 +21,7 @@ export function MarketplacesPage({
   onRemoveMarketplace: (name: string) => void;
   onRefresh: () => void;
 }) {
-  if (catalog === null) return <PluginsSkeleton />;
+  if (catalog === null) return <CardGridSkeleton />;
   const adding = isRunning(PluginAction.addMarketplace());
   const refreshing = isRunning(PluginAction.refresh());
   return (
@@ -65,9 +65,9 @@ export function MarketplacesPage({
           </button>
         </div>
         {catalog.marketCount === 0 ? (
-          <div className="plugins-empty">
-            <div className="plugins-empty-title">No marketplaces registered</div>
-            <div className="plugins-empty-hint">Add one above to populate the catalog.</div>
+          <div className="page-empty">
+            <div className="page-empty-title">No marketplaces registered</div>
+            <div className="page-empty-hint">Add one above to populate the catalog.</div>
           </div>
         ) : (
           catalog.markets.map((m) => {

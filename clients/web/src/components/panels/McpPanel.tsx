@@ -1,11 +1,11 @@
 import { useState } from "react";
 import { Skeleton } from "@ignite-ember/ui-react";
 import type { IgniClient } from "../../protocol/client";
-import { FilterIcon, NamedIcon, RefreshIcon, SortIcon } from "../Icons";
-import { ControlMenu } from "./ControlMenu";
+import { NamedIcon } from "../Icons";
+import { CardGrid } from "../page/CardGrid";
+import { PageEmpty } from "../page/PageEmpty";
+import { PageHeaderControls } from "../page/PageHeaderControls";
 import { Drawer } from "./Drawer";
-import { PanelSearch } from "./PanelSearch";
-import { useMasonry } from "./useMasonry";
 import { ADD_SERVER_PROMPT } from "./mcp/addServerPrompt";
 import { McpServer } from "./mcp/mcpServer";
 import { McpServerEntry } from "./mcp/McpServerEntry";
@@ -65,11 +65,9 @@ export function McpPanel({
     reload,
     reloading,
   } = useMcpServers(client);
-  const flow = useMasonry();
   const [query, setQuery] = useState("");
   const [sortBy, setSortBy] = useState<McpSort>("default");
   const [filterBy, setFilterBy] = useState<McpFilter>("all");
-  const [openMenu, setOpenMenu] = useState<"sort" | "filter" | null>(null);
   // A configured server the details left out still needs its answer.
   const listed = new Set(servers?.map((s) => s.name));
   const unlisted = servers
@@ -95,48 +93,32 @@ export function McpPanel({
       title="MCP Servers"
       onClose={onClose}
       headerExtras={
-        <div className="plugins-controls">
-          {all.length > 0 && (
-            <>
-              <PanelSearch
-                value={query}
-                onChange={setQuery}
-                label="Search MCP servers"
-                placeholder={`Search ${all.length} MCP server${all.length === 1 ? "" : "s"}…`}
-              />
-              <ControlMenu
-                label="Filter"
-                icon={<FilterIcon />}
-                active={filterBy !== "all"}
-                open={openMenu === "filter"}
-                onToggle={() => setOpenMenu(openMenu === "filter" ? null : "filter")}
-                onClose={() => setOpenMenu(null)}
-                options={MCP_FILTERS}
-                current={filterBy}
-                onPick={setFilterBy}
-              />
-              <ControlMenu
-                label="Sort"
-                icon={<SortIcon />}
-                active={sortBy !== "default"}
-                open={openMenu === "sort"}
-                onToggle={() => setOpenMenu(openMenu === "sort" ? null : "sort")}
-                onClose={() => setOpenMenu(null)}
-                options={MCP_SORTS}
-                current={sortBy}
-                onPick={setSortBy}
-              />
-            </>
-          )}
-          <button
-            className="kb-icon-btn"
-            disabled={reloading}
-            onClick={reload}
-            title="Reload .mcp.json — pick up servers added, edited or removed"
-            aria-label="Reload MCP config"
-          >
-            {reloading ? <span className="plugins-spinner" aria-hidden="true" /> : <RefreshIcon />}
-          </button>
+        <PageHeaderControls
+          search={
+            all.length > 0
+              ? {
+                  value: query,
+                  onChange: setQuery,
+                  label: "Search MCP servers",
+                  placeholder: `Search ${all.length} MCP server${all.length === 1 ? "" : "s"}…`,
+                }
+              : undefined
+          }
+          filter={
+            all.length > 0
+              ? { options: MCP_FILTERS, current: filterBy, onPick: setFilterBy }
+              : undefined
+          }
+          sort={
+            all.length > 0 ? { options: MCP_SORTS, current: sortBy, onPick: setSortBy } : undefined
+          }
+          refresh={{
+            onClick: reload,
+            busy: reloading,
+            label: "Reload MCP config",
+            title: "Reload .mcp.json — pick up servers added, edited or removed",
+          }}
+        >
           <button
             className="kb-icon-btn"
             onClick={() => onAddServer(ADD_SERVER_PROMPT)}
@@ -145,22 +127,21 @@ export function McpPanel({
           >
             <NamedIcon name="plus" />
           </button>
-        </div>
+        </PageHeaderControls>
       }
     >
       {servers === null && <McpSkeleton />}
       {loadError && <div className="msg-error">{loadError}</div>}
       {actionError && <div className="msg-error">{actionError}</div>}
       {servers?.length === 0 && unlisted.length === 0 && !loadError && (
-        <div className="msg-info">No MCP servers configured.</div>
+        <PageEmpty
+          title="No MCP servers configured"
+          hint="Add one with the + above, or list it in .mcp.json and reload."
+        />
       )}
-      {all.length > 0 && shown.length === 0 && (
-        <div className="plugins-empty">
-          <div className="plugins-empty-title">No MCP servers match</div>
-        </div>
-      )}
+      {all.length > 0 && shown.length === 0 && <PageEmpty title="No MCP servers match" />}
       {shown.length > 0 && (
-        <div className="plugins-grid plugins-grid--flow" ref={flow}>
+        <CardGrid flow>
           {shown.map((s) => (
             <McpServerEntry
               key={s.name}
@@ -172,7 +153,7 @@ export function McpPanel({
               onApprove={(approved) => setApproval(s.name, approved)}
             />
           ))}
-        </div>
+        </CardGrid>
       )}
     </Drawer>
   );

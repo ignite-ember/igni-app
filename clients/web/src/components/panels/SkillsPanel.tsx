@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import type { IgniClient } from "../../protocol/client";
 import { Drawer } from "./Drawer";
+import { PageEmpty } from "../page/PageEmpty";
+import { PageLoading } from "../page/PageLoading";
 
 interface SkillRow {
   name?: string;
@@ -28,11 +30,16 @@ export function SkillsPanel({
 
   return (
     <Drawer title="Skills" onClose={onClose}>
-      {skills === null && <div className="msg-info">Loading…</div>}
+      {skills === null && <PageLoading />}
       {skills?.length === 0 && (
-        <div className="msg-info">
-          No skills installed. Add some via Plugins or .igni/skills/.
-        </div>
+        <PageEmpty
+          title="No skills installed"
+          hint={
+            <>
+              Add some through Plugins, or put them in <code>.igni/skills/</code>.
+            </>
+          }
+        />
       )}
       {skills?.map((s) => (
         <div className="row" key={s.name}>

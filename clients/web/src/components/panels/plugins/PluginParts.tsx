@@ -1,5 +1,5 @@
 /** Small pieces the plugins page repeats: a source link, a plugin's
- *  capability chips, and the loading placeholders. */
+ *  capability chips, and the contents' loading placeholder. */
 
 import { Skeleton } from "@ignite-ember/ui-react";
 import type { InstalledPlugin } from "./installedPlugin";
@@ -37,23 +37,6 @@ export function PluginCapabilities({ plugin }: { plugin: InstalledPlugin }) {
           @{plugin.shortPin}
         </span>
       )}
-    </div>
-  );
-}
-
-export function PluginsSkeleton() {
-  return (
-    <div className="plugins-grid">
-      {Array.from({ length: 6 }).map((_, i) => (
-        <div key={i} className="plugins-gcard">
-          <Skeleton.Block height={34} width={34} />
-          <div style={{ flex: 1 }}>
-            <Skeleton.Line width="50%" height={13} />
-            <Skeleton.Line width="90%" height={11} style={{ marginTop: 8 }} />
-            <Skeleton.Line width="70%" height={11} style={{ marginTop: 4 }} />
-          </div>
-        </div>
-      ))}
     </div>
   );
 }

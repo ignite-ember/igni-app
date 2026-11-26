@@ -138,7 +138,7 @@ describe("the server list", () => {
 
   it("says when no server is configured", async () => {
     panelWith({ details: [] });
-    expect(await screen.findByText("No MCP servers configured.")).toBeTruthy();
+    expect(await screen.findByText("No MCP servers configured")).toBeTruthy();
   });
 
   it("says the list could not be read, rather than that it is empty", async () => {
@@ -146,7 +146,7 @@ describe("the server list", () => {
     expect(
       await screen.findByText("Could not read the MCP servers: backend gone"),
     ).toBeTruthy();
-    expect(screen.queryByText("No MCP servers configured.")).toBeNull();
+    expect(screen.queryByText("No MCP servers configured")).toBeNull();
   });
 
   it("reads lists the backend sent malformed as empty", async () => {
@@ -403,7 +403,7 @@ describe("first-use approvals (R669, R209)", () => {
   it("lists a configured server waiting for approval that the details left out", async () => {
     panelWith({ details: [], approvals: [waiting] });
     expect(await screen.findByRole("button", { name: "Approve jira" })).toBeTruthy();
-    expect(screen.queryByText("No MCP servers configured.")).toBeNull();
+    expect(screen.queryByText("No MCP servers configured")).toBeNull();
   });
 
   it("works as before against a backend that lists no approvals", async () => {

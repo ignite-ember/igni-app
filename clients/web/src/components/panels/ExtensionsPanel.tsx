@@ -10,6 +10,8 @@ import { ControlMenu } from "./ControlMenu";
 import { Drawer } from "./Drawer";
 import { PanelSearch } from "./PanelSearch";
 import { useMasonry } from "./useMasonry";
+import { EntityHero } from "../page/EntityHero";
+import { PageEmpty } from "../page/PageEmpty";
 
 type ExtSort = "default" | "name-asc" | "name-desc";
 type ExtFilter = "all" | "ready" | "failed" | "busy";
@@ -304,19 +306,19 @@ function ExtensionCard({
   // Not the id, which already sits in the foot.
   const desc = extension.reason || extension.menu[0]?.desc || "";
   return (
-    <button type="button" className="plugins-gcard ext-card" onClick={onOpen}>
-      <span className="plugins-gcard-icon" aria-hidden="true">
+    <button type="button" className="entity-card ext-card" onClick={onOpen}>
+      <span className="entity-card-icon" aria-hidden="true">
         <EntityGlyph name={extension.name} size={38} />
       </span>
-      <span className="plugins-gcard-body">
-        <span className="plugins-gcard-top">
+      <span className="entity-card-body">
+        <span className="entity-card-top">
           <span className="plugins-name name">
             {extension.name} <span className="meta">· {extension.version}</span>
           </span>
           <span className={stateClass(extension.state)}>{extension.state}</span>
         </span>
-        {desc && <span className="plugins-gcard-desc">{desc}</span>}
-        <span className="plugins-gcard-foot">
+        {desc && <span className="entity-card-desc">{desc}</span>}
+        <span className="entity-card-foot">
           <span className="meta ext-card-id">{extension.id}</span>
           <span className="plugins-chevron-end" aria-hidden="true">
             ›
@@ -344,21 +346,18 @@ function ExtensionDetailPage({
     extension.settings.length > 0 ||
     !!extension.web_url;
   return (
-    <div className="plugin-detail">
-      <div className="plugin-detail-hero">
-        <span className="plugin-detail-icon" aria-hidden="true">
-          <EntityGlyph name={extension.name} size={52} />
-        </span>
-        <div className="plugin-detail-main">
-          <div className="plugin-detail-title-row">
-            <h2 className="plugin-detail-title">{extension.name}</h2>
+    <div className="entity-detail">
+      <EntityHero
+        name={extension.name}
+        meta={
+          <>
             <span className={stateClass(extension.state)}>{extension.state}</span>
             {extension.version && <span className="plugins-version">{extension.version}</span>}
             <span className="plugins-source">{extension.id}</span>
-          </div>
-          {extension.reason && <div className="plugin-detail-desc">{extension.reason}</div>}
-        </div>
-      </div>
+          </>
+        }
+        description={extension.reason}
+      />
 
       <SwitchedOff entries={extension.switched_off ?? []} />
       <SwitchedOff
@@ -476,7 +475,7 @@ export function ExtensionsPanel({
       onClose={onClose}
       headerExtras={
         !current && extensions.length > 0 ? (
-          <div className="plugins-controls">
+          <div className="page-controls">
             <PanelSearch
               value={query}
               onChange={setQuery}
@@ -514,17 +513,15 @@ export function ExtensionsPanel({
       ) : (
         <>
           {extensions.length === 0 && (
-            <div className="msg-info">
-              No extensions installed. They arrive from your organisation&apos;s
-              services when you are signed in to igni.
-            </div>
+            <PageEmpty
+              title="No extensions installed"
+              hint="They arrive from your organisation's services when you are signed in to igni."
+            />
           )}
           {extensions.length > 0 && shown.length === 0 && (
-            <div className="plugins-empty">
-              <div className="plugins-empty-title">No extensions match</div>
-            </div>
+            <PageEmpty title="No extensions match" />
           )}
-          <div className="plugins-grid plugins-grid--flow" ref={flow}>
+          <div className="card-grid card-grid--flow" ref={flow}>
             {shown.map((extension) => (
               <ExtensionCard
                 key={extension.id}

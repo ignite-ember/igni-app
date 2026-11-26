@@ -233,7 +233,7 @@ button {
 .kb-tree-row,
 .mcp-tool-row,
 .panel-form-row,
-.plugin-detail-title-row,
+.entity-hero-title-row,
 .plugins-content-row,
 .plugins-install-row {
   display: flex;
@@ -7838,10 +7838,10 @@ button.mcp-server-head:focus-visible {
    (which carries ``margin-left: auto``) — so other pages that use the
    slot keep their content sizing. Without the span the controls have no
    room to push against and sit against the title on the left. */
-.page-head-extras:has(.plugins-headerbar),
-.page-head-extras:has(> .plugins-controls),
-.drawer-head-extras:has(.plugins-headerbar),
-.drawer-head-extras:has(> .plugins-controls) {
+.page-head-extras:has(.page-headerbar),
+.page-head-extras:has(> .page-controls),
+.drawer-head-extras:has(.page-headerbar),
+.drawer-head-extras:has(> .page-controls) {
   flex: 1;
   min-width: 0;
 }
@@ -7850,8 +7850,8 @@ button.mcp-server-head:focus-visible {
    with no headerbar around it. The group carries ``margin-left: auto``
    to sit at the far edge, but that only pushes inside a flex row — so
    make the slot one. (The headerbar case is already its own flex row.) */
-.page-head-extras:has(> .plugins-controls),
-.drawer-head-extras:has(> .plugins-controls) {
+.page-head-extras:has(> .page-controls),
+.drawer-head-extras:has(> .page-controls) {
   display: flex;
 }
 
@@ -7862,32 +7862,32 @@ button.mcp-server-head:focus-visible {
    the margin so the scroll clips flush at the rule, make the header
    opaque and raise it so the card goes behind it, and give the resting
    content its air from the scroll's own top padding instead. */
-.page:has(.plugins-headerbar) > .page-head,
-.page:has(.plugins-grid) > .page-head {
+.page:has(.page-headerbar) > .page-head,
+.page:has(.card-grid) > .page-head {
   position: relative;
   z-index: 2;
   background: var(--bg);
   margin-bottom: 0;
 }
 
-.page:has(.plugins-headerbar) > .page-body > .page-measure,
-.page:has(.plugins-grid) > .page-body > .page-measure {
+.page:has(.page-headerbar) > .page-body > .page-measure,
+.page:has(.card-grid) > .page-body > .page-measure {
   padding-top: var(--space-6);
 }
 
-.plugins-headerbar {
+.page-headerbar {
   display: flex;
   align-items: center;
   gap: var(--space-4);
   width: 100%;
 }
 
-.plugins-tabs {
+.page-tabs {
   display: flex;
   gap: var(--space-2);
 }
 
-.plugins-controls {
+.page-controls {
   display: flex;
   align-items: center;
   gap: var(--space-2);
@@ -7897,7 +7897,7 @@ button.mcp-server-head:focus-visible {
 /* Bare icons in the header — no boxed border around each one. A soft
    round hover is the only affordance, so the row reads as controls, not
    a row of buttons. */
-.plugins-controls .kb-icon-btn {
+.page-controls .kb-icon-btn {
   border: none;
   background: transparent;
   width: 28px;
@@ -7906,26 +7906,26 @@ button.mcp-server-head:focus-visible {
   color: var(--fg-faint);
 }
 
-.plugins-controls .kb-icon-btn:hover:not(:disabled),
-.plugins-controls .kb-icon-btn.is-active {
+.page-controls .kb-icon-btn:hover:not(:disabled),
+.page-controls .kb-icon-btn.is-active {
   border: none;
   color: var(--fg);
   background: var(--bg-surface);
 }
 
 /* Filter / sort dropdowns. */
-.plugins-menu-wrap {
+.control-menu-wrap {
   position: relative;
   display: inline-flex;
 }
 
-.plugins-menu-backdrop {
+.control-menu-backdrop {
   position: fixed;
   inset: 0;
   z-index: 40;
 }
 
-.plugins-menu {
+.control-menu {
   position: absolute;
   top: calc(100% + 6px);
   right: 0;
@@ -7943,7 +7943,7 @@ button.mcp-server-head:focus-visible {
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.22);
 }
 
-.plugins-menu-head {
+.control-menu-head {
   position: sticky;
   top: 0;
   z-index: 1;
@@ -7953,7 +7953,7 @@ button.mcp-server-head:focus-visible {
   background: var(--bg-surface);
 }
 
-.plugins-menu-head {
+.control-menu-head {
   padding: var(--space-3) var(--space-3) var(--space-2);
   font-size: var(--text-xs);
   font-weight: 600;
@@ -7962,7 +7962,7 @@ button.mcp-server-head:focus-visible {
   color: var(--fg-faint);
 }
 
-.plugins-menu-item {
+.control-menu-item {
   appearance: none;
   width: 100%;
   display: flex;
@@ -7980,22 +7980,22 @@ button.mcp-server-head:focus-visible {
   cursor: pointer;
 }
 
-.plugins-menu-item:hover {
+.control-menu-item:hover {
   background: var(--bg-raised);
 }
 
-.plugins-menu-item.active {
+.control-menu-item.active {
   color: var(--fg);
 }
 
-.plugins-menu-item svg {
+.control-menu-item svg {
   color: var(--accent, #ee6138);
   flex-shrink: 0;
 }
 
 /* The label side of a menu item, so a category's icon sits beside its
    name while the selected-check stays on the right. */
-.plugins-menu-item-label {
+.control-menu-item-label {
   display: inline-flex;
   align-items: center;
   gap: var(--space-3);
@@ -8004,16 +8004,18 @@ button.mcp-server-head:focus-visible {
 
 /* The category glyph reads as a marker, not the accent-coloured check —
    keep it muted so the check is the one orange mark in the row. */
-.plugins-menu-item-icon {
+.control-menu-item-icon {
   display: inline-flex;
 }
 
-.plugins-menu-item-icon svg {
+.control-menu-item-icon svg {
   color: var(--fg-muted);
 }
 
-/* A category chip on a plugin card: its glyph and name, quiet. */
-.plugins-cat-chip {
+/* A category chip on a plugin card: its glyph and name, quiet.
+   ``.entity-chip`` is the same chip for any card. */
+.plugins-cat-chip,
+.entity-chip {
   display: inline-flex;
   align-items: center;
   gap: var(--space-2);
@@ -8021,14 +8023,15 @@ button.mcp-server-head:focus-visible {
   font-size: var(--text-xs);
 }
 
-.plugins-cat-chip svg {
+.plugins-cat-chip svg,
+.entity-chip svg {
   color: var(--fg-faint);
   flex-shrink: 0;
 }
 
 /* The label side of a menu item, so a category's icon sits beside its
    name while the selected-check stays on the right. */
-.plugins-menu-item-label {
+.control-menu-item-label {
   display: inline-flex;
   align-items: center;
   gap: var(--space-3);
@@ -8037,16 +8040,18 @@ button.mcp-server-head:focus-visible {
 
 /* The category glyph reads as a marker, not the accent-coloured check —
    keep it muted so the check is the one orange mark in the row. */
-.plugins-menu-item-icon {
+.control-menu-item-icon {
   display: inline-flex;
 }
 
-.plugins-menu-item-icon svg {
+.control-menu-item-icon svg {
   color: var(--fg-muted);
 }
 
-/* A category chip on a plugin card: its glyph and name, quiet. */
-.plugins-cat-chip {
+/* A category chip on a plugin card: its glyph and name, quiet.
+   ``.entity-chip`` is the same chip for any card. */
+.plugins-cat-chip,
+.entity-chip {
   display: inline-flex;
   align-items: center;
   gap: var(--space-2);
@@ -8054,13 +8059,14 @@ button.mcp-server-head:focus-visible {
   font-size: var(--text-xs);
 }
 
-.plugins-cat-chip svg {
+.plugins-cat-chip svg,
+.entity-chip svg {
   color: var(--fg-faint);
   flex-shrink: 0;
 }
 
 /* Search as a pill that only appears once opened. */
-.plugins-searchbox {
+.page-search {
   display: flex;
   align-items: center;
   gap: var(--space-3);
@@ -8074,7 +8080,7 @@ button.mcp-server-head:focus-visible {
   max-width: 42vw;
 }
 
-.plugins-searchbox-input {
+.page-search-input {
   flex: 1;
   min-width: 0;
   border: none;
@@ -8085,7 +8091,7 @@ button.mcp-server-head:focus-visible {
   outline: none;
 }
 
-.plugins-searchbox-clear {
+.page-search-clear {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -8099,14 +8105,14 @@ button.mcp-server-head:focus-visible {
   cursor: pointer;
 }
 
-.plugins-searchbox-clear:hover {
+.page-search-clear:hover {
   color: var(--fg);
   background: var(--bg-raised);
 }
 
 /* A real ring spinner in the refresh button while a fetch is in flight,
    rather than rotating the refresh glyph itself. */
-.plugins-spinner {
+.icon-spinner {
   display: inline-block;
   width: 13px;
   height: 13px;
@@ -8116,7 +8122,7 @@ button.mcp-server-head:focus-visible {
   animation: igni-spin 0.8s linear infinite;
 }
 
-.plugins-tab {
+.page-tab {
   appearance: none;
   background: transparent;
   border: none;
@@ -8131,16 +8137,16 @@ button.mcp-server-head:focus-visible {
   gap: var(--space-3);
 }
 
-.plugins-tab:hover {
+.page-tab:hover {
   color: var(--fg);
 }
 
-.plugins-tab.active {
+.page-tab.active {
   background: var(--bg-raised);
   color: var(--fg);
 }
 
-.plugins-tab-count {
+.page-tab-count {
   font-size: var(--text-xs);
   padding: 1px 6px;
   border-radius: var(--radius-pill);
@@ -8149,7 +8155,7 @@ button.mcp-server-head:focus-visible {
   font-variant-numeric: tabular-nums;
 }
 
-.plugins-tab.active .plugins-tab-count {
+.page-tab.active .page-tab-count {
   /* Match the notification badge: orange gradient, white text. */
   background: var(--igni-gradient);
   color: #fff;
@@ -8205,14 +8211,14 @@ button.mcp-server-head:focus-visible {
 
 /* Marketplace catalog — a grid of cards, the way a store of things to add
    reads, rather than a stack of full-width rows. */
-.plugins-grid {
+.card-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--space-5);
 }
 
 @media (max-width: 760px) {
-  .plugins-grid {
+  .card-grid {
     grid-template-columns: 1fr;
   }
 }
@@ -8220,7 +8226,7 @@ button.mcp-server-head:focus-visible {
 /* Soft filled cards, no border — the fill alone separates them from the
    page, the way Claude's marketplace reads. A border on every card plus
    a coloured icon on every card is what made the grid feel busy. */
-.plugins-gcard {
+.entity-card {
   display: flex;
   gap: var(--space-5);
   padding: var(--space-7);
@@ -8232,8 +8238,8 @@ button.mcp-server-head:focus-visible {
   transition: border-color 0.12s ease, background 0.12s ease;
 }
 
-.plugins-gcard:hover,
-.plugins-gcard:focus-visible {
+.entity-card:hover,
+.entity-card:focus-visible {
   border-color: var(--border-soft);
   background: var(--bg-raised);
   outline: none;
@@ -8254,12 +8260,12 @@ button.mcp-server-head:focus-visible {
   letter-spacing: 0.01em;
 }
 
-.plugins-gcard-icon {
+.entity-card-icon {
   flex-shrink: 0;
   display: inline-flex;
 }
 
-.plugins-gcard-body {
+.entity-card-body {
   min-width: 0;
   flex: 1;
   display: flex;
@@ -8267,20 +8273,26 @@ button.mcp-server-head:focus-visible {
   gap: var(--space-2);
 }
 
-.plugins-gcard-top {
+.entity-card-top {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--space-3);
 }
 
-.plugins-gcard-top .plugins-name {
+.entity-card-name {
+  font-weight: 700;
+  color: var(--fg);
+  font-size: var(--text-md);
+}
+
+.entity-card-top :is(.entity-card-name, .plugins-name) {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.plugins-gcard-desc {
+.entity-card-desc {
   margin: 0;
   font-size: var(--text-sm);
   color: var(--fg-muted);
@@ -8292,7 +8304,7 @@ button.mcp-server-head:focus-visible {
   overflow: hidden;
 }
 
-.plugins-gcard-foot {
+.entity-card-foot {
   display: flex;
   align-items: center;
   gap: var(--space-3);
@@ -8305,7 +8317,7 @@ button.mcp-server-head:focus-visible {
    foot carries the id and a chevron that says it opens onto a page.
    A <button> takes the browser's own text colour and font rather than
    inheriting, which left the id black on the dark card — so set both. */
-.plugins-gcard.ext-card {
+.entity-card.ext-card {
   color: var(--fg);
   font: inherit;
 }
@@ -8417,7 +8429,8 @@ button.mcp-server-head:focus-visible {
   color: var(--fg-faint);
 }
 
-.plugins-source {
+.plugins-source,
+.entity-meta {
   font-size: var(--text-xs);
   color: var(--fg-faint);
 }
@@ -8488,7 +8501,7 @@ button.mcp-server-head:focus-visible {
   color: var(--fg-faint);
 }
 
-.plugins-empty {
+.page-empty {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -8499,14 +8512,46 @@ button.mcp-server-head:focus-visible {
   color: var(--fg-muted);
 }
 
-.plugins-empty-title {
+.page-empty-title {
   font-size: var(--text-lg);
   font-weight: 700;
   color: var(--fg);
 }
 
-.plugins-empty-hint {
+.page-empty-hint {
   margin-top: var(--space-2);
+  font-size: var(--text-sm);
+}
+
+/* The longer hints (Hooks, Workflows) wrap at a readable width rather
+   than across the whole column. */
+.page-empty-hint:has(code) {
+  max-width: 60ch;
+  line-height: 1.5;
+}
+
+.page-empty-hint code {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  padding: 1px 6px;
+  background: var(--bg-raised);
+  border-radius: 4px;
+  color: var(--fg-muted);
+}
+
+.page-empty-action {
+  margin-top: var(--space-6);
+}
+
+/* A first read in flight: one quiet line, not a blank page and not a
+   skeleton of a layout the page may not end up having. */
+.page-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  min-height: 46vh;
+  color: var(--fg-faint);
   font-size: var(--text-sm);
 }
 
@@ -8693,13 +8738,13 @@ button.mcp-server-head:focus-visible {
 }
 
 /* Detail page (post-routing) */
-.plugin-detail {
+.entity-detail {
   display: flex;
   flex-direction: column;
   gap: 0;
 }
 
-.plugin-detail-hero {
+.entity-hero {
   display: flex;
   gap: var(--space-6);
   padding-bottom: var(--space-7);
@@ -8707,44 +8752,44 @@ button.mcp-server-head:focus-visible {
   border-bottom: 1px solid var(--border-soft);
 }
 
-.plugin-detail-icon {
+.entity-hero-icon {
   flex-shrink: 0;
   display: inline-flex;
   margin-top: 2px;
 }
 
-.plugin-detail-main {
+.entity-hero-main {
   min-width: 0;
   flex: 1;
 }
 
-.plugin-detail-title-row {
+.entity-hero-title-row {
   gap: var(--space-5);
   flex-wrap: wrap;
 }
 
-.plugin-detail-caps {
+.entity-hero-chips {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-3);
   margin-bottom: var(--space-5);
 }
 
-.plugin-detail-title {
+.entity-hero-title {
   margin: 0;
   font-size: var(--text-2xl);
   font-weight: 700;
   letter-spacing: -0.01em;
 }
 
-.plugin-detail-desc {
+.entity-hero-desc {
   margin: 8px 0 12px;
   color: var(--fg-muted);
   font-size: var(--text-md);
   line-height: 1.5;
 }
 
-.plugin-detail-actions {
+.entity-hero-actions {
   display: flex;
   gap: var(--space-4);
 }
@@ -9049,42 +9094,6 @@ button.mcp-server-head:focus-visible {
 .kb-score.tone-warn {
   color: var(--warning, #f59e0b);
   background: color-mix(in srgb, var(--warning, #f59e0b) 14%, transparent);
-}
-
-/* ── Knowledge: empty / disabled states ──────────────────────── */
-.kb-empty {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  text-align: center;
-  padding: 48px 24px 32px;
-  color: var(--fg-muted);
-}
-
-.kb-empty-inline {
-  padding: var(--space-12) var(--space-4);
-}
-
-.kb-empty-title {
-  font-size: var(--text-lg);
-  font-weight: 700;
-  color: var(--fg);
-}
-
-.kb-empty-hint {
-  margin-top: var(--space-2);
-  font-size: var(--text-md);
-  max-width: 360px;
-  line-height: 1.5;
-}
-
-.kb-empty-hint code {
-  font-family: var(--font-mono);
-  font-size: var(--text-sm);
-  padding: 1px 6px;
-  background: var(--bg-raised);
-  border-radius: 4px;
-  color: var(--fg-muted);
 }
 
 .kb-detail-hero {
@@ -10211,26 +10220,6 @@ button.mcp-server-head:focus-visible {
 
 .ctx-error {
   color: var(--danger);
-}
-
-.ctx-empty {
-  color: var(--fg-muted);
-}
-
-/* ── A page with nothing to show yet ──────────────────────────── */
-.page-empty {
-  padding: 18px 0 6px;
-}
-
-.page-empty-lead {
-  margin: 0 0 16px;
-  max-width: 60ch;
-  line-height: 1.6;
-  color: var(--fg-muted);
-}
-
-.page-empty-lead strong {
-  color: var(--fg);
 }
 
 /* ── Workflows page ──────────────────────────────────────────────
@@ -12322,7 +12311,7 @@ button.mcp-server-head:focus-visible {
    (no ResizeObserver) it is still a grid, just an uneven one. An opened
    MCP server simply grows in its own column and the cards below it move
    down — spanning both columns would leave a hole beside the card above. */
-.plugins-grid--flow {
+.card-grid--flow {
   grid-auto-rows: 1px;
   row-gap: 0;
   align-items: start;
@@ -12340,7 +12329,7 @@ button.mcp-server-head:focus-visible {
 .mcp-server:hover { border-color: var(--border-soft); background: var(--bg-raised); }
 .mcp-server-main { gap: var(--space-3); }
 
-.plugins-grid .ext-row {
+.card-grid .ext-row {
   align-items: flex-start;
   gap: var(--space-5);
   padding: var(--space-7);
@@ -12350,7 +12339,7 @@ button.mcp-server-head:focus-visible {
   border-radius: var(--radius-lg);
   background: var(--bg-surface);
 }
-.plugins-grid .ext-row:hover { border-color: var(--border-soft); background: var(--bg-raised); }
+.card-grid .ext-row:hover { border-color: var(--border-soft); background: var(--bg-raised); }
 
 /* ?demo=panels toggle bar. */
 .demo-panels-switch { display: flex; gap: 8px; padding: 10px 16px; }

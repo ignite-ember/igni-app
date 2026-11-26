@@ -102,7 +102,7 @@ function LoadedContents({
       )}
 
       {contents.isEmpty && (
-        <div className="plugins-empty-hint">
+        <div className="page-empty-hint">
           This plugin doesn't bundle any skills, agents, hooks, MCP servers, or tools.
         </div>
       )}
