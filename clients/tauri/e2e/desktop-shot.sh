@@ -26,24 +26,34 @@ HOME="$home" XDG_CONFIG_HOME="$home/.config" XDG_DATA_HOME="$home/.local/share" 
   XDG_CACHE_HOME="$home/.cache" IGNI_RUNTIME_PYTHON="$IGNI_E2E_PYTHON" \
   "$app" "$project" >"$out/app.log" 2>&1 &
 pid=$!
+# The app is single-instance: one left running turns every later launch into
+# a hand-off that exits at once.
+trap 'kill "$pid" 2>/dev/null || true; pkill -f "igni_core.backend.*$project" || true' EXIT
 
 wid=""
 for _ in $(seq 1 90); do
   kill -0 "$pid" 2>/dev/null || { echo "the app exited at start"; tail -40 "$out/app.log"; exit 1; }
-  wid=$(xdotool search --onlyvisible --name '^released-check' 2>/dev/null | head -1 || true)
+  wid=$(xdotool search --onlyvisible --name '^(igni|released-check)' 2>/dev/null | head -1 || true)
   [ -n "$wid" ] && break
   sleep 1
 done
 [ -n "$wid" ] || { echo "no igni window within 90 s"; wmctrl -l || true; tail -40 "$out/app.log"; exit 1; }
 
-# The backend starts and the chat opens.
-sleep 30
-title=$(xdotool getwindowname "$wid")
+# The title turns from "igni" to the project's folder once the backend is
+# connected (bootstrap.rs).
+title=""
+for _ in $(seq 1 180); do
+  title=$(xdotool getwindowname "$wid" 2>/dev/null || true)
+  [[ "$title" == released-check* ]] && break
+  sleep 1
+done
+# The chat draws.
+sleep 10
 icon=$(xprop -id "$wid" _NET_WM_ICON | head -c 80)
 import -window root "$out/desktop.png"
 printf 'title: %s\nicon: %s\n' "$title" "$icon" | tee "$out/window.txt"
 
-[[ "$title" == released-check* ]] || { echo "the window's title is '$title', not the project's folder"; exit 1; }
+[[ "$title" == released-check* ]] || { echo "the window's title is still '$title' after 180 s: the backend did not connect"; exit 1; }
 [[ "$icon" == *"CARDINAL"* ]] || { echo "the window has no icon (_NET_WM_ICON)"; exit 1; }
 pgrep -f "igni_core.backend.*$project" >/dev/null || { echo "no backend for the project"; exit 1; }
 
