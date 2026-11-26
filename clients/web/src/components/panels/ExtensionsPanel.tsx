@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from "react";
+import { useMemo, useState } from "react";
 import { Button, Field, Input, Select, Switch, Text } from "@ignite-ember/ui-react";
 import { EntityGlyph } from "../EntityGlyph";
 import { FilterIcon, SortIcon } from "../Icons";
@@ -10,6 +10,7 @@ import { ControlMenu } from "./ControlMenu";
 import { Drawer } from "./Drawer";
 import { PanelSearch } from "./PanelSearch";
 import { useMasonry } from "./useMasonry";
+import { DetailSection } from "../page/DetailSection";
 import { EntityHero } from "../page/EntityHero";
 import { PageEmpty } from "../page/PageEmpty";
 
@@ -80,6 +81,13 @@ function sameValues(
 }
 
 /** A state, as a word and a tone the stylesheet already has. */
+/** The hero's status dot: lit when ready, red when failed, dim between. */
+function statusDot(state: string): string {
+  if (state === "ready") return "is-on";
+  if (state === "failed") return "is-failed";
+  return "is-off";
+}
+
 function stateClass(state: string): string {
   if (state === "ready") return "ext-state ext-state-ready";
   if (state === "failed") return "ext-state ext-state-failed";
@@ -269,28 +277,6 @@ function Problems({ entries }: { entries: string[] }) {
   );
 }
 
-/** One section of the extension's page — Pages, Commands, Tools — in the
- *  same vocabulary the plugin detail page lists a plugin's contents. */
-function ContentSection({
-  title,
-  count,
-  children,
-}: {
-  title: string;
-  count: number;
-  children: ReactNode;
-}) {
-  if (count === 0) return null;
-  return (
-    <div className="plugins-content-section">
-      <div className="plugins-content-head">
-        {title} <span className="plugins-content-count">{count}</span>
-      </div>
-      {children}
-    </div>
-  );
-}
-
 /** A compact extension card. The whole card is one control: clicking it
  *  opens the extension's own page, the way a plugin card does. Collapsed,
  *  it is just name, version, state and a one-line summary, so the grid
@@ -339,24 +325,22 @@ function ExtensionDetailPage({
   onSave: (values: Record<string, Value>) => Promise<void>;
 }) {
   const tools = extension.tools ?? [];
-  const hasContents =
-    extension.pages.length > 0 ||
-    extension.menu.length > 0 ||
-    tools.length > 0 ||
-    extension.settings.length > 0 ||
-    !!extension.web_url;
   return (
     <div className="entity-detail">
       <EntityHero
         name={extension.name}
+        leading={<span className={`plugins-status ${statusDot(extension.state)}`} />}
         meta={
           <>
-            <span className={stateClass(extension.state)}>{extension.state}</span>
-            {extension.version && <span className="plugins-version">{extension.version}</span>}
-            <span className="plugins-source">{extension.id}</span>
+            <span className="entity-meta">{extension.state}</span>
+            {extension.version && <span className="entity-meta">{extension.version}</span>}
+            <span className="entity-meta">{extension.id}</span>
           </>
         }
         description={extension.reason}
+        actions={
+          extension.web_url ? <OpenOnWeb url={extension.web_url} name={extension.name} /> : undefined
+        }
       />
 
       <SwitchedOff entries={extension.switched_off ?? []} />
@@ -371,44 +355,43 @@ function ExtensionDetailPage({
       )}
       <Problems entries={extension.problems ?? []} />
 
-      {hasContents && (
-        <div className="plugins-contents">
-          <ContentSection title="Pages" count={extension.pages.length}>
-            {extension.pages.map((p) => (
-              <div className="plugins-content-row" key={p.kind}>
-                <span className="plugins-content-name">{p.label}</span>
-                {p.sidebar && <span className="plugins-content-meta">in the sidebar</span>}
-              </div>
-            ))}
-          </ContentSection>
-
-          <ContentSection title="Commands" count={extension.menu.length}>
-            {extension.menu.map((c) => (
-              <div className="plugins-content-row" key={c.command}>
-                <code className="plugins-content-name">{c.command}</code>
-                <span className="plugins-content-desc">{c.desc}</span>
-              </div>
-            ))}
-          </ContentSection>
-
-          <ContentSection title="Tools for the agent" count={tools.length}>
-            {tools.map((t) => (
-              <div className="plugins-content-row" key={t.name}>
-                <code className="plugins-content-name">{t.name}</code>
-                <span className="plugins-content-desc">{t.hints}</span>
-              </div>
-            ))}
-          </ContentSection>
-
-          <OpenOnWeb url={extension.web_url} name={extension.name} />
-
-          {extension.settings.length > 0 && (
-            <div className="plugins-content-section">
-              <div className="plugins-content-head">Settings</div>
-              <SettingsForm extension={extension} onSave={onSave} />
+      {extension.pages.length > 0 && (
+        <DetailSection title="Pages" count={extension.pages.length}>
+          {extension.pages.map((p) => (
+            <div className="plugins-content-row" key={p.kind}>
+              <span className="plugins-content-name">{p.label}</span>
+              {p.sidebar && <span className="plugins-content-meta">in the sidebar</span>}
             </div>
-          )}
-        </div>
+          ))}
+        </DetailSection>
+      )}
+
+      {extension.menu.length > 0 && (
+        <DetailSection title="Commands" count={extension.menu.length}>
+          {extension.menu.map((c) => (
+            <div className="plugins-content-row" key={c.command}>
+              <code className="plugins-content-name">{c.command}</code>
+              <span className="plugins-content-desc">{c.desc}</span>
+            </div>
+          ))}
+        </DetailSection>
+      )}
+
+      {tools.length > 0 && (
+        <DetailSection title="Tools" count={tools.length}>
+          {tools.map((t) => (
+            <div className="plugins-content-row" key={t.name}>
+              <code className="plugins-content-name">{t.name}</code>
+              <span className="plugins-content-desc">{t.hints}</span>
+            </div>
+          ))}
+        </DetailSection>
+      )}
+
+      {extension.settings.length > 0 && (
+        <DetailSection title="Settings">
+          <SettingsForm extension={extension} onSave={onSave} />
+        </DetailSection>
       )}
     </div>
   );

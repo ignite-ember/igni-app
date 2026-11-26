@@ -317,6 +317,47 @@ describe("a plugin's page", () => {
     expect(screen.getByText("git@host:x")).toBeTruthy();
   });
 
+  it("lays its page out as the hero, then one section per part", async () => {
+    panelWith();
+    fireEvent.click(await screen.findByText("lint-helper"));
+    await screen.findByText("Lint helper");
+    const hero = document.querySelector(".entity-detail > .entity-hero")!;
+    expect(hero.querySelector("h2.entity-hero-title")?.textContent).toBe("lint-helper");
+    // Capabilities are the hero's neutral chips, not accent labels.
+    expect(hero.querySelectorAll(".entity-hero-chips > .hero-chip").length).toBeGreaterThan(0);
+    expect(hero.querySelector(".plugins-cap")).toBeNull();
+    // Install is the hero's one primary action.
+    expect(hero.querySelectorAll(".entity-hero-actions .btn-primary")).toHaveLength(1);
+    // Source facts and the README sit in sections, the README with no
+    // inner panel of its own.
+    const source = screen.getByRole("region", { name: "Source" });
+    expect(source.querySelector(".detail-facts")).toBeTruthy();
+    expect([...source.querySelectorAll("dt")].map((d) => d.textContent)).toEqual([
+      "Source",
+      "Subdir",
+      "Branch",
+    ]);
+    const readme = screen.getByRole("region", { name: "README" });
+    expect(readme.querySelector(".detail-md h1")?.textContent).toBe("Lint helper");
+    expect(readme.querySelector(".plugins-readme")).toBeNull();
+    for (const part of ["Agents", "MCP servers", "Hooks", "Tools"]) {
+      expect(screen.getByRole("region", { name: part }).className).toBe("detail-section");
+    }
+    // Every part of the page is the hero or a direct section.
+    const kids = [...document.querySelector(".entity-detail")!.children].map((c) => c.className);
+    expect(kids.every((c) => c === "entity-hero" || c === "detail-section")).toBe(true);
+  });
+
+  it("shows an installed copy's path as a mono fact", async () => {
+    panelWith();
+    fireEvent.click(await screen.findByRole("button", { name: /^Installed/ }));
+    fireEvent.click(screen.getByText("commit-tools"));
+    const path = await screen.findByText("/plugins/commit-tools");
+    expect(path.tagName).toBe("DD");
+    expect(path.className).toBe("is-mono");
+    expect(path.previousElementSibling?.textContent).toBe("Path");
+  });
+
   it("shows why its contents could not be read", async () => {
     panelWith({
       preview_plugin: () => {
