@@ -21,6 +21,12 @@ function Get-Backends {
   Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like "*igni_core.backend*" }
 }
 
+# A console window the app's own children opened (python.exe, uv.exe): it
+# would sit over the app for as long as the backend runs.
+function Get-ConsoleWindows {
+  Get-Process | Where-Object { $_.MainWindowHandle -ne 0 -and $_.MainWindowTitle -match '(?i)python|\\Scripts\\|\buv(\.exe)?\b' }
+}
+
 function Find-Exe([string[]]$Roots) {
   foreach ($r in $Roots) {
     if (Test-Path $r) {
@@ -154,6 +160,14 @@ switch ($Action) {
       $sig = Get-AuthenticodeSignature $env:IGNI_APP
       "title: $title`nsignature: $($sig.Status) $($sig.SignerCertificate.Subject)" | Tee-Object -FilePath (Join-Path $Out "window.txt")
       if ($sig.Status -ne "Valid") { Write-Host "::warning::igni-app.exe has no valid Authenticode signature ($($sig.Status)): SmartScreen warns on first run" }
+      $consoles = @(Get-ConsoleWindows | ForEach-Object { "$($_.ProcessName): $($_.MainWindowTitle)" })
+      "console windows: $(if ($consoles) { $consoles -join '; ' } else { 'none' })" | Tee-Object -FilePath (Join-Path $Out "window.txt") -Append
+      if ($consoles) {
+        # A pull request checks this script against the latest release, which
+        # it cannot change: there the finding is reported, not failed.
+        $msg = "the app's backend opened a console window over the app: $($consoles -join '; ')"
+        if ($env:GITHUB_EVENT_NAME -eq "pull_request") { Write-Host "::warning::$msg" } else { throw $msg }
+      }
       if ($title -notlike "released-check*") { throw "the window's title is still '$title' after 180 s: the backend did not connect" }
       $backend = @(Get-Backends | Where-Object { $_.CommandLine -like "*released-check*" })
       if ($backend.Count -eq 0) { throw "no igni_core.backend for the project" }
