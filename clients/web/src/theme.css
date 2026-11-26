@@ -10502,6 +10502,14 @@ button.mcp-server-head:focus-visible {
   height: 15px;
 }
 
+/* The bell is the menus' glyph, which is drawn quieter than its label
+   (thinner, 72% opacity). Here it stands with the folder and terminal,
+   so it takes their full strength and weight. */
+.chip-bell .menu-icon {
+  opacity: 1;
+  stroke-width: 1.6;
+}
+
 /* Lit only when something is actually waiting. A bell that is always
    coloured is a bell nobody looks at. */
 .chip-bell.has-waiting {
