@@ -23,7 +23,7 @@ export type TerminalPhase =
   | { kind: "exited"; exitCode: number | null }
   /** ``final``: igni said there is no terminal here, so the next
    *  connection does not ask again. */
-  | { kind: "failed"; message: string; final: boolean };
+  | { kind: "failed"; message: string; final: boolean; code: string | null };
 
 /** Where the session draws: xterm in the pane, a fake in tests. */
 export interface TerminalScreen {
@@ -75,6 +75,11 @@ export class TerminalSession {
   /** Whether a shell was ever opened here: the next one after a drop is
    *  announced as a reconnect. */
   private hadShell = false;
+  /** Whether a shell was ever opened here. */
+  get everOpened(): boolean {
+    return this.hadShell;
+  }
+
   /** Whether the connection is up, as last told. */
   private online = false;
   /** Output that arrived before ``terminal_open`` answered. */
@@ -180,14 +185,15 @@ export class TerminalSession {
       for (const ev of early) this.event(ev);
     } catch (e) {
       if (epoch !== this.epoch) return;
-      const final = FINAL_CODES.has(errorCode(e) ?? "");
+      const code = errorCode(e);
+      const final = FINAL_CODES.has(code ?? "");
       // A call lost with its connection is not an answer: the next
       // connection tries again.
       if (!this.online && !final) {
         this.set({ kind: "idle" });
         return;
       }
-      this.set({ kind: "failed", message: errorMessage(e), final });
+      this.set({ kind: "failed", message: errorMessage(e), final, code });
     }
   }
 

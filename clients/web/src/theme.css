@@ -12129,13 +12129,50 @@ button.mcp-server-head:focus-visible {
   padding-bottom: 0;
   background: var(--bg);
 }
-.terminal-title {
-  margin-bottom: 6px;
+.terminal-head .files-tabs {
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  border-bottom: none;
+}
+.terminal-tablist {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+}
+.terminal-tab.is-active {
+  background: var(--bg-inset);
+}
+.terminal-tab.is-exited .files-tab-label {
+  color: var(--fg-faint);
+}
+.terminal-tab-exited {
+  font-size: var(--text-xs);
+  font-style: italic;
+}
+.terminal-plus {
+  display: block;
+  font-size: 16px;
+  line-height: 14px;
+  width: 14px;
+  text-align: center;
+}
+.terminal-screen {
+  height: 100%;
+}
+.terminal-empty {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
   font-size: var(--text-sm);
   color: var(--fg-muted);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+}
+.terminal-empty .terminal-notice-btn {
+  margin-left: 0;
 }
 .terminal-host {
   flex: 1 1 auto;

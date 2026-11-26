@@ -53,6 +53,7 @@ function dock(filesOpen: boolean, terminalOpen: boolean, extra: Partial<Paramete
       client={{} as never}
       connected
       filesSession={{} as never}
+      terminals={{} as never}
       filesOpen={filesOpen}
       terminalOpen={terminalOpen}
       onCloseFiles={() => {}}

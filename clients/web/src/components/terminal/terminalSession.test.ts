@@ -95,7 +95,12 @@ describe("TerminalSession", () => {
     calls.terminalOpen.mockResolvedValueOnce(new TerminalOpened("", "", ""));
     session.connected();
     await flush();
-    expect(session.current).toEqual({ kind: "failed", message: "igni started no terminal", final: false });
+    expect(session.current).toEqual({
+      kind: "failed",
+      message: "igni started no terminal",
+      final: false,
+      code: null,
+    });
     session.connected();
     await flush();
     expect(session.current.kind).toBe("open");

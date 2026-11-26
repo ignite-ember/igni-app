@@ -29,13 +29,14 @@ test.describe("the terminal", () => {
   test.use({ viewport: { width: 1440, height: 900 } });
 
   test("opens from the header, shows igni's output and sends what is typed", async ({ page, backend, appUrl }) => {
-    // Each open is a new shell with its own id. The dev server mounts in
-    // StrictMode, so the pane opens twice and closes the first.
+    // Each open is a new shell with its own id.
     let opened = 0;
     backend.onRpc("terminal_open", () => ({ terminal_id: `t${++opened}`, shell: "/bin/zsh", cwd: "/tmp/project" }));
     backend.onRpc("terminal_input", (args) => ({ terminal_id: args.terminal_id }));
     backend.onRpc("terminal_resize", (args) => ({ terminal_id: args.terminal_id }));
     backend.onRpc("terminal_close", (args) => ({ terminal_id: args.terminal_id }));
+    const output = (terminal_id: string, data: string) =>
+      backend.pushEvent({ type: "push_notification", channel: "terminal_output", payload: { terminal_id, data } });
     await open(page, appUrl);
 
     const button = page.getByRole("button", { name: "Terminal", exact: true });
@@ -43,30 +44,18 @@ test.describe("the terminal", () => {
     await button.click();
     await expect(button).toHaveAttribute("aria-pressed", "true");
     const dock = page.getByRole("complementary", { name: "Terminal" });
-    await expect(dock.locator(".xterm")).toBeVisible();
-    await expect(dock.locator(".terminal-title")).toHaveText("zsh");
+    const panel = dock.getByRole("tabpanel");
+    await expect(panel.locator(".xterm")).toBeVisible();
+    await expect(dock.getByRole("tab")).toHaveText(["zsh"]);
 
-    await expect.poll(() => terminalCalls(backend, "terminal_open").length).toBeGreaterThan(0);
+    await expect.poll(() => terminalCalls(backend, "terminal_open").length).toBe(1);
     const size = terminalCalls(backend, "terminal_open")[0];
     expect(size.cols).toBeGreaterThan(10);
     expect(size.rows).toBeGreaterThan(3);
-    const live = `t${opened}`;
-    // Only the live shell is left open.
-    await expect
-      .poll(() => terminalCalls(backend, "terminal_close").map((a) => a.terminal_id))
-      .toEqual(Array.from({ length: opened - 1 }, (_, i) => `t${i + 1}`));
 
-    backend.pushEvent({
-      type: "push_notification",
-      channel: "terminal_output",
-      payload: { terminal_id: "other", data: "not-this-window " },
-    });
-    backend.pushEvent({
-      type: "push_notification",
-      channel: "terminal_output",
-      payload: { terminal_id: live, data: "igni-prompt$ " },
-    });
-    await expect(dock.locator(".xterm-rows")).toContainText("igni-prompt$");
+    output("other", "not-this-window ");
+    output("t1", "igni-prompt$ ");
+    await expect(panel.locator(".xterm-rows")).toContainText("igni-prompt$");
 
     await page.keyboard.type("ls");
     await expect.poll(() => terminalCalls(backend, "terminal_input").map((a) => a.data).join("")).toBe("ls");
@@ -82,17 +71,36 @@ test.describe("the terminal", () => {
     const found = results.violations.map((v) => `${v.id}: ${v.help} — ${v.nodes.map((n) => n.target.join(" ")).join(", ")}`);
     expect(found, found.join("\n")).toEqual([]);
 
-    // The files open above it, and the terminal keeps its shell.
+    // A second tab: its own shell, its own screen.
+    await dock.getByRole("button", { name: "New terminal" }).click();
+    await expect(dock.getByRole("tab")).toHaveText(["zsh", "zsh 2"]);
+    await expect.poll(() => terminalCalls(backend, "terminal_open").length).toBe(2);
+    output("t2", "second-shell$ ");
+    await expect(panel.locator(".xterm-rows")).toContainText("second-shell$");
+    await expect(panel.locator(".xterm-rows")).not.toContainText("igni-prompt$");
+
+    // Hidden, the shells run on and take output; shown, both tabs are back.
+    await button.click();
+    await expect(page.getByRole("complementary")).toHaveCount(0);
+    output("t1", "while-hidden ");
+    await button.click();
+    await expect(dock.getByRole("tab")).toHaveText(["zsh", "zsh 2"]);
+    await dock.getByRole("tab", { name: "zsh", exact: true }).click();
+    await expect(panel.locator(".xterm-rows")).toContainText("igni-prompt$ while-hidden");
+    expect(terminalCalls(backend, "terminal_close")).toEqual([]);
+    expect(terminalCalls(backend, "terminal_open")).toHaveLength(2);
+
+    // The files open above it, and the terminal keeps its shells.
     await page.getByRole("button", { name: "Files", exact: true }).click();
     const both = page.getByRole("complementary", { name: "Files and terminal" });
     await expect(both.locator(".dock-split")).toBeVisible();
     await expect(both.locator(".xterm-rows")).toContainText("igni-prompt$");
-    expect(terminalCalls(backend, "terminal_open")).toHaveLength(opened);
     await expect(both.locator(".xterm-rows")).not.toContainText("not-this-window");
 
-    await button.click();
-    await expect.poll(() => terminalCalls(backend, "terminal_close").at(-1)).toEqual({ terminal_id: live });
-    await expect(page.getByRole("complementary", { name: "Files" })).toBeVisible();
+    // Closing a tab closes its shell, and only that one.
+    await both.getByRole("button", { name: "Close terminal zsh 2" }).click();
+    await expect.poll(() => terminalCalls(backend, "terminal_close")).toEqual([{ terminal_id: "t2" }]);
+    await expect(both.getByRole("tab")).toHaveText(["zsh"]);
   });
 
   test("shows a refusal plainly", async ({ page, backend, appUrl }) => {

@@ -257,9 +257,6 @@ export const VIEW_STATE: Record<string, Partial<Record<Category, string[]>>> = {
   "components/SideDock.tsx": {
     disclosure: ["maximized"],
   },
-  "components/terminal/TerminalPane.tsx": {
-    pending: ["phase"],
-  },
   "components/terminal/useTerminalToggle.ts": {
     disclosure: ["terminalOpen"],
   },

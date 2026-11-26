@@ -5,9 +5,8 @@
  *
  * The dock owns what the two share: its width (dragged on the left
  * edge), full screen, and the split between them, each remembered per
- * device with the files' other preferences. The terminal keeps its
- * place in the tree while the files open and close above it, so its
- * shell is not restarted by them.
+ * device with the files' other preferences. The terminals themselves
+ * are the window's: closing the dock only hides them.
  */
 
 import { useRef, useState } from "react";
@@ -16,6 +15,7 @@ import type { IgniClient } from "../protocol/client";
 import { FilesDock } from "./FilesDock";
 import { DOCK_MAX, DOCK_MIN, clampSplit, useFilesPrefs } from "./pages/files/useFilesPrefs";
 import type { FilesSession } from "./pages/files/useFilesSession";
+import type { TerminalManager } from "./terminal/terminalManager";
 import { TerminalPane } from "./terminal/TerminalPane";
 
 function dockLabel(filesOpen: boolean, terminalOpen: boolean): string {
@@ -27,6 +27,7 @@ export function SideDock({
   client,
   connected,
   filesSession,
+  terminals,
   filesOpen,
   terminalOpen,
   onCloseFiles,
@@ -35,6 +36,8 @@ export function SideDock({
   client: IgniClient;
   connected: boolean;
   filesSession: FilesSession;
+  /** The window's terminals, which outlive the dock. */
+  terminals: TerminalManager;
   filesOpen: boolean;
   terminalOpen: boolean;
   onCloseFiles: () => void;
@@ -145,8 +148,7 @@ export function SideDock({
           style={{ flexGrow: split ? 1 - prefs.dockSplit : 1 }}
         >
           <TerminalPane
-            client={client}
-            connected={connected}
+            terminals={terminals}
             maximized={maximized}
             onToggleMaximize={toggleMaximize}
             onClose={onCloseTerminal}
