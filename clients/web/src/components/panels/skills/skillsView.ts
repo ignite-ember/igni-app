@@ -10,6 +10,9 @@ export interface SkillRow {
   context?: string;
   agent?: string;
   source_dir?: string;
+  version?: string;
+  /** The skill's full instructions, its SKILL.md body. */
+  body?: string;
 }
 
 export type SkillSource = "project" | "user" | "plugin" | "builtin";

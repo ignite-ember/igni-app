@@ -388,7 +388,7 @@ export const VIEW_STATE: Record<string, Partial<Record<Category, string[]>>> = {
   },
   "components/panels/SkillsPanel.tsx": {
     data: ["skills"],
-    page: ["filter", "sort"],
+    page: ["filter", "sort", "selected"],
     field: ["query"],
   },
   "components/panels/WatcherPanel.tsx": {

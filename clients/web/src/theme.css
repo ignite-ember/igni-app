@@ -5757,6 +5757,22 @@ button {
   color: var(--accent-orange-text);
 }
 
+.skill-detail .entity-hero-title {
+  font-family: var(--font-mono);
+  color: var(--accent-orange-text);
+}
+
+.skill-hero-chip {
+  padding: 1px 8px;
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--fg) 7%, transparent);
+}
+
+/* The instructions in a soft card, like a plugin's README. */
+.skill-body {
+  background: var(--bg-surface);
+}
+
 .skill-args {
   font-family: var(--font-mono);
   min-width: 0;

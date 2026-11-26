@@ -1,15 +1,17 @@
 // @vitest-environment jsdom
 /**
- * The Skills page: a card per skill, runnable from the card or its
- * play button, narrowed by search and source and ordered by the sort.
+ * The Skills page: a card per skill that opens the skill's own page,
+ * a play button that runs it, search, a source filter and a sort.
  *
- * Pinned: running closes the page and seeds `/name`; the play button
- * runs once without also opening the card; the source comes from where
- * the skill was loaded; a search with no hits says so and clears.
+ * Pinned: a card opens the skill and never touches the composer; the
+ * play button runs once without opening it; running closes the page and
+ * seeds `/name`; back lands on the list as it was left; the source
+ * comes from where the skill was loaded.
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 
+import { PageContext } from "../PageShell";
 import { SkillsPanel } from "./SkillsPanel";
 import { sourceFilters, sourceOf, visibleSkills, type SkillRow } from "./skills/skillsView";
 
@@ -22,6 +24,8 @@ const SKILLS: SkillRow[] = [
     category: "operations",
     argument_hint: "base-branch",
     source_dir: "/Users/me/code/app/.igni/skills",
+    version: "1.2.0",
+    body: "# Open a PR\n\nPush the branch, then **open** it.\n\n<script>alert(1)</script>",
   },
   {
     name: "commit",
@@ -39,14 +43,24 @@ const SKILLS: SkillRow[] = [
   },
 ];
 
-function mount(answer: unknown) {
+function mount(answer: unknown, { asPage = false } = {}) {
   const rpc = vi.fn(async () => {
     if (answer instanceof Error) throw answer;
     return answer;
   });
   const onRun = vi.fn();
   const onClose = vi.fn();
-  render(<SkillsPanel client={{ rpc } as never} onRun={onRun} onClose={onClose} />);
+  const panel = <SkillsPanel client={{ rpc } as never} onRun={onRun} onClose={onClose} />;
+  const trail = [{ kind: "skills", label: "Skills" } as never];
+  render(
+    asPage ? (
+      <PageContext.Provider value={{ trail, onCrumb: () => {}, onBack: () => {}, onClose: () => {} }}>
+        {panel}
+      </PageContext.Provider>
+    ) : (
+      panel
+    ),
+  );
   return { rpc, onRun, onClose };
 }
 
@@ -76,23 +90,92 @@ describe("the skills page", () => {
     mount(SKILLS);
     await screen.findByText("/pr");
     expect(names()).toEqual(["/acme:deploy", "/commit", "/pr"]);
-    const pr = screen.getByRole("button", { name: "/pr" });
+    const pr = screen.getByRole("button", { name: "Open /pr" });
     expect(pr.querySelector(".entity-card-desc")?.textContent).toBe("Open a pull request");
     expect(pr.querySelector(".skill-source")?.textContent).toBe("project");
     expect(pr.querySelector(".skill-args")?.textContent).toBe("base-branch");
     expect(pr.querySelector(".entity-glyph")?.textContent).toBe("PR");
-    const deploy = screen.getByRole("button", { name: "/acme:deploy" });
+    const deploy = screen.getByRole("button", { name: "Open /acme:deploy" });
     expect(deploy.querySelector(".skill-source")?.textContent).toBe("plugin");
     expect(deploy.textContent).toContain("runs on ops");
     expect(deploy.querySelector(".entity-glyph")?.textContent).toBe("DE");
   });
 
-  it("runs from the card: closes the page and seeds the command", async () => {
+  it("opens the skill's page from the card, by click, Enter or Space, without touching the composer", async () => {
     const { onRun, onClose } = mount(SKILLS);
     await screen.findByText("/pr");
     fireEvent.click(screen.getByText("/pr"));
+    expect(screen.getByRole("heading", { name: "/pr" })).toBeTruthy();
+    expect(onRun).not.toHaveBeenCalled();
+    expect(onClose).not.toHaveBeenCalled();
+    cleanup();
+    mount(SKILLS);
+    await screen.findByText("/pr");
+    fireEvent.keyDown(screen.getByRole("button", { name: "Open /commit" }), { key: "Enter" });
+    expect(screen.getByRole("heading", { name: "/commit" })).toBeTruthy();
+    cleanup();
+    mount(SKILLS);
+    await screen.findByText("/pr");
+    fireEvent.keyDown(screen.getByRole("button", { name: "Open /commit" }), { key: " " });
+    expect(screen.getByRole("heading", { name: "/commit" })).toBeTruthy();
+  });
+
+  it("draws the skill's page: hero, its instructions as markdown, and where it lives", async () => {
+    const { onRun, onClose } = mount(SKILLS);
+    await screen.findByText("/pr");
+    fireEvent.click(screen.getByRole("button", { name: "Open /pr" }));
+    const hero = document.querySelector(".entity-hero")!;
+    expect(hero.querySelector(".skill-source")?.textContent).toBe("project");
+    expect(hero.textContent).toContain("operations");
+    expect(hero.textContent).toContain("v1.2.0");
+    expect(hero.textContent).toContain("takes base-branch");
+    expect(hero.textContent).toContain("Open a pull request");
+    const body = document.querySelector(".skill-body")!;
+    expect(body.querySelector("h1")?.textContent).toBe("Open a PR");
+    expect(body.querySelector("strong")?.textContent).toBe("open");
+    // Raw HTML in a skill stays text.
+    expect(body.querySelector("script")).toBeNull();
+    expect(screen.getByText("/Users/me/code/app/.igni/skills")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Search skills" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Run /pr" }));
     expect(onClose).toHaveBeenCalledTimes(1);
     expect(onRun).toHaveBeenCalledWith("/pr");
+  });
+
+  it("says plainly when a skill's instructions were not sent", async () => {
+    mount([...SKILLS, { name: "bare" }]);
+    await screen.findByText("/pr");
+    fireEvent.click(screen.getByRole("button", { name: "Open /acme:deploy" }));
+    expect(screen.getByText("runs on ops")).toBeTruthy();
+    expect(screen.getByText(/did not send this skill's instructions, so they can only be read in its folder/)).toBeTruthy();
+    cleanup();
+    mount([{ name: "bare" }]);
+    await screen.findByText("/bare");
+    fireEvent.click(screen.getByRole("button", { name: "Open /bare" }));
+    expect(screen.getByText("igni did not send this skill's instructions.")).toBeTruthy();
+  });
+
+  it("goes back to the list as it was left: search, filter and scroll", async () => {
+    mount(SKILLS, { asPage: true });
+    await screen.findByText("/pr");
+    fireEvent.click(screen.getByRole("button", { name: "Search skills" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "Search skills" }), {
+      target: { value: "operations" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Source" }));
+    fireEvent.click(screen.getByRole("menuitemradio", { name: "Project" }));
+    const scroller = document.querySelector(".page-body") as HTMLElement;
+    scroller.scrollTop = 240;
+    fireEvent.click(screen.getByRole("button", { name: "Open /pr" }));
+    expect(scroller.scrollTop).toBe(0);
+    // The trail names the skill; its parent crumb goes back.
+    expect(screen.getAllByText("/pr").length).toBeGreaterThan(0);
+    fireEvent.click(screen.getByRole("button", { name: "Skills" }));
+    expect(screen.queryByRole("heading", { name: "/pr" })).toBeNull();
+    expect(names()).toEqual(["/pr"]);
+    expect((screen.getByRole("textbox", { name: "Search skills" }) as HTMLInputElement).value).toBe("operations");
+    expect(screen.getByRole("button", { name: "Source" }).className).toContain("is-active");
+    expect(scroller.scrollTop).toBe(240);
   });
 
   it("runs once from the play button, without also opening the card", async () => {
@@ -102,6 +185,7 @@ describe("the skills page", () => {
     expect(onRun).toHaveBeenCalledTimes(1);
     expect(onRun).toHaveBeenCalledWith("/commit");
     expect(onClose).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole("heading", { name: "/commit" })).toBeNull();
   });
 
   it("searches names, descriptions and categories, and clears a search with no hits", async () => {
