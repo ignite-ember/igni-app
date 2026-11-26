@@ -10,9 +10,11 @@ import { Drawer } from "./Drawer";
 import { useNow } from "./watcher/useNow";
 import { useWatcher } from "./watcher/useWatcher";
 import type { ProcessRow } from "./watcher/processTable";
-import { KillButton, ProcessGlyph, ProcessStatus, WatcherRow, startedClock } from "./watcher/WatcherRow";
+import { KillButton, ProcessGlyph, WatcherRow, startedClock } from "./watcher/WatcherRow";
 import { WatcherTail } from "./watcher/WatcherTail";
 import { CardGrid } from "../page/CardGrid";
+import { DetailFacts } from "../page/DetailFacts";
+import { DetailSection } from "../page/DetailSection";
 import { EntityHero } from "../page/EntityHero";
 import { PageEmpty } from "../page/PageEmpty";
 import { PageTabs } from "../page/PageTabs";
@@ -73,17 +75,25 @@ export function WatcherPanel({ client, onClose }: { client: IgniClient; onClose:
           <EntityHero
             name={selected.cmd}
             icon={<ProcessGlyph running={selected.isRunning} size={52} />}
-            meta={<ProcessStatus row={selected} />}
-            description={
-              <span className="watcher-detail-meta">
-                PID {selected.pid}
-                {selected.isRunning && ` · running ${selected.statusLabel(now)}`} · started{" "}
-                {startedClock(selected.startedAt)}
-              </span>
-            }
+            meta={<span className="entity-meta">{selected.isRunning ? "running" : selected.statusLabel(0)}</span>}
             actions={selected.isRunning ? <KillButton onKill={() => watcher.kill(selected.pid)} /> : undefined}
           />
-          <WatcherTail lines={table.logsOf(selected.pid)} filter={filter} onFilter={setFilter} />
+          <DetailSection title="Process">
+            <DetailFacts
+              facts={[
+                { label: "Command", value: selected.cmd, mono: true },
+                { label: "PID", value: String(selected.pid), mono: true },
+                {
+                  label: "State",
+                  value: selected.isRunning ? `running ${selected.statusLabel(now)}` : selected.statusLabel(now),
+                },
+                { label: "Started", value: startedClock(selected.startedAt) },
+              ]}
+            />
+          </DetailSection>
+          <DetailSection title="Output" count={table.logsOf(selected.pid).length}>
+            <WatcherTail lines={table.logsOf(selected.pid)} filter={filter} onFilter={setFilter} />
+          </DetailSection>
         </div>
       ) : table.rows.size === 0 ? (
         <PageEmpty

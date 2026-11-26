@@ -45,9 +45,63 @@ describe("the watcher panel", () => {
     expect(await screen.findByText("hello")).toBeTruthy();
     // The process's own page: its command as the heading, Kill still offered.
     expect(screen.getByRole("heading", { name: "sleep 600" })).toBeTruthy();
-    expect(screen.getByText(/PID 9 · running/)).toBeTruthy();
     expect(screen.getByRole("button", { name: /kill/i })).toBeTruthy();
     expect(screen.queryByRole("button", { name: /^Running/ })).toBeNull();
+  });
+
+  it("draws a process's page in the shared detail layout", async () => {
+    const client = fakeClient((m) => {
+      if (m === "list_background_processes") return [running];
+      return { output: "one\ntwo", is_running: true, exit_code: null };
+    });
+    render(<WatcherPanel client={client} onClose={() => {}} />);
+    fireEvent.click(await screen.findByRole("button", { name: "sleep 600" }));
+    await screen.findByText(/one/);
+    const detail = document.querySelector(".entity-detail") as HTMLElement;
+    const hero = detail.querySelector(".entity-hero") as HTMLElement;
+    // The command is the plain heading; the state is plain meta, not a chip.
+    expect(hero.querySelector("h2")?.className).toBe("entity-hero-title");
+    expect(hero.querySelector(".entity-hero-meta")?.textContent).toBe("running");
+    expect(hero.querySelector(".watcher-chip")).toBeNull();
+    expect(hero.querySelector(".entity-hero-actions .btn-danger")).toBeTruthy();
+    // Facts and output are sections straight under the hero.
+    const regions = screen.getAllByRole("region");
+    expect(regions.map((r) => r.getAttribute("aria-label"))).toEqual(["Process", "Output"]);
+    for (const r of regions) {
+      expect(r.className).toBe("detail-section");
+      expect(r.parentElement).toBe(detail);
+    }
+    const facts = [...regions[0].querySelectorAll(".detail-fact")].map((f) => [
+      f.querySelector("dt")?.textContent,
+      f.querySelector("dd")?.className,
+    ]);
+    expect(facts).toEqual([
+      ["Command", "is-mono"],
+      ["PID", "is-mono"],
+      ["State", ""],
+      ["Started", ""],
+    ]);
+    expect(regions[0].textContent).toMatch(/PID9Staterunning \d/);
+    expect(regions[1].querySelector(".detail-section-count")?.textContent).toBe("2");
+    expect(regions[1].querySelector(".watcher-log")?.textContent).toBe("one\ntwo");
+  });
+
+  it("says how a stopped process ended on its page", async () => {
+    const client = fakeClient((m) => {
+      if (m === "list_background_processes") {
+        return [{ pid: 10, cmd: "make", elapsed_seconds: 1, is_running: false, exit_code: 2 }];
+      }
+      return { output: "", is_running: false, exit_code: 2 };
+    });
+    render(<WatcherPanel client={client} onClose={() => {}} />);
+    fireEvent.click(await screen.findByRole("button", { name: "make" }));
+    await screen.findByRole("heading", { name: "make" });
+    expect(document.querySelector(".entity-hero-meta")?.textContent).toBe("exit 2");
+    expect(document.querySelector(".entity-hero-actions")).toBeNull();
+    const state = [...document.querySelectorAll(".detail-fact")].find(
+      (f) => f.querySelector("dt")?.textContent === "State",
+    );
+    expect(state?.querySelector("dd")?.textContent).toBe("exit 2");
   });
 
   it("kills from a process's own page", async () => {

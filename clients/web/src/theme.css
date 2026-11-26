@@ -9910,29 +9910,11 @@ button.mcp-server-head:focus-visible {
   font-variant-numeric: tabular-nums;
 }
 
-.watcher-detail .entity-hero-title {
-  font-family: var(--font-mono);
-  font-size: var(--text-lg);
-  word-break: break-all;
-}
-
-.watcher-detail-meta {
-  font-size: var(--text-sm);
-  color: var(--fg-faint);
-}
-
-.watcher-detail .entity-hero-actions .btn {
-  border-radius: var(--radius-pill);
-}
-
+/* The tail sits in the page's Output section. */
 .watcher-tail {
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
-  margin-top: var(--space-6);
-  padding: var(--space-5);
-  border-radius: var(--radius-lg);
-  background: var(--bg-surface);
 }
 
 .watcher-filter {
