@@ -64,7 +64,7 @@ function mount(answer: unknown, { asPage = false } = {}) {
   return { rpc, onRun, onClose };
 }
 
-const names = () => [...document.querySelectorAll(".skill-card-name")].map((n) => n.textContent);
+const names = () => [...document.querySelectorAll(".entity-card-name")].map((n) => n.textContent);
 
 describe("the skills page", () => {
   it("shows placeholder cards while the first read is in flight", () => {
@@ -92,11 +92,16 @@ describe("the skills page", () => {
     expect(names()).toEqual(["/acme:deploy", "/commit", "/pr"]);
     const pr = screen.getByRole("button", { name: "Open /pr" });
     expect(pr.querySelector(".entity-card-desc")?.textContent).toBe("Open a pull request");
-    expect(pr.querySelector(".skill-source")?.textContent).toBe("project");
-    expect(pr.querySelector(".skill-args")?.textContent).toBe("base-branch");
+    // The card's one look: source in the faint footer, the rest as neutral chips.
+    expect(pr.querySelector(".entity-card-foot .entity-meta")?.textContent).toBe("project");
+    expect([...pr.querySelectorAll(".entity-card-chips > .hero-chip")].map((c) => c.textContent)).toEqual([
+      "operations",
+      "base-branch",
+    ]);
+    expect(pr.querySelector(".entity-card-name code")).toBeNull();
     expect(pr.querySelector(".entity-glyph")?.textContent).toBe("PR");
     const deploy = screen.getByRole("button", { name: "Open /acme:deploy" });
-    expect(deploy.querySelector(".skill-source")?.textContent).toBe("plugin");
+    expect(deploy.querySelector(".entity-card-foot .entity-meta")?.textContent).toBe("plugin");
     expect(deploy.textContent).toContain("runs on ops");
     expect(deploy.querySelector(".entity-glyph")?.textContent).toBe("DE");
   });
@@ -136,7 +141,7 @@ describe("the skills page", () => {
     ]);
     expect(hero.querySelector(".skill-source, .entity-hero-chips code")).toBeNull();
     expect(hero.textContent).toContain("Open a pull request");
-    expect(hero.querySelectorAll(".entity-hero-actions .btn-primary")).toHaveLength(1);
+    expect(hero.querySelectorAll(".entity-hero-actions .button--primary")).toHaveLength(1);
     // Instructions and source are sections straight under the hero.
     const regions = screen.getAllByRole("region");
     expect(regions.map((r) => r.getAttribute("aria-label"))).toEqual(["Instructions", "Source"]);

@@ -33,7 +33,6 @@ const PENDING = new Set<string>([
   "panels/LoopPanel.tsx",
   "panels/ProgramsPanel.tsx",
   "panels/SchedulePanel.tsx",
-  "panels/SkillsPanel.tsx",
   "panels/watcher/WatcherRow.tsx",
   "panels/watcher/WatcherTail.tsx",
   "pages/ContextPage.tsx",

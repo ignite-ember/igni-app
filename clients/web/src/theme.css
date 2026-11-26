@@ -5751,20 +5751,6 @@ button {
   font-size: var(--text-sm);
 }
 
-/* ── Skills page ── an EntityCard grid; the name is the command, in the
-   accent mono the Help page draws commands in. */
-.skill-card-name {
-  color: var(--accent-orange-text);
-}
-
-.skill-args {
-  font-family: var(--font-mono);
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .kv {
   display: grid;
   grid-template-columns: auto 1fr;
@@ -10448,90 +10434,10 @@ button.mcp-server-head:focus-visible {
 }
 
 /* ── Workflows page ──────────────────────────────────────────────
-   A card grid like Plugins: a card opens the workflow's own page with
-   every phase spelled out; its round play button seeds the run.
+   The shared card grid: a card opens the workflow's own page with every
+   phase spelled out; its round play button seeds the run.
    Running still streams into the chat — several take a JSON argument
    object. See ``WorkflowsPage``. */
-.workflow-card-name,
-.skill-card-name {
-  font-family: var(--font-mono);
-  font-size: var(--text-md);
-  font-weight: 600;
-  background: none;
-  padding: 0;
-}
-
-.workflow-card-phases {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-2);
-  margin-top: var(--space-1);
-}
-
-.workflow-card-phase {
-  font-size: var(--text-xs);
-  padding: 1px 7px;
-  border-radius: var(--radius-pill);
-  background: var(--bg);
-  border: 1px solid var(--border-soft);
-  color: var(--fg-muted);
-}
-
-.workflow-card-count {
-  white-space: nowrap;
-}
-
-/* Where a skill or workflow comes from, as a quiet pill. */
-.workflow-source,
-.skill-source {
-  padding: 1px 7px;
-  border-radius: var(--radius-pill);
-  background: color-mix(in srgb, var(--fg) 7%, transparent);
-  white-space: nowrap;
-}
-
-.workflow-source,
-.skill-source.is-project {
-  color: var(--accent-orange-text);
-  background: color-mix(in srgb, var(--accent) 12%, transparent);
-}
-
-.skill-source.is-plugin {
-  color: var(--accent-blue-text);
-  background: color-mix(in srgb, var(--accent-blue) 12%, transparent);
-}
-
-/* A card's own action: a quiet round icon that lights on hover, so a
-   grid of cards is not a column of bordered buttons. */
-.card-action {
-  appearance: none;
-  flex-shrink: 0;
-  width: 28px;
-  height: 28px;
-  border: none;
-  border-radius: var(--radius-circle);
-  background: transparent;
-  color: var(--fg-faint);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition: color 0.12s, background 0.12s;
-}
-
-.card-action:hover:not(:disabled),
-.card-action:focus-visible {
-  color: var(--accent-orange-text);
-  background: color-mix(in srgb, var(--accent) 14%, transparent);
-  outline: none;
-}
-
-.card-action:disabled {
-  opacity: 0.5;
-  cursor: default;
-}
-
 .workflow-detail-text {
   margin: 0;
   color: var(--fg-muted);

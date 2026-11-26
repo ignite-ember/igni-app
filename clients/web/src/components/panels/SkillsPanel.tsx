@@ -2,10 +2,12 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react
 import type { IgniClient } from "../../protocol/client";
 import { countOf } from "../../lib/plural";
 import { Drawer } from "./Drawer";
+import { Button } from "../page/Button";
 import { CardAction } from "../page/CardAction";
 import { CardGrid } from "../page/CardGrid";
 import { CardGridSkeleton } from "../page/CardGridSkeleton";
 import { EntityCard } from "../page/EntityCard";
+import { HeroChip } from "../page/HeroChip";
 import { PageEmpty } from "../page/PageEmpty";
 import { PageHeaderControls } from "../page/PageHeaderControls";
 import { SkillDetail } from "./skills/SkillDetail";
@@ -130,9 +132,7 @@ export function SkillsPanel({
                     : "None from this source."
                 }
                 action={
-                  <button className="btn btn-sm" onClick={clear}>
-                    Show all skills
-                  </button>
+                  <Button onClick={clear}>Show all skills</Button>
                 }
               />
             )}
@@ -145,20 +145,22 @@ export function SkillsPanel({
                     <EntityCard
                       key={name}
                       glyph={name.split(":").pop()}
-                      name={<code className="skill-card-name">/{name}</code>}
+                      name={`/${name}`}
                       label={`Open /${name}`}
                       onOpen={() => open(s)}
                       action={<CardAction label={`Run /${name}`} onClick={() => run(name)} />}
                       description={s.description}
+                      chips={
+                        (s.category || s.argument_hint) && (
+                          <>
+                            {s.category && <HeroChip>{s.category}</HeroChip>}
+                            {s.argument_hint && <HeroChip title="Arguments">{s.argument_hint}</HeroChip>}
+                          </>
+                        )
+                      }
                       footer={
                         <>
-                          <span className={`entity-chip skill-source is-${source}`}>
-                            {SOURCE_LABELS[source]}
-                          </span>
-                          {s.category && <span className="entity-meta">{s.category}</span>}
-                          {s.argument_hint && (
-                            <code className="entity-meta skill-args">{s.argument_hint}</code>
-                          )}
+                          <span className="entity-meta">{SOURCE_LABELS[source]}</span>
                           {s.context === "fork" && s.agent && (
                             <span className="entity-meta">runs on {s.agent}</span>
                           )}

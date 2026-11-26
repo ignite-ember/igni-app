@@ -1,6 +1,7 @@
 /** One skill's own page: the command, where it comes from, how it runs,
  *  and its full instructions — what a card can only hint at. */
 
+import { Button } from "../../page/Button";
 import { PlayGlyph } from "../../page/CardAction";
 import { DetailFacts } from "../../page/DetailFacts";
 import { DetailMarkdown } from "../../page/DetailMarkdown";
@@ -34,9 +35,9 @@ export function SkillDetail({ skill, onRun }: { skill: SkillRow; onRun: () => vo
           </>
         }
         actions={
-          <button className="btn btn-sm btn-primary" onClick={onRun} aria-label={`Run /${name}`}>
-            <PlayGlyph size={10} /> Run
-          </button>
+          <Button variant="primary" icon={<PlayGlyph size={10} />} onClick={onRun} label={`Run /${name}`}>
+            Run
+          </Button>
         }
       />
       <DetailSection title="Instructions">

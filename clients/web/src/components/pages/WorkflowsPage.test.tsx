@@ -61,7 +61,8 @@ function mount(answer: unknown, { asPage = false } = {}) {
   return { rpc, onRun };
 }
 
-const names = () => [...document.querySelectorAll(".workflow-card-name")].map((n) => n.textContent);
+const names = () => [...document.querySelectorAll(".entity-card-name")].map((n) => n.textContent);
+const foot = (card: Element) => [...card.querySelectorAll(".entity-card-foot > .entity-meta")].map((m) => m.textContent);
 
 describe("the workflows page", () => {
   it("shows placeholder cards while reading", () => {
@@ -92,20 +93,20 @@ describe("the workflows page", () => {
     expect(names()).toEqual(["audit", "triage"]);
     const triage = screen.getByRole("button", { name: "Open triage" });
     expect(triage.querySelector(".entity-card-desc")?.textContent).toBe("Label new issues");
-    expect([...triage.querySelectorAll(".workflow-card-phase")].map((p) => p.textContent)).toEqual([
+    // The card's one look: phases as neutral chips, source and count in the faint footer.
+    expect([...triage.querySelectorAll(".entity-card-chips > .hero-chip")].map((p) => p.textContent)).toEqual([
       "Fetch",
       "Reproduce",
       "Label",
       "Assign",
+      "+1 more",
     ]);
-    expect(triage.textContent).toContain("+1 more");
-    expect(triage.querySelector(".workflow-source")?.textContent).toBe("project");
-    expect(triage.querySelector(".workflow-card-count")?.textContent).toBe("5 phases");
+    expect(foot(triage)).toEqual(["project", "5 phases"]);
+    expect(triage.querySelector(".entity-card-name code")).toBeNull();
     const audit = screen.getByRole("button", { name: "Open audit" });
     // No description: when to use stands in.
     expect(audit.querySelector(".entity-card-desc")?.textContent).toBe("Before a release");
-    expect(audit.querySelector(".workflow-source")?.textContent).toBe("user");
-    expect(audit.querySelector(".workflow-card-count")?.textContent).toBe("1 phase");
+    expect(foot(audit)).toEqual(["user", "1 phase"]);
   });
 
   it("seeds the run from the play button without opening the card", async () => {
@@ -146,7 +147,7 @@ describe("the workflows page", () => {
       "project",
     ]);
     expect(hero.querySelector(".workflow-source")).toBeNull();
-    expect(hero.querySelectorAll(".entity-hero-actions .btn-primary")).toHaveLength(1);
+    expect(hero.querySelectorAll(".entity-hero-actions .button--primary")).toHaveLength(1);
     const regions = screen.getAllByRole("region");
     expect(regions.map((r) => r.getAttribute("aria-label"))).toEqual(["When to use", "Phases", "Source"]);
     for (const r of regions) {

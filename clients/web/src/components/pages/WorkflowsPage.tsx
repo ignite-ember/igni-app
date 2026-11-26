@@ -3,10 +3,12 @@ import { useCallback, useEffect, useState } from "react";
 import { Drawer } from "../panels/Drawer";
 import type { IgniClient } from "../../protocol/client";
 import { countOf } from "../../lib/plural";
+import { Button } from "../page/Button";
 import { CardAction } from "../page/CardAction";
 import { CardGrid } from "../page/CardGrid";
 import { CardGridSkeleton } from "../page/CardGridSkeleton";
 import { EntityCard } from "../page/EntityCard";
+import { HeroChip } from "../page/HeroChip";
 import { PageEmpty } from "../page/PageEmpty";
 import { PageHeaderControls } from "../page/PageHeaderControls";
 import { WorkflowDetail } from "./workflows/WorkflowDetail";
@@ -155,11 +157,7 @@ export function WorkflowsPage({
               hint={
                 query.trim() ? `Nothing named or described like “${query.trim()}”.` : "None from this source."
               }
-              action={
-                <button className="btn btn-sm" onClick={clear}>
-                  Show all workflows
-                </button>
-              }
+              action={<Button onClick={clear}>Show all workflows</Button>}
             />
           )}
 
@@ -172,29 +170,27 @@ export function WorkflowsPage({
                   <EntityCard
                     key={wf.path || wf.name}
                     glyph={name}
-                    name={<code className="workflow-card-name">{name}</code>}
+                    name={name}
                     label={`Open ${name}`}
                     onOpen={() => setSelected(wf)}
                     action={<CardAction label={`Run ${name}`} onClick={() => run(wf)} />}
                     description={wf.description || wf.whenToUse}
                     chips={
                       phases.length > 0 && (
-                        <span className="workflow-card-phases">
+                        <>
                           {phases.slice(0, CARD_PHASES).map((p, i) => (
-                            <span className="workflow-card-phase" key={`${p.title ?? i}-${i}`}>
-                              {p.title ?? `Phase ${i + 1}`}
-                            </span>
+                            <HeroChip key={`${p.title ?? i}-${i}`}>{p.title ?? `Phase ${i + 1}`}</HeroChip>
                           ))}
                           {phases.length > CARD_PHASES && (
-                            <span className="entity-meta">+{phases.length - CARD_PHASES} more</span>
+                            <HeroChip>+{phases.length - CARD_PHASES} more</HeroChip>
                           )}
-                        </span>
+                        </>
                       )
                     }
                     footer={
                       <>
-                        <span className="entity-chip workflow-source">{workflowSource(wf)}</span>
-                        <span className="entity-meta workflow-card-count">{phaseCount(wf)}</span>
+                        <span className="entity-meta">{workflowSource(wf)}</span>
+                        <span className="entity-meta">{phaseCount(wf)}</span>
                       </>
                     }
                   />

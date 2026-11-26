@@ -1,6 +1,7 @@
 /** One workflow's own page: what it is, when to reach for it, and each
  *  phase it walks through — the part a card can only hint at. */
 
+import { Button } from "../../page/Button";
 import { PlayGlyph } from "../../page/CardAction";
 import { DetailFacts } from "../../page/DetailFacts";
 import { DetailSection } from "../../page/DetailSection";
@@ -18,9 +19,9 @@ export function WorkflowDetail({ workflow, onRun }: { workflow: WorkflowMeta; on
         description={workflow.description}
         chips={<HeroChip>{workflowSource(workflow)}</HeroChip>}
         actions={
-          <button className="btn btn-sm btn-primary" onClick={onRun}>
-            <PlayGlyph size={10} /> Run
-          </button>
+          <Button variant="primary" icon={<PlayGlyph size={10} />} onClick={onRun}>
+            Run
+          </Button>
         }
       />
       {workflow.whenToUse && (
