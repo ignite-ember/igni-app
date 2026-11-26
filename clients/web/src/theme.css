@@ -5382,21 +5382,15 @@ button {
   display: flex;
   align-items: center;
   gap: var(--space-4);
+  /* The same centred column as ``.page-measure`` below it, so the
+     title's left edge is the content's left edge. It used to span the
+     window under a full-width rule, which put the title 140px left of
+     everything it was the title of. No rule now — the chat has none,
+     and a heading over its own column does not need a line to say
+     where the page starts. */
+  width: min(900px, 100%);
+  margin: 0 auto;
   padding: 6px 18px 12px;
-  border-bottom: 1px solid var(--border-soft);
-  /* Air below the rule, not above the thing under it.
-     ``--page-chrome-h`` already says this header is 82px tall — more
-     than the box measures — and the difference is exactly this gap:
-     the hierarchy docks at that number and so clears the rule
-     comfortably, while the content in the flow below had only what
-     ``--doc-air`` gave it. That was six pixels when the air was 12,
-     and one pixel once a document needed less of it, which put the
-     search field's focus ring on the rule.
-
-     Here rather than on each view, because all four of them — the
-     list, the comments queue, Ask and Add — sit under this same
-     header and were all one pixel clear of it. */
-  margin-bottom: var(--space-6);
 }
 
 .page-title {
@@ -5407,8 +5401,9 @@ button {
 
 .page-toolbar {
   flex-shrink: 0;
-  padding: 10px 18px;
-  border-bottom: 1px solid var(--border-soft);
+  width: min(900px, 100%);
+  margin: 0 auto;
+  padding: 10px 18px 0;
 }
 
 /* The scrolling element, full width, so the scrollbar is where a
@@ -5419,6 +5414,11 @@ button {
 .page-body {
   flex: 1;
   overflow-y: auto;
+  /* A classic scrollbar takes its width from one side only, which
+     would centre the measure a few pixels left of the header above
+     it. Reserving the same gutter on both sides keeps the two
+     columns on one axis; overlay scrollbars reserve nothing. */
+  scrollbar-gutter: stable both-edges;
   overscroll-behavior: contain;
   font-size: var(--text-md);
   /* Deliberately *not* ``position: relative``. This box scrolls, and
@@ -7853,26 +7853,6 @@ button.mcp-server-head:focus-visible {
 .page-head-extras:has(> .page-controls),
 .drawer-head-extras:has(> .page-controls) {
   display: flex;
-}
-
-/* On a card-grid page (plugins, MCPs, extensions) a card scrolling up
-   must pass cleanly behind the header, not into a dark strip below the
-   rule. The header's margin below it left exactly that strip — a card's
-   top would clip there with the page's darker background above it. Drop
-   the margin so the scroll clips flush at the rule, make the header
-   opaque and raise it so the card goes behind it, and give the resting
-   content its air from the scroll's own top padding instead. */
-.page:has(.page-headerbar) > .page-head,
-.page:has(.card-grid) > .page-head {
-  position: relative;
-  z-index: 2;
-  background: var(--bg);
-  margin-bottom: 0;
-}
-
-.page:has(.page-headerbar) > .page-body > .page-measure,
-.page:has(.card-grid) > .page-body > .page-measure {
-  padding-top: var(--space-6);
 }
 
 .page-headerbar {
@@ -11276,6 +11256,7 @@ button.mcp-server-head:focus-visible {
    header row; a frame cannot know to leave room for it, so the body
    does. */
 .page:has(.extension-frame) .page-body {
+  scrollbar-gutter: auto;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -11713,10 +11694,17 @@ button.mcp-server-head:focus-visible {
    centred reading measure the other pages sit in and manages its own
    scroll inside each pane. */
 .page:has(.files-layout) .page-body {
+  scrollbar-gutter: auto;
   display: flex;
   overflow: hidden;
   padding: 0;
 }
+/* Full-bleed, so its header row is too. */
+.page:has(.files-layout) > .page-head,
+.page:has(.files-layout) > .page-toolbar {
+  width: 100%;
+}
+
 .page:has(.files-layout) .page-measure {
   flex: 1;
   min-width: 0;

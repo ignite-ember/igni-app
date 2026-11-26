@@ -470,8 +470,10 @@ export function ExtensionsPanel({
 
   return (
     <Drawer
-      title="Extensions"
+      title={current ? current.name : "Extensions"}
       levels={levels}
+      // The detail page's hero carries the extension's name.
+      titleInBody={!!current}
       onClose={onClose}
       headerExtras={
         !current && extensions.length > 0 ? (
