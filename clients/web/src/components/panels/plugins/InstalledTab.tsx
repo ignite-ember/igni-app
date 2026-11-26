@@ -1,5 +1,6 @@
 /** The Installed tab: install from a git ref, and the installed plugins. */
 
+import { Button } from "../../page/Button";
 import { CardGrid } from "../../page/CardGrid";
 import { CardGridSkeleton } from "../../page/CardGridSkeleton";
 import { EntityCard } from "../../page/EntityCard";
@@ -33,13 +34,14 @@ export function InstalledTab({
           onChange={(e) => onInstallRefChange(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && installRef.trim() && onInstall(installRef.trim())}
         />
-        <button
-          className="btn btn-sm btn-primary"
-          disabled={!installRef.trim() || installing}
+        <Button
+          variant="primary"
+          disabled={!installRef.trim()}
+          busy={installing}
           onClick={() => onInstall(installRef.trim())}
         >
-          {installing ? "…" : "Install"}
-        </button>
+          Install
+        </Button>
       </div>
       {installed.count === 0 ? (
         <PageEmpty
@@ -55,7 +57,6 @@ export function InstalledTab({
               name={
                 <>
                   <span className={`plugins-status ${p.enabled ? "is-on" : "is-off"}`} /> {p.name}
-                  {p.version && <span className="meta"> · {p.version}</span>}
                 </>
               }
               label={p.name}
@@ -68,10 +69,11 @@ export function InstalledTab({
               description={p.description}
               chips={<PluginCapabilities plugin={p} />}
               footer={
-                (p.sourceRoot || !p.enabled) && (
+                (p.sourceRoot || !p.enabled || p.version) && (
                   <>
-                    {!p.enabled && <span className="plugins-cat-chip">disabled</span>}
-                    {p.sourceRoot && <span className="plugins-source">{p.sourceRoot}</span>}
+                    {!p.enabled && <span className="entity-meta">disabled</span>}
+                    {p.version && <span className="entity-meta">{p.version}</span>}
+                    {p.sourceRoot && <span className="entity-meta">{p.sourceRoot}</span>}
                   </>
                 )
               }

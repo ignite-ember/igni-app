@@ -3,24 +3,19 @@
 
 import { Skeleton } from "@ignite-ember/ui-react";
 import { DetailSection } from "../../page/DetailSection";
+import { HeroChip } from "../../page/HeroChip";
 import type { InstalledPlugin } from "./installedPlugin";
 
 /** What an installed plugin bundles, and the ref it is pinned to. */
 export function PluginCapabilities({ plugin }: { plugin: InstalledPlugin }) {
   if (plugin.capabilities.length === 0) return null;
   return (
-    <div className="plugins-caps">
+    <>
       {plugin.capabilities.map((c) => (
-        <span key={c} className="plugins-cap">
-          {c}
-        </span>
+        <HeroChip key={c}>{c}</HeroChip>
       ))}
-      {plugin.pin && (
-        <span className="plugins-pin" title="Pinned ref">
-          @{plugin.shortPin}
-        </span>
-      )}
-    </div>
+      {plugin.pin && <HeroChip title="Pinned ref">@{plugin.shortPin}</HeroChip>}
+    </>
   );
 }
 
