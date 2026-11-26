@@ -1,13 +1,15 @@
 /** A page header's right-hand controls, as bare round icons: a search
  *  that expands from its icon, Filter and Sort menus, refresh, and a
- *  gear — each only when asked for, always in that order. Pass it as the
- *  frame's `headerExtras`, or as {@link PageTabs}' `controls`. */
+ *  gear — each only when asked for, always in that order — then the
+ *  page's one primary "+ Add" button. Pass it as the frame's
+ *  `headerExtras`, or as {@link PageTabs}' `controls`. */
 
 import { useState, type ReactNode } from "react";
 
-import { FilterIcon, GearIcon, RefreshIcon, SortIcon } from "../Icons";
+import { FilterIcon, GearIcon, NamedIcon, RefreshIcon, SortIcon } from "../Icons";
 import { ControlMenu } from "../panels/ControlMenu";
 import { PanelSearch } from "../panels/PanelSearch";
+import { Button } from "./Button";
 
 export interface HeaderSearch {
   value: string;
@@ -43,6 +45,7 @@ export function PageHeaderControls<F extends string, S extends string>({
   sort,
   refresh,
   settings,
+  add,
   children,
 }: {
   search?: HeaderSearch;
@@ -51,7 +54,10 @@ export function PageHeaderControls<F extends string, S extends string>({
   refresh?: HeaderButton;
   /** The gear, last. */
   settings?: HeaderButton;
-  /** More icon buttons (`.kb-icon-btn`), after refresh and before the gear. */
+  /** The primary "+ {text}" button, last: only where the page can add. */
+  add?: HeaderButton & { text: string };
+  /** More icon buttons ({@link Button} `variant="icon"`), after refresh
+   *  and before the gear. */
   children?: ReactNode;
 }) {
   // Only one menu open at a time.
@@ -89,26 +95,40 @@ export function PageHeaderControls<F extends string, S extends string>({
       {filter && menu("filter", filter, "Filter", <FilterIcon />)}
       {sort && menu("sort", sort, "Sort", <SortIcon />)}
       {refresh && (
-        <button
-          className="kb-icon-btn"
-          disabled={refresh.busy}
+        <Button
+          variant="icon"
+          busy={refresh.busy}
           onClick={refresh.onClick}
-          aria-label={refresh.label}
+          label={refresh.label}
           title={refresh.title ?? refresh.label}
         >
-          {refresh.busy ? <span className="icon-spinner" aria-hidden="true" /> : <RefreshIcon />}
-        </button>
+          <RefreshIcon />
+        </Button>
       )}
       {children}
       {settings && (
-        <button
-          className="kb-icon-btn"
+        <Button
+          variant="icon"
           onClick={settings.onClick}
-          aria-label={settings.label}
+          label={settings.label}
           title={settings.title ?? settings.label}
         >
           <GearIcon />
-        </button>
+        </Button>
+      )}
+      {add && (
+        <Button
+          variant="primary"
+          size="sm"
+          className="page-controls-add"
+          icon={<NamedIcon name="plus" size={14} />}
+          busy={add.busy}
+          onClick={add.onClick}
+          aria-label={add.label}
+          title={add.title ?? add.label}
+        >
+          {add.text}
+        </Button>
       )}
     </div>
   );

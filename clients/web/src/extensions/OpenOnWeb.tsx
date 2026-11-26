@@ -15,15 +15,18 @@
 export function OpenOnWeb({
   url,
   name,
+  className = "ext-web-link",
 }: {
   url: string | null | undefined;
   /** The extension's name, for the accessible label. */
   name: string;
+  /** Drawn as a page button where a page puts it among its actions. */
+  className?: string;
 }) {
   if (!url) return null;
   return (
     <a
-      className="ext-web-link"
+      className={className}
       href={url}
       target="_blank"
       rel="noopener noreferrer"

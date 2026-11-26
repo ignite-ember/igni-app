@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { Skeleton } from "@ignite-ember/ui-react";
 import type { IgniClient } from "../../protocol/client";
-import { NamedIcon } from "../Icons";
 import { CardGrid } from "../page/CardGrid";
 import { PageEmpty } from "../page/PageEmpty";
 import { PageHeaderControls } from "../page/PageHeaderControls";
@@ -118,16 +117,12 @@ export function McpPanel({
             label: "Reload MCP config",
             title: "Reload .mcp.json — pick up servers added, edited or removed",
           }}
-        >
-          <button
-            className="kb-icon-btn"
-            onClick={() => onAddServer(ADD_SERVER_PROMPT)}
-            title="Add an MCP server"
-            aria-label="Add an MCP server"
-          >
-            <NamedIcon name="plus" />
-          </button>
-        </PageHeaderControls>
+          add={{
+            text: "Add server",
+            label: "Add an MCP server",
+            onClick: () => onAddServer(ADD_SERVER_PROMPT),
+          }}
+        />
       }
     >
       {servers === null && <McpSkeleton />}

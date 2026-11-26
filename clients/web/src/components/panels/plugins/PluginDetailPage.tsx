@@ -2,6 +2,7 @@
  *  to it (install a catalog entry; enable, disable or remove an
  *  installed one). */
 
+import { Button } from "../../page/Button";
 import { EntityHero } from "../../page/EntityHero";
 import { HeroChip } from "../../page/HeroChip";
 import type { InstalledPlugin } from "./installedPlugin";
@@ -66,30 +67,22 @@ export function PluginDetailPage({
         actions={
           resolved.kind === "installed" ? (
             <>
-              <button
-                className="btn btn-sm"
-                disabled={busy}
-                onClick={() => onToggle(resolved.plugin)}
-              >
+              <Button disabled={busy} onClick={() => onToggle(resolved.plugin)}>
                 {resolved.plugin.enabled ? "Disable" : "Enable"}
-              </button>
-              <button
-                className="btn btn-sm btn-danger"
-                disabled={busy}
-                onClick={() => onRemove(resolved.plugin)}
-              >
+              </Button>
+              <Button variant="danger" disabled={busy} onClick={() => onRemove(resolved.plugin)}>
                 Remove
-              </button>
+              </Button>
             </>
           ) : (
-            <button
-              className="btn btn-sm btn-primary"
-              disabled={busy}
+            <Button
+              variant="primary"
+              busy={busy}
               onClick={() => onInstall(resolved.plugin)}
               title={`Install from ${resolved.plugin.source}`}
             >
               {busy ? "Installing…" : "Install"}
-            </button>
+            </Button>
           )
         }
       />

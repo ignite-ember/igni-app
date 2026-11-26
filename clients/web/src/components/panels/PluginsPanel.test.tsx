@@ -327,7 +327,7 @@ describe("a plugin's page", () => {
     expect(hero.querySelectorAll(".entity-hero-chips > .hero-chip").length).toBeGreaterThan(0);
     expect(hero.querySelector(".plugins-cap")).toBeNull();
     // Install is the hero's one primary action.
-    expect(hero.querySelectorAll(".entity-hero-actions .btn-primary")).toHaveLength(1);
+    expect(hero.querySelectorAll(".entity-hero-actions .button--primary")).toHaveLength(1);
     // Source facts and the README sit in sections, the README with no
     // inner panel of its own.
     const source = screen.getByRole("region", { name: "Source" });

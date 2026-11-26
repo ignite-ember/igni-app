@@ -1,7 +1,8 @@
 /** The Marketplace tab: every registered marketplace's plugins, searched,
  *  as a grid of cards. */
 
-import { CheckIcon } from "../../Icons";
+import { CheckIcon, NamedIcon } from "../../Icons";
+import { CardAction } from "../../page/CardAction";
 import { CardGrid } from "../../page/CardGrid";
 import { CardGridSkeleton } from "../../page/CardGridSkeleton";
 import { EntityCard } from "../../page/EntityCard";
@@ -64,29 +65,24 @@ export function MarketplaceTab({
               ) : undefined
             }
             action={
-              <button
-                type="button"
-                className={`plugins-add${isInstalled ? " is-installed" : ""}`}
-                disabled={busy || isInstalled}
-                aria-label={isInstalled ? "Installed" : "Install"}
+              <CardAction
+                label={isInstalled ? "Installed" : "Install"}
                 title={isInstalled ? "Installed" : `Install from ${plugin.source}`}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  if (!isInstalled && !busy) onInstall(plugin);
-                }}
+                className={isInstalled ? "is-installed" : undefined}
+                disabled={isInstalled}
+                busy={busy}
+                onClick={() => onInstall(plugin)}
               >
-                {busy ? "…" : isInstalled ? <CheckIcon size={12} /> : "+"}
-              </button>
+                {isInstalled ? <CheckIcon size={12} /> : <NamedIcon name="plus" size={14} />}
+              </CardAction>
             }
             description={plugin.description}
             footer={
               (plugin.category || showSource || plugin.version) && (
                 <>
-                  {plugin.category && (
-                    <span className="plugins-cat-chip">{categoryLabel(plugin.category)}</span>
-                  )}
-                  {showSource && <span className="plugins-source">{market}</span>}
-                  {plugin.version && <span className="plugins-version">{plugin.version}</span>}
+                  {plugin.category && <span className="entity-meta">{categoryLabel(plugin.category)}</span>}
+                  {showSource && <span className="entity-meta">{market}</span>}
+                  {plugin.version && <span className="entity-meta">{plugin.version}</span>}
                 </>
               )
             }

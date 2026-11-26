@@ -6,6 +6,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import { SearchIcon, XIcon } from "../Icons";
+import { Button } from "../page/Button";
 
 export function PanelSearch({
   value,
@@ -28,9 +29,9 @@ export function PanelSearch({
 
   if (!open) {
     return (
-      <button className="kb-icon-btn" aria-label={label} title={label} onClick={() => setExpanded(true)}>
+      <Button variant="icon" label={label} onClick={() => setExpanded(true)}>
         <SearchIcon />
-      </button>
+      </Button>
     );
   }
   return (
