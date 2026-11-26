@@ -330,6 +330,56 @@ describe("the form", () => {
   });
 });
 
+describe("its page is the shared detail layout", () => {
+  it("puts each contribution in a labelled section and the web link among the hero's actions", () => {
+    panelWith([
+      extension({
+        ...WITH_SETTINGS,
+        web_url: "https://acme.test/home",
+        pages: [{ kind: "acme.scan", label: "Scan", sidebar: true }] as never,
+        menu: [{ command: "/scan", desc: "Scan the repo" }] as never,
+        tools: [{ name: "scan_repo", hints: "read-only" }] as never,
+      }),
+    ]);
+    openDetail();
+    const hero = document.querySelector(".entity-hero")!;
+    expect(hero.querySelector(".entity-hero-meta")?.textContent).toBe("ready1.0.0acme.scanner");
+    // The state is a dot beside the name, not a coloured badge in the meta.
+    expect(hero.querySelector(".plugins-status.is-on")).toBeTruthy();
+    expect(hero.querySelector(".ext-state")).toBeNull();
+    expect(hero.querySelector(".entity-hero-actions a")?.getAttribute("href")).toBe(
+      "https://acme.test/home",
+    );
+    for (const [title, count, text] of [
+      ["Pages", "1", "in the sidebar"],
+      ["Commands", "1", "Scan the repo"],
+      ["Tools", "1", "scan_repo"],
+    ]) {
+      const region = screen.getByRole("region", { name: title });
+      expect(region.className).toContain("detail-section");
+      expect(region.querySelector(".detail-section-count")?.textContent).toBe(count);
+      expect(region.textContent).toContain(text);
+    }
+    const settings = screen.getByRole("region", { name: "Settings" });
+    expect(settings.querySelector(".detail-section-count")).toBeNull();
+    expect(settings.textContent).toContain("Endpoint");
+  });
+
+  it("draws no empty sections and no actions row for a bare extension", () => {
+    panelWith([extension({ state: "failed" })]);
+    openDetail();
+    expect(document.querySelector(".entity-hero .plugins-status.is-failed")).toBeTruthy();
+    expect(screen.queryByRole("region")).toBeNull();
+    expect(document.querySelector(".entity-hero-actions")).toBeNull();
+  });
+
+  it("dims the dot of an extension still starting", () => {
+    panelWith([extension({ state: "starting" })]);
+    openDetail();
+    expect(document.querySelector(".entity-hero .plugins-status.is-off")).toBeTruthy();
+  });
+});
+
 describe("the page kind is igni's own", () => {
   it("cannot be contributed by an extension", () => {
     // Otherwise an extension named its page `extensions` and the

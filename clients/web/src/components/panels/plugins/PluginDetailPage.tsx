@@ -3,6 +3,7 @@
  *  installed one). */
 
 import { EntityHero } from "../../page/EntityHero";
+import { HeroChip } from "../../page/HeroChip";
 import type { InstalledPlugin } from "./installedPlugin";
 import type { MarketplacePlugin } from "./marketplace";
 import { PluginAction } from "./pluginAction";
@@ -53,18 +54,14 @@ export function PluginDetailPage({
         }
         meta={
           <>
-            {about.version && <span className="plugins-version">{about.version}</span>}
-            {sourceLabel && <span className="plugins-source">{sourceLabel}</span>}
+            {about.version && <span className="entity-meta">{about.version}</span>}
+            {sourceLabel && <span className="entity-meta">{sourceLabel}</span>}
           </>
         }
         description={about.description}
         chips={
           caps.length > 0 &&
-          caps.map((c) => (
-            <span key={c} className="plugins-cap">
-              {c}
-            </span>
-          ))
+          caps.map((c) => <HeroChip key={c}>{c}</HeroChip>)
         }
         actions={
           resolved.kind === "installed" ? (
