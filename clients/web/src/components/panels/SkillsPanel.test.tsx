@@ -124,13 +124,30 @@ describe("the skills page", () => {
     const { onRun, onClose } = mount(SKILLS);
     await screen.findByText("/pr");
     fireEvent.click(screen.getByRole("button", { name: "Open /pr" }));
-    const hero = document.querySelector(".entity-hero")!;
-    expect(hero.querySelector(".skill-source")?.textContent).toBe("project");
-    expect(hero.textContent).toContain("operations");
-    expect(hero.textContent).toContain("v1.2.0");
-    expect(hero.textContent).toContain("takes base-branch");
+    const detail = document.querySelector(".entity-detail")!;
+    const hero = detail.querySelector(".entity-hero")!;
+    // The command is the plain heading — no accent, no mono class of its own.
+    expect(hero.querySelector("h2")?.className).toBe("entity-hero-title");
+    expect(hero.querySelector(".entity-hero-meta")?.textContent).toBe("operationsv1.2.0");
+    // Chips are the hero's neutral ones, in one font: no coloured source, no code.
+    expect([...hero.querySelectorAll(".entity-hero-chips > .hero-chip")].map((c) => c.textContent)).toEqual([
+      "project",
+      "takes base-branch",
+    ]);
+    expect(hero.querySelector(".skill-source, .entity-hero-chips code")).toBeNull();
     expect(hero.textContent).toContain("Open a pull request");
-    const body = document.querySelector(".skill-body")!;
+    expect(hero.querySelectorAll(".entity-hero-actions .btn-primary")).toHaveLength(1);
+    // Instructions and source are sections straight under the hero.
+    const regions = screen.getAllByRole("region");
+    expect(regions.map((r) => r.getAttribute("aria-label"))).toEqual(["Instructions", "Source"]);
+    for (const r of regions) {
+      expect(r.className).toBe("detail-section");
+      expect(r.parentElement).toBe(detail);
+    }
+    const folder = regions[1].querySelector("dd")!;
+    expect(folder.className).toBe("is-mono");
+    expect(regions[1].querySelector("dt")?.textContent).toBe("Folder");
+    const body = regions[0].querySelector(".detail-md")!;
     expect(body.querySelector("h1")?.textContent).toBe("Open a PR");
     expect(body.querySelector("strong")?.textContent).toBe("open");
     // Raw HTML in a skill stays text.

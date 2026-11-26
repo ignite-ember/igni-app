@@ -134,6 +134,39 @@ describe("the workflows page", () => {
     expect(names()).toEqual(["audit", "triage"]);
   });
 
+  it("draws a workflow's page in the shared detail layout", async () => {
+    mount(WORKFLOWS);
+    await screen.findByText("triage");
+    fireEvent.click(screen.getByRole("button", { name: "Open triage" }));
+    const detail = document.querySelector(".entity-detail")!;
+    const hero = detail.querySelector(".entity-hero")!;
+    expect(hero.querySelector("h2")?.className).toBe("entity-hero-title");
+    expect(hero.querySelector(".entity-hero-meta")?.textContent).toBe("5 phases");
+    expect([...hero.querySelectorAll(".entity-hero-chips > .hero-chip")].map((c) => c.textContent)).toEqual([
+      "project",
+    ]);
+    expect(hero.querySelector(".workflow-source")).toBeNull();
+    expect(hero.querySelectorAll(".entity-hero-actions .btn-primary")).toHaveLength(1);
+    const regions = screen.getAllByRole("region");
+    expect(regions.map((r) => r.getAttribute("aria-label"))).toEqual(["When to use", "Phases", "Source"]);
+    for (const r of regions) {
+      expect(r.className).toBe("detail-section");
+      expect(r.parentElement).toBe(detail);
+    }
+    expect(regions[1].querySelector(".detail-section-count")?.textContent).toBe("5");
+    expect(regions[1].querySelectorAll(".workflow-step")).toHaveLength(5);
+    const file = regions[2].querySelector("dd")!;
+    expect(file.textContent).toBe(".igni/workflows/triage.mjs");
+    expect(file.className).toBe("is-mono");
+  });
+
+  it("leaves out every section a bare workflow lacks", async () => {
+    mount([{ name: "bare" }]);
+    await screen.findByText("bare");
+    fireEvent.click(screen.getByRole("button", { name: "Open bare" }));
+    expect(screen.queryAllByRole("region")).toHaveLength(0);
+  });
+
   it("opens by keyboard too, and a bare workflow's page leaves out what it lacks", async () => {
     mount([{ name: "bare" }]);
     await screen.findByText("bare");

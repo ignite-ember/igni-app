@@ -1,38 +1,35 @@
 /** One workflow's own page: what it is, when to reach for it, and each
  *  phase it walks through — the part a card can only hint at. */
 
-import { EntityHero } from "../../page/EntityHero";
 import { PlayGlyph } from "../../page/CardAction";
+import { DetailFacts } from "../../page/DetailFacts";
+import { DetailSection } from "../../page/DetailSection";
+import { EntityHero } from "../../page/EntityHero";
+import { HeroChip } from "../../page/HeroChip";
 import { phaseCount, workflowSource, type WorkflowMeta } from "./workflowsView";
 
 export function WorkflowDetail({ workflow, onRun }: { workflow: WorkflowMeta; onRun: () => void }) {
   const phases = workflow.phases ?? [];
   return (
-    <div className="entity-detail">
+    <div className="entity-detail workflow-detail">
       <EntityHero
         name={workflow.name ?? "(unnamed)"}
-        meta={
-          <>
-            <span className="entity-chip workflow-source">{workflowSource(workflow)}</span>
-            <span className="entity-meta">{phaseCount(workflow)}</span>
-          </>
-        }
+        meta={<span className="entity-meta">{phaseCount(workflow)}</span>}
         description={workflow.description}
+        chips={<HeroChip>{workflowSource(workflow)}</HeroChip>}
         actions={
-          <button className="btn btn-sm btn-primary workflow-run-btn" onClick={onRun}>
+          <button className="btn btn-sm btn-primary" onClick={onRun}>
             <PlayGlyph size={10} /> Run
           </button>
         }
       />
       {workflow.whenToUse && (
-        <section className="workflow-detail-section">
-          <h3 className="workflow-detail-heading">When to use</h3>
+        <DetailSection title="When to use">
           <p className="workflow-detail-text">{workflow.whenToUse}</p>
-        </section>
+        </DetailSection>
       )}
       {phases.length > 0 && (
-        <section className="workflow-detail-section">
-          <h3 className="workflow-detail-heading">Phases</h3>
+        <DetailSection title="Phases" count={phases.length}>
           <ol className="workflow-steps">
             {phases.map((p, i) => (
               <li className="workflow-step" key={`${p.title ?? i}-${i}`}>
@@ -49,12 +46,12 @@ export function WorkflowDetail({ workflow, onRun }: { workflow: WorkflowMeta; on
               </li>
             ))}
           </ol>
-        </section>
+        </DetailSection>
       )}
       {workflow.path && (
-        <div className="workflow-detail-path">
-          <code>{workflow.path}</code>
-        </div>
+        <DetailSection title="Source">
+          <DetailFacts facts={[{ label: "File", value: workflow.path, mono: true }]} />
+        </DetailSection>
       )}
     </div>
   );
