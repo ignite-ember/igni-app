@@ -284,6 +284,9 @@ export const VIEW_STATE: Record<string, Partial<Record<Category, string[]>>> = {
   "components/WorkflowRun.tsx": {
     disclosure: ["collapsed"],
   },
+  "components/pages/HelpPage.tsx": {
+    field: ["query"],
+  },
   "components/pages/ContextPage.tsx": {
     data: ["breakdown"],
     pending: ["error", "loading"],
@@ -381,14 +384,14 @@ export const VIEW_STATE: Record<string, Partial<Record<Category, string[]>>> = {
   "components/panels/SchedulePanel.tsx": {
     menu: ["open"],
     data: ["tasks"],
-    page: ["filter"],
+    page: ["filter", "sortBy"],
     field: ["query"],
   },
   "components/panels/SkillsPanel.tsx": {
     data: ["skills"],
   },
   "components/panels/WatcherPanel.tsx": {
-    page: ["filter"],
+    page: ["filter", "tab"],
   },
   "components/panels/watcher/useNow.ts": {
     animation: ["now"],

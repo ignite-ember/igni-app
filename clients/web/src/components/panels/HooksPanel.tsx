@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { IgniClient } from "../../protocol/client";
 import { Drawer } from "./Drawer";
-import { Skeleton } from "@ignite-ember/ui-react";
 import { host } from "../../lib/host";
+import { CardGrid } from "../page/CardGrid";
+import { CardGridSkeleton } from "../page/CardGridSkeleton";
+import { EntityCard } from "../page/EntityCard";
 import { PageEmpty } from "../page/PageEmpty";
 
 // ── Types ────────────────────────────────────────────────────────
@@ -132,15 +134,15 @@ export function HooksPanel({
     >
       {error && <div className="msg-error msg-error--banner">{error}</div>}
       {groups === null ? (
-        <HooksSkeleton />
+        <CardGridSkeleton count={4} />
       ) : groups.length === 0 ? (
         <EmptyHero />
       ) : (
-        <div className="hooks-groups">
+        <CardGrid flow className="hooks-groups">
           {groups.map(({ event, hooks }) => (
             <HookGroup key={event} event={event} hooks={hooks} />
           ))}
-        </div>
+        </CardGrid>
       )}
     </Drawer>
   );
@@ -151,18 +153,24 @@ export function HooksPanel({
 function HookGroup({ event, hooks }: { event: string; hooks: HookEntry[] }) {
   const blurb = EVENT_BLURB[event];
   return (
-    <section className="hooks-group">
-      <header className="hooks-group-head">
-        <span className="hooks-event-name">{event}</span>
-        <span className="hooks-event-count">{hooks.length}</span>
-      </header>
-      {blurb && <div className="hooks-event-blurb">{blurb}</div>}
+    <EntityCard
+      className="hooks-group"
+
+      icon={
+        <span className="entity-glyph hooks-glyph">
+          <EventIcon />
+        </span>
+      }
+      name={<span className="hooks-event-name">{event}</span>}
+      action={<span className="hooks-event-count">{hooks.length}</span>}
+      description={blurb && <span className="hooks-event-blurb">{blurb}</span>}
+    >
       <div className="hooks-list">
         {hooks.map((h, i) => (
           <HookRow key={i} hook={h} />
         ))}
       </div>
-    </section>
+    </EntityCard>
   );
 }
 
@@ -222,7 +230,7 @@ function HookRow({ hook }: { hook: HookEntry }) {
   );
 }
 
-// ── Empty + skeleton ─────────────────────────────────────────────
+// ── Empty ───────────────────────────────────────────────────────
 
 function EmptyHero() {
   return (
@@ -240,20 +248,20 @@ function EmptyHero() {
   );
 }
 
-function HooksSkeleton() {
+// ── Inline SVGs ──────────────────────────────────────────────────
+
+function EventIcon() {
   return (
-    <div className="hooks-groups">
-      {[1, 2].map((g) => (
-        <div className="hooks-group" key={g}>
-          <Skeleton.Line width="40%" height={13} />
-          <Skeleton.Rows count={3} style={{ marginTop: 12 }} />
-        </div>
-      ))}
-    </div>
+    <svg viewBox="0 0 16 16" width="16" height="16" fill="none" aria-hidden="true">
+      <path
+        d="M9 1.8 3.8 9h4l-1 5.2L12.2 7h-4z"
+        stroke="currentColor"
+        strokeWidth="1.3"
+        strokeLinejoin="round"
+      />
+    </svg>
   );
 }
-
-// ── Inline SVGs ──────────────────────────────────────────────────
 
 function ScriptIcon() {
   return (

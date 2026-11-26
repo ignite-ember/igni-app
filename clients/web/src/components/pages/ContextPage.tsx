@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 
 import { Drawer } from "../panels/Drawer";
 import type { IgniClient } from "../../protocol/client";
+import { PageHeaderControls } from "../page/PageHeaderControls";
 import { PageLoading } from "../page/PageLoading";
 
 export interface ContextBreakdown {
@@ -87,9 +88,14 @@ export function ContextPage({
       title="Context"
       onClose={onClose}
       headerExtras={
-        <button className="btn btn-sm" onClick={() => void load()} disabled={loading}>
-          {loading ? "Reading…" : "Refresh"}
-        </button>
+        <PageHeaderControls
+          refresh={{
+            onClick: () => void load(),
+            busy: loading,
+            label: "Refresh",
+            title: "Read the context again",
+          }}
+        />
       }
     >
       {error && <div className="ctx-error">Could not read the context: {error}</div>}

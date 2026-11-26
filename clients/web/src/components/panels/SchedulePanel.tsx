@@ -2,9 +2,13 @@ import { useCallback, useEffect, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import type { IgniClient } from "../../protocol/client";
 import { Drawer } from "./Drawer";
-import { ChevronIcon } from "../Icons";
+import { ClockIcon, RefreshIcon } from "../Icons";
+import { CardGrid } from "../page/CardGrid";
+import { EntityCard } from "../page/EntityCard";
 import { PageEmpty } from "../page/PageEmpty";
+import { PageHeaderControls } from "../page/PageHeaderControls";
 import { PageLoading } from "../page/PageLoading";
+import { PageTabs } from "../page/PageTabs";
 
 interface ScheduledTask {
   id?: string;
@@ -25,59 +29,83 @@ const STATUS_TONE: Record<string, "ok" | "warn" | "bad" | "muted"> = {
   cancelled: "muted",
 };
 
+const isLive = (s?: string) => s === "pending" || s === "running";
+
 function StatusPill({ status }: { status: string }) {
   const tone = STATUS_TONE[status] || "muted";
   return <span className={`task-status tone-${tone}`}>{status}</span>;
 }
 
-function TaskRow({
-  task,
-  onCancel,
-}: {
-  task: ScheduledTask;
-  onCancel: () => void;
-}) {
+/** "Next run" while waiting, "Ran" once it has, "Was due" when cancelled first. */
+function whenLabel(status: string): string {
+  if (isLive(status)) return "Next run";
+  return status === "cancelled" ? "Was due" : "Ran";
+}
+
+function formatWhen(iso: string): string {
+  return new Date(iso).toLocaleString([], {
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function TaskCard({ task, onCancel }: { task: ScheduledTask; onCancel: () => void }) {
   const [open, setOpen] = useState(false);
   const hasDetails = Boolean(task.result || task.error);
   const status = task.status || "pending";
-  const cancellable = status === "pending" || status === "running";
   return (
-    <div className="task-entry">
-      <div className="task-head" onClick={() => setOpen(!open)}>
-        <span className="tool-chevron" style={{ display: "inline-flex" }}>
-          <ChevronIcon size={10} down={open} />
+    <EntityCard
+      className={`task-card${open ? " is-open" : ""}`}
+      icon={
+        <span className="entity-glyph task-glyph">
+          <ClockIcon size={16} />
         </span>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div className="name">
-            {task.description || "(no description)"}
-            <StatusPill status={status} />
-            {task.recurrence && <span className="mini-tag">{task.recurrence}</span>}
-          </div>
-          <div className="meta">
-            {task.scheduled_at &&
-              `next: ${new Date(task.scheduled_at).toLocaleString([], {
-                month: "short",
-                day: "numeric",
-                hour: "2-digit",
-                minute: "2-digit",
-              })}`}
-            {task.id && <code className="task-id">{task.id}</code>}
-          </div>
-        </div>
-        {cancellable && (
-          <button
-            className="btn btn-sm btn-danger"
-            onClick={(e) => {
-              e.stopPropagation();
-              onCancel();
-            }}
-          >
+      }
+      // The name is the card's one toggle, stretched over the card so a
+      // click anywhere opens it; Cancel stays its sibling, never nested.
+      name={
+        <button
+          type="button"
+          className="task-card-toggle"
+          aria-expanded={open}
+          onClick={() => setOpen(!open)}
+        >
+          {task.description || "(no description)"}
+        </button>
+      }
+      action={
+        isLive(status) && (
+          <button className="btn btn-sm btn-danger task-card-cancel" onClick={onCancel}>
             Cancel
           </button>
-        )}
-      </div>
+        )
+      }
+      chips={
+        <div className="task-card-chips">
+          <StatusPill status={status} />
+        </div>
+      }
+      footer={
+        <>
+          {task.recurrence && (
+            <span className="entity-chip">
+              <RefreshIcon size={11} />
+              {task.recurrence}
+            </span>
+          )}
+          {task.scheduled_at && (
+            <span className="entity-meta">
+              {whenLabel(status)} {formatWhen(task.scheduled_at)}
+            </span>
+          )}
+          {task.id && <code className="task-id">{task.id}</code>}
+        </>
+      }
+    >
       {open && (
-        <div className="task-body">
+        <div className="task-card-body">
           {task.error && (
             <div className="task-block task-block-error">
               <div className="task-block-label">Error</div>
@@ -92,26 +120,41 @@ function TaskRow({
               </div>
             </div>
           )}
-          {!hasDetails && (
-            <div className="msg-info" style={{ padding: 0 }}>
-              No output yet — this task hasn't run.
-            </div>
-          )}
+          {!hasDetails && <div className="task-block-none">No output yet — this task hasn't run.</div>}
         </div>
       )}
-    </div>
+    </EntityCard>
   );
 }
 
 type FilterKey = "active" | "all" | "completed" | "failed" | "cancelled";
 
-const FILTERS: { key: FilterKey; label: string; match: (s: string) => boolean }[] = [
-  { key: "active", label: "Active", match: (s) => s === "pending" || s === "running" },
-  { key: "all", label: "All", match: () => true },
-  { key: "completed", label: "Done", match: (s) => s === "completed" },
-  { key: "failed", label: "Failed", match: (s) => s === "failed" },
-  { key: "cancelled", label: "Cancelled", match: (s) => s === "cancelled" },
+const FILTERS: { key: FilterKey; label: string; empty: string; match: (s: string) => boolean }[] = [
+  { key: "active", label: "Active", empty: "Nothing waiting to run", match: isLive },
+  { key: "all", label: "All", empty: "No tasks", match: () => true },
+  { key: "completed", label: "Done", empty: "Nothing has finished yet", match: (s) => s === "completed" },
+  { key: "failed", label: "Failed", empty: "Nothing has failed", match: (s) => s === "failed" },
+  { key: "cancelled", label: "Cancelled", empty: "Nothing cancelled", match: (s) => s === "cancelled" },
 ];
+
+type SortKey = "live" | "soonest" | "name";
+
+const SORTS: { key: SortKey; label: string }[] = [
+  { key: "live", label: "Waiting first" },
+  { key: "soonest", label: "Soonest first" },
+  { key: "name", label: "Name" },
+];
+
+const COMPARE: Record<SortKey, (a: ScheduledTask, b: ScheduledTask) => number> = {
+  // Pending/running first, then the latest scheduled_at within each band.
+  live: (a, b) => {
+    const band = (s?: string) => (isLive(s) ? 0 : 1);
+    return band(a.status) - band(b.status) || (b.scheduled_at || "").localeCompare(a.scheduled_at || "");
+  },
+  // A task with no time sinks to the bottom.
+  soonest: (a, b) => (a.scheduled_at || "￿").localeCompare(b.scheduled_at || "￿"),
+  name: (a, b) => (a.description || "").localeCompare(b.description || ""),
+};
 
 export function SchedulePanel({
   client,
@@ -123,6 +166,7 @@ export function SchedulePanel({
   const [tasks, setTasks] = useState<ScheduledTask[] | null>(null);
   const [filter, setFilter] = useState<FilterKey>("active");
   const [query, setQuery] = useState("");
+  const [sortBy, setSortBy] = useState<SortKey>("live");
 
   const refresh = useCallback(async () => {
     try {
@@ -147,24 +191,10 @@ export function SchedulePanel({
     void refresh();
   };
 
-  const counts: Record<FilterKey, number> = {
-    active: 0,
-    all: tasks?.length || 0,
-    completed: 0,
-    failed: 0,
-    cancelled: 0,
-  };
-  for (const t of tasks || []) {
-    const s = t.status || "";
-    if (s === "pending" || s === "running") counts.active++;
-    else if (s === "completed") counts.completed++;
-    else if (s === "failed") counts.failed++;
-    else if (s === "cancelled") counts.cancelled++;
-  }
-
+  const all = tasks || [];
   const activeFilter = FILTERS.find((f) => f.key === filter) || FILTERS[0];
   const q = query.trim().toLowerCase();
-  const visible = (tasks || [])
+  const visible = all
     .filter((t) => activeFilter.match(t.status || ""))
     .filter(
       (t) =>
@@ -172,46 +202,35 @@ export function SchedulePanel({
         (t.description || "").toLowerCase().includes(q) ||
         (t.id || "").toLowerCase().includes(q),
     )
-    .sort((a, b) => {
-      // pending/running first, then by scheduled_at desc within each band.
-      const live = (s?: string) => (s === "pending" || s === "running" ? 0 : 1);
-      const liveDelta = live(a.status) - live(b.status);
-      if (liveDelta) return liveDelta;
-      return (b.scheduled_at || "").localeCompare(a.scheduled_at || "");
-    });
+    .sort(COMPARE[sortBy]);
 
-  const hasTasks = !!tasks && tasks.length > 0;
-  const toolbar = hasTasks && (
-    <div className="task-filters">
-      {FILTERS.map((f) => (
-        <button
-          key={f.key}
-          className={`task-filter ${filter === f.key ? "active" : ""}`}
-          onClick={() => setFilter(f.key)}
-        >
-          {f.label}
-          <span className="task-filter-count">{counts[f.key]}</span>
-        </button>
-      ))}
-    </div>
-  );
-  const headerSearch = hasTasks ? (
-    <input
-      className="task-search"
-      type="search"
-      placeholder="Search description or id…"
-      value={query}
-      onChange={(e) => setQuery(e.target.value)}
+  const hasTasks = all.length > 0;
+  // No tabs or search over an empty list.
+  const headerExtras = hasTasks ? (
+    <PageTabs<FilterKey>
+      tabs={FILTERS.map((f) => ({
+        key: f.key,
+        label: f.label,
+        count: all.filter((t) => f.match(t.status || "")).length,
+      }))}
+      current={filter}
+      onSelect={setFilter}
+      controls={
+        <PageHeaderControls<string, SortKey>
+          search={{
+            value: query,
+            onChange: setQuery,
+            placeholder: "Search description or id…",
+            label: "Search tasks",
+          }}
+          sort={{ options: SORTS, current: sortBy, onPick: setSortBy }}
+        />
+      }
     />
   ) : undefined;
 
   return (
-    <Drawer
-      title="Scheduled tasks"
-      headerExtras={headerSearch}
-      toolbar={toolbar}
-      onClose={onClose}
-    >
+    <Drawer title="Scheduled tasks" headerExtras={headerExtras} onClose={onClose}>
       {tasks === null && <PageLoading />}
       {tasks?.length === 0 && (
         <PageEmpty
@@ -223,10 +242,19 @@ export function SchedulePanel({
           }
         />
       )}
-      {tasks && tasks.length > 0 && visible.length === 0 && <PageEmpty title="No tasks match" />}
-      {visible.map((t, i) => (
-        <TaskRow key={t.id || i} task={t} onCancel={() => void cancel(t)} />
-      ))}
+      {hasTasks && visible.length === 0 && (
+        <PageEmpty
+          title={q ? "No tasks match" : activeFilter.empty}
+          hint={q ? undefined : "The other tabs hold the rest."}
+        />
+      )}
+      {visible.length > 0 && (
+        <CardGrid flow className="task-grid">
+          {visible.map((t, i) => (
+            <TaskCard key={t.id || i} task={t} onCancel={() => void cancel(t)} />
+          ))}
+        </CardGrid>
+      )}
     </Drawer>
   );
 }

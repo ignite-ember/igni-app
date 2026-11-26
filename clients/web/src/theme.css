@@ -260,8 +260,7 @@ button {
 .kb-stale-list,
 .mcp-tool-list,
 .plugins-list,
-.plugins-markets-list,
-.watcher-list {
+.plugins-markets-list {
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
@@ -5752,22 +5751,86 @@ button {
   font-size: var(--text-sm);
 }
 
-.kv {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  gap: 4px 14px;
-  font-size: var(--text-md);
+/* ── Loop page ─────────────────────────────────────────────────── */
+
+.loop-page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
 }
 
-.kv dt {
+.loop-stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-5);
+}
+
+.loop-stat,
+.loop-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-7);
+  border-radius: var(--radius-lg);
+  background: var(--bg-surface);
+}
+
+.loop-stat-label,
+.loop-card-label {
+  margin: 0;
+  font-size: var(--text-xs);
+  font-weight: 600;
   color: var(--fg-faint);
 }
 
-.kv dd {
-  margin: 0;
-  font-family: var(--font-mono);
+.loop-stat-value {
+  font-size: var(--text-2xl);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--fg);
+}
+
+.loop-stat-of {
+  color: var(--fg-faint);
+  font-weight: 600;
+}
+
+.loop-state {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: var(--radius-pill);
   font-size: var(--text-sm);
-  word-break: break-all;
+  font-weight: 600;
+  vertical-align: middle;
+}
+
+.loop-state--running {
+  background: color-mix(in srgb, var(--success) 10%, transparent);
+  color: var(--accent-green-text, var(--success));
+}
+
+.loop-state--paused {
+  background: color-mix(in srgb, var(--warning) 10%, transparent);
+  color: var(--accent-orange-text, var(--warning));
+}
+
+.loop-prompt {
+  margin: 0;
+  font-size: var(--text-md);
+  line-height: 1.5;
+  color: var(--fg);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.loop-actions {
+  display: flex;
+  gap: var(--space-4);
+  margin-top: var(--space-4);
+}
+
+.loop-actions .btn {
+  border-radius: var(--radius-pill);
 }
 
 /* Model dropdown */
@@ -6569,89 +6632,140 @@ button {
   font-variant-numeric: tabular-nums;
 }
 
-/* ── Scheduled tasks panel ─────────────────────────────────────── */
+/* ── Scheduled tasks page ──────────────────────────────────────── */
 
-.task-entry {
-  border-bottom: 1px solid var(--border-soft);
+/* A task is a soft card: its name is the one toggle, stretched over the
+   card so a click anywhere opens it, while Cancel sits above that layer
+   as a sibling button — never nested inside it. */
+.task-card {
+  position: relative;
+  cursor: default;
 }
 
-.task-head {
-  display: flex;
-  align-items: center;
-  gap: var(--space-5);
-  padding: var(--space-5) var(--space-4);
+.task-glyph {
+  width: 38px;
+  height: 38px;
+}
+
+.task-card-toggle {
+  appearance: none;
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  text-align: left;
   cursor: pointer;
-  border-radius: var(--radius-sm);
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.task-head:hover {
+.task-card-toggle::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+}
+
+.task-card-toggle:focus-visible {
+  outline: none;
+}
+
+.task-card:has(.task-card-toggle:focus-visible) {
+  border-color: var(--border-soft);
   background: var(--bg-raised);
+}
+
+.task-card-cancel,
+.task-card-body {
+  position: relative;
+  z-index: 1;
+}
+
+.task-card-cancel {
+  flex-shrink: 0;
+  border-radius: var(--radius-pill);
+}
+
+.task-card-chips {
+  display: flex;
+  gap: var(--space-3);
+}
+
+.task-card .entity-card-foot {
+  flex-wrap: wrap;
+  column-gap: var(--space-5);
 }
 
 .task-id {
   font-family: var(--font-mono);
   font-size: var(--text-xs);
   color: var(--fg-faint);
-  margin-left: var(--space-4);
 }
 
 .task-status {
   display: inline-block;
-  margin-left: var(--space-4);
-  padding: 1px 7px;
+  padding: 1px 8px;
   border-radius: var(--radius-pill);
   font-size: var(--text-xs);
   font-weight: 600;
-  letter-spacing: 0.02em;
-  text-transform: uppercase;
-  vertical-align: 1px;
 }
 
+/* Text-weight accents on a light tint: the plain --success/--warning
+   fills fall under 4.5:1 as 11px text on a tinted card. */
 .task-status.tone-ok {
-  background: color-mix(in srgb, var(--success) 14%, transparent);
-  color: var(--success);
+  background: color-mix(in srgb, var(--success) 10%, transparent);
+  color: var(--accent-green-text, var(--success));
 }
 .task-status.tone-warn {
-  background: color-mix(in srgb, var(--warning) 14%, transparent);
-  color: var(--warning);
+  background: color-mix(in srgb, var(--warning) 10%, transparent);
+  color: var(--accent-orange-text, var(--warning));
 }
 .task-status.tone-bad {
-  background: color-mix(in srgb, var(--danger) 14%, transparent);
-  color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 8%, transparent);
+  color: var(--accent-red-text, var(--danger-text));
 }
 .task-status.tone-muted {
-  background: var(--bg-raised);
-  color: var(--fg-faint);
+  background: color-mix(in srgb, var(--fg) 8%, transparent);
+  color: var(--fg-muted);
 }
 
-.task-body {
-  padding: var(--space-1) var(--space-4) var(--space-7) var(--space-16);
+.task-card-body {
+  margin-top: var(--space-4);
+  padding-top: var(--space-5);
+  border-top: 1px solid var(--border-soft);
   display: grid;
   gap: var(--space-6);
+  cursor: auto;
 }
 
 .task-block-label {
   font-size: var(--text-xs);
   font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
   color: var(--fg-faint);
   margin: 0 0 4px;
+}
+
+.task-block-none {
+  font-size: var(--text-sm);
+  color: var(--fg-muted);
 }
 
 .task-block-error pre {
   margin: 0;
   padding: var(--space-5) var(--space-6);
-  border-radius: 8px;
-  background: color-mix(in srgb, var(--danger) 10%, transparent);
-  border: 1px solid color-mix(in srgb, var(--danger) 35%, transparent);
-  color: var(--danger);
+  border-radius: var(--radius-md, 8px);
+  background: color-mix(in srgb, var(--danger) 8%, transparent);
+  border-left: 2px solid var(--danger);
+  color: var(--fg);
   font-family: var(--font-mono);
   font-size: var(--text-sm);
   white-space: pre-wrap;
 }
 
-/* ── Scheduled tasks toolbar (filter + search) ─────────────────── */
+/* ── Drawer toolbar ────────────────────────────────────────────── */
 
 /* Non-scrolling row docked under the drawer header. Centred so
    the filter pill bar sits in the middle, like a segmented tab
@@ -6672,91 +6786,6 @@ button {
   justify-content: stretch;
   padding: 0 var(--space-7);
   min-width: 0;
-}
-
-.drawer-head-extras .task-search {
-  /* Fill all available header space between title and close. */
-  width: 100%;
-  max-width: none;
-  text-align: left;
-}
-
-.task-filters {
-  /* Wrap to a second row when the panel is too narrow — beats overflowing the parent and
-     beats horizontal scrolling, which hides the count badges users
-     came here for. The pill background stays a single rounded shape
-     because the inner buttons each have their own rounded corners.
-     ``min-width: 0`` lets it actually shrink inside the toolbar's
-     centered flex column. */
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: var(--space-2);
-  background: var(--bg-raised);
-  padding: 3px;
-  border-radius: 14px;
-  min-width: 0;
-  max-width: 100%;
-}
-
-.task-filter {
-  appearance: none;
-  background: transparent;
-  border: none;
-  padding: var(--space-2) var(--space-5);
-  border-radius: var(--radius-pill);
-  font-size: var(--text-sm);
-  color: var(--fg-muted);
-  cursor: pointer;
-  font-family: var(--font-ui);
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-3);
-}
-
-.task-filter:hover {
-  color: var(--fg);
-}
-
-.task-filter.active {
-  background: var(--bg-surface);
-  color: var(--fg);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
-}
-
-.task-filter-count {
-  font-variant-numeric: tabular-nums;
-  font-size: var(--text-xs);
-  color: var(--fg-faint);
-  background: var(--bg-inset);
-  padding: 0 5px;
-  border-radius: var(--radius-pill);
-  min-width: 16px;
-  text-align: center;
-}
-
-.task-filter.active .task-filter-count {
-  color: var(--accent-orange-text, #f5a088);
-  background: color-mix(in srgb, var(--igni-orange) 14%, transparent);
-}
-
-.task-search {
-  /* width comes from the grid column (matches the filter group). */
-  width: 100%;
-  height: 28px;
-  padding: 0 var(--space-6);
-  border-radius: var(--radius-pill);
-  border: 1px solid var(--border-soft);
-  background: var(--bg-inset);
-  color: var(--fg);
-  font-family: var(--font-ui);
-  font-size: var(--text-sm);
-  text-align: center;
-}
-
-.task-search:focus {
-  outline: none;
-  border-color: var(--accent-orange-text, #f5a088);
 }
 
 /* Composer textarea tints to match the rendered mode bubbles. */
@@ -9383,41 +9412,61 @@ button.mcp-server-head:focus-visible {
   margin: 12px 0;
 }
 
-/* ── Programs panel ─────────────────────────────────────────────── */
+/* ── Programs page ──────────────────────────────────────────────── */
 
 .programs {
   display: flex;
   flex-direction: column;
-  gap: var(--space-4);
-  max-width: 62ch;
+  gap: var(--space-5);
+  max-width: 72ch;
+  padding: var(--space-8) var(--space-8) var(--space-7);
+  border-radius: var(--radius-lg);
+  background: var(--bg-surface);
+}
+
+.programs-title {
+  margin: 0;
+  font-size: var(--text-md);
+  font-weight: 700;
 }
 
 .programs-lead {
   margin: 0;
   color: var(--fg);
+  line-height: 1.5;
 }
 
 .programs-note {
   margin: 0;
   font-size: var(--text-sm);
   color: var(--fg-muted);
+  line-height: 1.5;
 }
 
 .programs-token {
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
-  padding: var(--space-4);
-  border: 1px solid var(--border-soft);
-  border-radius: var(--radius-sm);
+  gap: var(--space-3);
 }
 
 .programs-token-label {
   font-size: var(--text-sm);
+  font-weight: 600;
   color: var(--fg-muted);
 }
 
+.programs-token-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-3) var(--space-3) var(--space-3) var(--space-6);
+  border-radius: var(--radius-md, 8px);
+  background: var(--bg);
+}
+
 .programs-token-value {
+  flex: 1;
+  min-width: 0;
   font-family: var(--font-mono);
   font-size: var(--text-sm);
   overflow-wrap: anywhere;
@@ -9427,7 +9476,12 @@ button.mcp-server-head:focus-visible {
 .programs-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--space-2);
+  gap: var(--space-4);
+  margin-top: var(--space-2);
+}
+
+:is(.programs-actions, .programs-token-row) .btn {
+  border-radius: var(--radius-pill);
 }
 
 /* ── Hooks panel ────────────────────────────────────────────────── */
@@ -9439,58 +9493,51 @@ button.mcp-server-head:focus-visible {
   font-weight: 500;
 }
 
-.hooks-groups {
-  display: flex;
-  flex-direction: column;
-  gap: 18px;
-}
-
+/* One soft card per lifecycle event; its hooks are quiet rows inside
+   it that fill on hover, with soft chips under each. */
 .hooks-group {
-  display: flex;
-  flex-direction: column;
+  cursor: default;
 }
 
-.hooks-group-head {
-  display: flex;
-  align-items: baseline;
-  gap: var(--space-4);
-  margin-bottom: var(--space-2);
+/* The card itself opens nothing, so it does not light up; its rows do. */
+.hooks-group:hover {
+  border-color: transparent;
+  background: var(--bg-surface);
+}
+
+.hooks-glyph {
+  width: 38px;
+  height: 38px;
 }
 
 .hooks-event-name {
-  font-family: var(--font-mono);
-  font-size: var(--text-sm);
+  font-size: var(--text-md);
   font-weight: 700;
   color: var(--fg);
-  letter-spacing: 0.01em;
 }
 
 .hooks-event-count {
+  flex-shrink: 0;
   font-size: var(--text-xs);
   color: var(--fg-faint);
   padding: 1px 7px;
-  border-radius: 9px;
-  background: var(--bg-raised);
-}
-
-.hooks-event-blurb {
-  font-size: var(--text-sm);
-  color: var(--fg-faint);
-  margin-bottom: var(--space-4);
-  line-height: 1.45;
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--fg) 8%, transparent);
+  font-variant-numeric: tabular-nums;
 }
 
 .hooks-list {
-  gap: var(--space-3);
+  margin-top: var(--space-4);
+  margin-left: calc(-1 * var(--space-4));
+  gap: var(--space-1);
 }
 
 .hooks-row {
   align-items: flex-start;
   gap: var(--space-5);
-  padding: var(--space-4) var(--space-5);
-  border: 1px solid var(--border-soft);
-  border-radius: 8px;
-  background: var(--bg-surface);
+  width: 100%;
+  padding: var(--space-4);
+  border-radius: var(--radius-md, 8px);
 }
 
 .hooks-row-icon {
@@ -9500,15 +9547,13 @@ button.mcp-server-head:focus-visible {
   justify-content: center;
   width: 22px;
   height: 22px;
-  border-radius: 6px;
-  background: var(--bg-raised);
-  color: var(--fg-muted);
+  color: var(--fg-faint);
 }
 
 .hooks-row-main {
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
+  gap: var(--space-3);
   min-width: 0;
   flex: 1;
 }
@@ -9522,6 +9567,7 @@ button.mcp-server-head:focus-visible {
   white-space: nowrap;
   background: transparent;
   padding: 0;
+  line-height: 22px;
 }
 
 .hooks-row-tags {
@@ -9532,25 +9578,21 @@ button.mcp-server-head:focus-visible {
 
 .hooks-tag {
   font-size: var(--text-xs);
-  font-family: var(--font-mono);
   color: var(--fg-muted);
-  padding: 1px 7px;
-  border-radius: 9px;
-  background: var(--bg-raised);
-  border: 1px solid var(--border-soft);
+  padding: 1px 8px;
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--fg) 8%, transparent);
 }
 
 .hooks-tag.tone-good {
-  /* --success on --bg-raised is under 4.5:1 at this size in both
-     themes; the text-weight green clears it (R683). */
+  /* --success on a tint is under 4.5:1 at this size in both themes;
+     the text-weight green clears it (R683). */
   color: var(--accent-green-text, var(--success));
-  border-color: color-mix(in srgb, var(--success) 35%, transparent);
 }
 
 .hooks-row-link {
   background: transparent;
   border: none;
-  padding: 0;
   margin: 0;
   text-align: left;
   color: inherit;
@@ -9558,8 +9600,12 @@ button.mcp-server-head:focus-visible {
   font: inherit;
 }
 
+.hooks-row-link:hover,
+.hooks-row-link:focus-visible {
+  background: var(--bg);
+}
+
 .hooks-row-link:hover .hooks-row-ident {
-  text-decoration: underline;
   color: var(--accent-orange-text, #f5a088);
 }
 
@@ -9584,61 +9630,32 @@ button.mcp-server-head:focus-visible {
   word-break: break-word;
 }
 
-/* ── Watcher panel (background processes) ────────────────────────────
-   Two-pane: list on top, tail pane below. The list is bounded so the
-   tail always has at least ~50% of the drawer; with many processes
-   the list scrolls internally before the tail surrenders space. */
-.watcher-count {
-  color: var(--fg-muted);
-  font-weight: 400;
-}
-
-.watcher-layout {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-6);
-  height: 100%;
-  min-height: 0;
-}
-
-.watcher-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  gap: var(--space-3);
-  overflow-y: auto;
-  flex-shrink: 0;
-}
-
-/* When a process is selected, the list is bounded so the tail
-   pane gets at least 60% of the drawer. Without a selection
-   the list takes the full height. */
-.watcher-layout--split .watcher-list {
-  max-height: 40%;
-}
-
-.watcher-layout--list-only .watcher-list {
-  flex: 1;
-  max-height: none;
-}
-
+/* ── Watcher page (background processes) ─────────────────────────────
+   Soft cards, one per process. The command is the only mono text; the
+   toggle on it stretches over the card, and Kill sits above that layer
+   as a sibling button. One process's page is a hero and its tail in a
+   soft panel. */
 .watcher-row {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--space-4);
-  padding: var(--space-4) var(--space-5);
-  border: 1px solid var(--border-soft);
-  border-radius: 6px;
-  background: var(--bg-surface);
-  transition: border-color 0.12s, background 0.12s;
+  position: relative;
+  cursor: default;
+}
+
+.watcher-glyph {
+  position: relative;
+}
+
+.watcher-glyph .watcher-status {
+  position: absolute;
+  right: -3px;
+  bottom: -3px;
+  border: 2px solid var(--bg-surface);
+  box-sizing: content-box;
 }
 
 .watcher-row-toggle {
-  flex: 1;
   min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
+  max-width: 100%;
+  display: block;
   padding: 0;
   border: none;
   background: none;
@@ -9648,30 +9665,27 @@ button.mcp-server-head:focus-visible {
   cursor: pointer;
 }
 
-.watcher-row:hover {
-  border-color: var(--border);
+.watcher-row-toggle::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
 }
 
-.watcher-row--selected {
+.watcher-row-toggle:focus-visible {
+  outline: none;
+}
+
+.watcher-row:has(.watcher-row-toggle:focus-visible) {
   border-color: var(--accent-orange-text, #f5a088);
-  background: color-mix(in srgb, var(--igni-orange) 6%, var(--bg-surface));
+  background: var(--bg-raised);
 }
 
-.watcher-row--stopped .watcher-pid,
-.watcher-row--stopped .watcher-cmd {
-  /* Dimmed by colour, not opacity: a faded row took its 'exit -15'
-     down to 2.8:1 (R683). */
-  color: var(--fg-muted);
-}
-
-.watcher-row--stopped .watcher-status {
-  opacity: 0.65;
-}
-
-.watcher-row-head {
-  display: flex;
-  align-items: center;
-  gap: var(--space-4);
+.watcher-kill {
+  position: relative;
+  z-index: 1;
+  flex-shrink: 0;
+  border-radius: var(--radius-pill);
 }
 
 .watcher-status {
@@ -9683,108 +9697,124 @@ button.mcp-server-head:focus-visible {
 
 .watcher-status--running {
   background: #34c759;
-  box-shadow: 0 0 0 2px color-mix(in srgb, #34c759 25%, transparent);
 }
 
 .watcher-status--stopped {
   background: var(--fg-muted);
 }
 
-.watcher-pid {
-  font-family: var(--font-mono);
-  font-size: var(--text-sm);
-  color: var(--fg);
-  font-weight: 600;
-}
-
-.watcher-elapsed {
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-  color: var(--fg-muted);
-  margin-left: auto;
-}
-
-.watcher-row .btn-danger {
-  padding: var(--space-1) var(--space-4);
-  font-size: var(--text-xs);
-  background: transparent;
-  /* --danger is 4.33:1 on the dark surface at 11px (R683). */
-  color: var(--accent-red-text, var(--danger));
-  border-color: var(--danger);
-}
-
-.watcher-row .btn-danger:hover {
-  background: var(--danger);
-  color: #fff;
-}
-
 .watcher-cmd {
+  display: block;
   font-family: var(--font-mono);
   font-size: var(--text-sm);
+  font-weight: 600;
   color: var(--fg);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* Dimmed by colour, not opacity: a faded row took its 'exit -15' down
+   to 2.8:1 (R683). */
+.watcher-row--stopped .watcher-cmd {
+  color: var(--fg-muted);
 }
 
 .watcher-lastline {
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-  color: var(--fg-muted);
+  display: block;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
+.watcher-row .entity-card-foot {
+  flex-wrap: wrap;
+  column-gap: var(--space-5);
+}
+
+.watcher-chip {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: var(--radius-pill);
+  font-size: var(--text-xs);
+  font-weight: 600;
+}
+
+.watcher-chip--running {
+  background: color-mix(in srgb, var(--success) 10%, transparent);
+  color: var(--accent-green-text, var(--success));
+}
+
+.watcher-chip--stopped {
+  background: color-mix(in srgb, var(--fg) 8%, transparent);
+  color: var(--fg-muted);
+}
+
+.watcher-elapsed {
+  font-variant-numeric: tabular-nums;
+}
+
+.watcher-detail .entity-hero-title {
+  font-family: var(--font-mono);
+  font-size: var(--text-lg);
+  word-break: break-all;
+}
+
+.watcher-detail-meta {
+  font-size: var(--text-sm);
+  color: var(--fg-faint);
+}
+
+.watcher-detail .entity-hero-actions .btn {
+  border-radius: var(--radius-pill);
+}
+
 .watcher-tail {
-  flex: 1;
   display: flex;
   flex-direction: column;
-  min-height: 0;
   gap: var(--space-4);
+  margin-top: var(--space-6);
+  padding: var(--space-5);
+  border-radius: var(--radius-lg);
+  background: var(--bg-surface);
 }
 
 .watcher-filter {
   flex: 1;
-  padding: var(--space-3) var(--space-5);
+  height: 31px;
+  padding: 0 var(--space-6);
   font-size: var(--text-sm);
-  font-family: var(--font-mono);
-  border: 1px solid var(--border-soft);
-  border-radius: 6px;
-  background: var(--bg-inset);
+  border: 1px solid transparent;
+  border-radius: var(--radius-pill);
+  background: var(--bg);
   color: var(--fg);
 }
 
 .watcher-filter:focus {
   outline: none;
-  border-color: var(--accent-orange-text, #f5a088);
+  border-color: var(--border-soft);
 }
 
 .watcher-resume {
   display: inline-flex;
   align-items: center;
   gap: var(--space-2);
-}
-
-.watcher-row-toggle:focus-visible {
-  outline: 2px solid var(--accent-orange-text, #f5a088);
-  outline-offset: 2px;
+  border-radius: var(--radius-pill);
 }
 
 .watcher-log {
-  flex: 1;
   margin: 0;
   padding: var(--space-6);
   font-family: var(--font-mono);
   font-size: var(--text-sm);
   line-height: 1.45;
   color: var(--fg);
-  background: var(--bg-inset);
-  border: 1px solid var(--border-soft);
-  border-radius: 6px;
+  background: var(--bg);
+  border-radius: var(--radius-md, 8px);
   white-space: pre-wrap;
   overflow-y: auto;
-  min-height: 0;
+  min-height: 240px;
+  max-height: 62vh;
 }
 
 .watcher-log-empty {
@@ -9796,8 +9826,6 @@ button.mcp-server-head:focus-visible {
   padding: var(--space-10);
   text-align: center;
   font-size: var(--text-md);
-  border: 1px dashed var(--border-soft);
-  border-radius: 6px;
 }
 
 /* Unfolded ``language-md`` block. Renders a fenced code block whose
@@ -10069,14 +10097,20 @@ button.mcp-server-head:focus-visible {
    Commands grouped by what you are trying to do. Clicking one seeds
    the composer rather than firing it — see ``HelpPage``. */
 .help-intro {
+  margin: 0 0 var(--space-8);
   color: var(--fg-muted);
-  padding-bottom: var(--space-7);
-  border-bottom: 1px solid var(--border-soft);
-  margin-bottom: var(--space-8);
+}
+
+.help-intro code {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--bg-surface);
 }
 
 .help-group {
-  margin-bottom: 22px;
+  margin-bottom: var(--space-12);
 }
 
 .help-group-title {
@@ -10103,15 +10137,15 @@ button.mcp-server-head:focus-visible {
   gap: var(--space-5);
   text-align: left;
   background: none;
-  border: 1px solid transparent;
-  border-radius: var(--radius-sm);
-  padding: 7px 10px;
+  border: none;
+  border-radius: var(--radius-lg);
+  padding: 8px 12px;
   font: inherit;
   cursor: pointer;
 }
 
-.help-command:hover {
-  border-color: var(--border-soft);
+.help-command:hover,
+.help-command:focus-visible {
   background: var(--bg-surface);
 }
 

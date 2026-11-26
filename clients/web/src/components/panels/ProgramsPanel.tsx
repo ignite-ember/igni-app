@@ -66,7 +66,10 @@ export function ProgramsPanel({
 
   return (
     <Drawer title="Programs" onClose={onClose}>
-      <div className="programs">
+      <section className="programs" aria-labelledby="programs-title">
+        <h2 className="programs-title" id="programs-title">
+          Approver tokens
+        </h2>
         <p className="programs-lead">
           A program attached to igni, such as a script using the SDK, can run
           sessions but cannot answer the agent's approval requests. To let one
@@ -83,9 +86,9 @@ export function ProgramsPanel({
             <span className="programs-token-label">
               Approver token. It is shown once, so copy it now.
             </span>
-            <code className="programs-token-value">{token}</code>
-            <div className="programs-actions">
-              <button className="btn btn-sm" onClick={() => void copy()}>
+            <div className="programs-token-row">
+              <code className="programs-token-value">{token}</code>
+              <button className="btn btn-sm programs-copy" onClick={() => void copy()}>
                 {copied ? "Copied" : "Copy"}
               </button>
             </div>
@@ -99,7 +102,7 @@ export function ProgramsPanel({
           </p>
         )}
         <div className="programs-actions">
-          <button className="btn btn-sm" disabled={busy} onClick={() => void make()}>
+          <button className="btn btn-sm btn-primary" disabled={busy} onClick={() => void make()}>
             Make an approver token
           </button>
           <button
@@ -110,7 +113,7 @@ export function ProgramsPanel({
             Revoke all approver tokens
           </button>
         </div>
-      </div>
+      </section>
     </Drawer>
   );
 }

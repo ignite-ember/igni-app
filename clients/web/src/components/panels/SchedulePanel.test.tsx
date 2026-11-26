@@ -78,8 +78,9 @@ describe("what is scheduled", () => {
   it("says how to schedule something when nothing is", async () => {
     panelWith([]);
     expect(await screen.findByText(/Nothing scheduled/)).toBeTruthy();
-    // No filters or search over an empty list.
-    expect(screen.queryByPlaceholderText(/Search description/)).toBeNull();
+    // No tabs or search over an empty list.
+    expect(screen.queryByRole("button", { name: "Search tasks" })).toBeNull();
+    expect(screen.queryByRole("button", { name: /^Active/ })).toBeNull();
   });
 
   it("reads a failed list call as nothing scheduled, not as loading forever", async () => {
@@ -115,9 +116,7 @@ describe("what is scheduled", () => {
     panelWith(TASKS);
     await screen.findByText("Summarise open PRs");
     fireEvent.click(screen.getByRole("button", { name: /^All/ }));
-    const names = [...document.querySelectorAll(".task-entry .name")].map(
-      (n) => n.firstChild?.textContent,
-    );
+    const names = [...document.querySelectorAll(".task-card-toggle")].map((n) => n.textContent);
     expect(names).toEqual([
       "Summarise open PRs",
       "(no description)",
@@ -131,6 +130,7 @@ describe("what is scheduled", () => {
     panelWith(TASKS);
     await screen.findByText("Summarise open PRs");
     fireEvent.click(screen.getByRole("button", { name: /^All/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Search tasks" }));
     const search = screen.getByPlaceholderText(/Search description/);
     fireEvent.change(search, { target: { value: "T-BAD" } });
     expect(screen.getByText("Rotate the staging token")).toBeTruthy();
@@ -139,6 +139,56 @@ describe("what is scheduled", () => {
     expect(screen.getByText("Nightly dependency audit")).toBeTruthy();
     fireEvent.change(search, { target: { value: "nothing like this" } });
     expect(screen.getByText("No tasks match")).toBeTruthy();
+  });
+});
+
+describe("sorting and tabs", () => {
+  const order = () => [...document.querySelectorAll(".task-card-toggle")].map((n) => n.textContent);
+
+  it("sorts soonest first or by name from the Sort menu", async () => {
+    panelWith(TASKS);
+    await screen.findByText("Summarise open PRs");
+    fireEvent.click(screen.getByRole("button", { name: /^All/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Sort" }));
+    fireEvent.click(screen.getByRole("menuitemradio", { name: "Soonest first" }));
+    expect(order()).toEqual([
+      "Nightly dependency audit",
+      "Rotate the staging token",
+      "(no description)",
+      "Summarise open PRs",
+      "Old reminder",
+    ]);
+    fireEvent.click(screen.getByRole("button", { name: "Sort" }));
+    fireEvent.click(screen.getByRole("menuitemradio", { name: "Name" }));
+    expect(order()).toEqual([
+      "(no description)",
+      "Nightly dependency audit",
+      "Old reminder",
+      "Rotate the staging token",
+      "Summarise open PRs",
+    ]);
+  });
+
+  it("marks the open tab and says what an empty one means", async () => {
+    panelWith(TASKS.filter((t) => t.status === "completed"));
+    await screen.findByText("Nothing waiting to run");
+    expect(screen.getByRole("button", { name: /^Active/ }).className).toContain("active");
+    fireEvent.click(screen.getByRole("button", { name: /^Failed/ }));
+    expect(screen.getByText("Nothing has failed")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /^Cancelled/ }));
+    expect(screen.getByText("Nothing cancelled")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /^Done/ }));
+    expect(screen.getByText("Nightly dependency audit")).toBeTruthy();
+  });
+
+  it("labels when a task runs by whether it still will", async () => {
+    panelWith(TASKS);
+    await screen.findByText("Summarise open PRs");
+    fireEvent.click(screen.getByRole("button", { name: /^All/ }));
+    expect(screen.getAllByText(/^Next run /)).toHaveLength(2);
+    expect(screen.getAllByText(/^Ran /)).toHaveLength(2);
+    // The cancelled task has no time, so nothing is said about it.
+    expect(screen.queryByText(/^Was due /)).toBeNull();
   });
 });
 
@@ -163,10 +213,26 @@ describe("a task's details", () => {
 
   it("says a task that has not run has no output yet, and closes again", async () => {
     panelWith(TASKS);
-    fireEvent.click(await screen.findByText("Summarise open PRs"));
+    const toggle = await screen.findByRole("button", { name: "Summarise open PRs" });
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    fireEvent.click(toggle);
     expect(screen.getByText(/hasn't run/)).toBeTruthy();
-    fireEvent.click(screen.getByText("Summarise open PRs"));
+    expect(toggle.getAttribute("aria-expanded")).toBe("true");
+    fireEvent.click(toggle);
     expect(screen.queryByText(/hasn't run/)).toBeNull();
+  });
+
+  it("keeps Cancel beside the toggle, never inside it", async () => {
+    panelWith(TASKS);
+    const toggle = await screen.findByRole("button", { name: "Summarise open PRs" });
+    const [cancel] = screen.getAllByRole("button", { name: "Cancel" });
+    expect(toggle.contains(cancel)).toBe(false);
+  });
+
+  it("says when a cancelled task was due", async () => {
+    panelWith([{ id: "x", description: "Late", status: "cancelled", scheduled_at: "2026-11-01T02:00:00Z" }]);
+    fireEvent.click(await screen.findByRole("button", { name: /^Cancelled/ }));
+    expect(screen.getByText(/^Was due /)).toBeTruthy();
   });
 });
 
