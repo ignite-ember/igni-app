@@ -1,7 +1,9 @@
-/** One thing on a card page — a plugin, a server, an extension: a
- *  quiet icon tile, its name, two lines of description and a faint
- *  footer, on a soft filled card that only draws a border on hover.
- *  Lay several out with {@link CardGrid}. */
+/** One thing on a card page — a plugin, an agent, a skill, a workflow, a
+ *  task: a quiet icon tile, its name in plain type, two lines of
+ *  description, a row of soft neutral chips and a faint footer, on a soft
+ *  filled card that only draws a border on hover. Every card page draws
+ *  this one card and adds no look of its own. Lay several out with
+ *  {@link CardGrid}. */
 
 import type { KeyboardEvent, ReactNode } from "react";
 
@@ -16,16 +18,16 @@ export interface EntityCardProps {
   /** Replaces the initials tile — a category's own icon, say. Wrap it
    *  in `.entity-glyph` to keep the tile's shape. */
   icon?: ReactNode;
-  /** One control at the top right: an add button, a chevron. Its keys
-   *  never open the card; a button here stops its own click from
-   *  reaching the card (`e.stopPropagation()`). */
+  /** One control at the top right — a {@link CardAction}, or a chevron.
+   *  Its keys never open the card; a button here stops its own click
+   *  from reaching the card (CardAction does). */
   action?: ReactNode;
   /** Clamped to two lines. */
   description?: ReactNode;
-  /** Chips or badges under the description. */
+  /** {@link HeroChip}s under the description, in their own row. */
   chips?: ReactNode;
-  /** Faint meta along the bottom — use `.entity-chip` and
-   *  `.entity-meta` inside it. */
+  /** Faint meta along the bottom — a source, a count, a model — as
+   *  `.entity-meta` spans; spaced, never coloured. */
   footer?: ReactNode;
   /** Makes the whole card a button: click, Enter or Space opens it. */
   onOpen?: () => void;
@@ -75,7 +77,7 @@ export function EntityCard({
           {action}
         </div>
         {description && <p className="entity-card-desc">{description}</p>}
-        {chips}
+        {chips && <div className="entity-card-chips">{chips}</div>}
         {footer && <div className="entity-card-foot">{footer}</div>}
         {children}
       </div>

@@ -20,8 +20,8 @@ export interface EntityHeroProps {
   /** Chips under the description ({@link HeroChip}); nothing is drawn
    *  without them. */
   chips?: ReactNode;
-  /** Buttons along the bottom: at most one `.btn-primary`, the rest
-   *  quiet. */
+  /** {@link Button}s along the bottom: at most one `primary`, the rest
+   *  `secondary` or `danger`. */
   actions?: ReactNode;
 }
 

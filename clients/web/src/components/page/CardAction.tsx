@@ -1,35 +1,48 @@
-/** A quiet round icon button for an {@link EntityCard}'s action slot:
+/** A bare round icon button for an {@link EntityCard}'s action slot:
  *  it does its own thing and never opens the card it sits on. */
 
 import type { ReactNode } from "react";
+
+import { Button } from "./Button";
 
 export function CardAction({
   label,
   onClick,
   disabled = false,
+  busy = false,
+  danger = false,
+  title,
+  className,
   children,
 }: {
   /** Its accessible name and tooltip: "Run /commit". */
   label: string;
+  /** A tooltip that says more than the label. */
+  title?: string;
   onClick: () => void;
   disabled?: boolean;
+  busy?: boolean;
+  /** Turns red on hover: discard, remove. */
+  danger?: boolean;
+  className?: string;
   /** The icon; a play triangle when left out. */
   children?: ReactNode;
 }) {
   return (
-    <button
-      type="button"
-      className="card-action"
-      aria-label={label}
-      title={label}
+    <Button
+      variant="icon"
+      label={label}
+      title={title}
       disabled={disabled}
+      busy={busy}
+      className={["card-action", danger && "is-danger", className].filter(Boolean).join(" ")}
       onClick={(e) => {
         e.stopPropagation();
         onClick();
       }}
     >
       {children ?? <PlayGlyph />}
-    </button>
+    </Button>
   );
 }
 

@@ -10,7 +10,7 @@ export function PageEmpty({
 }: {
   title: ReactNode;
   hint?: ReactNode;
-  /** One button or link under the hint. */
+  /** One {@link Button} (or link) under the hint. */
   action?: ReactNode;
 }) {
   return (

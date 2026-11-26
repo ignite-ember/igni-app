@@ -3,6 +3,7 @@
 import { useState, type ReactNode } from "react";
 import { EntityGlyph } from "../../EntityGlyph";
 import { ChevronIcon } from "../../Icons";
+import { Button } from "../../page/Button";
 import type { McpApproval } from "./mcpApproval";
 import type { McpServer } from "./mcpServer";
 import { PromptRow, ResourceRow, ToolRow } from "./McpRows";
@@ -42,27 +43,22 @@ function ApprovalButton({
 }) {
   if (approval?.waiting) {
     return (
-      <button
-        className="btn btn-sm btn-primary"
-        disabled={busy}
-        aria-label={`Approve ${name}`}
-        onClick={() => onApprove(true)}
-      >
+      <Button variant="primary" size="sm" disabled={busy} label={`Approve ${name}`} onClick={() => onApprove(true)}>
         Approve
-      </button>
+      </Button>
     );
   }
   if (approval?.revocable) {
     return (
-      <button
-        className="btn btn-sm"
+      <Button
+        size="sm"
         disabled={busy}
-        aria-label={`Revoke the approval of ${name}`}
+        label={`Revoke the approval of ${name}`}
         title="Withdraw the approval: the server is disconnected and does not connect again until approved"
         onClick={() => onApprove(false)}
       >
         Revoke
-      </button>
+      </Button>
     );
   }
   return null;
@@ -140,13 +136,9 @@ export function McpServerEntry({
         <div className="mcp-server-actions">
           <ApprovalButton approval={approval} name={server.name} busy={busy} onApprove={onApprove} />
           {!waiting && (
-            <button
-              className="btn btn-sm"
-              disabled={busy || server.policyBlocked}
-              onClick={onToggle}
-            >
+            <Button size="sm" disabled={busy || server.policyBlocked} onClick={onToggle}>
               {busy ? "…" : server.connected ? "Disconnect" : "Connect"}
-            </button>
+            </Button>
           )}
         </div>
       </div>

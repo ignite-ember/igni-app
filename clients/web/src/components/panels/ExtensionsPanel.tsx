@@ -1,6 +1,5 @@
 import { useMemo, useState } from "react";
-import { Button, Field, Input, Select, Switch, Text } from "@ignite-ember/ui-react";
-import { EntityGlyph } from "../EntityGlyph";
+import { Field, Input, Select, Switch, Text } from "@ignite-ember/ui-react";
 import { FilterIcon, SortIcon } from "../Icons";
 import type { PanelLevels } from "../PageShell";
 import type { IgniClient } from "../../protocol/client";
@@ -10,8 +9,11 @@ import { ControlMenu } from "./ControlMenu";
 import { Drawer } from "./Drawer";
 import { PanelSearch } from "./PanelSearch";
 import { useMasonry } from "./useMasonry";
+import { Button, buttonClass } from "../page/Button";
 import { DetailSection } from "../page/DetailSection";
+import { EntityCard } from "../page/EntityCard";
 import { EntityHero } from "../page/EntityHero";
+import { HeroChip } from "../page/HeroChip";
 import { PageEmpty } from "../page/PageEmpty";
 
 type ExtSort = "default" | "name-asc" | "name-desc";
@@ -80,18 +82,11 @@ function sameValues(
   return true;
 }
 
-/** A state, as a word and a tone the stylesheet already has. */
 /** The hero's status dot: lit when ready, red when failed, dim between. */
 function statusDot(state: string): string {
   if (state === "ready") return "is-on";
   if (state === "failed") return "is-failed";
   return "is-off";
-}
-
-function stateClass(state: string): string {
-  if (state === "ready") return "ext-state ext-state-ready";
-  if (state === "failed") return "ext-state ext-state-failed";
-  return "ext-state ext-state-busy";
 }
 
 
@@ -215,7 +210,7 @@ function SettingsForm({
           {busy ? "Saving…" : "Save"}
         </Button>
         {dirty && !busy && (
-          <Button variant="default" size="sm" onClick={() => setDraft(saved)}>
+          <Button size="sm" onClick={() => setDraft(saved)}>
             Revert
           </Button>
         )}
@@ -292,26 +287,20 @@ function ExtensionCard({
   // Not the id, which already sits in the foot.
   const desc = extension.reason || extension.menu[0]?.desc || "";
   return (
-    <button type="button" className="entity-card ext-card" onClick={onOpen}>
-      <span className="entity-card-icon" aria-hidden="true">
-        <EntityGlyph name={extension.name} size={38} />
-      </span>
-      <span className="entity-card-body">
-        <span className="entity-card-top">
-          <span className="plugins-name name">
-            {extension.name} <span className="meta">· {extension.version}</span>
-          </span>
-          <span className={stateClass(extension.state)}>{extension.state}</span>
-        </span>
-        {desc && <span className="entity-card-desc">{desc}</span>}
-        <span className="entity-card-foot">
-          <span className="meta ext-card-id">{extension.id}</span>
-          <span className="plugins-chevron-end" aria-hidden="true">
-            ›
-          </span>
-        </span>
-      </span>
-    </button>
+    <EntityCard
+      className="ext-card"
+      name={extension.name}
+      label={extension.name}
+      onOpen={onOpen}
+      description={desc}
+      chips={<HeroChip>{extension.state}</HeroChip>}
+      footer={
+        <>
+          <span className="entity-meta">{extension.version}</span>
+          <span className="entity-meta">{extension.id}</span>
+        </>
+      }
+    />
   );
 }
 
@@ -339,7 +328,13 @@ function ExtensionDetailPage({
         }
         description={extension.reason}
         actions={
-          extension.web_url ? <OpenOnWeb url={extension.web_url} name={extension.name} /> : undefined
+          extension.web_url ? (
+            <OpenOnWeb
+              url={extension.web_url}
+              name={extension.name}
+              className={buttonClass("secondary", "sm", "ext-web-link")}
+            />
+          ) : undefined
         }
       />
 
