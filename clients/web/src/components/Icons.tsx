@@ -51,6 +51,16 @@ export function FolderIcon({ size = 13 }: IconProps) {
   );
 }
 
+/** A terminal window with a prompt: the header's terminal button. */
+export function TerminalIcon({ size = 13 }: IconProps) {
+  return (
+    <Svg size={size}>
+      <rect x="1.8" y="2.8" width="12.4" height="10.4" rx="1.2" />
+      <path d="M4.6 6.2l2 1.8-2 1.8M8.4 10.2h3" />
+    </Svg>
+  );
+}
+
 export function CloudIcon({ size = 13 }: IconProps) {
   return (
     <Svg size={size}>

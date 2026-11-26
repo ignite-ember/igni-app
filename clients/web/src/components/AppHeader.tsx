@@ -10,7 +10,7 @@ import { host } from "../lib/host";
 import { unreadFor, type NotificationCounts } from "../notifications/model";
 import type { ConnectionState, IgniClient } from "../protocol/client";
 import type { StatusUpdate } from "../protocol/messages";
-import { FolderIcon, PanelLeftIcon } from "./Icons";
+import { FolderIcon, PanelLeftIcon, TerminalIcon } from "./Icons";
 
 /** The most the bell's count says before it gives up counting. */
 const BELL_COUNT_CAP = 99;
@@ -29,6 +29,9 @@ export interface AppHeaderProps {
   /** Whether the Files split is docked open — drives the folder button. */
   filesOpen: boolean;
   onToggleFiles: () => void;
+  /** Whether the terminal is open in the dock — drives its button. */
+  terminalOpen: boolean;
+  onToggleTerminal: () => void;
   status: StatusUpdate | null;
   /** Unread notifications: the bell's count. */
   waiting: number;
@@ -132,6 +135,17 @@ export function AppHeader(props: AppHeaderProps) {
         onClick={props.onToggleFiles}
       >
         <FolderIcon size={15} />
+      </button>
+      {/* A shell where igni runs — this machine, or the cloud VM — in
+          the same dock, below the files when both are open. */}
+      <button
+        className={`chip chip-terminal${props.terminalOpen ? " active" : ""}`}
+        title={props.terminalOpen ? "Close terminal" : "Open terminal"}
+        aria-label="Terminal"
+        aria-pressed={props.terminalOpen}
+        onClick={props.onToggleTerminal}
+      >
+        <TerminalIcon size={15} />
       </button>
       {(status?.cloud_connected || waiting > 0) && (
         <button

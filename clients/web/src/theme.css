@@ -12082,11 +12082,97 @@ button.mcp-server-head:focus-visible {
 }
 .files-code-state { flex: 1; }
 
-/* The header's folder button, beside the bell. */
-.chip-files.active {
+/* The header's folder and terminal buttons, beside the bell. */
+.chip-files.active,
+.chip-terminal.active {
   color: var(--fg);
   background: var(--bg-surface);
   border-color: var(--border);
+}
+
+/* The dock's sections: the files, the terminal, or the files above the
+   terminal with a splitter between. Each grows by its share of the
+   height; the shares live on the elements while the splitter drags. */
+.dock-section {
+  flex: 1 1 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.dock-section--terminal {
+  min-height: 90px;
+}
+.dock-split {
+  flex: 0 0 auto;
+  height: 7px;
+  margin: -3px 0;
+  position: relative;
+  z-index: 6;
+  cursor: row-resize;
+  touch-action: none;
+  border-top: 1px solid var(--border-soft);
+  background-clip: content-box;
+}
+.dock-split:hover {
+  background: color-mix(in srgb, var(--accent) 35%, transparent);
+}
+
+/* ── Terminal: xterm on the inset background, its head like the files' */
+.terminal-pane {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-inset);
+}
+.terminal-head {
+  padding-bottom: 0;
+  background: var(--bg);
+}
+.terminal-title {
+  margin-bottom: 6px;
+  font-size: var(--text-sm);
+  color: var(--fg-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.terminal-host {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 6px 4px 4px 10px;
+  overflow: hidden;
+}
+.terminal-host .xterm {
+  height: 100%;
+}
+/* xterm's stylesheet paints its viewport black; the rows rarely fill
+   the pane exactly, and the remainder showed as a black strip. */
+.terminal-host .xterm .xterm-viewport {
+  background-color: transparent;
+}
+.terminal-notice {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 12px;
+  border-top: 1px solid var(--border-soft);
+  font-size: var(--text-sm);
+  color: var(--fg-muted);
+  background: var(--bg);
+}
+.terminal-notice-btn {
+  margin-left: auto;
+  padding: 3px 10px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  font: inherit;
+  color: var(--fg);
+  background: var(--bg-surface);
+  cursor: pointer;
+}
+.terminal-notice-btn:hover {
+  background: var(--bg-raised);
 }
 
 /* Full screen: the dock takes the whole window; the chat and the
@@ -12120,13 +12206,13 @@ button.mcp-server-head:focus-visible {
    and keep the empty row a drag handle with the tabs and controls
    excluded. In the split it sits on the right, clear of the lights, so
    this is full-screen only. */
-:root[data-host="tauri"][data-platform="mac"] .files-dock--full .files-dock-head {
+:root[data-host="tauri"][data-platform="mac"] .files-dock--full .dock-section:first-child .files-dock-head {
   padding-left: 80px;
   -webkit-app-region: drag;
   app-region: drag;
 }
-:root[data-host="tauri"][data-platform="mac"] .files-dock--full .files-dock-head .files-tab,
-:root[data-host="tauri"][data-platform="mac"] .files-dock--full .files-dock-head button {
+:root[data-host="tauri"][data-platform="mac"] .files-dock--full .dock-section:first-child .files-dock-head .files-tab,
+:root[data-host="tauri"][data-platform="mac"] .files-dock--full .dock-section:first-child .files-dock-head button {
   -webkit-app-region: no-drag;
   app-region: no-drag;
 }

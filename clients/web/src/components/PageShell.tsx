@@ -2,6 +2,7 @@ import { createContext, useEffect, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 
 import type { PageRoute } from "../chat/pageStack";
+import { isTerminalKey } from "./terminal/terminalKeys";
 
 export interface PageContextValue {
   trail: readonly PageRoute[];
@@ -105,7 +106,7 @@ export function PageShell({
   // handler ran, navigated, and swallowed the key.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "Escape") return;
+      if (e.key !== "Escape" || isTerminalKey(e)) return;
       if (
         document.querySelector(
           ".file-preview, .modal-overlay, .overflow-list, .notify-panel, .files-menu",

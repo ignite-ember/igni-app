@@ -1,6 +1,7 @@
 /**
  * Files — a read-only view of the project, docked as a split beside the
- * chat rather than taking it over. The header's folder button opens and
+ * chat rather than taking it over ({@link SideDock} holds it, above the
+ * terminal when that is open too). The header's folder button opens and
  * closes it; a changed file opens here in place, and several stay open
  * as tabs.
  *
@@ -17,10 +18,11 @@ import { useEffect, useRef, useState } from "react";
 import { host } from "../lib/host";
 import type { IgniClient } from "../protocol/client";
 import { CloseIcon, ExpandIcon, ListTreeIcon, MoreIcon, XIcon } from "./Icons";
+import { isTerminalKey } from "./terminal/terminalKeys";
 import { FileNavigator } from "./pages/files/FileNavigator";
 import { FileViewer } from "./pages/files/FileViewer";
 import { classify, isReadable } from "./pages/files/fileKind";
-import { DOCK_MAX, DOCK_MIN, TAB_SIZES, useFilesPrefs } from "./pages/files/useFilesPrefs";
+import { TAB_SIZES, type PrefsControl } from "./pages/files/useFilesPrefs";
 import type { FilesSession } from "./pages/files/useFilesSession";
 import { useFileBytes } from "./pages/files/useFileBytes";
 import { useFileContents } from "./pages/files/useFileContents";
@@ -42,21 +44,24 @@ export function FilesDock({
   client,
   connected,
   session,
+  prefs,
+  maximized,
+  onToggleMaximize,
   onClose,
 }: {
   client: IgniClient;
   connected: boolean;
   session: FilesSession;
+  /** The dock's preferences, held by {@link SideDock} so the two share one copy. */
+  prefs: PrefsControl;
+  maximized: boolean;
+  onToggleMaximize: () => void;
   onClose: () => void;
 }) {
-  const prefs = useFilesPrefs();
   const project = useProjectFiles(client, connected);
   const { tabs, activePath, query } = session;
 
   const [menuOpen, setMenuOpen] = useState(false);
-  // Full screen: the viewer takes the whole window and the chat (and the
-  // sidebar) step aside. A view of the moment, not kept across a close.
-  const [maximized, setMaximized] = useState(false);
   // Only text and markdown are read; a binary file (image, PDF) would
   // come back as mojibake, so it is not even fetched.
   const activeKind = classify(activePath);
@@ -65,7 +70,6 @@ export function FilesDock({
   const bytesKind = activeKind === "image" || activeKind === "pdf";
   const loadedBytes = useFileBytes(client, bytesKind ? activePath : "");
   const searchRef = useRef<HTMLInputElement>(null);
-  const dockRef = useRef<HTMLElement>(null);
 
   const focusFinder = () => {
     if (!prefs.treeOpen) prefs.set("treeOpen", true);
@@ -73,9 +77,11 @@ export function FilesDock({
   };
 
   // The dock's own shortcuts while it is open. ⌘F is left to the chat's
-  // find; Esc only closes the ⋯ menu, never the whole split.
+  // find; Esc only closes the ⋯ menu, never the whole split. A key typed
+  // in the terminal is the shell's.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if (isTerminalKey(e)) return;
       if (menuOpen && e.key === "Escape") {
         setMenuOpen(false);
         e.stopPropagation();
@@ -93,25 +99,6 @@ export function FilesDock({
     return () => window.removeEventListener("keydown", onKey, true);
   });
 
-  // Drag the left edge to resize. Done on the element directly so a drag
-  // is not a storm of state writes; the final width is saved on release.
-  const onResizeStart = (e: React.PointerEvent) => {
-    e.preventDefault();
-    const startX = e.clientX;
-    const startWidth = dockRef.current?.offsetWidth ?? prefs.dockWidth;
-    const move = (ev: PointerEvent) => {
-      const w = Math.min(DOCK_MAX, Math.max(DOCK_MIN, startWidth + (startX - ev.clientX)));
-      if (dockRef.current) dockRef.current.style.width = `${w}px`;
-    };
-    const up = () => {
-      window.removeEventListener("pointermove", move);
-      window.removeEventListener("pointerup", up);
-      prefs.set("dockWidth", dockRef.current?.offsetWidth ?? prefs.dockWidth);
-    };
-    window.addEventListener("pointermove", move);
-    window.addEventListener("pointerup", up);
-  };
-
   const empty = project.loading
     ? "Loading the project's files…"
     : project.paths.length === 0
@@ -124,22 +111,7 @@ export function FilesDock({
   };
 
   return (
-    <aside
-      className={`files-dock${maximized ? " files-dock--full" : ""}`}
-      ref={dockRef}
-      style={maximized ? undefined : { width: prefs.dockWidth }}
-      aria-label="Files"
-    >
-      {!maximized && (
-        <div
-          className="files-dock-resize"
-          role="separator"
-          aria-orientation="vertical"
-          title="Drag to resize"
-          onPointerDown={onResizeStart}
-        />
-      )}
-
+    <>
       <div className="files-dock-head">
         <div className="files-tabs" role="tablist" aria-label="Open files">
           {tabs.map((path) => (
@@ -168,10 +140,7 @@ export function FilesDock({
           title={maximized ? "Exit full screen" : "Full screen"}
           aria-label={maximized ? "Exit full screen" : "Full screen"}
           aria-pressed={maximized}
-          onClick={() => {
-            if (dockRef.current) dockRef.current.style.width = "";
-            setMaximized((m) => !m);
-          }}
+          onClick={onToggleMaximize}
         >
           <ExpandIcon size={14} full={maximized} />
         </button>
@@ -310,6 +279,6 @@ export function FilesDock({
           />
         )}
       </div>
-    </aside>
+    </>
   );
 }

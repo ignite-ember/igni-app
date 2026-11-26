@@ -41,6 +41,18 @@ export class ConnectionMovedError extends Error {
   }
 }
 
+/** An RPC igni answered with an error: the sentence as the message, and
+ *  the word a caller can branch on as ``code`` (``null`` from an older
+ *  igni that sends none). */
+export class RpcError extends Error {
+  constructor(
+    message: string,
+    readonly code: string | null,
+  ) {
+    super(message);
+  }
+}
+
 export type ConnectionState =
   | "connecting"
   | "connected"
@@ -241,7 +253,7 @@ export class IgniClient implements RpcCaller {
     if (reply.type !== "rpc_response") return reply as T;
     if (reply.error) {
       if (ConnectionMovedError.matches(reply.error)) throw new ConnectionMovedError(reply.error);
-      throw new Error(reply.error);
+      throw new RpcError(reply.error, reply.code ?? null);
     }
     return reply.result as T;
   }
