@@ -53,3 +53,20 @@ describe("AppHeader's terminal button", () => {
     expect(terminal.title).toBe("Close terminal");
   });
 });
+
+describe("AppHeader's right-hand icons", () => {
+  it("put the bell first, then a divider, then the folder and terminal", () => {
+    render(header({ waiting: 2 }));
+    const bell = screen.getByRole("button", { name: "Notifications" });
+    const divider = bell.nextElementSibling as HTMLElement;
+    expect(divider.className).toBe("chip-divider");
+    expect(divider.getAttribute("aria-hidden")).toBe("true");
+    expect(divider.nextElementSibling).toBe(screen.getByRole("button", { name: "Files" }));
+  });
+
+  it("drop the divider with the bell when nothing is waiting", () => {
+    const { container } = render(header());
+    expect(screen.queryByRole("button", { name: "Notifications" })).toBeNull();
+    expect(container.querySelector(".chip-divider")).toBeNull();
+  });
+});

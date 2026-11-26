@@ -125,8 +125,33 @@ export function AppHeader(props: AppHeaderProps) {
           </svg>
         </button>
       )}
+      {(status?.cloud_connected || waiting > 0) && (
+        <>
+          <button
+            className={waiting ? "chip chip-bell has-waiting" : "chip chip-bell"}
+            title={
+              waiting
+                ? `${waiting} unread ${waiting === 1 ? "notification" : "notifications"}`
+                : "Nothing is waiting on you"
+            }
+            aria-label="Notifications"
+            onClick={props.onToggleNotifications}
+          >
+            <Glyph name="bell" />
+            {/* The count, not a dot: "three people are waiting" and
+                "somebody is waiting" are different amounts of urgency. */}
+            {!!waiting && (
+              <span className="chip-bell-count">
+                {waiting > BELL_COUNT_CAP ? `${BELL_COUNT_CAP}+` : waiting}
+              </span>
+            )}
+          </button>
+          {/* What is waiting, set apart from the dock's two toggles. */}
+          <span className="chip-divider" aria-hidden="true" />
+        </>
+      )}
       {/* The project's files, as a read-only split beside the chat —
-          opened and closed here, next to what is waiting. */}
+          opened and closed here, after what is waiting. */}
       <button
         className={`chip chip-files${props.filesOpen ? " active" : ""}`}
         title={props.filesOpen ? "Close files" : "Browse project files"}
@@ -147,27 +172,6 @@ export function AppHeader(props: AppHeaderProps) {
       >
         <TerminalIcon size={15} />
       </button>
-      {(status?.cloud_connected || waiting > 0) && (
-        <button
-          className={waiting ? "chip chip-bell has-waiting" : "chip chip-bell"}
-          title={
-            waiting
-              ? `${waiting} unread ${waiting === 1 ? "notification" : "notifications"}`
-              : "Nothing is waiting on you"
-          }
-          aria-label="Notifications"
-          onClick={props.onToggleNotifications}
-        >
-          <Glyph name="bell" />
-          {/* The count, not a dot: "three people are waiting" and
-              "somebody is waiting" are different amounts of urgency. */}
-          {!!waiting && (
-            <span className="chip-bell-count">
-              {waiting > BELL_COUNT_CAP ? `${BELL_COUNT_CAP}+` : waiting}
-            </span>
-          )}
-        </button>
-      )}
       {conn === "replaced" && (
         <button
           className="chip"

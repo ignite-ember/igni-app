@@ -12082,12 +12082,38 @@ button.mcp-server-head:focus-visible {
 }
 .files-code-state { flex: 1; }
 
-/* The header's folder and terminal buttons, beside the bell. */
+/* The bell, then the folder and terminal toggles: bare glyphs, square,
+   with no outline — a fill shows hover and an open dock. */
+.chip-bell,
+.chip-files,
+.chip-terminal {
+  width: 30px;
+  padding: 0;
+  justify-content: center;
+  gap: 0;
+  border-color: transparent;
+  background: transparent;
+}
+.chip-bell:hover,
+.chip-files:hover,
+.chip-terminal:hover {
+  border-color: transparent;
+  background: var(--bg-surface);
+}
 .chip-files.active,
 .chip-terminal.active {
   color: var(--fg);
-  background: var(--bg-surface);
-  border-color: var(--border);
+  background: var(--bg-raised);
+  border-color: transparent;
+}
+
+/* Between what is waiting and the dock's toggles. */
+.chip-divider {
+  flex: 0 0 auto;
+  width: 1px;
+  height: 18px;
+  margin: 0 2px;
+  background: var(--border-soft);
 }
 
 /* The dock's sections: the files, the terminal, or the files above the
