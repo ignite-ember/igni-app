@@ -197,7 +197,7 @@ describe("a hook's page", () => {
   });
 
   it("shows the command when the script cannot be read, and says why", async () => {
-    panelWith([hook()], { files: { ".igni/hooks/guard.sh": new Error("outside the sandbox") } });
+    panelWith([hook()], { files: { ".igni/hooks/guard.sh": new Error("outside the sandbox.") } });
     fireEvent.click(await screen.findByRole("button", { name: /guard\.sh/ }));
     expect(await screen.findByText(/Could not read the file \(outside the sandbox\)/)).toBeTruthy();
     expect(screen.getByRole("region", { name: "Script" }).querySelector(".mono-block")!.textContent).toBe(

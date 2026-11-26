@@ -75,7 +75,7 @@ export function HookDetail({ hook, client }: { hook: HookEntry; client: IgniClie
           {!file.loading && !file.file.contents && (
             <>
               <p className="detail-note">
-                {file.error ? `Could not read the file (${file.error}); the command it runs:` : "The command it runs:"}
+                {file.error ? `Could not read the file (${file.error.replace(/\.$/, "")}); the command it runs:` : "The command it runs:"}
               </p>
               <MonoBlock text={hook.command} label="Command" />
             </>
