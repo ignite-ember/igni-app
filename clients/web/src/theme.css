@@ -4596,9 +4596,9 @@ button {
   flex-wrap: wrap;
 }
 
-/* The session and context moved to the composer dock; watcher, backend
-   and extension chips only appear when there is something to say. With
-   none of them the row collapses rather than leaving a floating gap. */
+/* The session and context moved to the composer dock and the status
+   chips to the header; the update notice only appears when there is
+   one. Without it the row collapses rather than leaving a floating gap. */
 .statusline:empty {
   display: none;
   margin: 0;
@@ -6238,36 +6238,81 @@ button {
   background: var(--fg-faint);
 }
 
-/* ── Watcher pill in the footer ───────────────────────────────── */
+/* ── Status chips in the header ───────────────────────────────── */
 
-/* Same geometry as ``.status-pill`` so the two pills look like
-   siblings. The dot pulses while at least one process is running
-   — it's a "you have invisible work" signal; static would let
-   the user miss it. */
-.watcher-pill {
-  appearance: none;
-  display: inline-flex;
+/* Right of the sidebar toggle, left to right: igni's own, then
+   extensions'. One row that scrolls sideways when it runs out of room
+   rather than wrapping or pushing the breadcrumb off. The 4px padding
+   (cancelled by the margin) keeps focus rings inside the clip. */
+.header-status-chips {
+  display: flex;
   align-items: center;
-  gap: var(--space-3);
-  height: 22px;
-  padding: 0 9px;
-  border-radius: var(--radius-pill);
-  border: 1px solid var(--border-soft);
+  gap: var(--space-2);
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 50%;
+  padding: 4px;
+  margin: -4px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior: contain;
+  touch-action: pan-x;
+  scrollbar-width: none;
+}
+.header-status-chips::-webkit-scrollbar {
+  display: none;
+}
+.header-status-chips:empty {
+  display: none;
+}
+.header-status-chips > * {
+  flex: 0 0 auto;
+}
+
+/* Quiet like the bell, folder and terminal: no outline, a fill on
+   hover. */
+.chip-status {
+  height: 30px;
+  padding: 0 var(--space-4);
+  border-color: transparent;
+  background: transparent;
+  color: var(--fg-muted);
+  font-family: var(--font-ui);
+}
+.chip-status:hover {
+  border-color: transparent;
   background: var(--bg-surface);
   color: var(--fg);
-  font-size: var(--text-sm);
-  cursor: pointer;
-  white-space: nowrap;
-  font-family: var(--font-ui);
-  transition: border-color 0.12s ease, background 0.12s ease;
 }
 
-.watcher-pill:hover {
-  border-color: var(--accent-orange-text, #f5a088);
-  background: color-mix(in srgb, var(--igni-orange) 6%, var(--bg-surface));
+/* Extensions' chips are the host's quiet button around a ``Status``;
+   in the header they drop the outline like igni's own. */
+.header-status-chips > .btn {
+  height: 30px;
+  padding: 0 var(--space-4);
+  border-color: transparent;
+  background: transparent;
+  border-radius: var(--radius-pill);
+}
+.header-status-chips > .btn:hover {
+  border-color: transparent;
+  background: var(--bg-surface);
 }
 
-.watcher-pill-dot {
+/* More chips than room: the clipped edge fades, so the row reads as
+   one that scrolls rather than one that was cut. */
+.header-status-chips[data-overflow="end"] {
+  mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
+}
+.header-status-chips[data-overflow="start"] {
+  mask-image: linear-gradient(to left, #000 calc(100% - 28px), transparent);
+}
+.header-status-chips[data-overflow="both"] {
+  mask-image: linear-gradient(to right, transparent, #000 28px, #000 calc(100% - 28px), transparent);
+}
+
+/* Pulses while a process runs — "you have invisible work". */
+.chip-watcher-dot {
   width: 7px;
   height: 7px;
   border-radius: var(--radius-circle);
@@ -6275,6 +6320,22 @@ button {
   box-shadow: 0 0 0 2px color-mix(in srgb, #34c759 25%, transparent);
   flex-shrink: 0;
   animation: pulse-dot 1.8s ease infinite;
+}
+
+/* The bell's count badge, inline rather than perched on a corner. */
+.chip-status-count {
+  min-width: 15px;
+  height: 15px;
+  padding: 0 4px;
+  box-sizing: border-box;
+  border-radius: var(--radius-pill);
+  background: var(--igni-gradient);
+  color: #fff;
+  font-size: var(--text-2xs);
+  font-weight: 700;
+  line-height: 15px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
 }
 
 /* ── Footer status bits ────────────────────────────────────────── */

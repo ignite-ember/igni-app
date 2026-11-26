@@ -54,6 +54,8 @@ describe("the watcher pill", () => {
       { pid: 10, cmd: "make", elapsed_seconds: 1, is_running: false, exit_code: 0 },
     ]);
     render(<WatcherIndicator client={client} onOpen={() => {}} />);
-    await waitFor(() => expect(screen.getByText("1 running")).toBeTruthy());
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Watcher 1 background process running" })).toBeTruthy(),
+    );
   });
 });

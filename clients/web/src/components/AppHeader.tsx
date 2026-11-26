@@ -4,12 +4,12 @@ import { useEffect, useRef } from "react";
 import { MenuIcon as Glyph } from "@ignite-ember/ui-react";
 
 import type { PageRoute } from "../chat/pageStack";
-import { ExtensionIndicator } from "../extensions/ExtensionIndicator";
 import type { ExtensionSummary } from "../extensions/ExtensionPage";
 import { host } from "../lib/host";
-import { unreadFor, type NotificationCounts } from "../notifications/model";
+import type { NotificationCounts } from "../notifications/model";
 import type { ConnectionState, IgniClient } from "../protocol/client";
 import type { StatusUpdate } from "../protocol/messages";
+import { HeaderStatusChips } from "./HeaderStatusChips";
 import { FolderIcon, PanelLeftIcon, TerminalIcon } from "./Icons";
 
 /** The most the bell's count says before it gives up counting. */
@@ -36,18 +36,18 @@ export interface AppHeaderProps {
   /** Unread notifications: the bell's count. */
   waiting: number;
   onToggleNotifications: () => void;
-  /** Installed extensions — their status chips sit in the header now,
-   *  beside igni's own controls, rather than in the footer. */
+  /** Installed extensions — their status chips sit left in the header,
+   *  after igni's own, right of the sidebar toggle. */
   extensions: ExtensionSummary[];
   notificationCounts: NotificationCounts;
   onOpenPage: (route: PageRoute) => void;
-  client: Pick<IgniClient, "connect" | "asExtension">;
+  client: IgniClient;
 }
 
 /**
- * The main column's header: the sidebar toggle, the brand with the
- * connection, find, and what is waiting. The folder and the environment
- * sit under the composer, and the account at the foot of the sidebar.
+ * The main column's header: the sidebar toggle, then the status chips
+ * (the watcher, then extensions'), the open page's breadcrumb; on the
+ * right find, what is waiting, and the files and terminal toggles.
  *
  * It is also the desktop window's drag region: ``data-tauri-drag-region``
  * and the stylesheet's ``-webkit-app-region`` where WebKit honours
@@ -76,6 +76,16 @@ export function AppHeader(props: AppHeaderProps) {
       >
         <PanelLeftIcon open={props.sidebarOpen} />
       </button>
+      {/* Status chips, left to right: igni's own, then extensions' in
+          the order they came — before the breadcrumb, so the keyboard
+          reaches them right after the toggle. */}
+      <HeaderStatusChips
+        status={status}
+        extensions={props.extensions}
+        notificationCounts={props.notificationCounts}
+        onOpenPage={props.onOpenPage}
+        client={props.client}
+      />
       {/* The open page's breadcrumb (``Chat / Plugins``) renders here,
           portaled in from ``PageShell`` so the trail sits to the right of
           the sidebar toggle. Empty when no page is open. */}
@@ -83,24 +93,6 @@ export function AppHeader(props: AppHeaderProps) {
       {/* The igni flame, wordmark and version live at the foot of the
           account menu now, not here — the top bar stays clean. */}
       <div className="header-spacer" />
-      {/* Extensions' status chips — data the host draws, moved up from the
-          footer so they sit beside igni's own header controls. */}
-      {status &&
-        props.extensions.flatMap((extension) =>
-          extension.indicators.map((indicator) => (
-            <ExtensionIndicator
-              key={indicator.id}
-              extensionId={extension.id}
-              indicator={indicator}
-              unread={unreadFor(props.notificationCounts, extension.id)}
-              onCall={(method, args) => props.client.asExtension(extension.id).rpc(method, args)}
-              onOpen={(kind) => {
-                const page = extension.pages.find((p) => p.kind === kind);
-                if (page) props.onOpenPage({ kind: page.kind, label: page.label });
-              }}
-            />
-          )),
-        )}
       {props.canSearch && (
         <button
           className={`chip chip-search${props.searchOpen ? " active" : ""}`}

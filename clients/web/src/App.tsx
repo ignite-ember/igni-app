@@ -310,13 +310,7 @@ export default function App() {
           sessionId={sessionId}
           onSend={scroll.scrollToBottom}
         />
-        <StatusLine
-          status={status}
-          client={client}
-          pendingUpdate={updateCheck.pendingUpdate}
-          onShowUpdate={updateCheck.showUpdate}
-          onOpen={navigator.openPage}
-        />
+        <StatusLine pendingUpdate={updateCheck.pendingUpdate} onShowUpdate={updateCheck.showUpdate} />
       </main>
 
       {/* The read-only Files viewer and the terminal, docked as a split

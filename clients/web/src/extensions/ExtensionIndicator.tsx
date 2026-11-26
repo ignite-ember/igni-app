@@ -1,9 +1,8 @@
 /**
  * An extension's status chip, in igni's own chrome.
  *
- * It sits in the composer beside `WatcherIndicator` and
- * `GroupIndicator`. The first extension to need one had a chip
- * hardcoded there before it was an extension, and moving it out meant
+ * It sits in the header's status row, after `WatcherIndicator`. The
+ * first extension to need one had a chip hardcoded in igni's chrome before it was an extension, and moving it out meant
  * the chip had to come from the manifest or be lost — and `indicators` had been moved to "not in v1" on the grounds that
  * nothing specified it, which was right about the specification and
  * wrong about the need.
