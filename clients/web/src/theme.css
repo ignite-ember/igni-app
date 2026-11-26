@@ -11772,7 +11772,12 @@ button.mcp-server-head:focus-visible {
   display: flex;
   gap: 4px;
   padding: 7px 10px 0;
+  /* Sideways only, on rails: with overflow-y left visible it computes to
+     auto, and a trackpad swipe dragged the strip up and down too. */
   overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior: contain;
+  touch-action: pan-x;
   border-bottom: 1px solid var(--border-soft);
   scrollbar-width: none;
 }
