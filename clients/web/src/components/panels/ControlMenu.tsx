@@ -4,6 +4,7 @@
 import type { ReactNode } from "react";
 
 import { CheckIcon } from "../Icons";
+import { Button } from "../page/Button";
 
 export function ControlMenu<K extends string>({
   label,
@@ -28,16 +29,16 @@ export function ControlMenu<K extends string>({
 }) {
   return (
     <div className="control-menu-wrap">
-      <button
-        className={`kb-icon-btn${active ? " is-active" : ""}`}
-        aria-label={label}
-        title={label}
+      <Button
+        variant="icon"
+        label={label}
+        active={active}
         aria-haspopup="menu"
         aria-expanded={open}
         onClick={onToggle}
       >
         {icon}
-      </button>
+      </Button>
       {open && (
         <>
           <div className="control-menu-backdrop" onClick={onClose} />

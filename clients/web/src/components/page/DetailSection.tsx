@@ -10,7 +10,8 @@ export interface DetailSectionProps {
   title: string;
   /** A count chip beside the label; nothing is drawn without it. */
   count?: number | null;
-  /** Quiet controls at the right of the label row. */
+  /** Quiet controls at the right of the label row: `secondary` or
+   *  `icon` {@link Button}s at `size="sm"`. */
   actions?: ReactNode;
   className?: string;
   children: ReactNode;

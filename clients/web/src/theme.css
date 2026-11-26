@@ -7903,23 +7903,10 @@ button.mcp-server-head:focus-visible {
   margin-left: auto;
 }
 
-/* Bare icons in the header — no boxed border around each one. A soft
-   round hover is the only affordance, so the row reads as controls, not
-   a row of buttons. */
-.page-controls .kb-icon-btn {
-  border: none;
-  background: transparent;
-  width: 28px;
-  height: 28px;
-  border-radius: var(--radius-circle);
-  color: var(--fg-faint);
-}
-
-.page-controls .kb-icon-btn:hover:not(:disabled),
-.page-controls .kb-icon-btn.is-active {
-  border: none;
-  color: var(--fg);
-  background: var(--bg-surface);
+/* The header's icons are the page button's ``icon`` variant; the
+   primary "+ Add" sits a little apart from them. */
+.page-controls .page-controls-add {
+  margin-left: var(--space-3);
 }
 
 /* Filter / sort dropdowns. */
@@ -8287,12 +8274,39 @@ button.mcp-server-head:focus-visible {
   align-items: center;
   justify-content: space-between;
   gap: var(--space-3);
+  min-height: 24px;
+  /* The action is 28px; let it overhang rather than push the name down. */
+  margin: -2px 0;
 }
 
+/* One name style for every card: plain sans, whatever the thing is — a
+   slash command, a workflow id, a task's prompt. */
 .entity-card-name {
-  font-weight: 700;
+  min-width: 0;
+  font-weight: 600;
   color: var(--fg);
   font-size: var(--text-md);
+}
+
+.entity-card-name,
+.entity-card-name * {
+  font-family: var(--font-ui);
+}
+
+.entity-card-top > .button--icon {
+  margin: -2px -6px -2px 0;
+}
+
+/* Soft neutral chips (``HeroChip``) in their own row. */
+.entity-card-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-1);
+}
+
+.entity-card-chips:empty {
+  display: none;
 }
 
 .entity-card-top :is(.entity-card-name, .plugins-name) {
@@ -8313,75 +8327,25 @@ button.mcp-server-head:focus-visible {
   overflow: hidden;
 }
 
+/* Faint meta along the bottom: plain words, spaced, never coloured. */
 .entity-card-foot {
   display: flex;
   align-items: center;
-  gap: var(--space-3);
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-5);
   margin-top: auto;
   padding-top: var(--space-2);
-}
-
-/* An extension card: a soft clickable card like a plugin card. The whole
-   card is the button, so it keeps the gcard's own pointer and hover; the
-   foot carries the id and a chevron that says it opens onto a page.
-   A <button> takes the browser's own text colour and font rather than
-   inheriting, which left the id black on the dark card — so set both. */
-.entity-card.ext-card {
-  color: var(--fg);
-  font: inherit;
-}
-
-.ext-card .meta {
+  font-size: var(--text-xs);
   color: var(--fg-faint);
 }
 
-.ext-card .ext-card-id {
+.entity-card-foot > * {
   min-width: 0;
-  color: var(--fg-muted);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.ext-card .plugins-chevron-end {
-  margin-left: auto;
-  color: var(--fg-faint);
 }
 
 /* The extension detail page reuses the plugin detail's vocabulary
    (`.plugin-detail-*`, `.plugins-content-*`) so the two read as one
    surface; only the settings form's width is its own. */
-
-/* The add control: a quiet + that turns into a green check once added. */
-.plugins-add {
-  appearance: none;
-  flex-shrink: 0;
-  width: 26px;
-  height: 26px;
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--border-soft);
-  background: var(--bg-raised);
-  color: var(--fg-muted);
-  font-size: var(--text-lg);
-  line-height: 1;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition: color 0.12s, border-color 0.12s, background 0.12s;
-}
-
-.plugins-add:hover:not(:disabled) {
-  color: var(--fg);
-  border-color: var(--border);
-}
-
-.plugins-add.is-installed {
-  color: var(--success, #10b981);
-  background: color-mix(in srgb, var(--success, #10b981) 14%, transparent);
-  border-color: transparent;
-  cursor: default;
-}
 
 .plugins-card {
   padding: var(--space-5) var(--space-6);
@@ -8836,7 +8800,9 @@ button.mcp-server-head:focus-visible {
   gap: var(--space-2);
   padding: 1px 7px;
   border-radius: 4px;
-  background: var(--bg-raised);
+  /* A tint of the text colour, so a chip reads on the page, on a card,
+     and on a card's hover alike. */
+  background: color-mix(in srgb, var(--fg) 8%, transparent);
   color: var(--fg-muted);
   font-size: var(--text-xs);
   font-weight: 500;
@@ -8848,7 +8814,8 @@ button.mcp-server-head:focus-visible {
   font-family: var(--font-ui);
 }
 
-/* One primary — the gradient pill — and quiet pills beside it. */
+/* The hero's buttons (see the shared `.button` below): one primary, the
+   rest quiet. */
 .entity-hero-actions {
   display: flex;
   flex-wrap: wrap;
@@ -8857,47 +8824,154 @@ button.mcp-server-head:focus-visible {
   margin-top: var(--space-1);
 }
 
-.entity-hero-actions .btn {
+/* ── The page button ─────────────────────────────────────────────
+   One button for every page, in Claude's style (``page/Button.tsx``):
+   no gradient and no border. ``primary`` is a filled rounded rectangle
+   in the page's inverse — light on the dark theme, dark on the light one
+   — so it reads at full contrast in both; ``secondary`` a soft quiet
+   fill; ``danger`` quiet red text that only fills on hover; ``icon`` a
+   bare round icon. The variants carry two classes so they win over any
+   older single-class rule on the same element. */
+.button {
+  appearance: none;
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: var(--space-3);
-  border-radius: var(--radius-pill);
-  padding: var(--space-2) var(--space-7);
+  flex-shrink: 0;
+  height: 32px;
+  padding: 0 var(--space-6);
+  margin: 0;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--fg);
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease, opacity 0.12s ease;
+}
+
+.button.button--sm {
+  height: 28px;
+  padding: 0 var(--space-5);
+  border-radius: var(--radius-sm);
   font-size: var(--text-sm);
 }
 
-.entity-hero-actions .btn:not(.btn-primary) {
-  background: transparent;
-  border: 1px solid var(--border-soft);
-  color: var(--fg-muted);
+.button:focus-visible {
+  outline: 2px solid var(--accent-blue);
+  outline-offset: 2px;
 }
 
-.entity-hero-actions .btn:not(.btn-primary):hover:not(:disabled) {
-  background: var(--bg-raised);
+.button:disabled,
+.button[aria-disabled="true"] {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.button[aria-busy="true"] {
+  opacity: 0.7;
+  cursor: progress;
+}
+
+.button-icon,
+.button-chevron {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.button-icon {
+  margin-left: -2px;
+}
+
+.button-chevron {
+  margin-right: -4px;
+  opacity: 0.7;
+}
+
+.button.button--primary {
+  background: var(--fg);
+  color: var(--bg);
+}
+
+.button.button--primary:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--fg) 86%, var(--bg));
+  text-decoration: none;
+}
+
+.button.button--primary .icon-spinner {
+  border-color: color-mix(in srgb, var(--bg) 35%, transparent);
+  border-top-color: var(--bg);
+}
+
+.button.button--secondary {
+  background: color-mix(in srgb, var(--fg) 7%, transparent);
   color: var(--fg);
 }
 
-.entity-hero-actions .btn.btn-danger {
+.button.button--secondary:hover:not(:disabled),
+.button.button--secondary.is-active {
+  background: color-mix(in srgb, var(--fg) 13%, transparent);
+  color: var(--fg);
+  text-decoration: none;
+}
+
+.button.button--danger {
+  background: transparent;
   color: var(--danger-text, var(--danger));
 }
 
-/* A link that acts — "Open on the web" — is a quiet pill too. */
-.entity-hero-actions a.ext-web-link {
-  display: inline-flex;
-  align-items: center;
-  margin: 0;
-  padding: var(--space-2) var(--space-7);
-  border: 1px solid var(--border-soft);
-  border-radius: var(--radius-pill);
-  font-size: var(--text-sm);
-  font-weight: 600;
-  color: var(--fg-muted);
+.button.button--danger:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--danger) 14%, transparent);
+  text-decoration: none;
 }
 
-.entity-hero-actions a.ext-web-link:hover {
-  text-decoration: none;
+/* Bare round icon — the page header's controls, a card's action. A soft
+   round hover is the only affordance. */
+.button.button--icon {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border-radius: var(--radius-circle);
+  background: transparent;
+  color: var(--fg-faint);
+}
+
+.button.button--icon.button--md {
+  width: 32px;
+  height: 32px;
+}
+
+.button.button--icon:hover:not(:disabled),
+.button.button--icon.is-active {
+  background: color-mix(in srgb, var(--fg) 10%, transparent);
   color: var(--fg);
-  background: var(--bg-raised);
+}
+
+.button.button--icon.is-danger:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--danger) 14%, transparent);
+  color: var(--danger-text, var(--danger));
+}
+
+/* A card's action is the small icon size whatever it is given. */
+.button.button--icon.card-action {
+  width: 28px;
+  height: 28px;
+}
+
+/* Added already: a quiet green check that does nothing. */
+.button.button--icon.card-action.is-installed,
+.button.button--icon.card-action.is-installed:disabled {
+  opacity: 1;
+  cursor: default;
+  color: var(--accent-green-text, var(--success));
+  background: transparent;
 }
 
 .detail-section {
@@ -8978,7 +9052,8 @@ button.mcp-server-head:focus-visible {
 }
 
 .detail-facts a {
-  color: var(--accent, #ee6138);
+  /* The accent itself is 4.0:1 on a section; this is its text shade. */
+  color: var(--accent-orange-text, var(--accent));
   text-decoration: none;
 }
 
@@ -9509,7 +9584,8 @@ button.mcp-server-head:focus-visible {
 }
 
 .detail-md a {
-  color: var(--accent, #ee6138);
+  /* The accent itself is 4.0:1 on a section; this is its text shade. */
+  color: var(--accent-orange-text, var(--accent));
   text-decoration: none;
 }
 
