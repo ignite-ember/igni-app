@@ -312,7 +312,9 @@ export const VIEW_STATE: Record<string, Partial<Record<Category, string[]>>> = {
   },
   "components/pages/WorkflowsPage.tsx": {
     data: ["workflows"],
-    pending: ["error"],
+    page: ["filter", "sort", "selected"],
+    field: ["query"],
+    pending: ["error", "loading"],
   },
   "components/panels/AgentsPanel.tsx": {
     data: ["agents"],
@@ -386,6 +388,8 @@ export const VIEW_STATE: Record<string, Partial<Record<Category, string[]>>> = {
   },
   "components/panels/SkillsPanel.tsx": {
     data: ["skills"],
+    page: ["filter", "sort"],
+    field: ["query"],
   },
   "components/panels/WatcherPanel.tsx": {
     page: ["filter"],

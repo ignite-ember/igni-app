@@ -1,0 +1,175 @@
+// @vitest-environment jsdom
+/**
+ * The Skills page: a card per skill, runnable from the card or its
+ * play button, narrowed by search and source and ordered by the sort.
+ *
+ * Pinned: running closes the page and seeds `/name`; the play button
+ * runs once without also opening the card; the source comes from where
+ * the skill was loaded; a search with no hits says so and clears.
+ */
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+
+import { SkillsPanel } from "./SkillsPanel";
+import { sourceFilters, sourceOf, visibleSkills, type SkillRow } from "./skills/skillsView";
+
+afterEach(cleanup);
+
+const SKILLS: SkillRow[] = [
+  {
+    name: "pr",
+    description: "Open a pull request",
+    category: "operations",
+    argument_hint: "base-branch",
+    source_dir: "/Users/me/code/app/.igni/skills",
+  },
+  {
+    name: "commit",
+    description: "Write a commit",
+    category: "development",
+    source_dir: "/Users/me/.igni/skills/commit",
+  },
+  {
+    name: "acme:deploy",
+    description: "Ship it",
+    category: "operations",
+    context: "fork",
+    agent: "ops",
+    source_dir: "/Users/me/.igni/plugins/acme/skills",
+  },
+];
+
+function mount(answer: unknown) {
+  const rpc = vi.fn(async () => {
+    if (answer instanceof Error) throw answer;
+    return answer;
+  });
+  const onRun = vi.fn();
+  const onClose = vi.fn();
+  render(<SkillsPanel client={{ rpc } as never} onRun={onRun} onClose={onClose} />);
+  return { rpc, onRun, onClose };
+}
+
+const names = () => [...document.querySelectorAll(".skill-card-name")].map((n) => n.textContent);
+
+describe("the skills page", () => {
+  it("shows placeholder cards while the first read is in flight", () => {
+    const rpc = vi.fn(() => new Promise(() => {}));
+    const { container } = render(<SkillsPanel client={{ rpc } as never} onRun={() => {}} onClose={() => {}} />);
+    expect(container.querySelectorAll(".card-grid > .entity-card").length).toBeGreaterThan(0);
+    expect(rpc).toHaveBeenCalledWith("get_skill_details");
+  });
+
+  it("says how to add one when there are none, or the call fails", async () => {
+    mount([]);
+    expect(await screen.findByText("No skills installed")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Search skills" })).toBeNull();
+    cleanup();
+    mount(new Error("nope"));
+    expect(await screen.findByText("No skills installed")).toBeTruthy();
+    cleanup();
+    mount({ not: "a list" });
+    expect(await screen.findByText("No skills installed")).toBeTruthy();
+  });
+
+  it("draws each skill as a card, by name, with its source, category and arguments", async () => {
+    mount(SKILLS);
+    await screen.findByText("/pr");
+    expect(names()).toEqual(["/acme:deploy", "/commit", "/pr"]);
+    const pr = screen.getByRole("button", { name: "/pr" });
+    expect(pr.querySelector(".entity-card-desc")?.textContent).toBe("Open a pull request");
+    expect(pr.querySelector(".skill-source")?.textContent).toBe("project");
+    expect(pr.querySelector(".skill-args")?.textContent).toBe("base-branch");
+    expect(pr.querySelector(".entity-glyph")?.textContent).toBe("PR");
+    const deploy = screen.getByRole("button", { name: "/acme:deploy" });
+    expect(deploy.querySelector(".skill-source")?.textContent).toBe("plugin");
+    expect(deploy.textContent).toContain("runs on ops");
+    expect(deploy.querySelector(".entity-glyph")?.textContent).toBe("DE");
+  });
+
+  it("runs from the card: closes the page and seeds the command", async () => {
+    const { onRun, onClose } = mount(SKILLS);
+    await screen.findByText("/pr");
+    fireEvent.click(screen.getByText("/pr"));
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(onRun).toHaveBeenCalledWith("/pr");
+  });
+
+  it("runs once from the play button, without also opening the card", async () => {
+    const { onRun, onClose } = mount(SKILLS);
+    await screen.findByText("/commit");
+    fireEvent.click(screen.getByRole("button", { name: "Run /commit" }));
+    expect(onRun).toHaveBeenCalledTimes(1);
+    expect(onRun).toHaveBeenCalledWith("/commit");
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("searches names, descriptions and categories, and clears a search with no hits", async () => {
+    mount(SKILLS);
+    await screen.findByText("/pr");
+    fireEvent.click(screen.getByRole("button", { name: "Search skills" }));
+    const box = screen.getByRole("textbox", { name: "Search skills" });
+    expect(box.getAttribute("placeholder")).toBe("Search 3 skills…");
+    fireEvent.change(box, { target: { value: "ship" } });
+    expect(names()).toEqual(["/acme:deploy"]);
+    fireEvent.change(box, { target: { value: "operations" } });
+    expect(names()).toEqual(["/acme:deploy", "/pr"]);
+    fireEvent.change(box, { target: { value: "zzz" } });
+    expect(screen.getByText("No skills match")).toBeTruthy();
+    expect(screen.getByText("Nothing named or described like “zzz”.")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Show all skills" }));
+    expect(names()).toHaveLength(3);
+  });
+
+  it("filters by source and sorts by source or category", async () => {
+    mount(SKILLS);
+    await screen.findByText("/pr");
+    fireEvent.click(screen.getByRole("button", { name: "Source" }));
+    expect(screen.getAllByRole("menuitemradio").map((o) => o.textContent)).toEqual([
+      "All sources",
+      "Project",
+      "User",
+      "Plugin",
+    ]);
+    fireEvent.click(screen.getByRole("menuitemradio", { name: "User" }));
+    expect(names()).toEqual(["/commit"]);
+    expect(screen.getByRole("button", { name: "Source" }).className).toContain("is-active");
+
+    fireEvent.click(screen.getByRole("button", { name: "Source" }));
+    fireEvent.click(screen.getByRole("menuitemradio", { name: "All sources" }));
+    fireEvent.click(screen.getByRole("button", { name: "Sort" }));
+    fireEvent.click(screen.getByRole("menuitemradio", { name: "Source" }));
+    expect(names()).toEqual(["/pr", "/commit", "/acme:deploy"]);
+    fireEvent.click(screen.getByRole("button", { name: "Sort" }));
+    fireEvent.click(screen.getByRole("menuitemradio", { name: "Category" }));
+    expect(names()).toEqual(["/commit", "/acme:deploy", "/pr"]);
+  });
+
+  it("reloads from the refresh button", async () => {
+    const { rpc } = mount(SKILLS);
+    await screen.findByText("/pr");
+    fireEvent.click(screen.getByRole("button", { name: "Reload skills" }));
+    expect(rpc).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("skillsView", () => {
+  it("knows a skill's source from its name and where it was loaded", () => {
+    expect(sourceOf({ name: "a:b", source_dir: "/Users/me/.igni/skills" })).toBe("plugin");
+    expect(sourceOf({ name: "x" })).toBe("builtin");
+    expect(sourceOf({ name: "x", source_dir: "/opt/igni/core/bundled_skills" })).toBe("builtin");
+    expect(sourceOf({ name: "x", source_dir: "/home/me/.claude/skills/x" })).toBe("user");
+    expect(sourceOf({ name: "x", source_dir: "/root/.igni/skills" })).toBe("user");
+    expect(sourceOf({ name: "x", source_dir: "C:\\Users\\me\\.igni\\skills\\x" })).toBe("user");
+    expect(sourceOf({ name: "x", source_dir: "/Users/me/app/.igni/skills" })).toBe("project");
+    expect(sourceOf({ source_dir: "/srv/app/.claude/skills" })).toBe("project");
+  });
+
+  it("offers only the sources present, and tolerates missing fields", () => {
+    expect(sourceFilters([{ name: "x" }]).map((o) => o.label)).toEqual(["All sources", "Built-in"]);
+    const rows: SkillRow[] = [{}, { name: "b", description: "B" }];
+    expect(visibleSkills(rows, "", "all", "name").map((r) => r.name)).toEqual([undefined, "b"]);
+    expect(visibleSkills(rows, "b", "all", "category").map((r) => r.name)).toEqual(["b"]);
+    expect(visibleSkills(rows, "", "builtin", "source")).toHaveLength(2);
+  });
+});

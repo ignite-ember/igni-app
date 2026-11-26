@@ -279,8 +279,7 @@ button {
 .compact-card,
 .doc-cite-card,
 .plan-card,
-.prov-card,
-.workflow-card {
+.prov-card {
   display: flex;
   flex-direction: column;
   gap: var(--space-5);
@@ -5752,6 +5751,20 @@ button {
   font-size: var(--text-sm);
 }
 
+/* ── Skills page ── an EntityCard grid; the name is the command, in the
+   accent mono the Help page draws commands in. */
+.skill-card-name {
+  color: var(--accent-orange-text);
+}
+
+.skill-args {
+  font-family: var(--font-mono);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .kv {
   display: grid;
   grid-template-columns: auto 1fr;
@@ -10203,58 +10216,173 @@ button.mcp-server-head:focus-visible {
 }
 
 /* ── Workflows page ──────────────────────────────────────────────
-   One card per workflow: what it is, when to reach for it, and the
-   phases it walks through. Clicking seeds the composer — several take
-   a JSON argument object. See ``WorkflowsPage``. */
-.workflow-card {
-  gap: var(--space-3);
-  width: 100%;
-  text-align: left;
-  background: none;
-  border-radius: var(--radius-md, 8px);
-  margin-bottom: var(--space-4);
-  font: inherit;
-  cursor: pointer;
-}
-
-.workflow-card:hover {
-  border-color: var(--accent, #ee6138);
-  background: var(--bg-surface);
-}
-
-.workflow-head {
-  display: flex;
-  align-items: baseline;
-  gap: var(--space-5);
-}
-
-.workflow-name {
-  font-family: var(--mono, ui-monospace, monospace);
-  font-weight: 600;
+   A card grid like Plugins: a card opens the workflow's own page with
+   every phase spelled out; its round play button seeds the run.
+   Running still streams into the chat — several take a JSON argument
+   object. See ``WorkflowsPage``. */
+.workflow-card-name,
+.skill-card-name {
+  font-family: var(--font-mono);
   font-size: var(--text-md);
+  font-weight: 600;
+  background: none;
+  padding: 0;
 }
 
-.workflow-phases {
-  font-size: var(--text-sm);
-  color: var(--fg-faint);
+.workflow-card-phases {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-1);
 }
 
-.workflow-desc {
-  font-size: var(--text-sm);
+.workflow-card-phase {
+  font-size: var(--text-xs);
+  padding: 1px 7px;
+  border-radius: var(--radius-pill);
+  background: var(--bg);
+  border: 1px solid var(--border-soft);
   color: var(--fg-muted);
 }
 
-.workflow-when {
-  font-size: var(--text-sm);
-  color: var(--fg-faint);
-  font-style: italic;
+.workflow-card-count {
+  white-space: nowrap;
 }
 
-.workflow-phase-list {
+/* Where a skill or workflow comes from, as a quiet pill. */
+.workflow-source,
+.skill-source {
+  padding: 1px 7px;
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--fg) 7%, transparent);
+  white-space: nowrap;
+}
+
+.workflow-source,
+.skill-source.is-project {
+  color: var(--accent-orange-text);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+.skill-source.is-plugin {
+  color: var(--accent-blue-text);
+  background: color-mix(in srgb, var(--accent-blue) 12%, transparent);
+}
+
+/* A card's own action: a quiet round icon that lights on hover, so a
+   grid of cards is not a column of bordered buttons. */
+.card-action {
+  appearance: none;
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: var(--radius-circle);
+  background: transparent;
+  color: var(--fg-faint);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: color 0.12s, background 0.12s;
+}
+
+.card-action:hover:not(:disabled),
+.card-action:focus-visible {
+  color: var(--accent-orange-text);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  outline: none;
+}
+
+.card-action:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.workflow-run-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.workflow-detail-section {
+  margin-top: var(--space-7);
+}
+
+.workflow-detail-heading {
+  margin: 0 0 var(--space-4);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--fg-faint);
+}
+
+.workflow-detail-text {
+  margin: 0;
+  color: var(--fg-muted);
+  font-size: var(--text-md);
+  line-height: 1.5;
+}
+
+.workflow-steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
   display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-  margin-top: var(--space-1);
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.workflow-step {
+  display: flex;
+  gap: var(--space-5);
+  padding: var(--space-5) var(--space-6);
+  border-radius: var(--radius-lg);
+  background: var(--bg-surface);
+}
+
+.workflow-step-num {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  border-radius: var(--radius-circle);
+  background: var(--bg);
+  border: 1px solid var(--border-soft);
+  color: var(--fg-muted);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.workflow-step-body {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.workflow-step-title {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-4);
+  font-weight: 600;
+  color: var(--fg);
+}
+
+.workflow-step-detail {
+  font-size: var(--text-sm);
+  color: var(--fg-muted);
+  line-height: 1.45;
+}
+
+.workflow-detail-path {
+  margin-top: var(--space-7);
+  font-size: var(--text-xs);
+  color: var(--fg-faint);
 }
 
 .workflow-phase {
