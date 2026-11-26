@@ -8772,8 +8772,9 @@ button.mcp-server-head:focus-visible {
   padding: 1px 7px;
   border-radius: 4px;
   /* A tint of the text colour, so a chip reads on the page, on a card,
-     and on a card's hover alike. */
-  background: color-mix(in srgb, var(--fg) 8%, transparent);
+     and on a card's hover alike — 6%, the most that keeps the muted text
+     at 4.5:1 on a hovered card in both themes. */
+  background: color-mix(in srgb, var(--fg) 6%, transparent);
   color: var(--fg-muted);
   font-size: var(--text-xs);
   font-weight: 500;
