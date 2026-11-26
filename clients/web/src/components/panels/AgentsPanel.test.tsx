@@ -218,11 +218,38 @@ describe("an agent's own page", () => {
     const sections = screen.getAllByRole("region").map((s) => s.getAttribute("aria-label"));
     expect(sections).toEqual(["Tools", "MCP servers", "Tags", "Source", "System prompt"]);
     const tools = screen.getByRole("region", { name: "Tools" });
-    expect(within(tools).getByText("Ghost").className).toContain("is-unknown");
-    expect(within(tools).getByText("Read").className).not.toContain("is-unknown");
+    expect(within(tools).getByText("Ghost").className).toBe("detail-pill is-flagged");
+    expect(within(tools).getByText("Read").className).toBe("detail-pill");
     expect(within(tools).getByText(/can't find Ghost/)).toBeTruthy();
     expect(screen.getByRole("heading", { name: "Be strict" })).toBeTruthy();
     expect(screen.getByText("/work/proj/.igni/agents/reviewer.md")).toBeTruthy();
+  });
+
+  it("draws the shared detail layout: plain hero, sections, facts and one prose style", async () => {
+    mount();
+    fireEvent.click(await screen.findByRole("button", { name: "reviewer" }));
+    const detail = document.querySelector(".entity-detail") as HTMLElement;
+    const hero = detail.querySelector(".entity-hero") as HTMLElement;
+    // The name is the plain heading; meta and chips are the hero's own.
+    expect(hero.querySelector("h2")?.className).toBe("entity-hero-title");
+    expect(hero.querySelector(".entity-hero-meta")?.textContent).toBe("opus3 tools");
+    expect(hero.querySelector(".plugins-version")).toBeNull();
+    expect([...hero.querySelectorAll(".hero-chip")].map((c) => c.textContent)).toEqual([
+      "Project",
+      "orchestrates",
+    ]);
+    // Every part below the hero is a DetailSection.
+    for (const region of screen.getAllByRole("region")) {
+      expect(region.className).toBe("detail-section");
+      expect(region.parentElement).toBe(detail);
+    }
+    const source = screen.getByRole("region", { name: "Source" });
+    const file = within(source).getByText("/work/proj/.igni/agents/reviewer.md");
+    expect(file.tagName).toBe("DD");
+    expect(file.className).toBe("is-mono");
+    const prompt = screen.getByRole("region", { name: "System prompt" });
+    expect(prompt.querySelector(".detail-md h1, .detail-md h2, .detail-md h3")).toBeTruthy();
+    expect(prompt.querySelector(".agent-prompt-md")).toBeNull();
   });
 
   it("leaves out the sections an agent has nothing for", async () => {

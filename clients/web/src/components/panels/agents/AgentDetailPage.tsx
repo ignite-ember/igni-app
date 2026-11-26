@@ -1,15 +1,25 @@
 /** One agent's page: what it is and where it comes from in the hero,
  *  then its tools, MCP servers, tags, file and system prompt, each in
- *  its own soft card. */
+ *  its own section. */
 
-import { useEffect, type ReactNode } from "react";
-import ReactMarkdown from "react-markdown";
+import { useEffect } from "react";
 
 import { EntityGlyph } from "../../EntityGlyph";
+import { PlainMarkdown } from "../../markdown/PlainMarkdown";
+import { DetailFacts } from "../../page/DetailFacts";
+import { DetailMarkdown } from "../../page/DetailMarkdown";
+import { DetailSection } from "../../page/DetailSection";
 import { EntityHero } from "../../page/EntityHero";
-import { AgentChips } from "./AgentChips";
+import { HeroChip } from "../../page/HeroChip";
 import { AgentKeepActions, type KeepChoice } from "./AgentKeepActions";
-import { agentShortName, toolsSummary, type AgentRow } from "./agentRecord";
+import {
+  agentPlugin,
+  agentShortName,
+  agentSource,
+  SOURCE_LABELS,
+  toolsSummary,
+  type AgentRow,
+} from "./agentRecord";
 
 export function AgentDetailPage({
   agent: a,
@@ -26,6 +36,7 @@ export function AgentDetailPage({
     document.querySelector(".page-body, .drawer-body")?.scrollTo?.(0, 0);
   }, [a.name]);
   const unknown = new Set(a.unknown_tools ?? []);
+  const plugin = agentPlugin(a);
   return (
     <div className="entity-detail agent-detail">
       <EntityHero
@@ -33,80 +44,65 @@ export function AgentDetailPage({
         icon={<EntityGlyph name={agentShortName(a) || "Agent"} size={52} />}
         meta={
           <>
-            <span className="plugins-version">{a.model || "Default model"}</span>
+            <span className="entity-meta">{a.model || "Default model"}</span>
             <span className="entity-meta">{toolsSummary(a)}</span>
           </>
         }
         description={a.description}
-        chips={<AgentChips agent={a} />}
+        chips={
+          <>
+            <HeroChip>
+              {plugin ? `${SOURCE_LABELS.plugin} · ${plugin}` : SOURCE_LABELS[agentSource(a)]}
+            </HeroChip>
+            {a.can_orchestrate && <HeroChip>orchestrates</HeroChip>}
+          </>
+        }
         actions={
           a.is_ephemeral && <AgentKeepActions variant="buttons" busy={busy} onPick={onKeep} />
         }
       />
 
-      <div className="agent-sections">
-        {!!a.tools?.length && (
-          <Section label="Tools" count={a.tools.length}>
-            <Pills items={a.tools} flagged={unknown} />
-            {unknown.size > 0 && (
-              <div className="agent-section-note">
-                igni can't find {[...unknown].join(", ")}; the agent fails when it is called.
-              </div>
-            )}
-          </Section>
-        )}
-        {!!a.mcp_servers?.length && (
-          <Section label="MCP servers" count={a.mcp_servers.length}>
-            <Pills items={a.mcp_servers} />
-          </Section>
-        )}
-        {!!a.tags?.length && (
-          <Section label="Tags" count={a.tags.length}>
-            <Pills items={a.tags} />
-          </Section>
-        )}
-        {a.source_path && (
-          <Section label="Source">
-            <code className="agent-source-path">{a.source_path}</code>
-          </Section>
-        )}
-        {a.system_prompt && (
-          <Section label="System prompt">
-            <div className="agent-prompt-md">
-              <ReactMarkdown>{a.system_prompt}</ReactMarkdown>
+      {!!a.tools?.length && (
+        <DetailSection title="Tools" count={a.tools.length}>
+          <Pills items={a.tools} flagged={unknown} />
+          {unknown.size > 0 && (
+            <div className="detail-note is-danger">
+              igni can't find {[...unknown].join(", ")}; the agent fails when it is called.
             </div>
-          </Section>
-        )}
-      </div>
+          )}
+        </DetailSection>
+      )}
+      {!!a.mcp_servers?.length && (
+        <DetailSection title="MCP servers" count={a.mcp_servers.length}>
+          <Pills items={a.mcp_servers} />
+        </DetailSection>
+      )}
+      {!!a.tags?.length && (
+        <DetailSection title="Tags" count={a.tags.length}>
+          <Pills items={a.tags} />
+        </DetailSection>
+      )}
+      {a.source_path && (
+        <DetailSection title="Source">
+          <DetailFacts facts={[{ label: "File", value: a.source_path, mono: true }]} />
+        </DetailSection>
+      )}
+      {a.system_prompt && (
+        <DetailSection title="System prompt">
+          <DetailMarkdown>
+            <PlainMarkdown text={a.system_prompt} />
+          </DetailMarkdown>
+        </DetailSection>
+      )}
     </div>
-  );
-}
-
-function Section({
-  label,
-  count,
-  children,
-}: {
-  label: string;
-  count?: number;
-  children: ReactNode;
-}) {
-  return (
-    <section className="agent-section" aria-label={label}>
-      <div className="plugins-content-head">
-        <span>{label}</span>
-        {count !== undefined && <span className="plugins-content-count">{count}</span>}
-      </div>
-      {children}
-    </section>
   );
 }
 
 function Pills({ items, flagged }: { items: string[]; flagged?: Set<string> }) {
   return (
-    <div className="agent-pills">
+    <div className="detail-pills">
       {items.map((t) => (
-        <span key={t} className={`agent-pill${flagged?.has(t) ? " is-unknown" : ""}`}>
+        <span key={t} className={`detail-pill${flagged?.has(t) ? " is-flagged" : ""}`}>
           {t}
         </span>
       ))}
