@@ -63,7 +63,7 @@ describe("the watcher panel", () => {
     expect(hero.querySelector("h2")?.className).toBe("entity-hero-title");
     expect(hero.querySelector(".entity-hero-meta")?.textContent).toBe("running");
     expect(hero.querySelector(".watcher-chip")).toBeNull();
-    expect(hero.querySelector(".entity-hero-actions .btn-danger")).toBeTruthy();
+    expect(hero.querySelector(".entity-hero-actions .button--danger")).toBeTruthy();
     // Facts and output are sections straight under the hero.
     const regions = screen.getAllByRole("region");
     expect(regions.map((r) => r.getAttribute("aria-label"))).toEqual(["Process", "Output"]);

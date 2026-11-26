@@ -28,7 +28,7 @@ describe("the context page", () => {
     const { rpc } = page(() => ({ total: 1000, runs: 750, floor: 250 }));
     await screen.findByText("1,000");
     const refresh = screen.getByRole("button", { name: "Refresh" });
-    expect(refresh.className).toContain("kb-icon-btn");
+    expect(refresh.className).toContain("button--icon");
     fireEvent.click(refresh);
     await waitFor(() => expect(rpc).toHaveBeenCalledTimes(2));
   });

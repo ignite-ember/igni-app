@@ -2,9 +2,11 @@ import { useCallback, useEffect, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import type { IgniClient } from "../../protocol/client";
 import { Drawer } from "./Drawer";
-import { ClockIcon, RefreshIcon } from "../Icons";
+import { ClockIcon, XIcon } from "../Icons";
+import { CardAction } from "../page/CardAction";
 import { CardGrid } from "../page/CardGrid";
 import { EntityCard } from "../page/EntityCard";
+import { HeroChip } from "../page/HeroChip";
 import { PageEmpty } from "../page/PageEmpty";
 import { PageHeaderControls } from "../page/PageHeaderControls";
 import { PageLoading } from "../page/PageLoading";
@@ -21,20 +23,7 @@ interface ScheduledTask {
   created_at?: string;
 }
 
-const STATUS_TONE: Record<string, "ok" | "warn" | "bad" | "muted"> = {
-  pending: "warn",
-  running: "warn",
-  completed: "ok",
-  failed: "bad",
-  cancelled: "muted",
-};
-
 const isLive = (s?: string) => s === "pending" || s === "running";
-
-function StatusPill({ status }: { status: string }) {
-  const tone = STATUS_TONE[status] || "muted";
-  return <span className={`task-status tone-${tone}`}>{status}</span>;
-}
 
 /** "Next run" while waiting, "Ran" once it has, "Was due" when cancelled first. */
 function whenLabel(status: string): string {
@@ -77,30 +66,21 @@ function TaskCard({ task, onCancel }: { task: ScheduledTask; onCancel: () => voi
       }
       action={
         isLive(status) && (
-          <button className="btn btn-sm btn-danger task-card-cancel" onClick={onCancel}>
-            Cancel
-          </button>
+          <CardAction label="Cancel" title="Cancel this task" danger className="task-card-cancel" onClick={onCancel}>
+            <XIcon size={11} />
+          </CardAction>
         )
       }
-      chips={
-        <div className="task-card-chips">
-          <StatusPill status={status} />
-        </div>
-      }
+      chips={<HeroChip>{status}</HeroChip>}
       footer={
         <>
-          {task.recurrence && (
-            <span className="entity-chip">
-              <RefreshIcon size={11} />
-              {task.recurrence}
-            </span>
-          )}
+          {task.recurrence && <span className="entity-meta">{task.recurrence}</span>}
           {task.scheduled_at && (
             <span className="entity-meta">
               {whenLabel(status)} {formatWhen(task.scheduled_at)}
             </span>
           )}
-          {task.id && <code className="task-id">{task.id}</code>}
+          {task.id && <span className="entity-meta">{task.id}</span>}
         </>
       }
     >

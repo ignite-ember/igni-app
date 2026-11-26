@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { IgniClient } from "../../protocol/client";
 import { Drawer } from "./Drawer";
+import { Button } from "../page/Button";
 
 /**
  * Programs — who besides this window may answer the agent's approval
@@ -88,9 +89,9 @@ export function ProgramsPanel({
             </span>
             <div className="programs-token-row">
               <code className="programs-token-value">{token}</code>
-              <button className="btn btn-sm programs-copy" onClick={() => void copy()}>
+              <Button size="sm" className="programs-copy" onClick={() => void copy()}>
                 {copied ? "Copied" : "Copy"}
-              </button>
+              </Button>
             </div>
           </div>
         ) : null}
@@ -102,16 +103,12 @@ export function ProgramsPanel({
           </p>
         )}
         <div className="programs-actions">
-          <button className="btn btn-sm btn-primary" disabled={busy} onClick={() => void make()}>
+          <Button variant="primary" disabled={busy} onClick={() => void make()}>
             Make an approver token
-          </button>
-          <button
-            className="btn btn-sm btn-danger"
-            disabled={busy}
-            onClick={() => void revokeAll()}
-          >
+          </Button>
+          <Button variant="danger" disabled={busy} onClick={() => void revokeAll()}>
             Revoke all approver tokens
-          </button>
+          </Button>
         </div>
       </section>
     </Drawer>

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import type { IgniClient } from "../../protocol/client";
 import { Drawer } from "./Drawer";
 import { PageEmpty } from "../page/PageEmpty";
+import { Button } from "../page/Button";
 
 interface LoopStatus {
   active?: boolean;
@@ -110,17 +111,15 @@ export function LoopPanel({
             <p className="loop-prompt">{status.prompt}</p>
             <div className="loop-actions">
               {status.paused ? (
-                <button className="btn btn-sm btn-primary" onClick={() => void resumeLoop()}>
+                <Button variant="primary" onClick={() => void resumeLoop()}>
                   Resume
-                </button>
+                </Button>
               ) : (
-                <button className="btn btn-sm" onClick={() => act("loop_pause")}>
-                  Pause
-                </button>
+                <Button onClick={() => act("loop_pause")}>Pause</Button>
               )}
-              <button className="btn btn-sm btn-danger" onClick={() => act("cancel_pending_loop")}>
+              <Button variant="danger" onClick={() => act("cancel_pending_loop")}>
                 Stop loop
-              </button>
+              </Button>
             </div>
           </section>
         </div>

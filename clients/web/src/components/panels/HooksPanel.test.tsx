@@ -76,7 +76,7 @@ describe("the hooks page", () => {
       hook({ event: "SessionStart", command: "start.sh" }),
     ]);
     await screen.findByText("4 hooks");
-    const events = [...document.querySelectorAll(".hooks-event-name")].map((e) => e.textContent);
+    const events = [...document.querySelectorAll(".hooks-group .entity-card-name")].map((e) => e.textContent);
     expect(events).toEqual(["SessionStart", "Stop", "AlphaEvent", "ZetaEvent"]);
     // Known events explain themselves; unknown ones carry no blurb.
     expect(screen.getByText(/Runs when a session boots/)).toBeTruthy();

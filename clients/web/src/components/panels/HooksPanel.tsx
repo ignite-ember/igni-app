@@ -161,7 +161,7 @@ function HookGroup({ event, hooks }: { event: string; hooks: HookEntry[] }) {
           <EventIcon />
         </span>
       }
-      name={<span className="hooks-event-name">{event}</span>}
+      name={event}
       action={<span className="hooks-event-count">{hooks.length}</span>}
       description={blurb && <span className="hooks-event-blurb">{blurb}</span>}
     >
