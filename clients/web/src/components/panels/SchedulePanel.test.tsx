@@ -1,17 +1,21 @@
 // @vitest-environment jsdom
 /**
- * The scheduled-tasks page: what is waiting, what ran, and the one thing
- * a person can do about a task — cancel it while it is still live.
+ * The scheduled-tasks page: what is waiting, what ran, and what a person
+ * can do about a task — run it now, or cancel it while it is still live.
  *
  * Pinned here: the default view is the live tasks, done ones stay
  * readable behind a filter, a finished task never offers Cancel, and a
  * backend that fails the list call reads as "nothing scheduled" rather
- * than a page stuck on "Loading…".
+ * than a page stuck on "Loading…". A card opens the task's own page —
+ * never an in-place expansion — where the whole output reads and copies,
+ * Run now and Cancel act, and back lands on the list as it was left.
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 
+import { PageContext } from "../PageShell";
 import { SchedulePanel } from "./SchedulePanel";
+import { looksLikeMarkdown } from "./schedule/scheduleView";
 
 afterEach(cleanup);
 
@@ -23,6 +27,7 @@ interface Task {
   recurrence?: string;
   result?: string;
   error?: string;
+  created_at?: string;
 }
 
 const TASKS: Task[] = [
@@ -51,7 +56,10 @@ const TASKS: Task[] = [
   { id: "t-run", status: "running", scheduled_at: "2026-11-03T10:00:00Z" },
 ];
 
-function panelWith(tasks: Task[] | Error) {
+function panelWith(
+  tasks: Task[] | Error,
+  { asPage = false, run }: { asPage?: boolean; run?: (params: unknown) => Promise<unknown> } = {},
+) {
   const calls: { method: string; params: unknown }[] = [];
   const rpc = vi.fn(async (method: string, params?: unknown) => {
     calls.push({ method, params });
@@ -59,11 +67,30 @@ function panelWith(tasks: Task[] | Error) {
       if (tasks instanceof Error) throw tasks;
       return tasks;
     }
+    if (method === "execute_scheduled_task" && run) return run(params);
     return { ok: true };
   });
-  render(<SchedulePanel client={{ rpc } as never} onClose={() => {}} />);
+  const panel = <SchedulePanel client={{ rpc } as never} onClose={() => {}} />;
+  const trail = [{ kind: "schedule", label: "Scheduled tasks" } as never];
+  render(
+    asPage ? (
+      <PageContext.Provider value={{ trail, onCrumb: () => {}, onBack: () => {}, onClose: () => {} }}>
+        {panel}
+      </PageContext.Provider>
+    ) : (
+      panel
+    ),
+  );
   return { rpc, calls };
 }
+
+/** Opens the task card named `name` and returns its page's hero heading. */
+async function openTask(name: string) {
+  fireEvent.click(await screen.findByRole("button", { name: `Open ${name}` }));
+  return screen.getByRole("heading", { name });
+}
+
+const cardNames = () => [...document.querySelectorAll(".task-card .entity-card-name")].map((n) => n.textContent);
 
 describe("what is scheduled", () => {
   it("asks for done tasks too, so past results stay readable", async () => {
@@ -116,8 +143,7 @@ describe("what is scheduled", () => {
     panelWith(TASKS);
     await screen.findByText("Summarise open PRs");
     fireEvent.click(screen.getByRole("button", { name: /^All/ }));
-    const names = [...document.querySelectorAll(".task-card-toggle")].map((n) => n.textContent);
-    expect(names).toEqual([
+    expect(cardNames()).toEqual([
       "Summarise open PRs",
       "(no description)",
       "Rotate the staging token",
@@ -143,15 +169,13 @@ describe("what is scheduled", () => {
 });
 
 describe("sorting and tabs", () => {
-  const order = () => [...document.querySelectorAll(".task-card-toggle")].map((n) => n.textContent);
-
   it("sorts soonest first or by name from the Sort menu", async () => {
     panelWith(TASKS);
     await screen.findByText("Summarise open PRs");
     fireEvent.click(screen.getByRole("button", { name: /^All/ }));
     fireEvent.click(screen.getByRole("button", { name: "Sort" }));
     fireEvent.click(screen.getByRole("menuitemradio", { name: "Soonest first" }));
-    expect(order()).toEqual([
+    expect(cardNames()).toEqual([
       "Nightly dependency audit",
       "Rotate the staging token",
       "(no description)",
@@ -160,7 +184,7 @@ describe("sorting and tabs", () => {
     ]);
     fireEvent.click(screen.getByRole("button", { name: "Sort" }));
     fireEvent.click(screen.getByRole("menuitemradio", { name: "Name" }));
-    expect(order()).toEqual([
+    expect(cardNames()).toEqual([
       "(no description)",
       "Nightly dependency audit",
       "Old reminder",
@@ -192,52 +216,224 @@ describe("sorting and tabs", () => {
   });
 });
 
-describe("a task's details", () => {
-  it("shows a finished task's result as markdown and offers no Cancel", async () => {
+describe("a task's page", () => {
+  it("opens from the card, not by expanding it in place", async () => {
     panelWith(TASKS);
     await screen.findByText("Summarise open PRs");
-    fireEvent.click(screen.getByRole("button", { name: /^Done/ }));
-    expect(screen.queryByRole("button", { name: "Cancel" })).toBeNull();
-    fireEvent.click(screen.getByText("Nightly dependency audit"));
-    expect(screen.getByText("Result")).toBeTruthy();
-    expect(screen.getByText("new").tagName).toBe("STRONG");
-  });
-
-  it("shows a failed task's error", async () => {
-    panelWith(TASKS);
-    await screen.findByText("Summarise open PRs");
-    fireEvent.click(screen.getByRole("button", { name: /^Failed/ }));
-    fireEvent.click(screen.getByText("Rotate the staging token"));
-    expect(screen.getByText("permission denied")).toBeTruthy();
-  });
-
-  it("says a task that has not run has no output yet, and closes again", async () => {
-    panelWith(TASKS);
-    const toggle = await screen.findByRole("button", { name: "Summarise open PRs" });
-    expect(toggle.getAttribute("aria-expanded")).toBe("false");
-    fireEvent.click(toggle);
+    expect(document.querySelector(".task-card [aria-expanded], .task-card[aria-expanded]")).toBeNull();
+    expect(await openTask("Summarise open PRs")).toBeTruthy();
+    // The list is gone: the page shows this one task.
+    expect(document.querySelector(".task-card")).toBeNull();
+    expect(screen.queryByRole("button", { name: /^Active/ })).toBeNull();
     expect(screen.getByText(/hasn't run/)).toBeTruthy();
-    expect(toggle.getAttribute("aria-expanded")).toBe("true");
-    fireEvent.click(toggle);
-    expect(screen.queryByText(/hasn't run/)).toBeNull();
   });
 
-  it("keeps Cancel beside the toggle, never inside it", async () => {
+  it("opens from the keyboard too", async () => {
     panelWith(TASKS);
-    const toggle = await screen.findByRole("button", { name: "Summarise open PRs" });
-    const [cancel] = screen.getAllByRole("button", { name: "Cancel" });
-    expect(toggle.contains(cancel)).toBe(false);
+    const card = await screen.findByRole("button", { name: "Open Summarise open PRs" });
+    fireEvent.keyDown(card, { key: "Enter" });
+    expect(screen.getByRole("heading", { name: "Summarise open PRs" })).toBeTruthy();
   });
 
-  it("says when a cancelled task was due", async () => {
+  it("puts the status, schedule and times in the hero and the facts", async () => {
+    panelWith([{ ...TASKS[1], created_at: "2026-10-30T08:00:00Z" }]);
+    await openTask("Summarise open PRs");
+    const hero = document.querySelector(".entity-hero") as HTMLElement;
+    expect(hero.querySelector(".hero-chip")!.textContent).toBe("pending");
+    expect(hero.textContent).toContain("every day");
+    expect(hero.textContent).toMatch(/Next run /);
+    const facts = Object.fromEntries(
+      [...document.querySelectorAll(".detail-fact")].map((f) => [
+        f.querySelector("dt")!.textContent,
+        f.querySelector("dd")!.textContent,
+      ]),
+    );
+    expect(Object.keys(facts)).toEqual(["ID", "Schedule", "Next run", "Created"]);
+    expect(facts.ID).toBe("t-live");
+    expect(facts.Schedule).toBe("every day");
+  });
+
+  it("names a finished task's time its last run, and a one-shot's schedule once", async () => {
+    panelWith(TASKS);
+    fireEvent.click(await screen.findByRole("button", { name: /^Done/ }));
+    await openTask("Nightly dependency audit");
+    const labels = [...document.querySelectorAll(".detail-fact dt")].map((d) => d.textContent);
+    expect(labels).toEqual(["ID", "Schedule", "Last run"]);
+    expect(screen.getByText("Once")).toBeTruthy();
+    expect(document.querySelector(".entity-hero")!.textContent).toContain("once");
+  });
+
+  it("shows a markdown result as markdown, and offers no Cancel once done", async () => {
+    panelWith(TASKS);
+    fireEvent.click(await screen.findByRole("button", { name: /^Done/ }));
+    expect(screen.queryByRole("button", { name: "Cancel" })).toBeNull();
+    await openTask("Nightly dependency audit");
+    expect(screen.getByRole("region", { name: "Output" })).toBeTruthy();
+    expect(screen.getByText("new").tagName).toBe("STRONG");
+    expect(screen.queryByRole("button", { name: "Cancel" })).toBeNull();
+  });
+
+  it("shows a long plain output whole, in a mono block, and copies all of it", async () => {
+    const writeText = vi.fn(async () => {});
+    Object.assign(navigator, { clipboard: { writeText } });
+    const long = Array.from({ length: 4000 }, (_, i) => `line ${i} of the build log`).join("\n");
+    panelWith([{ id: "t-long", description: "Build", status: "completed", result: long }]);
+    fireEvent.click(await screen.findByRole("button", { name: /^All/ }));
+    await openTask("Build");
+    const block = document.querySelector(".mono-block") as HTMLElement;
+    expect(block.tagName).toBe("PRE");
+    expect(block.textContent).toBe(long);
+    expect(block.textContent).toContain("line 3999 of the build log");
+    fireEvent.click(screen.getByRole("button", { name: "Copy the output" }));
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith(long));
+    expect(await screen.findByRole("button", { name: "Copied" })).toBeTruthy();
+  });
+
+  it("shows a failed task's error whole, and copies it", async () => {
+    const writeText = vi.fn(async () => {});
+    Object.assign(navigator, { clipboard: { writeText } });
+    panelWith(TASKS);
+    fireEvent.click(await screen.findByRole("button", { name: /^Failed/ }));
+    await openTask("Rotate the staging token");
+    const block = screen.getByRole("region", { name: "Error" }).querySelector(".mono-block")!;
+    expect(block.className).toContain("is-danger");
+    expect(block.textContent).toBe("permission denied");
+    expect(screen.queryByRole("region", { name: "Output" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Copy the error" }));
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith("permission denied"));
+  });
+
+  it("says a cancelled task never ran, and when it was due", async () => {
     panelWith([{ id: "x", description: "Late", status: "cancelled", scheduled_at: "2026-11-01T02:00:00Z" }]);
     fireEvent.click(await screen.findByRole("button", { name: /^Cancelled/ }));
     expect(screen.getByText(/^Was due /)).toBeTruthy();
+    await openTask("Late");
+    expect(screen.getByText("Cancelled before it ran.")).toBeTruthy();
+    expect(screen.getByText("Was due", { selector: "dt" })).toBeTruthy();
+  });
+
+  it("follows the latest poll while open", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      let tasks: Task[] = [{ id: "t1", description: "Flip", status: "running" }];
+      const rpc = vi.fn(async () => tasks);
+      render(<SchedulePanel client={{ rpc } as never} onClose={() => {}} />);
+      await openTask("Flip");
+      expect(screen.getByRole("button", { name: "Cancel" })).toBeTruthy();
+      tasks = [{ id: "t1", description: "Flip", status: "completed", result: "done and dusted" }];
+      await vi.advanceTimersByTimeAsync(3_000);
+      await waitFor(() => expect(screen.getByText("done and dusted")).toBeTruthy());
+      expect(screen.queryByRole("button", { name: "Cancel" })).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("runs the task's description now and shows the answer", async () => {
+    let finish: (v: unknown) => void = () => {};
+    const { calls } = panelWith(TASKS, { run: () => new Promise((r) => (finish = r)) });
+    await openTask("Summarise open PRs");
+    fireEvent.click(screen.getByRole("button", { name: "Run now" }));
+    expect(calls.find((c) => c.method === "execute_scheduled_task")!.params).toEqual({
+      description: "Summarise open PRs",
+    });
+    expect(screen.getByText("Running…")).toBeTruthy();
+    expect((screen.getByRole("button", { name: "Run now" }) as HTMLButtonElement).disabled).toBe(true);
+    finish({ run_id: "sched-1", result: "Three PRs open." });
+    expect(await screen.findByText("Three PRs open.")).toBeTruthy();
+    expect(screen.getByRole("region", { name: "Run now" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Copy the run's answer" })).toBeTruthy();
+  });
+
+  it("says why a run failed, and when it said nothing", async () => {
+    let answer: () => Promise<unknown> = async () => {
+      throw new Error("policy refused the run");
+    };
+    panelWith(TASKS, { run: () => answer() });
+    await openTask("Summarise open PRs");
+    fireEvent.click(screen.getByRole("button", { name: "Run now" }));
+    expect(await screen.findByText("policy refused the run")).toBeTruthy();
+    answer = async () => ({ run_id: "r", result: "" });
+    fireEvent.click(screen.getByRole("button", { name: "Run now" }));
+    expect(await screen.findByText("The run said nothing.")).toBeTruthy();
+    expect(screen.queryByText("policy refused the run")).toBeNull();
+    answer = async () => {
+      throw "plain refusal";
+    };
+    fireEvent.click(screen.getByRole("button", { name: "Run now" }));
+    expect(await screen.findByText("plain refusal")).toBeTruthy();
+    answer = async () => null;
+    fireEvent.click(screen.getByRole("button", { name: "Run now" }));
+    expect(await screen.findByText("The run said nothing.")).toBeTruthy();
+  });
+
+  it("does not offer Run now for a task with nothing to run", async () => {
+    const { calls } = panelWith([{ id: "t-run", status: "running" }]);
+    await openTask("(no description)");
+    const run = screen.getByRole("button", { name: "Run now" }) as HTMLButtonElement;
+    expect(run.disabled).toBe(true);
+    fireEvent.click(run);
+    expect(calls.some((c) => c.method === "execute_scheduled_task")).toBe(false);
+  });
+
+  it("cancels from its page, as a danger button, then reloads", async () => {
+    const { calls } = panelWith(TASKS);
+    await openTask("Summarise open PRs");
+    const cancel = screen.getByRole("button", { name: "Cancel" });
+    expect(cancel.className).toContain("button--danger");
+    fireEvent.click(cancel);
+    await waitFor(() =>
+      expect(calls.find((c) => c.method === "cancel_scheduled_task")?.params).toEqual({ task_id: "t-live" }),
+    );
+    await waitFor(() => expect(calls.filter((c) => c.method === "get_scheduled_tasks").length).toBe(2));
+    await waitFor(() => expect((screen.getByRole("button", { name: "Cancel" }) as HTMLButtonElement).disabled).toBe(false));
+  });
+
+  it("offers no Cancel on the page of a live task with no id", async () => {
+    panelWith([{ description: "Anonymous", status: "pending" }]);
+    await openTask("Anonymous");
+    expect(screen.queryByRole("button", { name: "Cancel" })).toBeNull();
+  });
+
+  it("goes back to the list as it was left: tab, search and scroll", async () => {
+    panelWith(TASKS, { asPage: true });
+    await screen.findByText("Summarise open PRs");
+    fireEvent.click(screen.getByRole("button", { name: /^All/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Search tasks" }));
+    fireEvent.change(screen.getByPlaceholderText(/Search description/), { target: { value: "audit" } });
+    const scroller = document.querySelector(".page-body") as HTMLElement;
+    scroller.scrollTop = 240;
+    await openTask("Nightly dependency audit");
+    expect(scroller.scrollTop).toBe(0);
+    // The trail names the task; its parent crumb goes back.
+    fireEvent.click(screen.getByRole("button", { name: "Scheduled tasks" }));
+    expect(screen.queryByRole("heading", { name: "Nightly dependency audit" })).toBeNull();
+    expect(cardNames()).toEqual(["Nightly dependency audit"]);
+    expect((screen.getByPlaceholderText(/Search description/) as HTMLInputElement).value).toBe("audit");
+    expect(screen.getByRole("button", { name: /^All/ }).className).toContain("active");
+    expect(scroller.scrollTop).toBe(240);
+  });
+});
+
+describe("telling markdown from plain output", () => {
+  it.each([
+    ["# Heading", true],
+    ["- item", true],
+    ["1. first", true],
+    ["some **bold** text", true],
+    ["```\ncode\n```", true],
+    ["see [docs](https://x.test)", true],
+    ["> quoted", true],
+    ["| a | b |", true],
+    ["exit 0\nbuilt 12 files in 3.2s", false],
+    ["2 * 3 = 6", false],
+  ])("%j reads as markdown: %s", (text, md) => {
+    expect(looksLikeMarkdown(text)).toBe(md);
   });
 });
 
 describe("cancelling", () => {
-  it("cancels by id without opening the row, then reloads the list", async () => {
+  it("cancels by id from the card without opening it, then reloads the list", async () => {
     const { calls } = panelWith(TASKS);
     await screen.findByText("Summarise open PRs");
     const [first] = screen.getAllByRole("button", { name: "Cancel" });
@@ -251,7 +447,15 @@ describe("cancelling", () => {
     await waitFor(() =>
       expect(calls.filter((c) => c.method === "get_scheduled_tasks").length).toBe(2),
     );
-    expect(screen.queryByText(/hasn't run/)).toBeNull();
+    expect(screen.queryByRole("heading", { name: "Summarise open PRs" })).toBeNull();
+  });
+
+  it("keeps Cancel beside the card's own button, never inside its name", async () => {
+    panelWith(TASKS);
+    await screen.findByText("Summarise open PRs");
+    const name = screen.getByText("Summarise open PRs");
+    const [cancel] = screen.getAllByRole("button", { name: "Cancel" });
+    expect(name.contains(cancel)).toBe(false);
   });
 
   it("sends nothing for a task without an id", async () => {

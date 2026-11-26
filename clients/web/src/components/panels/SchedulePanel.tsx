@@ -1,5 +1,7 @@
-import { useCallback, useEffect, useState } from "react";
-import ReactMarkdown from "react-markdown";
+/** Scheduled tasks: soft cards under Active / All / Done / Failed /
+ *  Cancelled tabs; a card opens the task's own page, where its whole
+ *  output reads, a level down. */
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { IgniClient } from "../../protocol/client";
 import { Drawer } from "./Drawer";
 import { ClockIcon, XIcon } from "../Icons";
@@ -11,62 +13,36 @@ import { PageEmpty } from "../page/PageEmpty";
 import { PageHeaderControls } from "../page/PageHeaderControls";
 import { PageLoading } from "../page/PageLoading";
 import { PageTabs } from "../page/PageTabs";
+import { TaskDetail } from "./schedule/TaskDetail";
+import {
+  COMPARE,
+  FILTERS,
+  SORTS,
+  formatWhen,
+  isLive,
+  taskName,
+  whenLabel,
+  type FilterKey,
+  type ScheduledTask,
+  type SortKey,
+} from "./schedule/scheduleView";
 
-interface ScheduledTask {
-  id?: string;
-  description?: string;
-  scheduled_at?: string;
-  status?: string;
-  recurrence?: string;
-  result?: string;
-  error?: string;
-  created_at?: string;
-}
-
-const isLive = (s?: string) => s === "pending" || s === "running";
-
-/** "Next run" while waiting, "Ran" once it has, "Was due" when cancelled first. */
-function whenLabel(status: string): string {
-  if (isLive(status)) return "Next run";
-  return status === "cancelled" ? "Was due" : "Ran";
-}
-
-function formatWhen(iso: string): string {
-  return new Date(iso).toLocaleString([], {
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
-
-function TaskCard({ task, onCancel }: { task: ScheduledTask; onCancel: () => void }) {
-  const [open, setOpen] = useState(false);
-  const hasDetails = Boolean(task.result || task.error);
+function TaskCard({ task, onOpen, onCancel }: { task: ScheduledTask; onOpen: () => void; onCancel: () => void }) {
   const status = task.status || "pending";
   return (
     <EntityCard
-      className={`task-card${open ? " is-open" : ""}`}
+      className="task-card"
       icon={
         <span className="entity-glyph task-glyph">
           <ClockIcon size={16} />
         </span>
       }
-      // The name is the card's one toggle, stretched over the card so a
-      // click anywhere opens it; Cancel stays its sibling, never nested.
-      name={
-        <button
-          type="button"
-          className="task-card-toggle"
-          aria-expanded={open}
-          onClick={() => setOpen(!open)}
-        >
-          {task.description || "(no description)"}
-        </button>
-      }
+      name={taskName(task)}
+      label={`Open ${taskName(task)}`}
+      onOpen={onOpen}
       action={
         isLive(status) && (
-          <CardAction label="Cancel" title="Cancel this task" danger className="task-card-cancel" onClick={onCancel}>
+          <CardAction label="Cancel" title="Cancel this task" danger onClick={onCancel}>
             <XIcon size={11} />
           </CardAction>
         )
@@ -83,58 +59,9 @@ function TaskCard({ task, onCancel }: { task: ScheduledTask; onCancel: () => voi
           {task.id && <span className="entity-meta">{task.id}</span>}
         </>
       }
-    >
-      {open && (
-        <div className="task-card-body">
-          {task.error && (
-            <div className="task-block task-block-error">
-              <div className="task-block-label">Error</div>
-              <pre>{task.error}</pre>
-            </div>
-          )}
-          {task.result && (
-            <div className="task-block">
-              <div className="task-block-label">Result</div>
-              <div className="agent-prompt-md">
-                <ReactMarkdown>{task.result}</ReactMarkdown>
-              </div>
-            </div>
-          )}
-          {!hasDetails && <div className="task-block-none">No output yet — this task hasn't run.</div>}
-        </div>
-      )}
-    </EntityCard>
+    />
   );
 }
-
-type FilterKey = "active" | "all" | "completed" | "failed" | "cancelled";
-
-const FILTERS: { key: FilterKey; label: string; empty: string; match: (s: string) => boolean }[] = [
-  { key: "active", label: "Active", empty: "Nothing waiting to run", match: isLive },
-  { key: "all", label: "All", empty: "No tasks", match: () => true },
-  { key: "completed", label: "Done", empty: "Nothing has finished yet", match: (s) => s === "completed" },
-  { key: "failed", label: "Failed", empty: "Nothing has failed", match: (s) => s === "failed" },
-  { key: "cancelled", label: "Cancelled", empty: "Nothing cancelled", match: (s) => s === "cancelled" },
-];
-
-type SortKey = "live" | "soonest" | "name";
-
-const SORTS: { key: SortKey; label: string }[] = [
-  { key: "live", label: "Waiting first" },
-  { key: "soonest", label: "Soonest first" },
-  { key: "name", label: "Name" },
-];
-
-const COMPARE: Record<SortKey, (a: ScheduledTask, b: ScheduledTask) => number> = {
-  // Pending/running first, then the latest scheduled_at within each band.
-  live: (a, b) => {
-    const band = (s?: string) => (isLive(s) ? 0 : 1);
-    return band(a.status) - band(b.status) || (b.scheduled_at || "").localeCompare(a.scheduled_at || "");
-  },
-  // A task with no time sinks to the bottom.
-  soonest: (a, b) => (a.scheduled_at || "￿").localeCompare(b.scheduled_at || "￿"),
-  name: (a, b) => (a.description || "").localeCompare(b.description || ""),
-};
 
 export function SchedulePanel({
   client,
@@ -147,6 +74,21 @@ export function SchedulePanel({
   const [filter, setFilter] = useState<FilterKey>("active");
   const [query, setQuery] = useState("");
   const [sortBy, setSortBy] = useState<SortKey>("live");
+  const [selected, setSelected] = useState<ScheduledTask | null>(null);
+  // Where the list was scrolled when a task opened, to land there again.
+  const anchor = useRef<HTMLDivElement>(null);
+  const listScroll = useRef(0);
+  const scroller = () => anchor.current?.closest<HTMLElement>(".page-body, .drawer-body") ?? null;
+
+  useLayoutEffect(() => {
+    const el = scroller();
+    if (el) el.scrollTop = selected ? 0 : listScroll.current;
+  }, [selected]);
+
+  const open = (task: ScheduledTask) => {
+    listScroll.current = scroller()?.scrollTop ?? 0;
+    setSelected(task);
+  };
 
   const refresh = useCallback(async () => {
     try {
@@ -172,6 +114,8 @@ export function SchedulePanel({
   };
 
   const all = tasks || [];
+  // The open task as the latest poll has it: its status and output move.
+  const current = selected && ((selected.id && all.find((t) => t.id === selected.id)) || selected);
   const activeFilter = FILTERS.find((f) => f.key === filter) || FILTERS[0];
   const q = query.trim().toLowerCase();
   const visible = all
@@ -186,7 +130,7 @@ export function SchedulePanel({
 
   const hasTasks = all.length > 0;
   // No tabs or search over an empty list.
-  const headerExtras = hasTasks ? (
+  const headerExtras = hasTasks && !current ? (
     <PageTabs<FilterKey>
       tabs={FILTERS.map((f) => ({
         key: f.key,
@@ -210,31 +154,49 @@ export function SchedulePanel({
   ) : undefined;
 
   return (
-    <Drawer title="Scheduled tasks" headerExtras={headerExtras} onClose={onClose}>
-      {tasks === null && <PageLoading />}
-      {tasks?.length === 0 && (
-        <PageEmpty
-          title="Nothing scheduled"
-          hint={
-            <>
-              Use <code>/schedule &lt;description&gt; every &lt;time&gt;</code>.
-            </>
-          }
-        />
-      )}
-      {hasTasks && visible.length === 0 && (
-        <PageEmpty
-          title={q ? "No tasks match" : activeFilter.empty}
-          hint={q ? undefined : "The other tabs hold the rest."}
-        />
-      )}
-      {visible.length > 0 && (
-        <CardGrid flow className="task-grid">
-          {visible.map((t, i) => (
-            <TaskCard key={t.id || i} task={t} onCancel={() => void cancel(t)} />
-          ))}
-        </CardGrid>
-      )}
+    <Drawer
+      title="Scheduled tasks"
+      levels={{
+        labels: current ? [taskName(current)] : [],
+        onTruncate: () => setSelected(null),
+      }}
+      // The task's page opens with its own name in the hero.
+      titleInBody={current !== null}
+      headerExtras={headerExtras}
+      onClose={onClose}
+    >
+      <div ref={anchor} className="tasks-page">
+        {current ? (
+          <TaskDetail task={current} client={client} onCancel={() => cancel(current)} />
+        ) : (
+          <>
+            {tasks === null && <PageLoading />}
+            {tasks?.length === 0 && (
+              <PageEmpty
+                title="Nothing scheduled"
+                hint={
+                  <>
+                    Use <code>/schedule &lt;description&gt; every &lt;time&gt;</code>.
+                  </>
+                }
+              />
+            )}
+            {hasTasks && visible.length === 0 && (
+              <PageEmpty
+                title={q ? "No tasks match" : activeFilter.empty}
+                hint={q ? undefined : "The other tabs hold the rest."}
+              />
+            )}
+            {visible.length > 0 && (
+              <CardGrid flow className="task-grid">
+                {visible.map((t, i) => (
+                  <TaskCard key={t.id || i} task={t} onOpen={() => open(t)} onCancel={() => void cancel(t)} />
+                ))}
+              </CardGrid>
+            )}
+          </>
+        )}
+      </div>
     </Drawer>
   );
 }

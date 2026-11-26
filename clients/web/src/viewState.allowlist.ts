@@ -343,6 +343,7 @@ export const VIEW_STATE: Record<string, Partial<Record<Category, string[]>>> = {
   },
   "components/panels/HooksPanel.tsx": {
     data: ["rows"],
+    page: ["selected"],
     pending: ["error"],
   },
   "components/panels/ProgramsPanel.tsx": {
@@ -382,10 +383,12 @@ export const VIEW_STATE: Record<string, Partial<Record<Category, string[]>>> = {
     data: ["contents"],
   },
   "components/panels/SchedulePanel.tsx": {
-    menu: ["open"],
     data: ["tasks"],
-    page: ["filter", "sortBy"],
+    page: ["filter", "sortBy", "selected"],
     field: ["query"],
+  },
+  "components/panels/schedule/TaskDetail.tsx": {
+    pending: ["running", "runAnswer", "runError", "cancelling"],
   },
   "components/panels/SkillsPanel.tsx": {
     data: ["skills"],
