@@ -7,6 +7,8 @@
 #   windows-install.ps1 -Action nsis          -Bundle <dir>   # ENT-021: setup.exe /S, then its uninstaller /S
 #   windows-install.ps1 -Action smoke         -Bundle <dir>   # PLAT-008 ENT-033: the installed app starts its backend
 #                                                             # on IGNI_E2E_PYTHON and stops it when closed
+#   windows-install.ps1 -Action desktop-shot  -Bundle <dir>   # the same, started normally, with a screenshot of
+#                                                             # the whole screen, the exe's icon and its signature
 param(
   [Parameter(Mandatory = $true)][string]$Action,
   [Parameter(Mandatory = $true)][string]$Bundle,
@@ -120,6 +122,49 @@ switch ($Action) {
     $left = @(Get-Backends | Where-Object { $_.CommandLine -like "*smoke-project*" })
     if ($left.Count -gt 0) { throw "the backend outlived the app by 30 s: $($left.CommandLine)" }
     Write-Host "the app started its backend and took it down when closed"
+  }
+  "desktop-shot" {
+    # The installed app as a person meets it: started the ordinary way, then
+    # the whole screen (window frame, title, taskbar) as well as the page.
+    # The title bar names the project folder (windows/title.rs).
+    $project = Join-Path $env:RUNNER_TEMP "released-check"
+    New-Item -ItemType Directory -Force -Path $project | Out-Null
+    $env:IGNI_RUNTIME_PYTHON = $env:IGNI_E2E_PYTHON
+    $app = Start-Process -FilePath $env:IGNI_APP -ArgumentList "`"$project`"" -PassThru
+    $deadline = (Get-Date).AddSeconds(90)
+    while ((Get-Date) -lt $deadline) {
+      if ($app.HasExited) { throw "the app exited at start with code $($app.ExitCode)" }
+      $app.Refresh()
+      if ($app.MainWindowHandle -ne 0 -and $app.MainWindowTitle) { break }
+      Start-Sleep -Seconds 1
+    }
+    if ($app.MainWindowHandle -eq 0) { throw "no igni window within 90 s" }
+    # The backend starts and the chat opens.
+    Start-Sleep -Seconds 30
+    $app.Refresh()
+    $title = $app.MainWindowTitle
+    Add-Type -AssemblyName System.Windows.Forms, System.Drawing
+    $screen = [System.Windows.Forms.SystemInformation]::VirtualScreen
+    $bmp = New-Object System.Drawing.Bitmap $screen.Width, $screen.Height
+    $g = [System.Drawing.Graphics]::FromImage($bmp)
+    $g.CopyFromScreen($screen.Left, $screen.Top, 0, 0, $bmp.Size)
+    $bmp.Save((Join-Path $Out "desktop.png"), [System.Drawing.Imaging.ImageFormat]::Png)
+    $g.Dispose(); $bmp.Dispose()
+    [System.Drawing.Icon]::ExtractAssociatedIcon($env:IGNI_APP).ToBitmap().Save((Join-Path $Out "exe-icon.png"), [System.Drawing.Imaging.ImageFormat]::Png)
+    $sig = Get-AuthenticodeSignature $env:IGNI_APP
+    "title: $title`nsignature: $($sig.Status) $($sig.SignerCertificate.Subject)" | Tee-Object -FilePath (Join-Path $Out "window.txt")
+    if ($sig.Status -ne "Valid") { Write-Host "::warning::igni-app.exe has no valid Authenticode signature ($($sig.Status)): SmartScreen warns on first run" }
+    if ($title -notlike "released-check*") { throw "the window's title is '$title', not the project's folder" }
+    $backend = @(Get-Backends | Where-Object { $_.CommandLine -like "*released-check*" })
+    if ($backend.Count -eq 0) { throw "no igni_core.backend for the project" }
+    $null = $app.CloseMainWindow()
+    if (-not $app.WaitForExit(30000)) { Stop-Process -Id $app.Id -Force; throw "the app was still running 30 s after its window was closed" }
+    $deadline = (Get-Date).AddSeconds(30)
+    while ((Get-Date) -lt $deadline -and @(Get-Backends | Where-Object { $_.CommandLine -like "*released-check*" }).Count -gt 0) {
+      Start-Sleep -Seconds 1
+    }
+    if (@(Get-Backends | Where-Object { $_.CommandLine -like "*released-check*" }).Count -gt 0) { throw "the backend outlived the app by 30 s" }
+    Write-Host "the app opened its window, started its backend and took it down when closed"
   }
   default { throw "unknown action $Action" }
 }
