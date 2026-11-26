@@ -12134,6 +12134,12 @@ button.mcp-server-head:focus-visible {
   min-width: 0;
   padding: 0;
   border-bottom: none;
+  /* Sideways only, on rails: overflow-x alone left overflow-y auto, and
+     a trackpad swipe dragged the strip up and down. */
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior: contain;
+  touch-action: pan-x;
 }
 .terminal-tablist {
   position: absolute;
