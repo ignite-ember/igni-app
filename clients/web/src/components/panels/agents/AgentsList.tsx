@@ -7,7 +7,14 @@ import { EntityCard } from "../../page/EntityCard";
 import { PageEmpty } from "../../page/PageEmpty";
 import { AgentChips } from "./AgentChips";
 import { AgentKeepActions, type KeepChoice } from "./AgentKeepActions";
-import { agentShortName, toolsSummary, type AgentRow } from "./agentRecord";
+import {
+  agentPlugin,
+  agentShortName,
+  agentSource,
+  SOURCE_LABELS,
+  toolsSummary,
+  type AgentRow,
+} from "./agentRecord";
 
 export function AgentsList({
   agents,
@@ -42,7 +49,6 @@ export function AgentsList({
       {visible.map((a) => (
         <EntityCard
           key={a.name}
-          className="agent-card"
           name={a.name || "Agent"}
           glyph={agentShortName(a) || "Agent"}
           label={a.name || "Agent"}
@@ -60,11 +66,12 @@ export function AgentsList({
           chips={<AgentChips agent={a} />}
           footer={
             <>
+              <span className="entity-meta">{sourceLabel(a)}</span>
               <span className="entity-meta">{a.model || "Default model"}</span>
-              <span className="entity-meta">· {toolsSummary(a)}</span>
+              <span className="entity-meta">{toolsSummary(a)}</span>
               {!!a.mcp_servers?.length && (
                 <span className="entity-meta">
-                  · {a.mcp_servers.length} MCP server{a.mcp_servers.length === 1 ? "" : "s"}
+                  {a.mcp_servers.length} MCP server{a.mcp_servers.length === 1 ? "" : "s"}
                 </span>
               )}
             </>
@@ -73,4 +80,10 @@ export function AgentsList({
       ))}
     </CardGrid>
   );
+}
+
+/** Where an agent comes from, in the card's footer words. */
+function sourceLabel(a: AgentRow): string {
+  const plugin = agentPlugin(a);
+  return plugin ? `${SOURCE_LABELS.plugin} · ${plugin}` : SOURCE_LABELS[agentSource(a)];
 }

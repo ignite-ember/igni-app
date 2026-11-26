@@ -2,9 +2,11 @@
  *  the team, keep it for yourself, or discard it. Round icons on a
  *  card, labelled buttons on the agent's own page. */
 
-import type { MouseEvent, ReactNode } from "react";
+import type { ReactNode } from "react";
 
 import { FolderIcon, TrashIcon } from "../../Icons";
+import { Button } from "../../page/Button";
+import { CardAction } from "../../page/CardAction";
 
 /** What the panel does when one is picked. */
 export type KeepChoice = "project" | "personal" | "discard";
@@ -44,26 +46,21 @@ export function AgentKeepActions({
   busy: boolean;
   onPick: (choice: KeepChoice) => void;
 }) {
-  // On a card the buttons sit inside the card's own button: a click
-  // here is the action's, never a request to open the agent.
-  const pick = (choice: KeepChoice) => (e: MouseEvent) => {
-    e.stopPropagation();
-    onPick(choice);
-  };
   if (variant === "icons") {
+    // On a card: round icons that never open the agent.
     return (
       <span className="agent-card-actions">
         {CHOICES.map((c) => (
-          <button
+          <CardAction
             key={c.key}
-            className={`kb-icon-btn${c.key === "discard" ? " is-danger" : ""}`}
-            aria-label={c.label}
+            label={c.label}
             title={c.title}
+            danger={c.key === "discard"}
             disabled={busy}
-            onClick={pick(c.key)}
+            onClick={() => onPick(c.key)}
           >
             {c.icon}
-          </button>
+          </CardAction>
         ))}
       </span>
     );
@@ -71,15 +68,15 @@ export function AgentKeepActions({
   return (
     <>
       {CHOICES.map((c) => (
-        <button
+        <Button
           key={c.key}
-          className={`btn btn-sm${c.key === "discard" ? " btn-danger" : c.key === "project" ? " btn-primary" : ""}`}
+          variant={c.key === "discard" ? "danger" : c.key === "project" ? "primary" : "secondary"}
           title={c.title}
           disabled={busy}
-          onClick={pick(c.key)}
+          onClick={() => onPick(c.key)}
         >
           {c.label}
-        </button>
+        </Button>
       ))}
     </>
   );

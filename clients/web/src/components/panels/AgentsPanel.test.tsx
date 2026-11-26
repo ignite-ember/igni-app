@@ -76,35 +76,33 @@ function mount(rows: AgentRow[] | (() => Promise<AgentRow[]>) = ROWS, asPage = f
 }
 
 const cardNames = () =>
-  Array.from(document.querySelectorAll(".agent-card .entity-card-name")).map((n) => n.textContent);
+  Array.from(document.querySelectorAll(".entity-card[role=button] .entity-card-name")).map((n) => n.textContent);
+const foot = (card: Element) =>
+  Array.from(card.querySelectorAll(".entity-card-foot > .entity-meta")).map((m) => m.textContent);
+const chips = (card: Element) =>
+  Array.from(card.querySelectorAll(".entity-card-chips > .hero-chip")).map((m) => m.textContent);
 
 describe("the agents list", () => {
   it("shows a skeleton while the first read is in flight", () => {
     mount(() => new Promise(() => {}));
     expect(document.querySelector(".card-grid .entity-card")).toBeTruthy();
-    expect(document.querySelector(".agent-card")).toBeNull();
+    expect(document.querySelector(".entity-card[role=button]")).toBeNull();
   });
 
-  it("draws one card per agent, by name, with source chips and a footer", async () => {
+  it("draws one card per agent, by name, the shared card: neutral chips, source in the faint footer", async () => {
     mount();
     await screen.findByText("reviewer");
     expect(cardNames()).toEqual(["acme:linter", "architect", "migrator", "reviewer"]);
     const reviewer = screen.getByRole("button", { name: "reviewer" });
-    expect(within(reviewer).getByText("Project")).toBeTruthy();
-    expect(within(reviewer).getByText("orchestrates")).toBeTruthy();
-    expect(reviewer.querySelector(".entity-card-foot")?.textContent).toBe(
-      "opus· 3 tools· 1 MCP server",
-    );
+    expect(chips(reviewer)[0]).toBe("orchestrates");
+    expect(foot(reviewer)).toEqual(["Project", "opus", "3 tools", "1 MCP server"]);
     expect(reviewer.querySelector(".entity-glyph")?.textContent).toBe("RE");
     const architect = screen.getByRole("button", { name: "architect" });
-    expect(within(architect).getByText("Built-in")).toBeTruthy();
-    expect(architect.querySelector(".entity-card-foot")?.textContent).toBe(
-      "Default model· All tools",
-    );
+    expect(foot(architect)).toEqual(["Built-in", "Default model", "All tools"]);
     const linter = screen.getByRole("button", { name: "acme:linter" });
-    expect(within(linter).getByText("Plugin · acme")).toBeTruthy();
+    expect(foot(linter)[0]).toBe("Plugin · acme");
     expect(linter.querySelector(".entity-glyph")?.textContent).toBe("LI");
-    expect(within(screen.getByRole("button", { name: "migrator" })).getByText("Unsaved")).toBeTruthy();
+    expect(foot(screen.getByRole("button", { name: "migrator" }))[0]).toBe("Unsaved");
   });
 
   it("searches names and descriptions, and says when nothing matches", async () => {

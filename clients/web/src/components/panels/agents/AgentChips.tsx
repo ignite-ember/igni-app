@@ -1,17 +1,21 @@
-/** An agent's soft chips: where it comes from, and whether it can
- *  orchestrate other agents. */
+/** An agent's soft chips on its card: whether it can orchestrate other
+ *  agents, and its first tags. Where it comes from is the footer's. */
 
-import { agentPlugin, agentSource, SOURCE_LABELS, type AgentRow } from "./agentRecord";
+import { HeroChip } from "../../page/HeroChip";
+import type { AgentRow } from "./agentRecord";
+
+/** Tags drawn on a card before the rest fold into "+N more". */
+const CARD_TAGS = 3;
 
 export function AgentChips({ agent }: { agent: AgentRow }) {
-  const source = agentSource(agent);
-  const plugin = agentPlugin(agent);
+  const tags = agent.tags ?? [];
   return (
-    <span className="agent-chips">
-      <span className={`agent-chip${source === "session" ? " is-unsaved" : ""}`}>
-        {plugin ? `${SOURCE_LABELS.plugin} · ${plugin}` : SOURCE_LABELS[source]}
-      </span>
-      {agent.can_orchestrate && <span className="agent-chip">orchestrates</span>}
-    </span>
+    <>
+      {agent.can_orchestrate && <HeroChip>orchestrates</HeroChip>}
+      {tags.slice(0, CARD_TAGS).map((t) => (
+        <HeroChip key={t}>{t}</HeroChip>
+      ))}
+      {tags.length > CARD_TAGS && <HeroChip>+{tags.length - CARD_TAGS} more</HeroChip>}
+    </>
   );
 }

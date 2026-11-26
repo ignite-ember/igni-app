@@ -5834,65 +5834,12 @@ button {
 
 /* ── Agents panel ──────────────────────────────────────────────── */
 
-/* The agents as soft cards (EntityCard). The chips are quiet filled
-   labels; an unsaved agent's keep/discard actions are bare round icons,
-   the same affordance as the page header's controls. */
-.agent-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-}
-
-.agent-chip {
-  font-size: var(--text-xs);
-  font-weight: 500;
-  color: var(--fg-muted);
-  padding: 1px 7px;
-  background: var(--bg-raised);
-  border-radius: 4px;
-}
-
-.agent-card .agent-chip {
-  background: var(--bg);
-}
-
-.agent-chip.is-unsaved {
-  color: var(--accent-orange-text, #f5a088);
-  background: color-mix(in srgb, var(--igni-orange) 12%, transparent);
-}
-
-.agent-card .entity-card-foot {
-  flex-wrap: wrap;
-  gap: var(--space-2);
-}
-
+/* An unsaved agent's keep / keep-for-me / discard: three card actions
+   side by side in the card's action slot. */
 .agent-card-actions {
   display: inline-flex;
   gap: var(--space-1);
   flex-shrink: 0;
-}
-
-.agent-card-actions .kb-icon-btn {
-  border: none;
-  background: transparent;
-  width: 26px;
-  height: 26px;
-  border-radius: var(--radius-circle);
-  color: var(--fg-faint);
-}
-
-.agent-card-actions .kb-icon-btn:hover:not(:disabled) {
-  border: none;
-  color: var(--fg);
-  background: var(--bg);
-}
-
-.agent-card-actions .kb-icon-btn.is-danger:hover:not(:disabled) {
-  color: var(--danger);
-}
-
-.agent-card-actions .kb-icon-btn:disabled {
-  color: var(--fg-faint);
 }
 
 .breadcrumb {
