@@ -22,9 +22,19 @@ use std::process::Command;
 const MOUNT_PATHS: [&str; 4] = ["PYTHONHOME", "PYTHONPATH", "LD_LIBRARY_PATH", "PATH"];
 
 /// `program`, to be started with the user's environment rather than the
-/// AppImage's. Every interpreter and uv the shell starts goes through here.
+/// AppImage's, and on Windows without a console window. Every interpreter
+/// and uv the shell starts goes through here.
 pub(crate) fn host_command(program: impl AsRef<OsStr>) -> Command {
     let mut cmd = Command::new(program);
+    // The app is a GUI program: a console program it starts (python.exe,
+    // uv.exe) gets a console window of its own unless told not to, and an
+    // empty one then sits over the app for as long as the backend runs.
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        cmd.creation_flags(CREATE_NO_WINDOW);
+    }
     if std::env::var_os("APPIMAGE").is_some() {
         if let Some(appdir) = std::env::var_os("APPDIR") {
             scrub(&mut cmd, Path::new(&appdir), |key| std::env::var_os(key));
