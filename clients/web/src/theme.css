@@ -7471,72 +7471,12 @@ button {
 .hitl-diff-del::before { content: "- "; opacity: 0.6; }
 .hitl-diff-add::before { content: "+ "; opacity: 0.6; }
 
-/* ── MCP: header action ───────────────────────────────────────── */
-.mcp-head-actions {
-  display: flex;
-  justify-content: flex-end;
-  width: 100%;
-}
-
-/* ── MCP: server row ──────────────────────────────────────────── */
-/* Each server is a card, matching the extensions and plugins lists;
-   the header stays a full-width button so expand/collapse still works. */
-.mcp-server {
-  border: 1px solid var(--border-soft);
-  border-radius: var(--radius-lg);
-  background: var(--bg-surface);
-  padding: var(--space-4) var(--space-5);
-  margin-bottom: var(--space-3);
-}
-
-:is(.drawer-body, .page-body) .row.mcp-server-row {
-  border-bottom: none;
-  padding: 0;
-}
-
-/* The heading is a button when the server has something to open, so
-   it is reachable by keyboard; it keeps the look of the plain row. */
-.mcp-server-head {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  text-align: left;
-  background: none;
-  border: none;
-  padding: 0;
-  margin: 0;
-  color: inherit;
-  font: inherit;
-}
-
-button.mcp-server-head {
-  cursor: pointer;
-}
-
-button.mcp-server-head:focus-visible {
-  outline: 2px solid var(--accent-blue);
-  outline-offset: 2px;
-  border-radius: 4px;
-}
-
-.mcp-server-chevron {
-  display: inline-flex;
-}
-
-/* The name line is a flex row so the status dot — an inline <span> —
-   takes its 8px instead of collapsing to nothing, and every name starts
-   at the same edge whether or not the server can be opened. */
-.mcp-server-name {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-3);
-  min-width: 0;
-}
-
-.mcp-server-name .tool-status {
+/* ── MCP: a server's status dot and its own page ───────────────── */
+/* The dot inside a status chip or before the hero's name; a span, so it
+   needs a box to take its 8px. */
+.mcp-dot {
   display: inline-block;
+  align-self: center;
 }
 
 /* Off, with nothing wrong: a quiet ring rather than the red of a failure. */
@@ -7545,85 +7485,37 @@ button.mcp-server-head:focus-visible {
   box-shadow: inset 0 0 0 1.5px var(--fg-faint);
 }
 
-.mcp-server-status {
-  color: var(--fg-muted);
-  line-height: 1.45;
-}
-
-.mcp-server-actions {
-  display: flex;
-  gap: var(--space-4);
-  flex-shrink: 0;
-}
-
 /* Waiting for the person's approval: amber, but still, not a spinner. */
 .tool-status.running.mcp-waiting {
   animation: none;
 }
 
-.mcp-skeleton {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
+.mcp-detail-text {
+  margin: 0;
+  line-height: 1.5;
 }
 
-.mcp-skeleton-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 10px 0;
-  border-bottom: 1px solid var(--border-soft);
+.mcp-detail-note {
+  margin: 0 0 var(--space-4);
 }
 
-.mcp-skeleton-text {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-/* ── MCP: server expansion (tools / resources / prompts) ──────── */
-.mcp-server-body {
-  padding: 4px 0 14px 26px;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-6);
-}
-
-.mcp-section {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-}
-
-.mcp-section-head {
-  display: flex;
-  align-items: center;
-  gap: var(--space-4);
-  font-size: var(--text-xs);
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--fg-faint);
-}
-
-.mcp-section-count {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 20px;
-  height: 18px;
-  padding: 0 var(--space-3);
-  border-radius: var(--radius-pill);
+/* The transport's own words, as it raised them. */
+.mcp-detail-error {
+  margin: 0;
+  padding: var(--space-4) var(--space-5);
+  border-radius: var(--radius-sm);
   background: var(--bg-raised);
-  color: var(--fg);
+  color: var(--fg-muted);
+  font-family: var(--font-mono);
   font-size: var(--text-xs);
-  font-weight: 600;
-  letter-spacing: 0;
-  text-transform: none;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 240px;
+  overflow: auto;
 }
 
+/* ── MCP: a server's tools, resources and prompts ─────────────── */
 .mcp-tool-row {
   gap: var(--space-5);
   align-items: flex-start;
@@ -12537,18 +12429,6 @@ button.mcp-server-head:focus-visible {
   row-gap: 0;
   align-items: start;
 }
-
-.mcp-server {
-  display: flex;
-  gap: var(--space-5);
-  padding: var(--space-7);
-  margin-bottom: 0;
-  border: 1px solid transparent;
-  border-radius: var(--radius-lg);
-  background: var(--bg-surface);
-}
-.mcp-server:hover { border-color: var(--border-soft); background: var(--bg-raised); }
-.mcp-server-main { gap: var(--space-3); }
 
 .card-grid .ext-row {
   align-items: flex-start;

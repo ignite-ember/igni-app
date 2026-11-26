@@ -120,7 +120,7 @@ test("panels card lists", { tag: "@manual" }, async ({ page, backend, appUrl }) 
 
   await page.emulateMedia({ colorScheme: "light" });
   await page.locator(".sidebar-link", { hasText: "MCPs" }).click();
-  await expect(page.locator(".mcp-server").first()).toBeVisible();
+  await expect(page.locator(".mcp-page .entity-card").first()).toBeVisible();
   await page.waitForTimeout(300);
   await page.screenshot({ path: "account-shots/mcp-light.png" });
   await page.emulateMedia({ colorScheme: "dark" });

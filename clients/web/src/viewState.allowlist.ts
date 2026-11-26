@@ -333,7 +333,7 @@ export const VIEW_STATE: Record<string, Partial<Record<Category, string[]>>> = {
   },
   "components/panels/McpPanel.tsx": {
     field: ["query"],
-    page: ["sortBy", "filterBy"],
+    page: ["sortBy", "filterBy", "selectedName"],
   },
   "components/panels/PanelSearch.tsx": {
     disclosure: ["expanded"],
@@ -356,9 +356,6 @@ export const VIEW_STATE: Record<string, Partial<Record<Category, string[]>>> = {
   "components/panels/mcp/McpRows.tsx": {
     disclosure: ["expanded"],
     measure: ["overflowing"],
-  },
-  "components/panels/mcp/McpServerEntry.tsx": {
-    menu: ["open"],
   },
   "components/panels/mcp/useMcpServers.ts": {
     data: ["servers", "approvals"],

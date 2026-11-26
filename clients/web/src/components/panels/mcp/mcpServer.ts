@@ -1,5 +1,6 @@
 /** The MCP servers as `get_mcp_server_details` lists them, read at the boundary. */
 
+import { countOf } from "../../../lib/plural";
 import { WirePayload } from "../../../protocol/wirePayload";
 
 /** A resource a server exposes. */
@@ -115,35 +116,15 @@ export class McpServer {
     return Array.isArray(raw) ? raw.map(McpServer.parse) : [];
   }
 
-  /** Whether there is anything to show when the row is opened. */
-  get expandable(): boolean {
-    return (
-      this.toolNames.length + this.resources.length + this.prompts.length > 0
-    );
-  }
-
-  /** What it offers, e.g. ``2 tools · 1 resources``. */
+  /** What it offers, e.g. ``2 tools · 1 resource``. */
   get summary(): string {
     return [
-      `${this.toolNames.length} tools`,
-      this.resources.length ? `${this.resources.length} resources` : "",
-      this.prompts.length ? `${this.prompts.length} prompts` : "",
+      countOf(this.toolNames.length, "tool"),
+      this.resources.length ? countOf(this.resources.length, "resource") : "",
+      this.prompts.length ? countOf(this.prompts.length, "prompt") : "",
     ]
       .filter(Boolean)
       .join(" · ");
-  }
-
-  /** The one line under the server's name. */
-  get status(): string {
-    if (this.policyBlocked) return "blocked by policy";
-    if (this.connected) return `${this.summary} — click to expand`;
-    return this.error ? friendlyError(this.error) : "disconnected";
-  }
-
-  /** Which dot the card shows: up, down with a reason, or simply off. */
-  get health(): "connected" | "error" | "idle" {
-    if (this.connected) return "connected";
-    return this.error || this.policyBlocked ? "error" : "idle";
   }
 
   isToolDisabled(tool: string): boolean {

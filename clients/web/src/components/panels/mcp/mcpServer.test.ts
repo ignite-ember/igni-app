@@ -1,14 +1,13 @@
 /**
- * What an MCP server's card says when it is down, and which dot it shows.
+ * How an MCP server's tool names and connection errors are read.
  *
  * Pinned: the transport's common failures become a sentence that says
- * what to check, an unrecognised one is shown as it came rather than
- * guessed at, and the dot tells a failure (red) from a server that is
- * simply off (a quiet ring).
+ * what to check, and an unrecognised one is shown as it came rather than
+ * guessed at.
  */
 import { describe, expect, it } from "vitest";
 
-import { friendlyError, McpServer, McpToolName } from "./mcpServer";
+import { friendlyError, McpToolName } from "./mcpServer";
 
 describe("McpToolName", () => {
   it("splits the registry's mcp_<server>_ prefix using the server name", () => {
@@ -68,29 +67,5 @@ describe("friendlyError", () => {
 
   it("shows an unrecognised error as it came", () => {
     expect(friendlyError("MCP 'jira' is not approved")).toBe("MCP 'jira' is not approved");
-  });
-});
-
-describe("health", () => {
-  const server = (over: Record<string, unknown>) => McpServer.parse({ name: "x", ...over });
-
-  it("is connected when up", () => {
-    expect(server({ connected: true }).health).toBe("connected");
-  });
-
-  it("is an error when down with a reason", () => {
-    expect(server({ connected: false, error: "boom" }).health).toBe("error");
-  });
-
-  it("is an error when policy blocks it", () => {
-    expect(server({ connected: false, policy_blocked: true }).health).toBe("error");
-  });
-
-  it("is idle when simply off", () => {
-    expect(server({ connected: false }).health).toBe("idle");
-  });
-
-  it("reads plainly when simply off", () => {
-    expect(server({ connected: false }).status).toBe("disconnected");
   });
 });
