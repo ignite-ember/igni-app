@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useRef, type ReactNode, type RefObject } from "react";
 // Aliased: ``Icons`` exports a ``MenuIcon`` too, and that one is the
 // hamburger. This is the glyph set the panels draw from.
 import { MenuIcon as Glyph } from "@ignite-ember/ui-react";
@@ -15,6 +15,9 @@ import { FolderIcon, PanelLeftIcon, TerminalIcon } from "./Icons";
 /** The most the bell's count says before it gives up counting. */
 const BELL_COUNT_CAP = 99;
 
+/** The space kept between the open search pill and the sidebar toggle. */
+const SEARCH_PILL_CLEARANCE = 8;
+
 export interface AppHeaderProps {
   conn: ConnectionState;
   groupName: string;
@@ -26,6 +29,9 @@ export interface AppHeaderProps {
   canSearch: boolean;
   searchOpen: boolean;
   onToggleSearch: () => void;
+  /** The open search's body (``ChatSearchBar``), shown inside the pill
+   *  the search icon grows into. */
+  searchBar?: ReactNode;
   /** Whether the Files split is docked open — drives the folder button. */
   filesOpen: boolean;
   onToggleFiles: () => void;
@@ -61,6 +67,12 @@ export function AppHeader(props: AppHeaderProps) {
     const el = headerRef.current;
     return el ? host.bindDragRegion(el) : undefined;
   }, []);
+  const searchOpen = props.searchOpen && !!props.searchBar;
+  const sidebarToggleRef = useRef<HTMLButtonElement>(null);
+  const searchRef = useRef<HTMLDivElement>(null);
+  const searchIconRef = useRef<HTMLButtonElement>(null);
+  useSearchPillRoom(searchOpen, sidebarToggleRef, searchRef);
+  useFocusBackOnClose(searchOpen, searchRef, searchIconRef);
 
   return (
     <header ref={headerRef} className="app-header" data-tauri-drag-region>
@@ -68,6 +80,7 @@ export function AppHeader(props: AppHeaderProps) {
           scrolling under it disappear at its edge; also the drag area. */}
       <div className="app-header-blur" aria-hidden="true" />
       <button
+        ref={sidebarToggleRef}
         className="icon-btn"
         title={props.sidebarOpen ? "Hide sidebar" : "Show sidebar"}
         aria-label={props.sidebarOpen ? "Hide sidebar" : "Show sidebar"}
@@ -92,29 +105,39 @@ export function AppHeader(props: AppHeaderProps) {
       {/* The igni flame, wordmark and version live at the foot of the
           account menu now, not here — the top bar stays clean. */}
       <div className="header-spacer" />
+      {/* Find: the icon's own outline grows leftward into the search
+          field, over the chips and breadcrumb, and shrinks back on close. */}
       {props.canSearch && (
-        <button
-          className={`chip chip-search${props.searchOpen ? " active" : ""}`}
-          title="Find in conversation (⌘F)"
-          aria-label="Find in conversation"
-          onClick={props.onToggleSearch}
-        >
-          <svg
-            width="14"
-            height="14"
-            viewBox="0 0 16 16"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.6"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            aria-hidden="true"
-            style={{ display: "block" }}
-          >
-            <circle cx="7" cy="7" r="4.5" />
-            <path d="M10.5 10.5L13.5 13.5" />
-          </svg>
-        </button>
+        <div ref={searchRef} className="header-search" data-open={searchOpen || undefined}>
+          <div className="header-search-pill">
+            <button
+              ref={searchIconRef}
+              type="button"
+              className="header-search-icon"
+              title={searchOpen ? "Close find (⌘F)" : "Find in conversation (⌘F)"}
+              aria-label="Find in conversation"
+              aria-expanded={searchOpen}
+              onClick={props.onToggleSearch}
+            >
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 16 16"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.6"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+                style={{ display: "block" }}
+              >
+                <circle cx="7" cy="7" r="4.5" />
+                <path d="M10.5 10.5L13.5 13.5" />
+              </svg>
+            </button>
+            {searchOpen && props.searchBar}
+          </div>
+        </div>
       )}
       {(status?.cloud_connected || waiting > 0) && (
         <>
@@ -175,4 +198,59 @@ export function AppHeader(props: AppHeaderProps) {
       )}
     </header>
   );
+}
+
+/**
+ * Give the open search pill the room between the sidebar toggle and the
+ * search icon's right edge, as ``--header-search-room``, so it covers
+ * the chips and breadcrumb but never the toggle.
+ */
+function useSearchPillRoom(
+  open: boolean,
+  toggleRef: RefObject<HTMLButtonElement | null>,
+  searchRef: RefObject<HTMLDivElement | null>,
+) {
+  useLayoutEffect(() => {
+    if (!open) return;
+    const measure = () => {
+      const toggle = toggleRef.current;
+      const search = searchRef.current;
+      if (!toggle || !search) return;
+      const room =
+        search.getBoundingClientRect().right -
+        toggle.getBoundingClientRect().right -
+        SEARCH_PILL_CLEARANCE;
+      if (room > 0) search.style.setProperty("--header-search-room", `${Math.floor(room)}px`);
+    };
+    measure();
+    // The header changes width with the window and with the sidebar.
+    const header = searchRef.current?.parentElement;
+    const observer =
+      header && typeof ResizeObserver !== "undefined" ? new ResizeObserver(measure) : null;
+    if (header) observer?.observe(header);
+    window.addEventListener("resize", measure);
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener("resize", measure);
+    };
+  }, [open, toggleRef, searchRef]);
+}
+
+/** When the pill closes with focus inside it (or lost with the field),
+ *  hand focus back to the search icon it shrank into. */
+function useFocusBackOnClose(
+  open: boolean,
+  searchRef: RefObject<HTMLDivElement | null>,
+  iconRef: RefObject<HTMLButtonElement | null>,
+) {
+  const wasOpen = useRef(open);
+  useLayoutEffect(() => {
+    if (wasOpen.current && !open) {
+      const active = document.activeElement;
+      if (!active || active === document.body || searchRef.current?.contains(active)) {
+        iconRef.current?.focus();
+      }
+    }
+    wasOpen.current = open;
+  }, [open, searchRef, iconRef]);
 }

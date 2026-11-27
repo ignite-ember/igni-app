@@ -227,6 +227,19 @@ export default function App() {
           canSearch={items.length > 0 && !page}
           searchOpen={search.searchOpen}
           onToggleSearch={search.toggleSearch}
+          searchBar={
+            search.searchOpen && sessionId && items.length > 0 ? (
+              <ChatSearchBar
+                client={client}
+                sessionId={sessionId}
+                historyIndexToItemIndex={historyIndexToItemIndex}
+                liveItemCount={items.length}
+                onJumpTo={search.onSearchJump}
+                onOpenSession={actions.pickSession}
+                onClose={() => windowModel.closePanel()}
+              />
+            ) : null
+          }
           filesOpen={filesOpen}
           onToggleFiles={() => windowModel.togglePanel("files")}
           terminalOpen={terminalOpen}
@@ -244,17 +257,6 @@ export default function App() {
             scrollbar, outside ``.conversation`` so the header blur does
             not cover it. */}
         <ScrollIndicator element={scroll.scrollEl} />
-        {search.searchOpen && sessionId && items.length > 0 && (
-          <ChatSearchBar
-            client={client}
-            sessionId={sessionId}
-            historyIndexToItemIndex={historyIndexToItemIndex}
-            liveItemCount={items.length}
-            onJumpTo={search.onSearchJump}
-            onOpenSession={actions.pickSession}
-            onClose={() => windowModel.closePanel()}
-          />
-        )}
         <ConversationFrame
           items={items}
           transcript={view.transcript}
