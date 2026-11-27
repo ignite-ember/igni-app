@@ -54,6 +54,19 @@ describe("the watcher pill", () => {
       { pid: 10, cmd: "make", elapsed_seconds: 1, is_running: false, exit_code: 0 },
     ]);
     render(<WatcherIndicator client={client} onOpen={() => {}} />);
-    await waitFor(() => expect(screen.getByText("1 running")).toBeTruthy());
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Watcher 1 background process running" })).toBeTruthy(),
+    );
+  });
+
+  it("stays in the header, quiet and counting zero, when nothing runs", async () => {
+    const client = fakeClient(() => [{ pid: 10, cmd: "make", elapsed_seconds: 1, is_running: false, exit_code: 0 }]);
+    const onOpen = vi.fn();
+    render(<WatcherIndicator client={client} onOpen={onOpen} />);
+    const chip = await screen.findByRole("button", { name: "Watcher 0 background processes running" });
+    expect(chip.className).toBe("chip chip-status chip-watcher idle");
+    expect(chip.querySelector(".chip-status-count")!.textContent).toBe("0");
+    fireEvent.click(chip);
+    expect(onOpen).toHaveBeenCalled();
   });
 });

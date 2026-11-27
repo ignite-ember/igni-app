@@ -22,11 +22,11 @@ test("orphan tail pane shows real stdout from per-pid log", async ({
     { timeout: 30_000 },
   );
 
-  // Footer pill should appear (1 running).
-  await expect(page.locator(".watcher-pill")).toBeVisible({ timeout: 5_000 });
+  // The header chip should appear (1 running).
+  await expect(page.locator(".chip-watcher")).toBeVisible({ timeout: 5_000 });
 
-  // Click the pill → watcher opens with the orphan.
-  await page.locator(".watcher-pill").click();
+  // Click the chip → watcher opens with the orphan.
+  await page.locator(".chip-watcher").click();
   await expect(page.locator(".watcher-row")).toHaveCount(1);
 
   // Click the row → tail pane loads from the per-pid log file.

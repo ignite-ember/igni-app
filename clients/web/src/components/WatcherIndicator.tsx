@@ -1,22 +1,28 @@
 import type { IgniClient } from "../protocol/client";
 import { useProcessTable } from "./panels/watcher/useProcessTable";
 
-/** Footer pill showing how many background processes are running; click
- *  opens the watcher. Hidden when nothing runs. It keeps its own
- *  count-only table (no output buffered, since the pill is always
- *  mounted), seeded and pushed the same way as the panel's. */
+/** Header status chip for the watcher, always there; click opens it.
+ *  It always counts the running processes, and pulses while there are
+ *  any. It keeps its own count-only table (no output buffered, since
+ *  the chip is always mounted), seeded and pushed the same way as the
+ *  panel's. */
 export function WatcherIndicator({ client, onOpen }: { client: IgniClient; onOpen: () => void }) {
   const count = useProcessTable(client, { logs: false }).table.runningCount;
-  if (count === 0) return null;
-
+  const idle = count === 0;
+  const what = `background process${count === 1 ? "" : "es"} running`;
   return (
     <button
-      className="watcher-pill"
-      title={`${count} background process${count === 1 ? "" : "es"} running — click to open the watcher`}
+      type="button"
+      className={`chip chip-status chip-watcher${idle ? " idle" : ""}`}
+      title={`${count} ${what} — click to open the watcher`}
       onClick={onOpen}
     >
-      <span className="watcher-pill-dot" />
-      {count} running
+      <span className="chip-watcher-dot" aria-hidden="true" />
+      <span className="chip-label">Watcher</span>{" "}
+      {/* The name is what shows, then what the count counts:
+          "Watcher 2 background processes running". */}
+      <span className="chip-status-count">{count}</span>{" "}
+      <span className="ui-visually-hidden">{what}</span>
     </button>
   );
 }

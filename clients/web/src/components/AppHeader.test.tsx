@@ -26,7 +26,7 @@ function header(props: Partial<AppHeaderProps> = {}) {
     extensions: [],
     notificationCounts: { unread: 0, by_source: {} } as never,
     onOpenPage: () => {},
-    client: { connect: () => {}, asExtension: () => ({}) as never },
+    client: { connect: () => {}, asExtension: () => ({}) as never } as never,
   };
   return <AppHeader {...base} {...props} />;
 }
