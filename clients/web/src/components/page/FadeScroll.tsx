@@ -6,6 +6,7 @@ import {
   type RefObject,
 } from "react";
 import { ScrollIndicator } from "../ScrollIndicator";
+import { TopBlur } from "./TopBlur";
 
 /**
  * The one way a page scrolls.
@@ -124,7 +125,9 @@ export function FadeScroll({
           {chrome}
         </div>
       ) : null}
-      <div className="fade-scroll-blur" aria-hidden="true" />
+      <div className="fade-scroll-blur" aria-hidden="true">
+        <TopBlur />
+      </div>
       <div
         ref={(el) => {
           scroller.current = el;

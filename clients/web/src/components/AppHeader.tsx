@@ -10,6 +10,7 @@ import type { NotificationCounts } from "../notifications/model";
 import type { ConnectionState, IgniClient } from "../protocol/client";
 import type { StatusUpdate } from "../protocol/messages";
 import { HeaderStatusChips } from "./HeaderStatusChips";
+import { TopBlur } from "./page/TopBlur";
 import { FolderIcon, PanelLeftIcon, TerminalIcon } from "./Icons";
 
 /** The most the bell's count says before it gives up counting. */
@@ -78,7 +79,9 @@ export function AppHeader(props: AppHeaderProps) {
     <header ref={headerRef} className="app-header" data-tauri-drag-region>
       {/* The opaque panel behind the header content, so messages
           scrolling under it disappear at its edge; also the drag area. */}
-      <div className="app-header-blur" aria-hidden="true" />
+      <div className="app-header-blur" aria-hidden="true">
+        <TopBlur />
+      </div>
       <button
         ref={sidebarToggleRef}
         className="icon-btn"

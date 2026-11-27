@@ -639,8 +639,8 @@ button {
   z-index: 5;
   pointer-events: none;
   background: transparent;
-  -webkit-backdrop-filter: var(--top-blur);
-  backdrop-filter: var(--top-blur);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
   -webkit-mask-image: linear-gradient(
     to bottom,
     #000 0%,
@@ -1324,35 +1324,30 @@ button {
   z-index: -1;
 }
 
-/* The blur itself, one definition for the chat's header and for the
-   chrome over every page (``FadeScroll``), so the two cannot drift. */
+/* The blur's boxes, one for the chat's header and one over every page's
+   fixed chrome (``FadeScroll``). Each holds the same layered blur
+   (``TopBlur``, tuned in ``components/page/topBlurLayers.ts``); the boxes only
+   place it. ``--top-blur-tail`` is how far below the chrome it reaches. */
 :root {
-  --top-blur: blur(6px);
   --top-blur-tail: 24px;
-  --top-blur-mask: linear-gradient(
-    to bottom,
-    #000 0%,
-    rgba(0, 0, 0, 0.9) 22%,
-    rgba(0, 0, 0, 0.7) 42%,
-    rgba(0, 0, 0, 0.45) 60%,
-    rgba(0, 0, 0, 0.22) 77%,
-    rgba(0, 0, 0, 0.07) 90%,
-    transparent 100%
-  );
 }
 
 .app-header-blur,
 .fade-scroll-blur {
   pointer-events: none;
   background: transparent;
-  -webkit-backdrop-filter: var(--top-blur);
-  backdrop-filter: var(--top-blur);
-  -webkit-mask-image: var(--top-blur-mask);
-  mask-image: var(--top-blur-mask);
+}
+
+.top-blur-layer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  pointer-events: none;
 }
 
 /* The messages fade to nothing as they reach the top of the window, on a
-   smooth (smoothstep-shaped) curve over the top 57px — gone at the very
+   smooth (smoothstep-shaped) curve over the top 58px — gone at the very
    edge, fully there just below the header, and no point in between where
    the opacity jumps. Cheaper than any blur: it is only a mask.
 
@@ -1361,14 +1356,14 @@ button {
   --top-fade-mask: linear-gradient(
     to bottom,
     transparent 0px,
-    rgba(0, 0, 0, 0.03) 6px,
-    rgba(0, 0, 0, 0.12) 12.75px,
-    rgba(0, 0, 0, 0.27) 20.25px,
-    rgba(0, 0, 0, 0.46) 27.75px,
-    rgba(0, 0, 0, 0.65) 35.25px,
-    rgba(0, 0, 0, 0.82) 42.75px,
-    rgba(0, 0, 0, 0.94) 50.25px,
-    #000 57px
+    rgba(0, 0, 0, 0.043) 7.25px,
+    rgba(0, 0, 0, 0.156) 14.5px,
+    rgba(0, 0, 0, 0.316) 21.75px,
+    rgba(0, 0, 0, 0.500) 29px,
+    rgba(0, 0, 0, 0.684) 36.25px,
+    rgba(0, 0, 0, 0.844) 43.5px,
+    rgba(0, 0, 0, 0.957) 50.75px,
+    #000 58px
   );
 }
 
