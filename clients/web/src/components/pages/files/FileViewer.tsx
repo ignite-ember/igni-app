@@ -10,6 +10,7 @@ import { useLayoutEffect, useMemo, useRef } from "react";
 
 import { FileIcon } from "../../Icons";
 import { FileMarkdown } from "../../markdown/FileMarkdown";
+import { scrollToAnchor } from "../../markdown/headingSlugs";
 import { classify, kindLabel, looksBinary } from "./fileKind";
 import { parentDir } from "./fileTree";
 import { PdfFrame } from "./PdfFrame";
@@ -84,12 +85,28 @@ export function FileViewer({
     const el = scrollRef.current;
     if (el && showing.current) scrollMemory.set(showing.current, el.scrollTop);
   };
+  // A link to ``other.md#heading`` lands on the heading once that file
+  // renders, instead of where it was last left.
+  const pendingAnchor = useRef<{ path: string; anchor: string } | null>(null);
   useLayoutEffect(() => {
     const el = scrollRef.current;
     if (!el || !path) return;
     showing.current = path;
+    const pending = pendingAnchor.current;
+    if (pending?.path === path && ready) {
+      pendingAnchor.current = null;
+      if (scrollToAnchor(el, pending.anchor)) return;
+    }
     el.scrollTop = scrollMemory.get(path) ?? 0;
-  }, [path, file.contents, bytes.data, asMarkdown, isImage, asCard, scrollMemory]);
+  }, [path, ready, file.contents, bytes.data, asMarkdown, isImage, asCard, scrollMemory]);
+  const openFile = (target: string, anchor?: string) => {
+    if (target === path && anchor) {
+      scrollToAnchor(scrollRef.current, anchor);
+      return;
+    }
+    pendingAnchor.current = anchor ? { path: target, anchor } : null;
+    onOpenFile?.(target);
+  };
 
   if (!path) return <div className="files-code-state files-code-empty">{empty}</div>;
 
@@ -137,7 +154,7 @@ export function FileViewer({
     return (
       <div className="files-md" ref={scrollRef} onScroll={remember}>
         <div className="files-md-body">
-          <FileMarkdown text={file.contents} baseDir={parentDir(path)} onOpenFile={onOpenFile} />
+          <FileMarkdown text={file.contents} baseDir={parentDir(path)} onOpenFile={openFile} />
         </div>
       </div>
     );
