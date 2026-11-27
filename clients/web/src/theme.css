@@ -6322,6 +6322,13 @@ button {
   animation: pulse-dot 1.8s ease infinite;
 }
 
+/* Nothing runs: a still, grey dot. */
+.chip-watcher.idle .chip-watcher-dot {
+  background: var(--fg-muted);
+  box-shadow: none;
+  animation: none;
+}
+
 /* The bell's count badge, inline rather than perched on a corner. */
 .chip-status-count {
   min-width: 15px;
