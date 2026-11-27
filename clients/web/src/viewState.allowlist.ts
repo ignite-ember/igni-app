@@ -321,7 +321,8 @@ export const VIEW_STATE: Record<string, Partial<Record<Category, string[]>>> = {
   },
   "components/panels/AgentsPanel.tsx": {
     data: ["agents"],
-    page: ["selected"],
+    page: ["selectedName", "source", "sort"],
+    field: ["query"],
     pending: ["busy"],
   },
   "components/panels/DirectoryPicker.tsx": {

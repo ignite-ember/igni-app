@@ -5857,23 +5857,11 @@ button {
 
 /* ── Agents panel ──────────────────────────────────────────────── */
 
-.agent-head {
-  display: flex;
-  align-items: center;
-  gap: var(--space-5);
-  padding: 11px 8px;
-  border-bottom: 1px solid var(--border-soft);
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-}
-
-.agent-head:hover {
-  background: var(--bg-raised);
-}
-
-.agent-open-chevron {
+/* An unsaved agent's keep / keep-for-me / discard: three card actions
+   side by side in the card's action slot. */
+.agent-card-actions {
   display: inline-flex;
-  color: var(--fg-faint);
+  gap: var(--space-1);
   flex-shrink: 0;
 }
 
@@ -5923,12 +5911,50 @@ button {
   border-color: color-mix(in srgb, var(--igni-orange) 40%, transparent);
 }
 
-.agent-tags .mini-tag {
-  margin: 0 4px 4px 0;
+.breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  font-size: var(--text-lg);
+  margin: 2px 0 8px;
 }
 
-.agent-body {
-  padding: var(--space-1) var(--space-4) var(--space-7) var(--space-16);
+.breadcrumb-link {
+  appearance: none;
+  border: none;
+  background: transparent;
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--text-lg);
+  color: var(--accent-orange-text, #f5a088);
+  cursor: pointer;
+  border-radius: 6px;
+}
+
+.breadcrumb-link:hover {
+  background: var(--bg-raised);
+}
+
+.breadcrumb-sep {
+  color: var(--fg-faint);
+}
+
+.mini-tag {
+  display: inline-block;
+  margin-left: var(--space-3);
+  padding: 1px 7px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border-soft);
+  background: var(--bg-surface);
+  color: var(--fg-muted);
+  font-size: var(--text-xs);
+  font-weight: 500;
+  line-height: 1.6;
+  vertical-align: 1px;
+}
+
+.mini-tag.ephemeral {
+  color: var(--accent-orange-text, #f5a088);
+  border-color: color-mix(in srgb, var(--igni-orange) 40%, transparent);
 }
 
 .agent-kv {
