@@ -1352,7 +1352,7 @@ button {
 }
 
 /* The messages fade to nothing as they reach the top of the window, on a
-   smooth (smoothstep-shaped) curve over the top 76px — gone at the very
+   smooth (smoothstep-shaped) curve over the top 57px — gone at the very
    edge, fully there just below the header, and no point in between where
    the opacity jumps. Cheaper than any blur: it is only a mask.
 
@@ -1361,14 +1361,14 @@ button {
   --top-fade-mask: linear-gradient(
     to bottom,
     transparent 0px,
-    rgba(0, 0, 0, 0.03) 8px,
-    rgba(0, 0, 0, 0.12) 17px,
-    rgba(0, 0, 0, 0.27) 27px,
-    rgba(0, 0, 0, 0.46) 37px,
-    rgba(0, 0, 0, 0.65) 47px,
-    rgba(0, 0, 0, 0.82) 57px,
-    rgba(0, 0, 0, 0.94) 67px,
-    #000 76px
+    rgba(0, 0, 0, 0.03) 6px,
+    rgba(0, 0, 0, 0.12) 12.75px,
+    rgba(0, 0, 0, 0.27) 20.25px,
+    rgba(0, 0, 0, 0.46) 27.75px,
+    rgba(0, 0, 0, 0.65) 35.25px,
+    rgba(0, 0, 0, 0.82) 42.75px,
+    rgba(0, 0, 0, 0.94) 50.25px,
+    #000 57px
   );
 }
 

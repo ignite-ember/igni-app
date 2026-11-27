@@ -322,7 +322,7 @@ describe("(d) the chat and FadeScroll share one fade and one blur", () => {
   it("defines the fade curve once", () => {
     expect(CSS.match(/--top-fade-mask\s*:/g)).toHaveLength(1);
     // The curve's last stop, written anywhere else, is a second copy.
-    expect(CSS.match(/#000 76px/g)).toHaveLength(1);
+    expect(CSS.match(/#000 57px/g)).toHaveLength(1);
   });
 
   it("applies it in one rule to the chat and to a scrolled page", () => {
