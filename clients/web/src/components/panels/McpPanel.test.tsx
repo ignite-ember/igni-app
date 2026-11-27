@@ -221,7 +221,7 @@ describe("the server list", () => {
 
   it("hands the composer a setup prompt rather than a form", async () => {
     const { onAddServer } = panelWith();
-    fireEvent.click(screen.getByRole("button", { name: "Add an MCP server" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add server" }));
     const [seed] = onAddServer.mock.calls[0];
     expect(seed).toMatch(/Help me set up a new MCP server/);
     expect(seed).toMatch(/mcpServers/);
@@ -280,7 +280,7 @@ describe("a server's own page", () => {
     await openServer();
     expect(screen.getByRole("heading", { name: "github" })).toBeTruthy();
     expect(screen.getByText("2 tools · 2 resources · 2 prompts")).toBeTruthy();
-    expect(screen.queryByRole("button", { name: "Add an MCP server" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Add server" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Open github" })).toBeNull();
   });
 
