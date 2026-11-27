@@ -444,6 +444,20 @@ describe("Host.setAppTitle", () => {
     expect(setAppTitle).toHaveBeenLastCalledWith("", "");
   });
 
+  it.each([
+    ["D:\\a\\_temp\\released-check", "released-check"],
+    ["C:\\Users\\me\\proj\\", "proj"],
+    ["C:/Users\\me/proj", "proj"],
+    ["\\\\server\\share\\proj", "proj"],
+    ["C:\\", "C:"],
+    ["/", "/"],
+  ])("names the folder of %s as %s, whichever separator the OS uses", (dir, folder) => {
+    const setAppTitle = vi.fn();
+    (win.__IGNI_HOST__ as Record<string, unknown> | undefined) = { setAppTitle };
+    new HostMod.Host().setAppTitle(dir, "acme");
+    expect(setAppTitle).toHaveBeenCalledWith(folder, "acme");
+  });
+
   it("does nothing without a shell", () => {
     expect(() => new HostMod.Host().setAppTitle("/a", "b")).not.toThrow();
   });
