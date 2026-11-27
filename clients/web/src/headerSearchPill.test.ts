@@ -52,11 +52,15 @@ describe("the header's search pill", () => {
     expect(`${pill}${open}`).not.toMatch(/igni-orange|box-shadow/);
   });
 
-  it("fits the header's height", () => {
+  it("closes to the icon's 30px and opens to a taller 40px field, centred on the row", () => {
     expect(rule(".header-search-pill")).toMatch(/height:\s*30px;/);
-    expect(rule(".chat-search-scope-btn")).toMatch(/height:\s*18px;/);
+    const open = rule(".header-search[data-open] .header-search-pill");
+    expect(open).toMatch(/height:\s*40px;/);
+    expect(open).toMatch(/top:\s*-5px;/);
+    expect(rule(".chat-search-scope-btn")).toMatch(/height:\s*26px;/);
     const nav = rule(".chat-search-nav,\n.chat-search-close");
-    expect(nav).toMatch(/height:\s*20px;/);
+    expect(nav).toMatch(/height:\s*28px;/);
+    expect(rule(".chat-search-input")).toMatch(/font-size:\s*var\(--text-md\)/);
   });
 
   it("drops its matches under the pill, right-aligned with it", () => {
