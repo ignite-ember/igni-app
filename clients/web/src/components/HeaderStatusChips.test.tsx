@@ -85,7 +85,7 @@ describe("the header's status chips", () => {
     expect(chip.querySelector(".chip-status-count")?.textContent).toBe("1");
   });
 
-  it("sit in the header right after the sidebar toggle and before the breadcrumb", async () => {
+  it("sit in the header right after the sidebar toggle and the breadcrumb", async () => {
     render(
       <AppHeader
         conn="connected"
@@ -112,8 +112,8 @@ describe("the header's status chips", () => {
     await screen.findByRole("button", { name: /^Watcher/ });
     const toggle = screen.getByRole("button", { name: "Hide sidebar" });
     const group = screen.getByRole("group", { name: "Status" });
-    expect(toggle.nextElementSibling).toBe(group);
-    expect(group.nextElementSibling?.id).toBe("app-header-crumbs");
+    expect(toggle.nextElementSibling?.id).toBe("app-header-crumbs");
+    expect(toggle.nextElementSibling?.nextElementSibling).toBe(group);
   });
 });
 

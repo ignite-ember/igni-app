@@ -6269,33 +6269,33 @@ button {
   flex: 0 0 auto;
 }
 
-/* Quiet like the bell, folder and terminal: no outline, a fill on
-   hover. */
+/* A status is a chip: an outlined pill, unlike the bare icon buttons
+   on the right; a fill on hover. */
 .chip-status {
-  height: 30px;
+  height: 28px;
   padding: 0 var(--space-4);
-  border-color: transparent;
+  border: 1px solid var(--border-soft);
   background: transparent;
   color: var(--fg-muted);
   font-family: var(--font-ui);
 }
 .chip-status:hover {
-  border-color: transparent;
+  border-color: var(--border);
   background: var(--bg-surface);
   color: var(--fg);
 }
 
 /* Extensions' chips are the host's quiet button around a ``Status``;
-   in the header they drop the outline like igni's own. */
+   in the header they take the same outlined pill as igni's own. */
 .header-status-chips > .btn {
-  height: 30px;
+  height: 28px;
   padding: 0 var(--space-4);
-  border-color: transparent;
+  border: 1px solid var(--border-soft);
   background: transparent;
   border-radius: var(--radius-pill);
 }
 .header-status-chips > .btn:hover {
-  border-color: transparent;
+  border-color: var(--border);
   background: var(--bg-surface);
 }
 

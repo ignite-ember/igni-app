@@ -76,9 +76,12 @@ export function AppHeader(props: AppHeaderProps) {
       >
         <PanelLeftIcon open={props.sidebarOpen} />
       </button>
-      {/* Status chips, left to right: igni's own, then extensions' in
-          the order they came — before the breadcrumb, so the keyboard
-          reaches them right after the toggle. */}
+      {/* The open page's breadcrumb (``Chat / Plugins``) renders here,
+          portaled in from ``PageShell`` so the trail sits to the right of
+          the sidebar toggle. Empty when no page is open. */}
+      <div className="header-crumbs" id="app-header-crumbs" />
+      {/* Status chips, left to right after the breadcrumb: igni's own,
+          then extensions' in the order they came. */}
       <HeaderStatusChips
         status={status}
         extensions={props.extensions}
@@ -86,10 +89,6 @@ export function AppHeader(props: AppHeaderProps) {
         onOpenPage={props.onOpenPage}
         client={props.client}
       />
-      {/* The open page's breadcrumb (``Chat / Plugins``) renders here,
-          portaled in from ``PageShell`` so the trail sits to the right of
-          the sidebar toggle. Empty when no page is open. */}
-      <div className="header-crumbs" id="app-header-crumbs" />
       {/* The igni flame, wordmark and version live at the foot of the
           account menu now, not here — the top bar stays clean. */}
       <div className="header-spacer" />
