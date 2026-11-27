@@ -122,3 +122,17 @@ export class PlanDecision {
     return new PlanDecision(p.string("run_id"), p.string("decision"), p.string("mode_status"));
   }
 }
+
+/** ``terminal_open``: the terminal igni started for this window. */
+export class TerminalOpened {
+  constructor(
+    readonly terminalId: string,
+    readonly shell: string,
+    readonly cwd: string,
+  ) {}
+
+  static parse(raw: unknown): TerminalOpened {
+    const p = new WirePayload(raw);
+    return new TerminalOpened(p.string("terminal_id"), p.string("shell"), p.string("cwd"));
+  }
+}

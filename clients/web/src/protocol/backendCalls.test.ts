@@ -175,3 +175,38 @@ describe("the chat-side calls", () => {
     expect(await files.client.completeFiles("a")).toMatchObject({ matches: ["a.ts"], total: 9 });
   });
 });
+
+describe("terminal calls", () => {
+  it("opens a terminal at a size and reads what igni started", async () => {
+    const { client, rpc } = clientAnswering(async () => ({
+      terminal_id: "t1",
+      shell: "/bin/zsh",
+      cwd: "/repo",
+    }));
+
+    const opened = await client.terminalOpen(80, 24);
+
+    expect(rpc).toHaveBeenCalledExactlyOnceWith("terminal_open", { cols: 80, rows: 24 });
+    expect(opened).toMatchObject({ terminalId: "t1", shell: "/bin/zsh", cwd: "/repo" });
+  });
+
+  it("reads a malformed open answer as empty fields", async () => {
+    const { client } = clientAnswering(async () => null);
+
+    expect(await client.terminalOpen(1, 1)).toMatchObject({ terminalId: "", shell: "", cwd: "" });
+  });
+
+  it("sends input, a resize and a close by the terminal's id", async () => {
+    const { client, rpc } = clientAnswering(async () => null);
+
+    await client.terminalInput("t1", "ls\r");
+    await client.terminalResize("t1", 100, 30);
+    await client.terminalClose("t1");
+
+    expect(rpc.mock.calls).toEqual([
+      ["terminal_input", { terminal_id: "t1", data: "ls\r" }],
+      ["terminal_resize", { terminal_id: "t1", cols: 100, rows: 30 }],
+      ["terminal_close", { terminal_id: "t1" }],
+    ]);
+  });
+});

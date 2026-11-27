@@ -227,7 +227,6 @@ export const VIEW_STATE: Record<string, Partial<Record<Category, string[]>>> = {
   },
   "components/FilesDock.tsx": {
     menu: ["menuOpen"],
-    disclosure: ["maximized"],
   },
   "components/GroupIndicator.tsx": {
     data: ["policy"],
@@ -254,6 +253,12 @@ export const VIEW_STATE: Record<string, Partial<Record<Category, string[]>>> = {
   "components/RetryBanner.tsx": {
     data: ["retries"],
     animation: ["countdownPercent"],
+  },
+  "components/SideDock.tsx": {
+    disclosure: ["maximized"],
+  },
+  "components/terminal/useTerminalToggle.ts": {
+    disclosure: ["terminalOpen"],
   },
   "components/ScrollIndicator.tsx": {
     measure: ["thumb"],

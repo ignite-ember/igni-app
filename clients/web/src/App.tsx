@@ -36,7 +36,9 @@ import { AppSidebar } from "./components/AppSidebar";
 import { BackendBanner } from "./components/BackendBanner";
 import { ChatSearchBar } from "./components/ChatSearchBar";
 import { ConversationFrame } from "./components/ConversationFrame";
-import { FilesDock } from "./components/FilesDock";
+import { SideDock } from "./components/SideDock";
+import { useTerminalToggle } from "./components/terminal/useTerminalToggle";
+import { useTerminals } from "./components/terminal/useTerminals";
 import { useFilesSession } from "./components/pages/files/useFilesSession";
 import { FileViewerContext } from "./components/pages/files/viewerContext";
 import { FPSCounterOverlay } from "./components/FPSCounter";
@@ -112,6 +114,10 @@ export default function App() {
   // starts over.
   const filesSession = useFilesSession(projectDir);
   const filesOpen = panel?.kind === "files";
+  // The terminal opens beside the files, so it is not a panel. Its
+  // shells are the window's: hiding the dock leaves them running.
+  const { terminalOpen, toggleTerminal, closeTerminal } = useTerminalToggle();
+  const terminals = useTerminals(client, connected);
 
   // Opening a file in the read-only viewer from a chat pill, wherever it
   // is. It docks the Files split open at that file, over whichever
@@ -223,6 +229,8 @@ export default function App() {
           onToggleSearch={search.toggleSearch}
           filesOpen={filesOpen}
           onToggleFiles={() => windowModel.togglePanel("files")}
+          terminalOpen={terminalOpen}
+          onToggleTerminal={toggleTerminal}
           status={status}
           waiting={notificationCounts.unread}
           onToggleNotifications={() => windowModel.togglePanel("notifications")}
@@ -311,15 +319,20 @@ export default function App() {
         />
       </main>
 
-      {/* The read-only Files viewer, docked as a split to the right of
-          the chat rather than over it. Toggled by the header's folder
-          button, and opened at a file by a chat pill. */}
-      {filesOpen && (
-        <FilesDock
+      {/* The read-only Files viewer and the terminal, docked as a split
+          to the right of the chat rather than over it. Toggled by the
+          header's folder and terminal buttons; a chat pill opens the
+          files at a file. */}
+      {(filesOpen || terminalOpen) && (
+        <SideDock
           client={client}
           connected={connected}
-          session={filesSession}
-          onClose={() => windowModel.closePanel()}
+          filesSession={filesSession}
+          terminals={terminals}
+          filesOpen={filesOpen}
+          terminalOpen={terminalOpen}
+          onCloseFiles={() => windowModel.closePanel()}
+          onCloseTerminal={closeTerminal}
         />
       )}
 

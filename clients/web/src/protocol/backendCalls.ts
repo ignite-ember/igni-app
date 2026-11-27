@@ -15,6 +15,7 @@ import {
   LoginStarted,
   PlanDecision,
   ShellOutput,
+  TerminalOpened,
 } from "./backendCallResults";
 import {
   MAX_ATTACHMENT_BYTES,
@@ -143,5 +144,29 @@ export class BackendCalls {
    */
   async dismissPlan(runId: string): Promise<PlanDecision> {
     return PlanDecision.parse(await this.transport.rpc("dismiss_plan", { run_id: runId }));
+  }
+
+  /**
+   * Start an interactive shell for this window, sized ``cols`` × ``rows``.
+   * Its output arrives on the ``terminal_output`` push channel and its
+   * end on ``terminal_exited``, both addressed to this window only.
+   */
+  async terminalOpen(cols: number, rows: number): Promise<TerminalOpened> {
+    return TerminalOpened.parse(await this.transport.rpc("terminal_open", { cols, rows }));
+  }
+
+  /** Keystrokes (or a paste) for the terminal, as the text xterm made of them. */
+  async terminalInput(terminalId: string, data: string): Promise<void> {
+    await this.transport.rpc("terminal_input", { terminal_id: terminalId, data });
+  }
+
+  /** The terminal's new size, after the pane was resized. */
+  async terminalResize(terminalId: string, cols: number, rows: number): Promise<void> {
+    await this.transport.rpc("terminal_resize", { terminal_id: terminalId, cols, rows });
+  }
+
+  /** End the terminal's shell. */
+  async terminalClose(terminalId: string): Promise<void> {
+    await this.transport.rpc("terminal_close", { terminal_id: terminalId });
   }
 }
