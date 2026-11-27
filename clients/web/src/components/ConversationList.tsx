@@ -12,9 +12,10 @@ import { ActivityGroupView } from "./chatItems/ActivityGroupView";
 import { ChatItemView } from "./chatItems/ChatItemView";
 import type { ChatItemHandlers } from "./chatItems/handlers";
 
-/** Room above the first message, so its edit/delete chip clears the
- *  frosted header's drag region. */
-const HEADER_SPACER_PX = 78;
+/** Room above the first message: below where the top fade has vanished
+ *  (``--chat-fade-top``), and enough that its edit/delete chip clears the
+ *  header's drag region. */
+const HEADER_SPACER = "calc(var(--chat-fade-top) + 78px)";
 
 /** How far past the viewport Virtuoso renders, each way. */
 const OVERSCAN = { top: 400, bottom: 800 } as const;
@@ -123,7 +124,7 @@ export function ConversationList({
   // status tick does not hand Virtuoso a new Footer to remount.
   const components = useMemo(
     () => ({
-      Header: () => <div aria-hidden="true" style={{ height: HEADER_SPACER_PX }} />,
+      Header: () => <div aria-hidden="true" style={{ height: HEADER_SPACER }} />,
       Footer: () => <TypingFooter runPhase={runPhase} />,
     }),
     [runPhase],

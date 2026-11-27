@@ -1295,7 +1295,7 @@ button {
    that's what lets content slide *behind* the header for the blur
    to pick up. */
 .conversation > .col {
-  padding-top: 78px;
+  padding-top: calc(var(--chat-fade-top) + 78px);
 }
 
 /* Solid opaque background painted behind the header content
@@ -1330,6 +1330,19 @@ button {
    place it. ``--top-blur-tail`` is how far below the chrome it reaches. */
 :root {
   --top-blur-tail: 24px;
+  /* Where the chat's content has fully vanished: the bottom of the app
+     header, so nothing shows through the header itself. The curve and
+     the blur start here, and the first message rests as far below it as
+     it used to below the window's top. */
+  --chat-fade-top: 58px;
+}
+
+.conversation {
+  --fade-top: var(--chat-fade-top);
+}
+
+.app-header-blur .top-blur-layer {
+  top: var(--chat-fade-top);
 }
 
 .app-header-blur,

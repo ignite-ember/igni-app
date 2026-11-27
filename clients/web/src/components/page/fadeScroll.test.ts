@@ -372,3 +372,19 @@ describe("the page scroller's native scrollbar", () => {
   });
 });
 
+
+describe("the chat's top fade starts at the bottom of the app header", () => {
+  const rule = (sel: string) => RULES.filter((r) => r.selectors.includes(sel)).map((r) => r.body).join("\n");
+
+  it("vanishes the content at --chat-fade-top, with the blur moved down to match", () => {
+    expect(CSS).toMatch(/--chat-fade-top:\s*58px;/);
+    expect(rule(".conversation")).toMatch(/--fade-top:\s*var\(--chat-fade-top\)/);
+    expect(rule(".app-header-blur .top-blur-layer")).toMatch(/top:\s*var\(--chat-fade-top\)/);
+  });
+
+  it("rests the first message below it, in the list and in the plain column alike", () => {
+    expect(rule(".conversation > .col")).toMatch(/padding-top:\s*calc\(var\(--chat-fade-top\) \+ 78px\)/);
+    const list = readFileSync(path.join(SRC, "components/ConversationList.tsx"), "utf8");
+    expect(list).toContain('const HEADER_SPACER = "calc(var(--chat-fade-top) + 78px)";');
+  });
+});
