@@ -146,14 +146,17 @@ test("the last lines of a streaming thought slide under the markers, and the lat
   const window = page.locator(".activity-live");
   backend.pushEvent({ type: "content_delta", id: runId, text: "one\ntwo\n", is_thinking: true });
   await expect(window.locator(".live-window-line")).toHaveText(["one", "two"]);
-  backend.pushEvent({ type: "content_delta", id: runId, text: "three\nfour", is_thinking: true });
-  await expect(window.locator(".live-window-line")).toHaveText(["two", "three", "four"]);
-  // However long the thought, the window is three lines tall at most.
+  backend.pushEvent({ type: "content_delta", id: runId, text: "three\nfour\nfive", is_thinking: true });
+  await expect(window.locator(".live-window-line")).toHaveText(["two", "three", "four", "five"]);
+  const four = await window.boundingBox();
+  expect(four!.height).toBeGreaterThan(3 * 18);
+  expect(four!.height).toBeLessThanOrEqual(4 * 18 + 1);
+  // However long the thought, the window is four lines tall at most.
   backend.pushEvent({ type: "content_delta", id: runId, text: " and then ".repeat(60), is_thinking: true });
   await expect(window.locator(".live-window-line").last()).toContainText("and then and then");
   const box = await window.boundingBox();
   expect(box!.height).toBeGreaterThan(2 * 18);
-  expect(box!.height).toBeLessThanOrEqual(3 * 18 + 1);
+  expect(box!.height).toBeLessThanOrEqual(4 * 18 + 1);
 
   // The thought sits below the line of markers, inside the group.
   const markersBox = await page.locator(".activity-markers").boundingBox();
@@ -165,7 +168,7 @@ test("the last lines of a streaming thought slide under the markers, and the lat
   await expect(page.locator(".activity-thought-line")).not.toHaveClass(/live/);
   await expect(window.locator(".live-window-line").last()).toContainText("and then and then");
 
-  // Done: the last thought in two lines, and all of it a click away.
+  // Done: the last thought in three lines, and all of it a click away.
   toolDone(backend, runId, "12 passed");
   backend.pushEvent({ type: "content_delta", id: runId, text: "Tests pass.", is_thinking: false });
   backend.pushEvent({ type: "stream_end", id: runId });
@@ -173,9 +176,9 @@ test("the last lines of a streaming thought slide under the markers, and the lat
   const toggle = page.getByRole("button", { name: "All thinking" });
   await expect(toggle).toHaveAttribute("aria-expanded", "false");
   const done = await window.boundingBox();
-  expect(done!.height).toBeLessThanOrEqual(2 * 18 + 1);
+  expect(done!.height).toBeLessThanOrEqual(3 * 18 + 1);
   await toggle.click();
-  await expect(page.locator(".activity-thoughts-full")).toContainText("one\ntwo\nthree\nfour");
+  await expect(page.locator(".activity-thoughts-full")).toContainText("one\ntwo\nthree\nfour\nfive");
   await expect(page.locator(".activity-head")).toHaveAttribute("aria-expanded", "false");
 });
 
