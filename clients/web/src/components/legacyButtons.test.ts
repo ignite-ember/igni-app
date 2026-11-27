@@ -83,11 +83,15 @@ describe("the legacy .btn rules are drawn like the kit", () => {
   );
   const body = (sel: string) => rules.find(([s]) => s === sel)?.[1] ?? "";
 
+  // An extension's status in the header is an outlined chip, like igni's own.
+  const OUTLINED_CHIPS = new Set([".header-status-chips > .btn", ".header-status-chips > .btn:hover"]);
+
   it("no .btn rule carries a gradient or a border", () => {
     const legacy = rules.filter(([s]) => /(?<![\w-])\.btn(?![\w-])|(?<![\w-])\.btn-/.test(s));
     expect(legacy.length).toBeGreaterThan(5);
     for (const [sel, b] of legacy) {
       expect(b, sel).not.toMatch(/gradient/);
+      if (OUTLINED_CHIPS.has(sel)) continue;
       expect(b, sel).not.toMatch(/border(-color)?:\s*(1px|var|color-mix)/);
     }
   });
