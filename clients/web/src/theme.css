@@ -5452,6 +5452,63 @@ button {
    of a 27-inch display — these are lists and forms, and a line of
    metadata stretched across a metre reads worse than it did in the
    modal. */
+/* A page's content fades out under its title the way the chat fades under
+   the header, instead of being cut at the scroll box's top edge: the same
+   smooth curve as `.conversation`, ending where the first item rests, so
+   nothing at rest is faded. The sticky strip adds the chat's soft, untinted
+   blur on top of it. */
+.page-body {
+  --page-fade: 16px;
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    transparent 0px,
+    rgba(0, 0, 0, 0.03) calc(var(--page-fade) * 0.125),
+    rgba(0, 0, 0, 0.12) calc(var(--page-fade) * 0.25),
+    rgba(0, 0, 0, 0.27) calc(var(--page-fade) * 0.375),
+    rgba(0, 0, 0, 0.46) calc(var(--page-fade) * 0.5),
+    rgba(0, 0, 0, 0.65) calc(var(--page-fade) * 0.625),
+    rgba(0, 0, 0, 0.82) calc(var(--page-fade) * 0.75),
+    rgba(0, 0, 0, 0.94) calc(var(--page-fade) * 0.875),
+    #000 var(--page-fade)
+  );
+  mask-image: linear-gradient(
+    to bottom,
+    transparent 0px,
+    rgba(0, 0, 0, 0.03) calc(var(--page-fade) * 0.125),
+    rgba(0, 0, 0, 0.12) calc(var(--page-fade) * 0.25),
+    rgba(0, 0, 0, 0.27) calc(var(--page-fade) * 0.375),
+    rgba(0, 0, 0, 0.46) calc(var(--page-fade) * 0.5),
+    rgba(0, 0, 0, 0.65) calc(var(--page-fade) * 0.625),
+    rgba(0, 0, 0, 0.82) calc(var(--page-fade) * 0.75),
+    rgba(0, 0, 0, 0.94) calc(var(--page-fade) * 0.875),
+    #000 var(--page-fade)
+  );
+}
+
+/* Under a title the list starts 12px higher, behind the title row's empty
+   bottom padding, so the fade has 28px to run without moving anything at
+   rest. Not under a toolbar: it has no bottom padding to slide under. */
+.page-head + .page-body {
+  --page-fade: 28px;
+  margin-top: -12px;
+  padding-top: 12px;
+}
+
+.page-body::before {
+  content: "";
+  display: block;
+  position: sticky;
+  top: 0;
+  height: var(--page-fade);
+  margin-bottom: calc(var(--page-fade) * -1);
+  z-index: 1;
+  pointer-events: none;
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+  -webkit-mask-image: linear-gradient(to bottom, #000, transparent);
+  mask-image: linear-gradient(to bottom, #000, transparent);
+}
+
 .page-measure {
   padding: 16px 18px;
   width: min(900px, 100%);
