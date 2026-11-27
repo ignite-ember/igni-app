@@ -1,6 +1,7 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import App from "./App";
+import { ActivityDemo } from "./dev/ActivityDemo";
 import { ChatScrollDemo } from "./dev/ChatScrollDemo";
 import { CloudSwitchDemo } from "./dev/CloudSwitchDemo";
 import { HitlDemo } from "./dev/HitlDemo";
@@ -39,6 +40,9 @@ document.documentElement.dataset.host = host.kind;
 //                          the backend chip and every banner, plus a
 //                          live panel the shell's pushes drive — see
 //                          ``dev/CloudSwitchDemo.tsx``.
+//   ?demo=activity       — the activity group in each of its
+//                          states, clocks fixed — see
+//                          ``dev/ActivityDemo.tsx``.
 //   ?demo=app            — force-load the real app (otherwise
 //                          the dev Tauri shell, which has no
 //                          address bar to type a query into,
@@ -58,6 +62,7 @@ function pickRoot() {
   if (demo === "cloud") return <CloudSwitchDemo />;
   if (demo === "panels") return <PanelsDemo />;
   if (demo === "plugins") return <PluginsCatalogDemo />;
+  if (demo === "activity") return <ActivityDemo />;
   return <App />;
 }
 

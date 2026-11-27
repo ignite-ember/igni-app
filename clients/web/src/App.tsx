@@ -266,6 +266,7 @@ export default function App() {
           handlers={controller.handlers}
           scroll={scroll}
           atBottomNow={() => windowModel.get("scroll").at_bottom}
+          awaitingApproval={(hitl.pending?.length ?? 0) > 0}
           groupName={groupName}
           groupMark={groupMark}
           status={status}

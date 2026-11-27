@@ -174,6 +174,12 @@ export const VIEW_STATE: Record<string, Partial<Record<Category, string[]>>> = {
     menu: ["retryOpen"],
     field: ["retryDraft"],
   },
+  "components/chatItems/ActivityGroupView.tsx": {
+    animation: ["now", "flash"],
+    hover: ["tip"],
+    measure: ["width"],
+    disclosure: ["open"],
+  },
   "components/chatItems/ToolCardView.tsx": {
     disclosure: ["open"],
   },

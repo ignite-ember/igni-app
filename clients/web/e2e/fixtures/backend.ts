@@ -112,6 +112,8 @@ export interface StartOptions {
   /** Stable ``client_id`` returned in the Welcome. Tests sometimes
    *  read it back via ``client.clientId`` and want determinism. */
   clientId?: string;
+  /** The port to listen on; ``IGNI_E2E_FIXTURE_PORT``, else any free one. */
+  port?: number;
 }
 
 /**
@@ -174,7 +176,10 @@ export async function startFixtureBackend(
   const afterHandlers: Record<string, RpcAfterHandler> = { ...(opts.rpcAfterHandlers || {}) };
   const clientId = opts.clientId ?? "test-client-001";
 
-  const wss = new WebSocketServer({ host: "127.0.0.1", port: 0 });
+  const wss = new WebSocketServer({
+    host: "127.0.0.1",
+    port: opts.port ?? Number(process.env.IGNI_E2E_FIXTURE_PORT ?? 0),
+  });
   await new Promise<void>((resolve) => wss.once("listening", () => resolve()));
   const port = (wss.address() as AddressInfo).port;
   const url = `ws://127.0.0.1:${port}`;

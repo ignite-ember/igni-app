@@ -40,6 +40,7 @@
 import { expect, type Page } from "@playwright/test";
 import { mkdirSync } from "node:fs";
 
+import { openActivity } from "./fixtures/chat";
 import { test, whyNoModel } from "./fixtures/live-be";
 
 const OUT = "shots/live";
@@ -330,8 +331,10 @@ test(
     // on a comma-selector resolves to whichever is in the DOM.
     const dialog = page.locator(".hitl-card").first();
     const toolCard = page.locator(".tool-card").first();
+    // The call lands in an activity group, collapsed to its progress row.
+    const activity = page.locator(".activity-group").first();
     await expect(
-      page.locator(".hitl-card, .tool-card").first(),
+      page.locator(".hitl-card, .activity-group").first(),
       "the run neither asked for approval nor showed a tool call",
     ).toBeVisible({ timeout: 120_000 });
 
@@ -352,10 +355,12 @@ test(
 
     // The claim in the title: the call itself is *shown*. Asserted
     // after the approval, because the card is what the run renders
-    // once the tool actually goes.
-    await expect(toolCard, "no tool call was shown to the user").toBeVisible({
+    // once the tool actually goes, inside its activity group.
+    await expect(activity, "no tool call was shown to the user").toBeVisible({
       timeout: 120_000,
     });
+    await openActivity(page);
+    await expect(toolCard, "no tool call was shown to the user").toBeVisible();
     await expect(toolCard.locator(".tool-name")).toContainText(/bash|shell/i);
 
     // The token, and only the token. `|error|failed` used to be an

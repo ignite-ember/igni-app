@@ -2739,6 +2739,793 @@ button {
 
 /* ── Tool cards ─────────────────────────────────────────────────── */
 
+/* ── Activity group ────────────────────────────────────────────────
+   A run of tool calls and thinking between two replies, as one quiet
+   container: the step it is on (or what it did, as chips), a marker per
+   step, and the latest thought under them when collapsed; a timeline of
+   the cards when open (chatItems/ActivityGroupView.tsx).
+
+   Colour carries meaning only. Each kind of step has a hue family (its
+   marker's tint and icon); how a step went is a badge on it: a green
+   check, a red cross, an ember ring while it runs. */
+.activity-group {
+  /* Opaque, so a marker can ring itself in it over the timeline's line. */
+  --activity-bg: color-mix(in srgb, var(--bg-surface) 55%, var(--bg));
+  --kind-command: #4fb6a7;
+  --kind-read: #6aa3f7;
+  --kind-edit: #d9a644;
+  --kind-search: #b5b06a;
+  --kind-fetch: #e58fb7;
+  --kind-mcp: #5bbfe0;
+  --kind-agent: #a991f0;
+  --kind-other: #a5a49e;
+  --kind-thinking: #aaa4bd;
+  --step-ok: var(--success);
+  --step-ok-text: var(--accent-green-text);
+  --step-fail: var(--danger);
+  --step-fail-text: var(--danger-text);
+  --kind: var(--kind-other);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius);
+  background: var(--activity-bg);
+  font-size: var(--text-md);
+}
+
+:root[data-theme="light"] .activity-group,
+:root[data-theme="auto"][data-os-prefers-light="1"] .activity-group {
+  --kind-command: #1b7a6d;
+  --kind-read: #2563c9;
+  --kind-edit: #946300;
+  --kind-search: #6c6820;
+  --kind-fetch: #b03a78;
+  --kind-mcp: #0d7ea8;
+  --kind-agent: #6a4fc6;
+  --kind-other: #64635f;
+  --kind-thinking: #716b85;
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) .activity-group {
+    --kind-command: #1b7a6d;
+    --kind-read: #2563c9;
+    --kind-edit: #946300;
+    --kind-search: #6c6820;
+    --kind-fetch: #b03a78;
+    --kind-mcp: #0d7ea8;
+    --kind-agent: #6a4fc6;
+    --kind-other: #64635f;
+    --kind-thinking: #716b85;
+  }
+}
+
+.activity-group .glyph-command { --kind: var(--kind-command); }
+.activity-group .glyph-read { --kind: var(--kind-read); }
+.activity-group .glyph-edit { --kind: var(--kind-edit); }
+.activity-group .glyph-search { --kind: var(--kind-search); }
+.activity-group .glyph-fetch { --kind: var(--kind-fetch); }
+.activity-group .glyph-mcp { --kind: var(--kind-mcp); }
+.activity-group .glyph-agent { --kind: var(--kind-agent); }
+.activity-group .glyph-other { --kind: var(--kind-other); }
+.activity-group .glyph-thinking { --kind: var(--kind-thinking); }
+
+.activity-group.failed {
+  border-color: color-mix(in srgb, var(--danger) 22%, var(--border-soft));
+}
+
+.activity-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  width: 100%;
+  min-height: 34px;
+  padding: var(--space-4) var(--space-7) var(--space-2);
+  border: 0;
+  border-radius: calc(var(--radius) - 1px) calc(var(--radius) - 1px) 0 0;
+  background: transparent;
+  color: var(--fg-muted);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  user-select: none;
+}
+
+.activity-head:hover {
+  color: var(--fg);
+}
+
+.activity-head:hover .activity-chevron {
+  color: var(--fg);
+}
+
+.activity-head:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+/* ── The markers ── */
+.activity-markers {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  /* Margin, not padding: the strip's measured width is its markers' room. */
+  margin: var(--space-2) var(--space-7) var(--space-5);
+}
+
+.activity-more {
+  flex-shrink: 0;
+  min-width: 31px;
+  height: 22px;
+  padding: 0 var(--space-2);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--fg-faint);
+  font: inherit;
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+
+.activity-more:hover {
+  border-color: var(--border);
+  color: var(--fg);
+}
+
+.step-marker-slot {
+  position: relative;
+  display: flex;
+  flex-shrink: 0;
+}
+
+.step-marker-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  cursor: pointer;
+}
+
+.step-marker-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 0;
+}
+
+.step-marker-btn:hover .step-marker,
+.step-marker-btn:focus-visible .step-marker {
+  transform: translateY(-1px) scale(1.12);
+}
+
+.step-marker {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 19px;
+  height: 19px;
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--kind) 17%, var(--activity-bg));
+  color: var(--kind);
+  transition: transform 0.12s ease;
+}
+
+.step-marker.glyph-thinking {
+  border-radius: var(--radius-circle);
+  background: color-mix(in srgb, var(--kind) 12%, var(--activity-bg));
+}
+
+/* The result badge, cut out of the marker's corner. */
+.step-badge {
+  position: absolute;
+  right: -2px;
+  bottom: -2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 10px;
+  height: 10px;
+  border-radius: var(--radius-circle);
+  background: var(--step-ok);
+  color: var(--activity-bg);
+  box-shadow: 0 0 0 1.5px var(--activity-bg);
+}
+
+.step-badge svg {
+  stroke-width: 3;
+}
+
+/* A failure stands out from across the row: red through and through. */
+.step-marker.state-failed {
+  background: color-mix(in srgb, var(--step-fail) 22%, var(--activity-bg));
+  color: var(--step-fail-text);
+  outline: 1px solid color-mix(in srgb, var(--step-fail) 70%, transparent);
+  outline-offset: -1px;
+}
+
+.step-marker.state-failed .step-badge {
+  background: var(--step-fail);
+}
+
+/* Never ran: refused in the approval dialog. Faded, with a dash. */
+.step-marker.state-rejected {
+  opacity: 0.55;
+}
+
+.step-marker.state-rejected .step-badge {
+  background: var(--fg-faint);
+}
+
+/* Running: an ember ring breathing round the marker. */
+.step-marker.state-live {
+  background: color-mix(in srgb, var(--accent) 18%, var(--activity-bg));
+  color: var(--accent);
+}
+
+.step-marker.glyph-thinking.state-live {
+  background: color-mix(in srgb, var(--kind) 20%, var(--activity-bg));
+  color: var(--kind);
+}
+
+.step-marker.state-live::after {
+  content: "";
+  position: absolute;
+  inset: -3px;
+  border: 1.5px solid var(--accent);
+  border-radius: 7px;
+  animation: step-pulse 1.4s ease-in-out infinite;
+}
+
+.step-marker.glyph-thinking.state-live::after {
+  border-color: var(--kind);
+  border-radius: var(--radius-circle);
+}
+
+@keyframes step-pulse {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.25;
+    transform: scale(1.12);
+  }
+}
+
+
+.step-tooltip {
+  position: absolute;
+  bottom: calc(100% + 4px);
+  left: -4px;
+  z-index: 20;
+  max-width: 380px;
+  padding: 3px var(--space-4);
+  border-radius: 6px;
+  background: var(--fg);
+  color: var(--bg);
+  font-size: var(--text-xs);
+  line-height: 16px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
+}
+
+/* ── The labels ── */
+.activity-label {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.activity-label-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.activity-status {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 14px;
+  height: 14px;
+}
+
+.activity-status.state-done {
+  color: var(--step-ok-text);
+}
+
+.activity-status.state-failed {
+  color: var(--step-fail-text);
+}
+
+.activity-status.state-rejected {
+  color: var(--fg-faint);
+}
+
+.activity-live-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: var(--radius-circle);
+  background: var(--accent);
+  animation: pulse-dot 1.4s ease infinite;
+}
+
+.activity-kind {
+  display: flex;
+  flex-shrink: 0;
+  color: var(--kind);
+}
+
+.activity-tool-name {
+  flex-shrink: 0;
+  color: var(--fg);
+  font-weight: 500;
+}
+
+.activity-tool-args {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  color: var(--fg-muted);
+}
+
+.activity-step-tail {
+  flex-shrink: 0;
+  color: var(--fg-faint);
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.activity-step-tail.state-failed {
+  color: var(--step-fail-text);
+  font-weight: 500;
+}
+
+.activity-chips {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  min-width: 0;
+}
+
+.activity-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-shrink: 0;
+  height: 22px;
+  padding: 0 var(--space-4) 0 var(--space-3);
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--kind) 11%, transparent);
+  color: var(--fg-muted);
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.activity-chip > svg {
+  color: var(--kind);
+}
+
+.activity-chip-count {
+  color: var(--fg);
+  font-weight: 500;
+}
+
+.activity-chip-ok {
+  display: flex;
+  color: var(--step-ok-text);
+}
+
+.activity-chip.activity-failed {
+  background: color-mix(in srgb, var(--step-fail) 14%, transparent);
+  color: var(--step-fail-text);
+  font-weight: 500;
+}
+
+.activity-chip.activity-failed > svg {
+  color: inherit;
+}
+
+.activity-meta {
+  flex-shrink: 0;
+  margin-left: auto;
+  color: var(--fg-faint);
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.activity-chevron {
+  flex-shrink: 0;
+  color: var(--fg-faint);
+}
+
+/* ── The live window ──
+   The last lines of a streaming thought or a command's output. The
+   mask is as tall as the window at its fullest and sits at its bottom,
+   so the top line fades only once the window is full. */
+.live-window {
+  --live-line: 18px;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  max-height: calc(var(--live-lines) * var(--live-line));
+  overflow: hidden;
+  color: var(--fg-faint);
+  font-size: var(--text-sm);
+  line-height: var(--live-line);
+  overflow-wrap: anywhere;
+  -webkit-mask-image: linear-gradient(to bottom, transparent, #000 var(--live-line));
+  mask-image: linear-gradient(to bottom, transparent, #000 var(--live-line));
+  -webkit-mask-size: 100% calc(var(--live-lines) * var(--live-line));
+  mask-size: 100% calc(var(--live-lines) * var(--live-line));
+  -webkit-mask-position: bottom;
+  mask-position: bottom;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+}
+
+.live-window.mono {
+  --live-line: 17px;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  white-space: pre-wrap;
+}
+
+/* ── Under the markers: the thinking, and a command's output ── */
+.activity-feed {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin: calc(-1 * var(--space-1)) var(--space-7) var(--space-5);
+}
+
+.activity-thought-line {
+  display: grid;
+  grid-template-columns: 14px minmax(0, 1fr) auto;
+  align-items: start;
+  column-gap: var(--space-4);
+}
+
+.activity-thought-icon {
+  display: flex;
+  padding-top: 3px;
+  color: var(--kind-thinking);
+}
+
+.activity-thought-line.live .activity-thought-icon {
+  animation: pulse-dot 1.8s ease infinite;
+}
+
+.activity-thought-line .live-window {
+  color: var(--fg-muted);
+}
+
+.activity-thinking-toggle {
+  align-self: end;
+  padding: 0 var(--space-2);
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--fg-faint);
+  font: inherit;
+  font-size: var(--text-xs);
+  line-height: 18px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.activity-thinking-toggle:hover {
+  color: var(--fg);
+  text-decoration: underline;
+}
+
+.activity-thinking-toggle:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 0;
+}
+
+.activity-thoughts-full {
+  max-height: 320px;
+  overflow-y: auto;
+  color: var(--fg-muted);
+  font-size: var(--text-sm);
+  line-height: 18px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.activity-thoughts-full p {
+  margin: 0 0 var(--space-3);
+}
+
+.activity-thoughts-full p:last-child {
+  margin-bottom: 0;
+}
+
+.activity-output-line {
+  display: grid;
+  grid-template-columns: 14px minmax(0, 1fr);
+  align-items: start;
+  column-gap: var(--space-4);
+}
+
+.activity-output-icon {
+  display: flex;
+  padding-top: 5px;
+  color: var(--kind-command);
+}
+
+.activity-output-line .live-window {
+  padding: var(--space-1) var(--space-4);
+  max-height: calc(var(--live-lines) * var(--live-line) + 2 * var(--space-1));
+  border-left: 2px solid color-mix(in srgb, var(--kind-command) 60%, transparent);
+  border-radius: 0 6px 6px 0;
+  background: var(--bg-inset);
+  color: var(--fg-muted);
+  -webkit-mask-image: none;
+  mask-image: none;
+}
+
+/* ── The edited files ── */
+.activity-files {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  padding: 0 var(--space-7) var(--space-5) var(--space-7);
+}
+
+.activity-files-label {
+  color: var(--fg-faint);
+  font-size: var(--text-xs);
+}
+
+.activity-file-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  max-width: 260px;
+  padding: 1px var(--space-4);
+  border: 1px solid color-mix(in srgb, var(--kind-edit) 30%, var(--border-soft));
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--kind-edit) 7%, var(--bg-surface));
+  color: var(--fg-muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  line-height: 18px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.activity-file-chip svg {
+  color: var(--kind-edit);
+}
+
+button.activity-file-chip {
+  cursor: pointer;
+}
+
+button.activity-file-chip:hover {
+  border-color: var(--kind-edit);
+  color: var(--fg);
+}
+
+button.activity-file-chip:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* ── The timeline ── */
+.activity-body {
+  padding: var(--space-3) var(--space-6) var(--space-4) var(--space-3);
+  border-top: 1px solid var(--border-soft);
+}
+
+.activity-body[hidden] {
+  display: none;
+}
+
+.activity-timeline {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.activity-step {
+  --rail-mid: 20px;
+  position: relative;
+  display: grid;
+  grid-template-columns: 26px minmax(0, 1fr) auto;
+  column-gap: var(--space-2);
+  padding: 2px 0;
+  border-radius: var(--radius-sm);
+}
+
+.activity-step.state-failed {
+  background: color-mix(in srgb, var(--step-fail) 6%, transparent);
+}
+
+/* The thin line joining the markers, from the first to the last. */
+.activity-step::before {
+  content: "";
+  position: absolute;
+  left: 12.5px;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--border);
+}
+
+.activity-step:first-child::before {
+  top: var(--rail-mid);
+}
+
+.activity-step:last-child::before {
+  bottom: auto;
+  height: var(--rail-mid);
+}
+
+.activity-step:only-child::before {
+  display: none;
+}
+
+.activity-rail {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 36px;
+}
+
+.activity-rail .step-marker {
+  box-shadow: 0 0 0 3px var(--activity-bg);
+}
+
+.activity-step.state-failed .activity-rail .step-marker {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--step-fail) 6%, var(--activity-bg));
+}
+
+.activity-step-body {
+  min-width: 0;
+}
+
+.activity-step-time {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-3);
+  min-width: 26px;
+  height: 36px;
+  color: var(--fg-faint);
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+.activity-step-exit {
+  color: var(--step-fail-text);
+  font-weight: 500;
+}
+
+.activity-step:focus {
+  outline: none;
+}
+
+.activity-step:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.activity-step.flash {
+  animation: activity-step-flash 1.6s ease-out;
+}
+
+@keyframes activity-step-flash {
+  0%,
+  35% {
+    background: color-mix(in srgb, var(--accent) 13%, transparent);
+  }
+  100% {
+    background: transparent;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .activity-step.flash {
+    animation: none;
+    background: color-mix(in srgb, var(--accent) 10%, transparent);
+  }
+}
+
+/* The rail's marker is the step's status: the card's own dot steps
+   aside, and a card sits flat on the timeline until it is opened. */
+.activity-timeline .tool-status {
+  display: none;
+}
+
+.activity-timeline .tool-card:not(:has(.tool-card-body)) {
+  border-color: transparent;
+  background: transparent;
+}
+
+.activity-timeline .tool-card-header {
+  min-height: 36px;
+}
+
+.activity-timeline .tool-card:not(:has(.tool-card-body)):hover {
+  background: color-mix(in srgb, var(--fg) 4%, transparent);
+}
+
+.activity-timeline .agent-dispatch {
+  display: flex;
+  align-items: center;
+  min-height: 36px;
+  padding: 0 13px;
+}
+
+.activity-thought .thinking-toggle {
+  min-height: 36px;
+  width: 100%;
+  padding: 0 13px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--fg-faint);
+  font: inherit;
+  font-size: var(--text-sm);
+  text-align: left;
+}
+
+.activity-thought .thinking-toggle:hover {
+  color: var(--fg-muted);
+}
+
+.activity-thought .thinking-toggle:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.activity-thought-preview {
+  margin: -6px 13px var(--space-3) 27px;
+  color: var(--fg-muted);
+}
+
+.activity-thought .msg-thinking {
+  margin: 0 13px var(--space-4) 27px;
+  font-size: var(--text-md);
+}
+
+/* Under reduced motion every pulse holds still: the ring, the dot and
+   the thought's icon stay, at full strength. Last, so it wins. */
+@media (prefers-reduced-motion: reduce) {
+  .step-marker.state-live::after,
+  .activity-live-dot,
+  .activity-thought-line.live .activity-thought-icon {
+    animation: none;
+  }
+
+  .step-marker {
+    transition: none;
+  }
+}
+
 .tool-card {
   border: 1px solid var(--border-soft);
   border-radius: var(--radius);
