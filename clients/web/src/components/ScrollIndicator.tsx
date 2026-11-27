@@ -10,6 +10,8 @@ export const SCROLL_INDICATOR_PAD = 32;
  *  lists. macOS overlay scrollbar uses ~14px; we lean larger so
  *  the thumb stays a useful position indicator. */
 export const SCROLL_INDICATOR_MIN_THUMB = 24;
+/** The gap at each end of a track that starts below fixed chrome. */
+export const SCROLL_INDICATOR_INSET_PAD = 8;
 
 export interface ThumbRect {
   top: number;
@@ -27,6 +29,7 @@ export function computeThumb(
   scrollHeight: number,
   clientHeight: number,
   pad: number = SCROLL_INDICATOR_PAD,
+  inset: number = 0,
 ): ThumbRect {
   // Hide entirely when there's nothing to scroll. The +1 absorbs
   // sub-pixel rounding so a "fits exactly" list doesn't flicker
@@ -34,14 +37,14 @@ export function computeThumb(
   if (scrollHeight <= clientHeight + 1) {
     return { top: 0, height: 0, visible: false };
   }
-  const track = Math.max(0, clientHeight - pad * 2);
+  const track = Math.max(0, clientHeight - inset - pad * 2);
   const ratio = clientHeight / scrollHeight;
   // Minimum thumb height (grabbable on long lists); bounded above
   // by the available track length.
   const thumbH = Math.max(SCROLL_INDICATOR_MIN_THUMB, Math.min(track, clientHeight * ratio));
   const maxScroll = scrollHeight - clientHeight;
   const maxThumbTop = Math.max(0, track - thumbH);
-  const top = pad + (maxScroll > 0 ? (scrollTop / maxScroll) * maxThumbTop : 0);
+  const top = inset + pad + (maxScroll > 0 ? (scrollTop / maxScroll) * maxThumbTop : 0);
   return { top, height: thumbH, visible: true };
 }
 
@@ -63,6 +66,7 @@ export function computeThumb(
 export function ScrollIndicator({
   scrollRef,
   element,
+  belowPadding = false,
 }: {
   scrollRef?: RefObject<HTMLElement | null>;
   /** Alternative to ``scrollRef`` for callers that obtain the scroll
@@ -70,6 +74,11 @@ export function ScrollIndicator({
    *  fires after the first render). State-backed so this component
    *  re-runs its bind effect when the element appears. */
   element?: HTMLElement | null;
+  /** Run the track from where the scroller's content starts (its top
+   *  padding) to its bottom, placed against the scroller's offset parent:
+   *  for a scroller that reaches up under fixed chrome, so the thumb never
+   *  rides up into it. */
+  belowPadding?: boolean;
 }) {
   const [thumb, setThumb] = useState<{ top: number; height: number; visible: boolean }>({
     top: 0,
@@ -84,7 +93,11 @@ export function ScrollIndicator({
     if (!el) return;
 
     const update = () => {
-      const rect = computeThumb(el.scrollTop, el.scrollHeight, el.clientHeight);
+      const inset = belowPadding ? parseFloat(getComputedStyle(el).paddingTop) || 0 : 0;
+      const rect = belowPadding
+        ? computeThumb(el.scrollTop, el.scrollHeight, el.clientHeight, SCROLL_INDICATOR_INSET_PAD, inset)
+        : computeThumb(el.scrollTop, el.scrollHeight, el.clientHeight);
+      if (belowPadding && rect.visible) rect.top += el.offsetTop;
       if (!rect.visible) {
         setThumb((t) => (t.visible ? { ...t, visible: false } : t));
         return;
@@ -102,16 +115,16 @@ export function ScrollIndicator({
     };
 
     el.addEventListener("scroll", onScroll, { passive: true });
-    const ro = new ResizeObserver(update);
-    ro.observe(el);
+    const ro = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(update);
+    ro?.observe(el);
     update();
 
     return () => {
       el.removeEventListener("scroll", onScroll);
-      ro.disconnect();
+      ro?.disconnect();
       if (fadeTimer.current !== null) window.clearTimeout(fadeTimer.current);
     };
-  }, [scrollRef, element]);
+  }, [scrollRef, element, belowPadding]);
 
   if (!thumb.visible) return null;
   return (

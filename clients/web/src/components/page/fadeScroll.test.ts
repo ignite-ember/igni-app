@@ -355,3 +355,12 @@ describe("(d) the chat and FadeScroll share one fade and one blur", () => {
     expect(fadeOverrides(rogue)).toEqual([".page:has(.rogue) .page-body", ".main--paged .fade-scroll-blur"]);
   });
 });
+
+describe("the page scroller's native scrollbar", () => {
+  it("is hidden, because it would fade with the content; the thumb is drawn over the fade", () => {
+    const css = readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), "../../theme.css"), "utf8").replace(/\r\n/g, "\n");
+    expect(css).toMatch(/\.fade-scroll-body \{[^}]*scrollbar-width: none;/);
+    expect(css).toMatch(/\.fade-scroll-body::-webkit-scrollbar \{\s*display: none;/);
+  });
+});
+
