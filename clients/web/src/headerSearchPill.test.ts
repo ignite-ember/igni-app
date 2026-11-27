@@ -9,7 +9,8 @@ import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
-const CSS = readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), "theme.css"), "utf8");
+/** LF line endings, so the multi-line selectors match a Windows CRLF checkout too. */
+const CSS = readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), "theme.css"), "utf8").replace(/\r\n/g, "\n");
 
 /** The declarations of the rule whose selector is exactly ``selector``. */
 function rule(selector: string, css = CSS): string {
