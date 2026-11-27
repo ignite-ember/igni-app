@@ -225,7 +225,7 @@ export function Sidebar({
               is excluded from the drag region so it stays clickable. */}
           <div className="sidebar-head">
             {avatar && catShown && <BotAvatar look={avatar} />}
-            <button className="btn sidebar-new-chat" onClick={onNewChat}>
+            <button type="button" className="sidebar-new-chat" onClick={onNewChat}>
               + New chat
             </button>
           </div>

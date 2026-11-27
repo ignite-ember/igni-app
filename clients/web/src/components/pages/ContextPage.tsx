@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Drawer } from "../panels/Drawer";
 import type { IgniClient } from "../../protocol/client";
 import { PageLoading } from "../page/PageLoading";
+import { Button } from "../page/Button";
 
 export interface ContextBreakdown {
   total: number;
@@ -87,9 +88,9 @@ export function ContextPage({
       title="Context"
       onClose={onClose}
       headerExtras={
-        <button className="btn btn-sm" onClick={() => void load()} disabled={loading}>
+        <Button size="sm" onClick={() => void load()} disabled={loading}>
           {loading ? "Reading…" : "Refresh"}
-        </button>
+        </Button>
       }
     >
       {error && <div className="ctx-error">Could not read the context: {error}</div>}
@@ -141,9 +142,9 @@ export function ContextPage({
             not drop to zero after compacting.
           </p>
 
-          <button className="btn btn-primary" onClick={onCompact}>
+          <Button variant="primary" onClick={onCompact}>
             Compact the conversation
-          </button>
+          </Button>
         </>
       )}
 

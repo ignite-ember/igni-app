@@ -3,6 +3,7 @@ import type { IgniClient } from "../../protocol/client";
 import { Drawer } from "./Drawer";
 import { PageEmpty } from "../page/PageEmpty";
 import { PageLoading } from "../page/PageLoading";
+import { Button } from "../page/Button";
 
 interface SkillRow {
   name?: string;
@@ -47,15 +48,15 @@ export function SkillsPanel({
             <div className="name">/{s.name}</div>
             <div className="meta">{s.description}</div>
           </div>
-          <button
-            className="btn btn-sm"
+          <Button
+            size="sm"
             onClick={() => {
               onClose();
               onRun(`/${s.name}`);
             }}
           >
             Run
-          </button>
+          </Button>
         </div>
       ))}
     </Drawer>

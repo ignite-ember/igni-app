@@ -13,6 +13,7 @@ import { useExtensionName } from "../../extensions/extensionNames";
 import { FilePill } from "../FilePill";
 import { EditPenIcon, TrashIcon } from "../Icons";
 import { ChatMarkdown } from "../markdown/ChatMarkdown";
+import { Button } from "../page/Button";
 import type { UserItemHandlers } from "./handlers";
 import { UserCodePill } from "./UserCodePill";
 import { useMessageEditor, type MessageEditor } from "./useMessageEditor";
@@ -59,16 +60,17 @@ function MessageEditForm({
         <span className="msg-user-edit-hint">
           ⌘↵ to save · Esc to cancel — saving wipes the rest of the conversation
         </span>
-        <button className="btn btn-sm" onClick={editor.cancel}>
+        <Button size="sm" onClick={editor.cancel}>
           Cancel
-        </button>
-        <button
-          className="btn btn-sm btn-primary"
+        </Button>
+        <Button
+          variant="primary"
+          size="sm"
           disabled={!editor.draft.trim() || editor.draft === item.text}
           onClick={editor.submit}
         >
           Save & resend
-        </button>
+        </Button>
       </div>
     </div>
   );
@@ -112,18 +114,19 @@ export const UserMessage = memo(function UserMessage({
           {confirmingDelete ? (
             <>
               <span className="msg-user-confirm-text">Delete this and everything after?</span>
-              <button className="btn btn-sm" onClick={() => setConfirmingDelete(false)}>
+              <Button size="sm" onClick={() => setConfirmingDelete(false)}>
                 Cancel
-              </button>
-              <button
-                className="btn btn-sm btn-danger"
+              </Button>
+              <Button
+                variant="danger"
+                size="sm"
                 onClick={() => {
                   setConfirmingDelete(false);
                   onDelete?.(item);
                 }}
               >
                 Delete
-              </button>
+              </Button>
             </>
           ) : (
             <>

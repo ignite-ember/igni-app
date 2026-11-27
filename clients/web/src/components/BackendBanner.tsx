@@ -3,6 +3,7 @@ import { useState, type ReactNode } from "react";
 import type { BackendSnapshot } from "../cloud/backendState";
 import { noticeText, refusalText, unreachableText } from "../cloud/backendTexts";
 import { host } from "../lib/host";
+import { Button } from "./page/Button";
 
 /** The shell calls the banner's buttons make; a test passes its own. */
 export interface BackendActions {
@@ -45,9 +46,9 @@ export function BackendBanner({
       .finally(() => setBusy(false));
   };
   const useLocal = backend.canUseLocal && backend.side === "cloud" && (
-    <button type="button" className="backend-banner-btn" disabled={busy} onClick={() => run(actions.useThisComputer)}>
+    <Button size="sm" disabled={busy} onClick={() => run(actions.useThisComputer)}>
       Use this computer
-    </button>
+    </Button>
   );
   const failure = error && (
     <span className="backend-banner-error" role="alert">
@@ -61,9 +62,9 @@ export function BackendBanner({
       tone: "warn",
       text: "Your cloud igni needs you to sign in again.",
       buttons: (
-        <button type="button" className="backend-banner-btn primary" disabled={busy} onClick={() => run(actions.signIn)}>
+        <Button variant="primary" size="sm" disabled={busy} onClick={() => run(actions.signIn)}>
           Sign in
-        </button>
+        </Button>
       ),
     };
   } else if (backend.side === "cloud" && backend.state === "cloud_unreachable") {
@@ -72,9 +73,9 @@ export function BackendBanner({
       text: unreachableText(backend),
       buttons: (
         <>
-          <button type="button" className="backend-banner-btn" onClick={actions.retry}>
+          <Button size="sm" onClick={actions.retry}>
             Retry
-          </button>
+          </Button>
           {useLocal}
         </>
       ),
@@ -86,9 +87,9 @@ export function BackendBanner({
       text: `${refusalText(backend.reason)}${fallback}`,
       buttons:
         backend.side === "local" ? (
-          <button type="button" className="backend-banner-btn" onClick={actions.dismiss}>
+          <Button size="sm" onClick={actions.dismiss}>
             Dismiss
-          </button>
+          </Button>
         ) : null,
     };
   } else if (backend.notice) {
@@ -97,9 +98,9 @@ export function BackendBanner({
       text: noticeText(backend.notice),
       buttons:
         backend.notice.kind === "moving_to_cloud" ? null : (
-          <button type="button" className="backend-banner-btn" onClick={actions.dismiss}>
+          <Button size="sm" onClick={actions.dismiss}>
             Dismiss
-          </button>
+          </Button>
         ),
     };
   }

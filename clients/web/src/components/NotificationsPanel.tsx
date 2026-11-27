@@ -26,6 +26,7 @@ import {
   type NotificationTarget,
 } from "../notifications/model";
 import type { IgniClient } from "../protocol/client";
+import { Button } from "./page/Button";
 
 export function NotificationsPanel({
   client,
@@ -139,16 +140,15 @@ export function NotificationsPanel({
             {unread ? `${unread} unread` : "nothing unread"}
           </span>
           {!!unread && (
-            <button
-              type="button"
-              className="btn btn-sm"
+            <Button
+              size="sm"
               title="Mark everything as read"
               onClick={() => {
                 void markRead({}).then(() => load());
               }}
             >
               Mark all read
-            </button>
+            </Button>
           )}
           <button className="icon-btn" title="Close (Esc)" onClick={onClose}>
             <CloseIcon />

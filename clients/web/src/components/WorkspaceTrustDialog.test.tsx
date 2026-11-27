@@ -77,6 +77,14 @@ describe("WorkspaceTrustDialog", () => {
     expect(rpc).toHaveBeenCalledWith("set_workspace_trust", { decision });
   });
 
+  it("draws Trust as the kit's primary and the other answers as secondary", () => {
+    render(<WorkspaceTrustDialog client={{ rpc: rpcStub() }} status={asking} onClose={() => undefined} />);
+    const cls = (name: string) => screen.getByRole("button", { name }).className;
+    expect(cls("Trust")).toContain("button--primary");
+    expect(cls("Don't trust")).toContain("button--secondary");
+    expect(cls("This time only")).toContain("button--secondary");
+  });
+
   it("explains a policy refusal and offers no way to trust", () => {
     const refused = {
       ...asking,

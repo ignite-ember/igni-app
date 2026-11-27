@@ -393,18 +393,20 @@ button {
    text, no border or filled box, just a soft hover highlight — rather
    than a boxed control. flex:1 so it fills the row past the macOS
    traffic-light gutter. */
-/* Scoped to beat the later ``.btn`` rule (equal specificity, defined
-   further down the file, which would otherwise restore the border and
-   fill). */
 .sidebar-head .sidebar-new-chat {
   /* Sized to its text (not flex:1), so the hover highlight hugs the
      label instead of spanning the whole row. margin-left:auto pushes
      it to the right edge of the sidebar, clear of the traffic lights. */
   flex: 0 0 auto;
   margin-left: auto;
+  appearance: none;
   border: none;
   background: transparent;
   color: var(--fg);
+  font: inherit;
+  font-size: var(--text-md);
+  font-weight: 600;
+  cursor: pointer;
   text-align: left;
   border-radius: var(--radius-sm);
   padding: var(--space-3) var(--space-4);
@@ -2014,11 +2016,6 @@ button {
   flex-wrap: nowrap;
 }
 
-.msg-user-actions .btn-sm {
-  white-space: nowrap;
-  flex-shrink: 0;
-}
-
 .msg-user:hover .msg-user-actions,
 .msg-user-actions:focus-within {
   opacity: 1;
@@ -2197,13 +2194,11 @@ button {
  * scrolling up to find the user message and re-editing it from
  * scratch — see [[feedback-interrupted-messages]].
  *
- * Visual treatment: muted background (the same raised-tone as the
- * other in-bubble UI affordances), a small left-border accent in
- * the reason's colour, italic label, and three buttons sized to
- * the bubble's existing pill-button aesthetic. ``:focus-visible``
- * gets a clear ring so keyboard-only users see the focused action
- * after the auto-focus on mount. The fade-in animation is a CSS
- * transition keyed off the banner mount — no JS animation lib.
+ * Visual treatment: the quiet surface the rest of the chat uses — a
+ * soft fill, no border — with the italic label on the left and the
+ * shared Button kit on the right. ``:focus-visible`` gets a clear
+ * ring so keyboard-only users see the focus after the auto-focus on
+ * mount. The fade-in is a CSS animation keyed off the mount.
  */
 .msg-assistant-interrupted {
   display: flex;
@@ -2211,10 +2206,10 @@ button {
   align-items: center;
   gap: 6px 10px;
   margin-top: var(--space-5);
-  padding: var(--space-4) var(--space-6);
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--border-soft);
-  background: color-mix(in srgb, var(--igni-orange) 6%, transparent);
+  padding: var(--space-3) var(--space-3) var(--space-3) var(--space-6);
+  border-radius: 12px;
+  border: none;
+  background: color-mix(in srgb, var(--fg) 4%, transparent);
   color: var(--fg);
   font-size: var(--text-md);
   line-height: 1.4;
@@ -2226,16 +2221,15 @@ button {
   box-shadow: 0 0 0 2px var(--accent-blue);
 }
 
-/* Reason tint — mirrors the .msg-error border/bg blend. Default
-   is a soft orange wash (cancelled). Errored leans redder,
-   abandoned leans warmer. Low alpha so the banner reads as a
-   footer on the message, not a separate alert box. */
+/* Reason tint: the faintest wash of the reason's colour over the
+   same quiet surface, so the banner reads as a footer on the message,
+   not an alert box. Cancelled stays neutral. */
 .msg-assistant-interrupted--errored {
-  background: color-mix(in srgb, var(--danger, #cf222e) 7%, transparent);
+  background: color-mix(in srgb, var(--danger, #cf222e) 6%, transparent);
 }
 
 .msg-assistant-interrupted--abandoned {
-  background: color-mix(in srgb, var(--warning, #d9a644) 7%, transparent);
+  background: color-mix(in srgb, var(--warning, #d9a644) 6%, transparent);
 }
 
 .msg-assistant-interrupted-label {
@@ -3181,76 +3175,19 @@ button {
   font-style: italic;
 }
 
-/* ── Stop buttons ──────────────────────────────────────────────
-   Two flavours, same look: red-tinted pill with a filled square
-   icon. ``.orch-stop-team`` sits in the team-progress header and
-   nukes the whole run; ``.orch-stop-agent`` sits in each running
-   agent header and cancels only that sub-agent (siblings continue). */
+/* ── Stop and Retry ─────────────────────────────────────────────
+   Both are the shared Button (Stop its danger variant, Retry its
+   secondary one); these classes only space them from the header.
+   ``.orch-stop-team`` sits in the team-progress header and stops the
+   whole run; ``.orch-stop-agent`` sits in each running agent header
+   and cancels only that sub-agent (siblings continue). Retry appears
+   only when the agent ended in error or was stopped. */
 .orch-stop-btn {
-  appearance: none;
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
   margin-left: var(--space-4);
-  padding: var(--space-2) var(--space-5);
-  font-family: var(--font-ui);
-  font-size: var(--text-sm);
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  border-radius: 6px;
-  cursor: pointer;
-  border: 1px solid color-mix(in srgb, var(--accent-red, #e54848) 40%, transparent);
-  background: color-mix(in srgb, var(--accent-red, #e54848) 12%, transparent);
-  color: var(--accent-red-text);
-  flex-shrink: 0;
 }
 
-.orch-stop-btn:hover {
-  background: color-mix(in srgb, var(--accent-red, #e54848) 22%, transparent);
-  border-color: color-mix(in srgb, var(--accent-red, #e54848) 60%, transparent);
-}
-
-.orch-stop-btn:active {
-  transform: translateY(1px);
-}
-
-.orch-stop-agent {
-  /* Sits inline as the last child of .orch-agent-head, after the
-     counts cluster — flex layout keeps the buttons disjoint and
-     prevents the overlap we had with absolute positioning. */
-  padding: 3px 8px;
-  font-size: var(--text-xs);
-}
-
-/* Retry button — appears only when the agent ended in error or was
-   stopped by the user. Same shape as Stop but tinted with the ember
-   accent so it doesn't read as a destructive action. */
 .orch-retry-btn {
-  appearance: none;
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
   margin-left: var(--space-3);
-  padding: 3px 8px;
-  font-family: var(--font-ui);
-  font-size: var(--text-xs);
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  border-radius: 6px;
-  cursor: pointer;
-  border: 1px solid color-mix(in srgb, var(--igni-orange) 40%, transparent);
-  background: color-mix(in srgb, var(--igni-orange) 12%, transparent);
-  color: var(--accent-orange-text, #f5a088);
-  flex-shrink: 0;
-}
-
-.orch-retry-btn:hover {
-  background: color-mix(in srgb, var(--igni-orange) 22%, transparent);
-  border-color: color-mix(in srgb, var(--igni-orange) 60%, transparent);
-}
-
-.orch-retry-btn:active {
-  transform: translateY(1px);
 }
 
 /* Inline retry editor — opens beneath the agent header when the user
@@ -3944,36 +3881,6 @@ button {
 .plan-card-actions {
   gap: var(--space-5);
   flex-wrap: wrap;
-}
-
-.plan-card-btn {
-  font-family: var(--font-ui, inherit);
-  font-size: var(--text-sm);
-  font-weight: 600;
-  padding: 7px 14px;
-  border-radius: 6px;
-  border: 1px solid transparent;
-  cursor: pointer;
-  transition: filter 0.12s ease;
-}
-
-.plan-card-btn:hover {
-  filter: brightness(1.08);
-}
-
-.plan-card-btn:active {
-  filter: brightness(0.92);
-}
-
-.plan-card-btn--approve {
-  background: var(--accent-green, #10b981);
-  color: white;
-}
-
-.plan-card-btn--reject {
-  background: transparent;
-  color: var(--fg);
-  border-color: var(--border-soft);
 }
 
 .plan-card-footer {
@@ -4710,6 +4617,7 @@ button {
    from the extension package entirely, which would have made an
    extension the cause of its host's accessibility findings. */
 .btn:focus-visible,
+.sidebar-new-chat:focus-visible,
 .ui-item:focus-visible,
 .file-pill-menu-item:focus-visible,
 .mention-item:focus-visible,
@@ -4984,62 +4892,98 @@ button {
   padding: var(--space-1) var(--space-3);
 }
 
+/* The legacy ``.btn`` family, drawn exactly like the shared Button kit
+   (``.button`` below): the app itself no longer spells these classes,
+   but an extension's ``Button`` from the SDK floor does, and it should
+   sit in the host looking like every other button. ``.btn`` is the
+   kit's secondary (soft quiet fill), ``.btn-primary`` its primary (the
+   page's inverse), ``.btn-danger`` quiet red text, ``.btn-quiet`` and
+   ``.btn-warn`` quiet text in their colour; ``.btn-sm`` is the kit's
+   28px size and ``.btn-xs`` a dense 24px one. */
 .btn {
   appearance: none;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--bg-surface);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  height: 32px;
+  padding: 0 var(--space-6);
+  margin: 0;
+  border: none;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--fg) 7%, transparent);
   color: var(--fg);
-  padding: 7px 14px;
-  font-size: var(--text-md);
-  font-weight: 600;
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+  text-decoration: none;
   cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease, opacity 0.12s ease;
 }
 
 .btn:hover:not(:disabled) {
-  background: var(--bg-raised);
+  background: color-mix(in srgb, var(--fg) 13%, transparent);
 }
 
 .btn:disabled,
 .btn[aria-disabled="true"] {
   opacity: 0.45;
   cursor: not-allowed;
-  background: var(--bg-surface);
-  box-shadow: none;
 }
 
-.btn-primary {
-  background: var(--igni-gradient);
-  border: none;
-  color: #fff;
+.btn.btn-primary {
+  background: var(--fg);
+  color: var(--bg);
 }
 
-/* Disabled primary needs to stay recognizable as a button — without
-   this it collapses to a borderless rect on the same bg colour as
-   the dialog and effectively disappears. */
-.btn-primary:disabled,
-.btn-primary[aria-disabled="true"] {
-  opacity: 0.6;
-  background: var(--igni-gradient);
-  color: rgba(255, 255, 255, 0.85);
+.btn.btn-primary:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--fg) 86%, var(--bg));
 }
 
-.btn-primary:hover:not(:disabled) {
-  box-shadow: 0 6px 18px rgba(238, 97, 56, 0.3);
-  background: var(--igni-gradient);
+.btn.btn-danger,
+.btn.btn-quiet,
+.btn.btn-warn {
+  background: transparent;
 }
 
-.btn-danger {
-  border-color: color-mix(in srgb, var(--danger) 55%, transparent);
-  /* --danger is 3.74:1 against the raised panel this button sits on;
-   * --danger-text is the same hue at 4.50. The border keeps the
-   * stronger colour. F138. */
+.btn.btn-danger {
   color: var(--danger-text, var(--danger));
 }
 
-.btn-sm {
-  padding: var(--space-2) var(--space-5);
-  font-size: var(--text-sm);
+.btn.btn-danger:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--danger) 14%, transparent);
+}
+
+.btn.btn-quiet {
+  color: var(--fg-muted);
+}
+
+.btn.btn-quiet:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--fg) 10%, transparent);
+  color: var(--fg);
+}
+
+.btn.btn-warn {
+  color: var(--accent-orange-text, var(--warning));
+}
+
+.btn.btn-warn:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--warning) 14%, transparent);
+}
+
+.btn.btn-sm {
+  height: 28px;
+  padding: 0 var(--space-5);
+  border-radius: var(--radius-sm);
+}
+
+.btn.btn-xs {
+  height: 24px;
+  padding: 0 var(--space-4);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-xs);
 }
 
 .overlay {
@@ -8046,8 +7990,8 @@ button {
   width: 100%;
 }
 
-/* Toolbar uses align-items: stretch; the panel-input drives height,
-   and .btn-sm stretches to match. The icon button has a fixed 23×23
+/* Toolbar uses align-items: stretch; the panel-input drives height.
+   The icon button has a fixed 23×23
    default — bump it to match so the gear sits flush with Refresh. */
 .plugins-toolbar .kb-icon-btn {
   width: 31px;
@@ -8481,11 +8425,7 @@ button {
   border-top: none;
 }
 
-/* Install-by-URL row at the top of the Installed tab. Both children
-   share the same explicit height so the .btn-primary doesn't render
-   taller than the input — .panel-input is 31px (7px+13px+7px+border),
-   and .btn-primary without an explicit height would render at ~22-30px
-   depending on flex alignment. Lock both. */
+/* Install-by-URL row at the top of the Installed tab. */
 .plugins-install-row {
   align-items: stretch;
   margin-bottom: var(--space-7);
@@ -8494,8 +8434,7 @@ button {
 /* The install field reads like the chat composer — raised above the
    page rather than inset into it, taller, and the same soft rounded
    box — so it is the obvious place to type, not a thin dark slot. */
-.plugins-install-row .panel-input,
-.plugins-install-row .btn {
+.plugins-install-row .panel-input {
   height: auto;
   min-height: 44px;
   box-sizing: border-box;
@@ -8513,13 +8452,6 @@ button {
 
 .plugins-install-row .panel-input:focus {
   border-color: color-mix(in srgb, var(--igni-orange) 55%, var(--border));
-}
-
-.plugins-install-row .btn {
-  flex-shrink: 0;
-  border-radius: var(--radius-lg);
-  padding: 0 var(--space-6);
-  font-size: var(--text-md);
 }
 
 .plugins-section-head {
@@ -9829,20 +9761,6 @@ button {
   margin-left: auto;
 }
 
-.watcher-row .btn-danger {
-  padding: var(--space-1) var(--space-4);
-  font-size: var(--text-xs);
-  background: transparent;
-  /* --danger is 4.33:1 on the dark surface at 11px (R683). */
-  color: var(--accent-red-text, var(--danger));
-  border-color: var(--danger);
-}
-
-.watcher-row .btn-danger:hover {
-  background: var(--danger);
-  color: #fff;
-}
-
 .watcher-cmd {
   font-family: var(--font-mono);
   font-size: var(--text-sm);
@@ -10388,32 +10306,6 @@ button {
   border-radius: var(--radius-pill);
   background: var(--bg-raised);
   color: var(--fg-muted);
-}
-
-.btn-warn {
-  color: var(--warning);
-  border-color: var(--warning);
-}
-
-.btn-xs {
-  padding: 2px 7px;
-  font-size: var(--text-xs);
-  line-height: 1.5;
-  color: var(--fg);
-  background: var(--bg-surface);
-  border: 1px solid var(--border);
-  border-radius: 5px;
-  cursor: pointer;
-}
-
-.btn-xs:disabled {
-  opacity: 0.5;
-  cursor: default;
-}
-
-.btn-quiet {
-  color: var(--fg-muted);
-  border-color: var(--border-soft);
 }
 
 .kb-share-audience {
@@ -11123,14 +11015,6 @@ button {
   user-select: none;
 }
 
-/* The header control that is currently on. Used by Compare, which is
-   a mode rather than an action — it stays pressed while the page is
-   in its comparison state. */
-.btn.btn-active {
-  border-color: var(--accent-blue);
-  color: var(--accent-blue-text);
-}
-
 /* ── The sign-in wall ─────────────────────────────────────────────
    A session with no account sees this and nothing else: igni is
    self-hosted, so a session with nowhere to write has nothing to
@@ -11201,10 +11085,10 @@ button {
   border-color: var(--accent, #e8613c);
 }
 
-.wall-go {
+.button.wall-go {
   width: 100%;
-  padding: var(--space-5) var(--space-6);
-  font-size: var(--text-lg);
+  height: 40px;
+  font-size: var(--text-md);
 }
 
 /* The portal address, for a deployment that serves its sign-in page
@@ -11480,15 +11364,6 @@ button {
   margin-top: var(--space-2);
 }
 
-/* Nothing to save yet is a quiet state, not a faded warning: a disabled
-   primary reads as neutral grey rather than washed-out orange. */
-.ext-settings-actions .btn-primary:disabled {
-  background: var(--bg-raised);
-  border-color: transparent;
-  color: var(--fg-faint);
-  opacity: 1;
-}
-
 .ext-settings-error {
   color: var(--danger-text);
 }
@@ -11744,28 +11619,6 @@ button {
 .backend-banner-actions {
   display: flex;
   gap: var(--space-4);
-}
-
-.backend-banner-btn {
-  padding: var(--space-2) var(--space-6);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-pill);
-  background: var(--bg-raised);
-  color: var(--fg);
-  font: inherit;
-  font-size: var(--text-sm);
-  cursor: pointer;
-}
-
-.backend-banner-btn.primary {
-  border-color: transparent;
-  background: var(--igni-gradient);
-  color: #fff;
-}
-
-.backend-banner-btn:disabled {
-  cursor: progress;
-  opacity: 0.6;
 }
 
 .backend-banner-error {

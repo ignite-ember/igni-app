@@ -5,6 +5,7 @@ import { Drawer } from "./Drawer";
 import { ChevronIcon } from "../Icons";
 import { PageEmpty } from "../page/PageEmpty";
 import { PageLoading } from "../page/PageLoading";
+import { Button } from "../page/Button";
 
 interface ScheduledTask {
   id?: string;
@@ -65,15 +66,16 @@ function TaskRow({
           </div>
         </div>
         {cancellable && (
-          <button
-            className="btn btn-sm btn-danger"
+          <Button
+            variant="danger"
+            size="sm"
             onClick={(e) => {
               e.stopPropagation();
               onCancel();
             }}
           >
             Cancel
-          </button>
+          </Button>
         )}
       </div>
       {open && (

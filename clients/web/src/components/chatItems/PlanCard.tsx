@@ -9,6 +9,7 @@ import { memo } from "react";
 import type { PlanItem } from "../../chat/chatItem";
 import { PlanTaskList, type PlanTask } from "../../chat/planTasks";
 import { PlainMarkdown } from "../markdown/PlainMarkdown";
+import { Button } from "../page/Button";
 
 function taskMarker(status: PlanTask["status"]): string {
   return status === "completed" ? "✓" : status === "in_progress" ? "●" : "○";
@@ -52,22 +53,21 @@ export const PlanCard = memo(function PlanCard({
       <div className="plan-card-actions">
         {item.state === "pending" ? (
           <>
-            <button
-              type="button"
+            <Button
+              variant="primary"
               className="plan-card-btn plan-card-btn--approve"
               onClick={() => onApprove(item.id)}
               title="Exit plan mode and let the agent execute this plan."
             >
               Approve &amp; exit plan mode
-            </button>
-            <button
-              type="button"
+            </Button>
+            <Button
               className="plan-card-btn plan-card-btn--reject"
               onClick={() => onReject(item.id)}
               title="Dismiss this plan. Stay in plan mode — type your feedback to ask for revisions."
             >
               Refine
-            </button>
+            </Button>
           </>
         ) : (
           <span className={`plan-card-footer plan-card-footer--${item.state}`} aria-live="polite">

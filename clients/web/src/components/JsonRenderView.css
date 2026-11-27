@@ -392,43 +392,47 @@
 
 /* ── Interactive ────────────────────────────────────────────────── */
 
+/* Drawn like the host's Button kit: no gradient, no border. Primary
+   is the page's inverse, secondary a soft quiet fill, ghost bare text,
+   danger quiet red text. */
 .jr-btn {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 6px;
-  padding: 6px 12px;
+  height: 28px;
+  padding: 0 var(--space-5);
   border-radius: var(--radius-sm);
-  border: 1px solid transparent;
-  font-family: var(--font-ui);
-  font-size: 12px;
-  font-weight: 500;
-  cursor: pointer;
-  line-height: 1.4;
-  transition: background 120ms ease, border-color 120ms ease;
-}
-.jr-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-.jr-btn-primary {
-  background: var(--igni-gradient);
-  color: white;
-}
-.jr-btn-primary:hover:not(:disabled) { filter: brightness(1.08); }
-.jr-btn-secondary {
-  background: var(--bg-raised);
-  border-color: var(--border);
-  color: var(--fg);
-}
-.jr-btn-secondary:hover:not(:disabled) { background: var(--bg-inset); }
-.jr-btn-ghost {
+  border: none;
   background: transparent;
+  color: var(--fg);
+  font-family: var(--font-ui);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 120ms ease, color 120ms ease;
+}
+.jr-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+.jr-btn:focus-visible { outline: 2px solid var(--accent-blue); outline-offset: 2px; }
+.jr-btn-primary {
+  background: var(--fg);
+  color: var(--bg);
+}
+.jr-btn-primary:hover:not(:disabled) { background: color-mix(in srgb, var(--fg) 86%, var(--bg)); }
+.jr-btn-secondary {
+  background: color-mix(in srgb, var(--fg) 7%, transparent);
+}
+.jr-btn-secondary:hover:not(:disabled) { background: color-mix(in srgb, var(--fg) 13%, transparent); }
+.jr-btn-ghost {
   color: var(--fg-muted);
 }
-.jr-btn-ghost:hover:not(:disabled) { color: var(--fg); background: var(--bg-raised); }
+.jr-btn-ghost:hover:not(:disabled) { color: var(--fg); background: color-mix(in srgb, var(--fg) 10%, transparent); }
 .jr-btn-danger {
-  background: transparent;
-  border-color: var(--danger);
-  color: var(--danger);
+  color: var(--danger-text, var(--danger));
 }
-.jr-btn-danger:hover:not(:disabled) { background: rgba(239, 106, 90, 0.1); }
+.jr-btn-danger:hover:not(:disabled) { background: color-mix(in srgb, var(--danger) 14%, transparent); }
 
 .jr-link {
   color: var(--igni-orange);

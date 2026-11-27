@@ -27,18 +27,6 @@ const NOT_PAGES = new Set([
   "panels/Drawer.tsx",
 ]);
 const NOT_PAGE_DIRS = ["pages/files/"];
-/** Pages still to move over; each entry must still need it. */
-const PENDING = new Set<string>([
-  "panels/AgentsPanel.tsx",
-  "panels/LoopPanel.tsx",
-  "panels/ProgramsPanel.tsx",
-  "panels/SchedulePanel.tsx",
-  "panels/SkillsPanel.tsx",
-  "panels/watcher/WatcherRow.tsx",
-  "panels/watcher/WatcherTail.tsx",
-  "pages/ContextPage.tsx",
-]);
-
 /** The old styles, and the SDK's Button (which draws `.btn`). */
 const OLD = [
   /className=["'{`][^"'}`]*\bbtn\b/,
@@ -71,12 +59,8 @@ describe("page buttons are the shared Button", () => {
     expect(sources).toContain("panels/McpPanel.tsx");
   });
 
-  it.each(sources.filter((f) => !PENDING.has(f)))("%s spells no old button class", (file) => {
+  it.each(sources)("%s spells no old button class", (file) => {
     expect(oldStyles(file)).toEqual([]);
-  });
-
-  it.each([...PENDING])("%s is still pending (drop it from the list once moved)", (file) => {
-    expect(oldStyles(file).length).toBeGreaterThan(0);
   });
 });
 

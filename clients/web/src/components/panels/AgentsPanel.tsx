@@ -4,6 +4,7 @@ import type { IgniClient } from "../../protocol/client";
 import { Drawer } from "./Drawer";
 import { ChevronIcon } from "../Icons";
 import { PageLoading } from "../page/PageLoading";
+import { Button } from "../page/Button";
 
 interface AgentRow {
   name?: string;
@@ -153,8 +154,8 @@ export function AgentsPanel({
               </div>
               {a.is_ephemeral && (
                 <div style={{ display: "flex", gap: 6 }} onClick={(e) => e.stopPropagation()}>
-                  <button
-                    className="btn btn-sm"
+                  <Button
+                    size="sm"
                     title="Keep it for the project: .igni/agents/, committed and shared with the team"
                     disabled={busy === a.name}
                     onClick={() =>
@@ -162,9 +163,9 @@ export function AgentsPanel({
                     }
                   >
                     Keep
-                  </button>
-                  <button
-                    className="btn btn-sm"
+                  </Button>
+                  <Button
+                    size="sm"
                     title="Keep it for yourself: .igni/agents.local/, not in git"
                     disabled={busy === a.name}
                     onClick={() =>
@@ -172,14 +173,15 @@ export function AgentsPanel({
                     }
                   >
                     Keep for me
-                  </button>
-                  <button
-                    className="btn btn-sm btn-danger"
+                  </Button>
+                  <Button
+                    variant="danger"
+                    size="sm"
                     disabled={busy === a.name}
                     onClick={() => void act(a.name || "", "discard_ephemeral_agent")}
                   >
                     Discard
-                  </button>
+                  </Button>
                 </div>
               )}
               <span className="agent-open-chevron">

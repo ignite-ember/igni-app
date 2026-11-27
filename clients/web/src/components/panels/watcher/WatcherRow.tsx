@@ -7,6 +7,7 @@
  *  the visible 'exit …' and last line, which fails WCAG 2.5.3 (R683). */
 
 import type { ProcessRow } from "./processTable";
+import { Button } from "../../page/Button";
 
 export function WatcherRow({
   row,
@@ -52,9 +53,9 @@ export function WatcherRow({
         ) : null}
       </button>
       {row.isRunning ? (
-        <button type="button" className="btn btn-sm btn-danger" onClick={onKill} title="Send SIGTERM">
+        <Button variant="danger" size="sm" onClick={onKill} title="Send SIGTERM">
           Kill
-        </button>
+        </Button>
       ) : null}
     </li>
   );

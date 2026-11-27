@@ -4,6 +4,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ChevronIcon } from "../../Icons";
+import { Button } from "../../page/Button";
 
 /** How close to the bottom, in px, still counts as following. */
 const FOLLOW_SLACK_PX = 40;
@@ -51,9 +52,9 @@ export function WatcherTail({
           onChange={(e) => onFilter(e.target.value)}
         />
         {!autoScroll && (
-          <button
-            type="button"
-            className="btn btn-sm watcher-resume"
+          <Button
+            size="sm"
+            className="watcher-resume"
             onClick={() => {
               setAutoScroll(true);
               scrollToEnd();
@@ -61,7 +62,7 @@ export function WatcherTail({
             title="Resume auto-scroll"
           >
             <ChevronIcon size={10} down /> Resume
-          </button>
+          </Button>
         )}
       </div>
       <pre ref={logRef} className="watcher-log" onScroll={onScroll}>

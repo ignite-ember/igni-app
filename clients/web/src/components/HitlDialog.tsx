@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { HITLDecision } from "../protocol/clientMessages";
 import type { HITLRequest } from "../protocol/messages";
 import { HitlArgsView } from "./HitlArgsView";
+import { Button } from "./page/Button";
 
 /** Tools that mutate files — the set ``acceptEdits`` mode auto-allows.
  *  When the dialog is asking about one of these AND the session is
@@ -196,60 +197,57 @@ export function HitlDialog({
               paddingLeft: 86,
             }}
           >
-            <button
-              className="btn btn-primary"
+            <Button
+              variant="primary"
               onClick={approveAllEditsInBatch}
               title="Confirm this edit and auto-approve any further edits the agent makes for the rest of this task. Reverts to default when the agent finishes."
             >
               Accept all edits during this session
-            </button>
+            </Button>
             <div className="dialog-actions">
-              <button className="btn" onClick={() => decide("confirm", "once")}>
+              <Button onClick={() => decide("confirm", "once")}>
                 Allow once
-              </button>
-              <button
-                className="btn"
+              </Button>
+              <Button
                 onClick={() => decide("confirm", "always")}
               >
                 Always allow
-              </button>
-              <button
-                className="btn"
+              </Button>
+              <Button
                 onClick={() => decide("confirm", "similar")}
               >
                 Allow similar
-              </button>
-              <button
-                className="btn btn-danger"
+              </Button>
+              <Button
+                variant="danger"
                 onClick={() => decide("reject", "")}
               >
                 Reject
-              </button>
+              </Button>
             </div>
           </div>
         ) : (
           <div className="dialog-actions" style={{ paddingLeft: 86 }}>
-            <button
-              className="btn btn-primary"
+            <Button
+              variant="primary"
               onClick={() => decide("confirm", "once")}
             >
               Allow once
-            </button>
-            <button className="btn" onClick={() => decide("confirm", "always")}>
+            </Button>
+            <Button onClick={() => decide("confirm", "always")}>
               Always allow
-            </button>
-            <button
-              className="btn"
+            </Button>
+            <Button
               onClick={() => decide("confirm", "similar")}
             >
               Allow similar
-            </button>
-            <button
-              className="btn btn-danger"
+            </Button>
+            <Button
+              variant="danger"
               onClick={() => decide("reject", "")}
             >
               Reject
-            </button>
+            </Button>
           </div>
         )}
         {/* Escape is global (``useHitl``) and does more than close the

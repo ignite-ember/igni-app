@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import type { IgniClient } from "../../protocol/client";
 import { WirePayload } from "../../protocol/wirePayload";
+import { Button } from "../page/Button";
 
 /**
  * Browser-callback login. Progress streams in as push notifications:
@@ -47,15 +48,14 @@ export function LoginPanel({
           {statusText}
         </div>
         <div className="dialog-actions">
-          <button
-            className="btn btn-danger"
+          <Button
             onClick={() => {
               client.cancelLogin();
               onCancel();
             }}
           >
             Cancel
-          </button>
+          </Button>
         </div>
       </div>
     </div>
