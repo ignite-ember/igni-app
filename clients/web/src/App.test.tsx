@@ -377,6 +377,10 @@ describe("a conversation", () => {
     push({ type: "content_delta", id: runId, text: "Three files.", is_thinking: false });
     push({ type: "stream_end", id: runId });
     expect(await screen.findByText("Three files.")).toBeTruthy();
+    // The call sits in its activity group, collapsed to a summary.
+    const group = screen.getByRole("button", { name: /Ran 1 command/ });
+    expect(screen.queryAllByText(/ls -la/)).toHaveLength(0);
+    fireEvent.click(group);
     expect(screen.getAllByText(/ls -la/).length).toBeGreaterThan(0);
   });
 
@@ -389,6 +393,47 @@ describe("a conversation", () => {
     expect(
       (await screen.findAllByText(/The model provider refused the request\./)).length,
     ).toBeGreaterThan(0);
+  });
+
+  it("keeps a pending approval outside the collapsed activity group, which stays live", async () => {
+    const editor = await boot();
+    typeAndSend(editor, "clean up");
+    const runId = await sentRun("clean up");
+    push({ type: "run_started", id: runId, run_id: runId, parent_run_id: null, agent_name: "igni", model: "test-model" });
+    push({ type: "content_delta", id: runId, text: "Looking first.", is_thinking: true });
+    push({
+      type: "tool_started",
+      id: runId,
+      run_id: runId,
+      tool_name: "run_shell_command",
+      friendly_name: "Bash",
+      args_summary: "ls build",
+    });
+    push({
+      type: "run_paused",
+      id: runId,
+      run_id: runId,
+      requirements: [
+        {
+          type: "hitl_request",
+          requirement_id: "req-1",
+          tool_name: "run_shell_command",
+          friendly_name: "Bash",
+          tool_args: { command: "rm -rf build" },
+          details: "Removes the build directory.",
+          agent_path: ["igni"],
+        },
+      ],
+    });
+    await screen.findAllByText(/rm -rf build/, {}, { timeout: 5000 });
+    const group = screen.getByRole("button", { name: /ls build/ });
+    expect(group.getAttribute("aria-expanded")).toBe("false");
+    // Paused on the person, the turn is not over: the row stays live.
+    expect(group.querySelector(".activity-dot.live")).not.toBeNull();
+    // The dialog is the composer's, never inside the group.
+    const dialog = document.querySelector(".hitl-card");
+    expect(dialog).not.toBeNull();
+    expect(group.closest(".activity-group")!.contains(dialog)).toBe(false);
   });
 
   it("asks before a tool runs, and sends the answer", async () => {

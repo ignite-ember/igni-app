@@ -277,6 +277,9 @@ test(capture, { tag: "@manual" }, async ({ page, backend, appUrl }) => {
   await expect(page.locator(".msg-assistant").last()).toContainText(
     "open a PR",
   );
+  // The cards sit in activity groups; open them for the shot.
+  const closed = page.locator('.activity-head[aria-expanded="false"]');
+  while ((await closed.count()) > 0) await closed.first().click();
   await expect(page.locator(".tool-card")).toHaveCount(5);
 
   // Expand the first Edit card so the diff table is on screen — a

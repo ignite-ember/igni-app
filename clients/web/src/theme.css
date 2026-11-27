@@ -2724,6 +2724,136 @@ button {
 
 /* ── Tool cards ─────────────────────────────────────────────────── */
 
+/* ── Activity group ────────────────────────────────────────────────
+   A run of tool calls and thinking between two replies, as one quiet
+   container: a progress row when collapsed, the cards when open
+   (chatItems/ActivityGroupView.tsx). */
+.activity-group {
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--bg-surface) 55%, transparent);
+  font-size: var(--text-md);
+  overflow: hidden;
+}
+
+.activity-group.failed {
+  border-color: color-mix(in srgb, var(--danger) 16%, var(--border-soft));
+}
+
+.activity-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  width: 100%;
+  min-height: 36px;
+  padding: var(--space-4) var(--space-7);
+  border: 0;
+  background: transparent;
+  color: var(--fg-muted);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  user-select: none;
+}
+
+.activity-head:hover {
+  color: var(--fg);
+  background: color-mix(in srgb, var(--fg) 4%, transparent);
+}
+
+.activity-head:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+  border-radius: var(--radius);
+}
+
+.activity-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: var(--radius-circle);
+  flex-shrink: 0;
+  background: var(--fg-faint);
+  opacity: 0.6;
+}
+
+.activity-dot.live {
+  background: var(--accent);
+  opacity: 1;
+  animation: pulse-dot 1.4s ease infinite;
+}
+
+.activity-group.failed .activity-dot:not(.live) {
+  background: var(--danger);
+  opacity: 0.75;
+}
+
+.activity-label {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.activity-label-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.activity-tool-name {
+  flex-shrink: 0;
+  color: var(--fg);
+  font-weight: 500;
+}
+
+.activity-tool-args {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  color: var(--fg-muted);
+}
+
+.activity-failed {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-shrink: 0;
+  color: var(--danger-text, var(--danger));
+  font-size: var(--text-sm);
+}
+
+.activity-failed-mark {
+  align-self: center;
+}
+
+.activity-meta {
+  flex-shrink: 0;
+  color: var(--fg-faint);
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.activity-chevron {
+  flex-shrink: 0;
+  color: var(--fg-faint);
+}
+
+.activity-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-6);
+  border-top: 1px solid var(--border-soft);
+}
+
+.activity-body[hidden] {
+  display: none;
+}
+
 .tool-card {
   border: 1px solid var(--border-soft);
   border-radius: var(--radius);

@@ -19,6 +19,7 @@ export function ConversationFrame({
   handlers,
   scroll,
   atBottomNow,
+  awaitingApproval,
   groupName,
   groupMark,
   status,
@@ -52,6 +53,7 @@ export function ConversationFrame({
           handlers={handlers}
           scroll={scroll}
           atBottomNow={atBottomNow}
+          awaitingApproval={awaitingApproval}
         />
       )}
     </div>
