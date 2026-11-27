@@ -1,9 +1,11 @@
 import {
   useLayoutEffect,
   useRef,
+  useState,
   type ReactNode,
   type RefObject,
 } from "react";
+import { ScrollIndicator } from "../ScrollIndicator";
 
 /**
  * The one way a page scrolls.
@@ -105,6 +107,7 @@ export function FadeScroll({
   const root = useRef<HTMLDivElement>(null);
   const chromeEl = useRef<HTMLDivElement>(null);
   const scroller = useRef<HTMLDivElement>(null);
+  const [scrollEl, setScrollEl] = useState<HTMLDivElement | null>(null);
   const mode: FadeMode = chrome ? "chrome" : "app";
   useChromeHeight(root, chromeEl);
   useRestShift(root, scroller, selfScrolling);
@@ -122,9 +125,20 @@ export function FadeScroll({
         </div>
       ) : null}
       <div className="fade-scroll-blur" aria-hidden="true" />
-      <div ref={scroller} className={className ? `fade-scroll-body ${className}` : "fade-scroll-body"}>
+      <div
+        ref={(el) => {
+          scroller.current = el;
+          setScrollEl(el);
+        }}
+        className={className ? `fade-scroll-body ${className}` : "fade-scroll-body"}
+      >
         {children}
       </div>
+      {/* The native scrollbar sits inside the faded scroller, so it faded
+          with the content and reappeared above it. The chat's own thumb is
+          drawn instead, over the fade, on a track that starts below the
+          fixed chrome. A frame draws its own. */}
+      {selfScrolling ? null : <ScrollIndicator element={scrollEl} belowPadding />}
     </div>
   );
 }

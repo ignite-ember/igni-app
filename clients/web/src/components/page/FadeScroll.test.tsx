@@ -105,6 +105,24 @@ describe("FadeScroll", () => {
     expect(root.style.getPropertyValue("--fade-rest-shift")).toBe(`${FADE_REST_SHIFT - 1}px`);
   });
 
+  it("draws the chat's thumb for its scroller, on a track below its top padding", () => {
+    const { container } = render(<FadeScroll>list</FadeScroll>);
+    const body = container.querySelector(".fade-scroll-body") as HTMLElement;
+    body.style.paddingTop = "120px";
+    Object.defineProperty(body, "scrollHeight", { configurable: true, value: 3000 });
+    Object.defineProperty(body, "clientHeight", { configurable: true, value: 600 });
+    Object.defineProperty(body, "offsetTop", { configurable: true, value: -58 });
+    fireEvent.scroll(body);
+    const thumb = container.querySelector(".scroll-indicator") as HTMLElement;
+    expect(thumb).toBeTruthy();
+    expect(parseFloat(thumb.style.top)).toBe(-58 + 120 + 8);
+  });
+
+  it("draws no thumb over a frame that scrolls itself", () => {
+    const { container } = render(<FadeScroll selfScrolling>frame</FadeScroll>);
+    expect(container.querySelector(".scroll-indicator")).toBeNull();
+  });
+
   it("adds the caller's class to the scroller", () => {
     const { container } = render(<FadeScroll className="page-body">list</FadeScroll>);
     expect(container.querySelector(".fade-scroll-body")?.className).toBe("fade-scroll-body page-body");

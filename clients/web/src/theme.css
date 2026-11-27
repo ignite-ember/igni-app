@@ -6251,6 +6251,13 @@ button.activity-file-chip:focus-visible {
   isolation: isolate;
   z-index: 0;
   overscroll-behavior: contain;
+  /* Hidden: it would fade with the content. ``ScrollIndicator`` draws the
+     thumb over the fade instead, as on the chat. */
+  scrollbar-width: none;
+}
+
+.fade-scroll-body::-webkit-scrollbar {
+  display: none;
 }
 
 /* A frame scrolls itself, so this one does not: the frame reaches up

@@ -132,3 +132,17 @@ describe("computeThumb — small-viewport edge cases", () => {
     expect(rect.top + rect.height).toBeGreaterThan(SCROLL_INDICATOR_PAD);
   });
 });
+
+describe("computeThumb — a track below fixed chrome", () => {
+  it("starts the thumb below the inset and shortens the track by it", () => {
+    const atTop = computeThumb(0, 5000, 600, 8, 100);
+    expect(atTop.top).toBe(108);
+    const atEnd = computeThumb(4400, 5000, 600, 8, 100);
+    expect(atEnd.top + atEnd.height).toBe(600 - 8);
+  });
+
+  it("is the old track when the inset is zero", () => {
+    expect(computeThumb(300, 5000, 600, 32, 0)).toEqual(computeThumb(300, 5000, 600, 32));
+  });
+});
+
