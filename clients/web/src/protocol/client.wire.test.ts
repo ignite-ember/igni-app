@@ -99,6 +99,17 @@ describe("an RPC", () => {
     await expect(pending).rejects.toThrow("unknown method: nope");
   });
 
+  it("carries the error's code, or null when igni sends none", async () => {
+    const { client, ws } = connected();
+    const refused = client.rpc("terminal_open");
+    ws.receive({ type: "rpc_response", id: ws.last.id, error: "terminals are off", code: "refused" });
+    await expect(refused).rejects.toMatchObject({ message: "terminals are off", code: "refused" });
+    const bare = client.rpc("nope");
+    ws.receive({ type: "rpc_response", id: ws.last.id, error: "no" });
+    await expect(bare).rejects.toBeInstanceOf(mod.RpcError);
+    await expect(bare).rejects.toMatchObject({ code: null });
+  });
+
   it("resolves a typed reply as itself", async () => {
     const { client, ws } = connected();
     const pending = client.rpc("get_status");

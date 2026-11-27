@@ -174,6 +174,12 @@ export const VIEW_STATE: Record<string, Partial<Record<Category, string[]>>> = {
     menu: ["retryOpen"],
     field: ["retryDraft"],
   },
+  "components/chatItems/ActivityGroupView.tsx": {
+    animation: ["now", "flash"],
+    hover: ["tip"],
+    measure: ["width"],
+    disclosure: ["open"],
+  },
   "components/chatItems/ToolCardView.tsx": {
     disclosure: ["open"],
   },
@@ -227,7 +233,6 @@ export const VIEW_STATE: Record<string, Partial<Record<Category, string[]>>> = {
   },
   "components/FilesDock.tsx": {
     menu: ["menuOpen"],
-    disclosure: ["maximized"],
   },
   "components/GroupIndicator.tsx": {
     data: ["policy"],
@@ -254,6 +259,12 @@ export const VIEW_STATE: Record<string, Partial<Record<Category, string[]>>> = {
   "components/RetryBanner.tsx": {
     data: ["retries"],
     animation: ["countdownPercent"],
+  },
+  "components/SideDock.tsx": {
+    disclosure: ["maximized"],
+  },
+  "components/terminal/useTerminalToggle.ts": {
+    disclosure: ["terminalOpen"],
   },
   "components/ScrollIndicator.tsx": {
     measure: ["thumb"],
@@ -284,6 +295,9 @@ export const VIEW_STATE: Record<string, Partial<Record<Category, string[]>>> = {
   "components/WorkflowRun.tsx": {
     disclosure: ["collapsed"],
   },
+  "components/pages/HelpPage.tsx": {
+    field: ["query"],
+  },
   "components/pages/ContextPage.tsx": {
     data: ["breakdown"],
     pending: ["error", "loading"],
@@ -312,11 +326,14 @@ export const VIEW_STATE: Record<string, Partial<Record<Category, string[]>>> = {
   },
   "components/pages/WorkflowsPage.tsx": {
     data: ["workflows"],
-    pending: ["error"],
+    page: ["filter", "sort", "selected"],
+    field: ["query"],
+    pending: ["error", "loading"],
   },
   "components/panels/AgentsPanel.tsx": {
     data: ["agents"],
-    page: ["selected"],
+    page: ["selectedName", "source", "sort"],
+    field: ["query"],
     pending: ["busy"],
   },
   "components/panels/DirectoryPicker.tsx": {
@@ -333,14 +350,14 @@ export const VIEW_STATE: Record<string, Partial<Record<Category, string[]>>> = {
   },
   "components/panels/McpPanel.tsx": {
     field: ["query"],
-    page: ["sortBy", "filterBy"],
-    menu: ["openMenu"],
+    page: ["sortBy", "filterBy", "selectedName"],
   },
   "components/panels/PanelSearch.tsx": {
     disclosure: ["expanded"],
   },
   "components/panels/HooksPanel.tsx": {
     data: ["rows"],
+    page: ["selected"],
     pending: ["error"],
   },
   "components/panels/ProgramsPanel.tsx": {
@@ -358,9 +375,6 @@ export const VIEW_STATE: Record<string, Partial<Record<Category, string[]>>> = {
     disclosure: ["expanded"],
     measure: ["overflowing"],
   },
-  "components/panels/mcp/McpServerEntry.tsx": {
-    menu: ["open"],
-  },
   "components/panels/mcp/useMcpServers.ts": {
     data: ["servers", "approvals"],
     pending: ["busy", "loadError", "actionError", "reloading"],
@@ -369,8 +383,7 @@ export const VIEW_STATE: Record<string, Partial<Record<Category, string[]>>> = {
     page: ["view", "sortBy", "filterBy"],
     field: ["installRef", "marketUrl", "query"],
   },
-  "components/panels/plugins/PluginsChrome.tsx": {
-    disclosure: ["expanded"],
+  "components/page/PageHeaderControls.tsx": {
     menu: ["openMenu"],
   },
   "components/panels/plugins/usePlugins.ts": {
@@ -381,16 +394,20 @@ export const VIEW_STATE: Record<string, Partial<Record<Category, string[]>>> = {
     data: ["contents"],
   },
   "components/panels/SchedulePanel.tsx": {
-    menu: ["open"],
     data: ["tasks"],
-    page: ["filter"],
+    page: ["filter", "sortBy", "selected"],
     field: ["query"],
+  },
+  "components/panels/schedule/TaskDetail.tsx": {
+    pending: ["running", "runAnswer", "runError", "cancelling"],
   },
   "components/panels/SkillsPanel.tsx": {
     data: ["skills"],
+    page: ["filter", "sort", "selected"],
+    field: ["query"],
   },
   "components/panels/WatcherPanel.tsx": {
-    page: ["filter"],
+    page: ["filter", "tab"],
   },
   "components/panels/watcher/useNow.ts": {
     animation: ["now"],

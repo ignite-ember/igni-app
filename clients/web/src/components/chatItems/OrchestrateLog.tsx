@@ -6,6 +6,7 @@ import { memo, useState } from "react";
 import type { OrchestrateItem } from "../../chat/chatItem";
 import { TeamSummary } from "../../chat/orchestrateSummary";
 import { ChevronIcon, StopSquareIcon } from "../Icons";
+import { Button } from "../page/Button";
 import { formatTokenCount } from "../statsLine";
 import type { TeamHandlers } from "./handlers";
 import { OrchestrateAgentRow } from "./OrchestrateAgentRow";
@@ -66,8 +67,10 @@ export const OrchestrateLog = memo(function OrchestrateLog({
           )}
         </span>
         {streaming && stopTeam && (
-          <button
-            type="button"
+          <Button
+            variant="danger"
+            size="sm"
+            icon={<StopSquareIcon />}
             className="orch-stop-btn orch-stop-team"
             title="Stop the team — cancels all running agents"
             onClick={(e) => {
@@ -75,9 +78,8 @@ export const OrchestrateLog = memo(function OrchestrateLog({
               stopTeam();
             }}
           >
-            <StopSquareIcon />
             Stop team
-          </button>
+          </Button>
         )}
       </div>
       {open && (

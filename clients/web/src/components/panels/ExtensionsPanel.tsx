@@ -1,6 +1,5 @@
-import { useMemo, useState, type ReactNode } from "react";
-import { Button, Field, Input, Select, Switch, Text } from "@ignite-ember/ui-react";
-import { EntityGlyph } from "../EntityGlyph";
+import { useMemo, useState } from "react";
+import { Field, Input, Select, Switch, Text } from "@ignite-ember/ui-react";
 import { FilterIcon, SortIcon } from "../Icons";
 import type { PanelLevels } from "../PageShell";
 import type { IgniClient } from "../../protocol/client";
@@ -10,6 +9,12 @@ import { ControlMenu } from "./ControlMenu";
 import { Drawer } from "./Drawer";
 import { PanelSearch } from "./PanelSearch";
 import { useMasonry } from "./useMasonry";
+import { Button, buttonClass } from "../page/Button";
+import { DetailSection } from "../page/DetailSection";
+import { EntityCard } from "../page/EntityCard";
+import { EntityHero } from "../page/EntityHero";
+import { HeroChip } from "../page/HeroChip";
+import { PageEmpty } from "../page/PageEmpty";
 
 type ExtSort = "default" | "name-asc" | "name-desc";
 type ExtFilter = "all" | "ready" | "failed" | "busy";
@@ -77,11 +82,11 @@ function sameValues(
   return true;
 }
 
-/** A state, as a word and a tone the stylesheet already has. */
-function stateClass(state: string): string {
-  if (state === "ready") return "ext-state ext-state-ready";
-  if (state === "failed") return "ext-state ext-state-failed";
-  return "ext-state ext-state-busy";
+/** The hero's status dot: lit when ready, red when failed, dim between. */
+function statusDot(state: string): string {
+  if (state === "ready") return "is-on";
+  if (state === "failed") return "is-failed";
+  return "is-off";
 }
 
 
@@ -205,7 +210,7 @@ function SettingsForm({
           {busy ? "Saving…" : "Save"}
         </Button>
         {dirty && !busy && (
-          <Button variant="default" size="sm" onClick={() => setDraft(saved)}>
+          <Button size="sm" onClick={() => setDraft(saved)}>
             Revert
           </Button>
         )}
@@ -267,28 +272,6 @@ function Problems({ entries }: { entries: string[] }) {
   );
 }
 
-/** One section of the extension's page — Pages, Commands, Tools — in the
- *  same vocabulary the plugin detail page lists a plugin's contents. */
-function ContentSection({
-  title,
-  count,
-  children,
-}: {
-  title: string;
-  count: number;
-  children: ReactNode;
-}) {
-  if (count === 0) return null;
-  return (
-    <div className="plugins-content-section">
-      <div className="plugins-content-head">
-        {title} <span className="plugins-content-count">{count}</span>
-      </div>
-      {children}
-    </div>
-  );
-}
-
 /** A compact extension card. The whole card is one control: clicking it
  *  opens the extension's own page, the way a plugin card does. Collapsed,
  *  it is just name, version, state and a one-line summary, so the grid
@@ -304,26 +287,20 @@ function ExtensionCard({
   // Not the id, which already sits in the foot.
   const desc = extension.reason || extension.menu[0]?.desc || "";
   return (
-    <button type="button" className="plugins-gcard ext-card" onClick={onOpen}>
-      <span className="plugins-gcard-icon" aria-hidden="true">
-        <EntityGlyph name={extension.name} size={38} />
-      </span>
-      <span className="plugins-gcard-body">
-        <span className="plugins-gcard-top">
-          <span className="plugins-name name">
-            {extension.name} <span className="meta">· {extension.version}</span>
-          </span>
-          <span className={stateClass(extension.state)}>{extension.state}</span>
-        </span>
-        {desc && <span className="plugins-gcard-desc">{desc}</span>}
-        <span className="plugins-gcard-foot">
-          <span className="meta ext-card-id">{extension.id}</span>
-          <span className="plugins-chevron-end" aria-hidden="true">
-            ›
-          </span>
-        </span>
-      </span>
-    </button>
+    <EntityCard
+      className="ext-card"
+      name={extension.name}
+      label={extension.name}
+      onOpen={onOpen}
+      description={desc}
+      chips={<HeroChip>{extension.state}</HeroChip>}
+      footer={
+        <>
+          <span className="entity-meta">{extension.version}</span>
+          <span className="entity-meta">{extension.id}</span>
+        </>
+      }
+    />
   );
 }
 
@@ -337,28 +314,29 @@ function ExtensionDetailPage({
   onSave: (values: Record<string, Value>) => Promise<void>;
 }) {
   const tools = extension.tools ?? [];
-  const hasContents =
-    extension.pages.length > 0 ||
-    extension.menu.length > 0 ||
-    tools.length > 0 ||
-    extension.settings.length > 0 ||
-    !!extension.web_url;
   return (
-    <div className="plugin-detail">
-      <div className="plugin-detail-hero">
-        <span className="plugin-detail-icon" aria-hidden="true">
-          <EntityGlyph name={extension.name} size={52} />
-        </span>
-        <div className="plugin-detail-main">
-          <div className="plugin-detail-title-row">
-            <h2 className="plugin-detail-title">{extension.name}</h2>
-            <span className={stateClass(extension.state)}>{extension.state}</span>
-            {extension.version && <span className="plugins-version">{extension.version}</span>}
-            <span className="plugins-source">{extension.id}</span>
-          </div>
-          {extension.reason && <div className="plugin-detail-desc">{extension.reason}</div>}
-        </div>
-      </div>
+    <div className="entity-detail">
+      <EntityHero
+        name={extension.name}
+        leading={<span className={`plugins-status ${statusDot(extension.state)}`} />}
+        meta={
+          <>
+            <span className="entity-meta">{extension.state}</span>
+            {extension.version && <span className="entity-meta">{extension.version}</span>}
+            <span className="entity-meta">{extension.id}</span>
+          </>
+        }
+        description={extension.reason}
+        actions={
+          extension.web_url ? (
+            <OpenOnWeb
+              url={extension.web_url}
+              name={extension.name}
+              className={buttonClass("secondary", "sm", "ext-web-link")}
+            />
+          ) : undefined
+        }
+      />
 
       <SwitchedOff entries={extension.switched_off ?? []} />
       <SwitchedOff
@@ -372,44 +350,43 @@ function ExtensionDetailPage({
       )}
       <Problems entries={extension.problems ?? []} />
 
-      {hasContents && (
-        <div className="plugins-contents">
-          <ContentSection title="Pages" count={extension.pages.length}>
-            {extension.pages.map((p) => (
-              <div className="plugins-content-row" key={p.kind}>
-                <span className="plugins-content-name">{p.label}</span>
-                {p.sidebar && <span className="plugins-content-meta">in the sidebar</span>}
-              </div>
-            ))}
-          </ContentSection>
-
-          <ContentSection title="Commands" count={extension.menu.length}>
-            {extension.menu.map((c) => (
-              <div className="plugins-content-row" key={c.command}>
-                <code className="plugins-content-name">{c.command}</code>
-                <span className="plugins-content-desc">{c.desc}</span>
-              </div>
-            ))}
-          </ContentSection>
-
-          <ContentSection title="Tools for the agent" count={tools.length}>
-            {tools.map((t) => (
-              <div className="plugins-content-row" key={t.name}>
-                <code className="plugins-content-name">{t.name}</code>
-                <span className="plugins-content-desc">{t.hints}</span>
-              </div>
-            ))}
-          </ContentSection>
-
-          <OpenOnWeb url={extension.web_url} name={extension.name} />
-
-          {extension.settings.length > 0 && (
-            <div className="plugins-content-section">
-              <div className="plugins-content-head">Settings</div>
-              <SettingsForm extension={extension} onSave={onSave} />
+      {extension.pages.length > 0 && (
+        <DetailSection title="Pages" count={extension.pages.length}>
+          {extension.pages.map((p) => (
+            <div className="plugins-content-row" key={p.kind}>
+              <span className="plugins-content-name">{p.label}</span>
+              {p.sidebar && <span className="plugins-content-meta">in the sidebar</span>}
             </div>
-          )}
-        </div>
+          ))}
+        </DetailSection>
+      )}
+
+      {extension.menu.length > 0 && (
+        <DetailSection title="Commands" count={extension.menu.length}>
+          {extension.menu.map((c) => (
+            <div className="plugins-content-row" key={c.command}>
+              <code className="plugins-content-name">{c.command}</code>
+              <span className="plugins-content-desc">{c.desc}</span>
+            </div>
+          ))}
+        </DetailSection>
+      )}
+
+      {tools.length > 0 && (
+        <DetailSection title="Tools" count={tools.length}>
+          {tools.map((t) => (
+            <div className="plugins-content-row" key={t.name}>
+              <code className="plugins-content-name">{t.name}</code>
+              <span className="plugins-content-desc">{t.hints}</span>
+            </div>
+          ))}
+        </DetailSection>
+      )}
+
+      {extension.settings.length > 0 && (
+        <DetailSection title="Settings">
+          <SettingsForm extension={extension} onSave={onSave} />
+        </DetailSection>
       )}
     </div>
   );
@@ -471,12 +448,14 @@ export function ExtensionsPanel({
 
   return (
     <Drawer
-      title="Extensions"
+      title={current ? current.name : "Extensions"}
       levels={levels}
+      // The detail page's hero carries the extension's name.
+      titleInBody={!!current}
       onClose={onClose}
       headerExtras={
         !current && extensions.length > 0 ? (
-          <div className="plugins-controls">
+          <div className="page-controls">
             <PanelSearch
               value={query}
               onChange={setQuery}
@@ -514,17 +493,15 @@ export function ExtensionsPanel({
       ) : (
         <>
           {extensions.length === 0 && (
-            <div className="msg-info">
-              No extensions installed. They arrive from your organisation&apos;s
-              services when you are signed in to igni.
-            </div>
+            <PageEmpty
+              title="No extensions installed"
+              hint="They arrive from your organisation's services when you are signed in to igni."
+            />
           )}
           {extensions.length > 0 && shown.length === 0 && (
-            <div className="plugins-empty">
-              <div className="plugins-empty-title">No extensions match</div>
-            </div>
+            <PageEmpty title="No extensions match" />
           )}
-          <div className="plugins-grid plugins-grid--flow" ref={flow}>
+          <div className="card-grid card-grid--flow" ref={flow}>
             {shown.map((extension) => (
               <ExtensionCard
                 key={extension.id}

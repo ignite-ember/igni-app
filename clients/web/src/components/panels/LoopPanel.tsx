@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 import type { IgniClient } from "../../protocol/client";
 import { Drawer } from "./Drawer";
+import { PageEmpty } from "../page/PageEmpty";
+import { Button } from "../page/Button";
 
 interface LoopStatus {
   active?: boolean;
@@ -13,6 +15,14 @@ interface LoopStatus {
   cap_explicit?: boolean;
   /** Agent-announced total via loop_set_total — wins over the cap. */
   announced_total?: number | null;
+}
+
+/** The total to show after the iteration, or null when there is none worth showing. */
+function loopTotal(status: LoopStatus): number | null {
+  const total =
+    status.announced_total ??
+    (status.cap_explicit ? (status.iteration_index ?? 0) + (status.iterations_remaining ?? 0) : null);
+  return total || null;
 }
 
 export function LoopPanel({
@@ -64,48 +74,55 @@ export function LoopPanel({
     }
   };
 
+  const total = status ? loopTotal(status) : null;
+  const state = status?.paused ? "paused" : "running";
+
   return (
     <Drawer title="Loop" onClose={onClose}>
       {!status?.active && (
-        <div className="msg-info">
-          No active loop. Start one with <code>/loop &lt;prompt&gt;</code>.
-        </div>
+        <PageEmpty
+          title="No active loop"
+          hint={
+            <>
+              Start one with <code>/loop &lt;prompt&gt;</code>.
+            </>
+          }
+        />
       )}
       {status?.active && (
-        <>
-          <dl className="kv">
-            <dt>Prompt</dt>
-            <dd>{status.prompt}</dd>
-            <dt>Iteration</dt>
-            <dd>
-              {status.iteration_index ?? 0}
-              {(() => {
-                const total =
-                  status.announced_total ??
-                  (status.cap_explicit
-                    ? (status.iteration_index ?? 0) + (status.iterations_remaining ?? 0)
-                    : null);
-                return total ? `/${total}` : "";
-              })()}
-            </dd>
-            <dt>State</dt>
-            <dd>{status.paused ? "paused" : "running"}</dd>
-          </dl>
-          <div className="dialog-actions" style={{ marginTop: 16 }}>
-            {status.paused ? (
-              <button className="btn btn-sm" onClick={() => void resumeLoop()}>
-                Resume
-              </button>
-            ) : (
-              <button className="btn btn-sm" onClick={() => act("loop_pause")}>
-                Pause
-              </button>
-            )}
-            <button className="btn btn-sm btn-danger" onClick={() => act("cancel_pending_loop")}>
-              Stop loop
-            </button>
+        <div className="loop-page">
+          <div className="loop-stats">
+            <div className="loop-stat">
+              <span className="loop-stat-label">Iteration</span>
+              <span className="loop-stat-value">
+                {status.iteration_index ?? 0}
+                {total ? <span className="loop-stat-of">/{total}</span> : null}
+              </span>
+            </div>
+            <div className="loop-stat">
+              <span className="loop-stat-label">State</span>
+              <span className="loop-stat-value">
+                <span className={`loop-state loop-state--${state}`}>{state}</span>
+              </span>
+            </div>
           </div>
-        </>
+          <section className="loop-card">
+            <h2 className="loop-card-label">Prompt</h2>
+            <p className="loop-prompt">{status.prompt}</p>
+            <div className="loop-actions">
+              {status.paused ? (
+                <Button variant="primary" onClick={() => void resumeLoop()}>
+                  Resume
+                </Button>
+              ) : (
+                <Button onClick={() => act("loop_pause")}>Pause</Button>
+              )}
+              <Button variant="danger" onClick={() => act("cancel_pending_loop")}>
+                Stop loop
+              </Button>
+            </div>
+          </section>
+        </div>
       )}
     </Drawer>
   );

@@ -2,6 +2,9 @@ import { useCallback, useEffect, useState } from "react";
 
 import { Drawer } from "../panels/Drawer";
 import type { IgniClient } from "../../protocol/client";
+import { Button } from "../page/Button";
+import { PageHeaderControls } from "../page/PageHeaderControls";
+import { PageLoading } from "../page/PageLoading";
 
 export interface ContextBreakdown {
   total: number;
@@ -86,9 +89,14 @@ export function ContextPage({
       title="Context"
       onClose={onClose}
       headerExtras={
-        <button className="btn btn-sm" onClick={() => void load()} disabled={loading}>
-          {loading ? "Reading…" : "Refresh"}
-        </button>
+        <PageHeaderControls
+          refresh={{
+            onClick: () => void load(),
+            busy: loading,
+            label: "Refresh",
+            title: "Read the context again",
+          }}
+        />
       }
     >
       {error && <div className="ctx-error">Could not read the context: {error}</div>}
@@ -140,13 +148,13 @@ export function ContextPage({
             not drop to zero after compacting.
           </p>
 
-          <button className="btn btn-primary" onClick={onCompact}>
+          <Button variant="primary" className="ctx-compact" onClick={onCompact}>
             Compact the conversation
-          </button>
+          </Button>
         </>
       )}
 
-      {!breakdown && !error && <div className="ctx-empty">Reading the context…</div>}
+      {!breakdown && !error && <PageLoading label="Reading the context…" />}
     </Drawer>
   );
 }

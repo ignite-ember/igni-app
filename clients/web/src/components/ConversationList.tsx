@@ -1,10 +1,14 @@
-import { useMemo } from "react";
-import { Virtuoso } from "react-virtuoso";
+import { useImperativeHandle, useMemo, useRef } from "react";
+import { Virtuoso, type VirtuosoHandle } from "react-virtuoso";
 
+import { activityDisclosure } from "../chat/activityDisclosure";
+import { TranscriptRows } from "../chat/activityGroups";
+import { liveStepIndexes } from "../chat/activitySteps";
 import type { ChatItem } from "../chat/chatItem";
 import type { ChatTranscript } from "../chat/chatTranscript";
 import { isProcessing, phaseLabel, shouldShowSpinner, type RunPhase } from "../chat/runPhase";
 import { AT_BOTTOM_THRESHOLD, type TranscriptScroll } from "../chat/useTranscriptScroll";
+import { ActivityGroupView } from "./chatItems/ActivityGroupView";
 import { ChatItemView } from "./chatItems/ChatItemView";
 import type { ChatItemHandlers } from "./chatItems/handlers";
 
@@ -34,12 +38,37 @@ function TypingFooter({ runPhase }: { runPhase: RunPhase }) {
 }
 
 /**
+ * ``handle`` with item indexes in place of row indexes: the scroll and
+ * search hooks name items, the list draws rows.
+ */
+function itemIndexHandle(handle: () => VirtuosoHandle | null, rowOf: (item: number) => number): VirtuosoHandle {
+  type Location = Parameters<VirtuosoHandle["scrollToIndex"]>[0];
+  const toRow = (loc: Location): Location => {
+    if (typeof loc === "number") return rowOf(loc);
+    if (typeof loc === "object" && typeof loc.index === "number") return { ...loc, index: rowOf(loc.index) };
+    return loc;
+  };
+  return {
+    scrollToIndex: (loc) => handle()?.scrollToIndex(toRow(loc)),
+    scrollIntoView: (loc) =>
+      handle()?.scrollIntoView(typeof loc.index === "number" ? { ...loc, index: rowOf(loc.index) } : loc),
+    scrollTo: (opts) => handle()?.scrollTo(opts),
+    scrollBy: (opts) => handle()?.scrollBy(opts),
+    getState: (cb) => handle()?.getState(cb),
+    autoscrollToBottom: () => handle()?.autoscrollToBottom(),
+  };
+}
+
+/**
  * The conversation as a virtualized list, and the button back to its
  * end when the person has scrolled away from it.
  *
  * Following the tail is Virtuoso's ``followOutput``, gated on its "at
  * bottom" agreeing with the page (``chat/followOutput``), and never
  * ``smooth`` so streaming does not visibly chase tokens.
+ *
+ * Its rows are the items with each run of tools and thinking gathered
+ * into one activity group (``chat/activityGroups``).
  */
 export function ConversationList({
   items,
@@ -50,6 +79,7 @@ export function ConversationList({
   handlers,
   scroll,
   atBottomNow,
+  awaitingApproval = false,
 }: {
   items: ChatItem[];
   transcript: (items: ChatItem[]) => ChatTranscript;
@@ -60,8 +90,35 @@ export function ConversationList({
   scroll: TranscriptScroll;
   /** ``ui.scroll.at_bottom`` as the model has it now. */
   atBottomNow: () => boolean;
+  /** An approval waits in the composer for the running turn. */
+  awaitingApproval?: boolean;
 }) {
   const view = useMemo(() => transcript(items), [transcript, items]);
+  const rows = useMemo(() => TranscriptRows.of(items), [items]);
+  const rowsRef = useRef(rows);
+  rowsRef.current = rows;
+  const listRef = useRef<VirtuosoHandle>(null);
+  useImperativeHandle(
+    scroll.virtuosoRef,
+    () => itemIndexHandle(() => listRef.current, (i) => rowsRef.current.rowOfItem(i)),
+    [],
+  );
+  // A run paused on an approval is still the turn's: its group stays live.
+  const live = processing || awaitingApproval;
+  // When each group and step ran, read off the rows as they are rebuilt.
+  const clocks = useMemo(() => {
+    const now = Date.now();
+    const out = new Map<string, { start: number; end: number | null }>();
+    for (const row of rows.rows) {
+      if (row.kind !== "activity") continue;
+      const running = live && row.group.tail;
+      const clock = activityDisclosure.clock(row.group.key, running, now);
+      activityDisclosure.stepClocks(row.group.key, liveStepIndexes(row.group.items, running), now);
+      if (clock) out.set(row.group.key, { ...clock });
+    }
+    return out;
+  }, [rows, live]);
+  const searchGroup = pulsingItemId === null ? null : rows.groupOfItemId(pulsingItemId)?.key;
   // Stable unless the footer would change, so a streamed token or a
   // status tick does not hand Virtuoso a new Footer to remount.
   const components = useMemo(
@@ -76,17 +133,17 @@ export function ConversationList({
   return (
     <>
       <Virtuoso
-        ref={scroll.virtuosoRef}
+        ref={listRef}
         className="conversation"
-        data={items}
+        data={rows.rows}
         // By id, so React reuses rows across edits and ChatItemView's memo holds.
-        computeItemKey={(_idx, item) => item.id}
+        computeItemKey={(_idx, row) => row.key}
         followOutput={follow.followOutput}
         totalListHeightChanged={follow.totalListHeightChanged}
         atBottomThreshold={AT_BOTTOM_THRESHOLD}
         atBottomStateChange={follow.atBottomStateChange}
         rangeChanged={(range) => {
-          scroll.topIndexRef.current = range.startIndex;
+          scroll.topIndexRef.current = rowsRef.current.itemOfRow(range.startIndex);
         }}
         // Come to rest: where the top of the view is, once per stop.
         isScrolling={(moving) => {
@@ -97,7 +154,25 @@ export function ConversationList({
           scroll.setScrollEl(el as HTMLElement | null);
         }}
         increaseViewportBy={OVERSCAN}
-        itemContent={(idx, item) => {
+        itemContent={(_row, row) => {
+          if (row.kind === "activity") {
+            const { group } = row;
+            const running = live && group.tail;
+            const clock = clocks.get(group.key);
+            return (
+              <div className="chat-row">
+                <ActivityGroupView
+                  group={group}
+                  running={running}
+                  forceOpen={searchGroup === group.key}
+                  startedAt={clock?.start ?? null}
+                  endedAt={clock?.end ?? null}
+                  handlers={handlers}
+                />
+              </div>
+            );
+          }
+          const { item, index: idx } = row;
           // The blinking caret, on the live tail's reply only.
           const isStreamingTail = processing && idx === items.length - 1 && item.kind === "assistant";
           const isSearchTarget = item.id === pulsingItemId;

@@ -8,6 +8,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import type { BackendCalls } from "../../protocol/backendCalls";
 import type { ModelChoice } from "../../protocol/composerWire";
+import { isTerminalKey } from "../terminal/terminalKeys";
 
 export type ComposerPopup =
   | { kind: "none" }
@@ -73,7 +74,7 @@ export function useComposerPopup({
   useEffect(() => {
     if (!modelOpen) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
+      if (e.key === "Escape" && !isTerminalKey(e)) {
         e.stopPropagation();
         close();
       }

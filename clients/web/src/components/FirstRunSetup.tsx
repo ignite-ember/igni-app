@@ -17,6 +17,8 @@
  * which has no tests.
  */
 
+import { Button } from "./page/Button";
+
 export function FirstRunSetup({
   onLogin,
   signedInAs = "",
@@ -38,9 +40,9 @@ export function FirstRunSetup({
         </p>
       ) : (
         <div className="welcome-setup-actions">
-          <button className="btn btn-primary" onClick={onLogin}>
+          <Button variant="primary" onClick={onLogin}>
             Sign in to your igni server
-          </button>
+          </Button>
         </div>
       )}
       {/* `~/.igni`: the directory the backend reads (`core/paths.py`,

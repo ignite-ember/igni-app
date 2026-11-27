@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { IgniClient } from "../../protocol/client";
 import { ArrowUpIcon, FolderIcon } from "../Icons";
+import { Button } from "../page/Button";
 
 interface DirListing {
   path: string;
@@ -72,21 +73,21 @@ export function DirectoryPicker({
         <div className="dialog-title">{title}</div>
 
         <div className="dir-pathbar">
-          <button
-            className="btn btn-sm"
+          <Button
+            size="sm"
             title="Home"
             onClick={() => listing && void load(listing.home)}
           >
             ⌂
-          </button>
-          <button
-            className="btn btn-sm"
+          </Button>
+          <Button
+            size="sm"
             title="Up one level"
             disabled={!listing?.parent}
             onClick={() => listing?.parent && void load(listing.parent)}
           >
             <ArrowUpIcon size={13} />
-          </button>
+          </Button>
           <input
             className="dir-path-input"
             value={pathInput}
@@ -122,9 +123,9 @@ export function DirectoryPicker({
         </div>
 
         <div className="dialog-actions" style={{ marginTop: 14 }}>
-          <button className="btn btn-primary" disabled={!listing} onClick={() => listing && onSelect(listing.path)}>
+          <Button variant="primary" disabled={!listing} onClick={() => listing && onSelect(listing.path)}>
             Use this folder
-          </button>
+          </Button>
           <label className="dir-hidden-toggle">
             <input
               type="checkbox"
@@ -137,9 +138,9 @@ export function DirectoryPicker({
             hidden folders
           </label>
           <div className="header-spacer" />
-          <button className="btn" onClick={onCancel}>
+          <Button onClick={onCancel}>
             Cancel
-          </button>
+          </Button>
         </div>
       </div>
     </div>

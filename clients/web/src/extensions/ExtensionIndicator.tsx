@@ -1,9 +1,8 @@
 /**
  * An extension's status chip, in igni's own chrome.
  *
- * It sits in the composer beside `WatcherIndicator` and
- * `GroupIndicator`. The first extension to need one had a chip
- * hardcoded there before it was an extension, and moving it out meant
+ * It sits in the header's status row, after `WatcherIndicator`. The
+ * first extension to need one had a chip hardcoded in igni's chrome before it was an extension, and moving it out meant
  * the chip had to come from the manifest or be lost — and `indicators` had been moved to "not in v1" on the grounds that
  * nothing specified it, which was right about the specification and
  * wrong about the need.
@@ -24,6 +23,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { Status, Tooltip } from "@ignite-ember/ui-react";
 
+import { Button } from "../components/page/Button";
 import { badgeText } from "../notifications/model";
 
 /** The four the design system publishes, and nothing else. */
@@ -165,14 +165,13 @@ export function ExtensionIndicator({
     );
     if (!indicator.opens || onOpen === undefined) return label;
     return (
-      <button
-        type="button"
-        className="btn btn-quiet btn-xs"
+      <Button
+        size="sm"
         aria-label={`${indicator.label}: ${unread} unread. Open.`}
         onClick={() => onOpen(indicator.opens)}
       >
         {label}
-      </button>
+      </Button>
     );
   }
 
@@ -188,15 +187,14 @@ export function ExtensionIndicator({
   }
 
   const button = (
-    <button
-      type="button"
-      className="btn btn-quiet btn-xs"
+    <Button
+      size="sm"
       // The label is the state; the name says what clicking does.
       aria-label={`${indicator.label}: ${state.label}${unread > 0 ? `, ${unread} unread` : ""}. Open.`}
       onClick={() => onOpen(indicator.opens)}
     >
       {chip}
-    </button>
+    </Button>
   );
 
   return state.detail ? <Tooltip text={state.detail}>{button}</Tooltip> : button;

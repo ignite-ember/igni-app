@@ -1,6 +1,7 @@
 import { useContext, useEffect, type ReactNode } from "react";
 import { CloseIcon } from "../Icons";
 import { PageContext, PageShell, type PanelLevels } from "../PageShell";
+import { isTerminalKey } from "../terminal/terminalKeys";
 
 /**
  * The frame a panel renders in — a modal, or a page.
@@ -59,7 +60,7 @@ export function Drawer({
   useEffect(() => {
     if (page) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "Escape") return;
+      if (e.key !== "Escape" || isTerminalKey(e)) return;
       // A file preview (or any overlay marked .modal-overlay) sits
       // ON TOP of the drawer and owns Esc while it's open — don't
       // close the drawer underneath it.

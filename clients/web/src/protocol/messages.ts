@@ -226,6 +226,9 @@ export interface RPCResponse extends BaseMessage {
   type: "rpc_response";
   result: unknown;
   error: string | null;
+  /** Why it failed, as a word to branch on (``refused``, ``unavailable``,
+   *  …); absent from an older igni. */
+  code?: string | null;
 }
 
 /** A broadcast on one channel, as it arrives: the producer set is open

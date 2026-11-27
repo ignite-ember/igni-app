@@ -11,7 +11,9 @@
  * does, so code gets the copy/collapse treatment and mermaid renders.
  *
  * A link to another file in the project opens that file in the viewer
- * rather than in a browser; only a real outward URL leaves.
+ * rather than in a browser; only a real outward URL leaves. Headings get
+ * GitHub's anchors, so a ``#heading`` link scrolls to its heading, and
+ * ``other.md#heading`` opens the file there.
  */
 
 import { useMemo, type AnchorHTMLAttributes, type ReactNode } from "react";
@@ -24,6 +26,7 @@ import remarkGfm from "remark-gfm";
 import { MermaidBlock } from "@ignite-ember/ui-react";
 import { CodeBlock, MarkdownBlock, PreformattedBlock } from "./CodeBlock";
 import { FencedBlock } from "./fencedBlock";
+import { rehypeHeadingSlugs, scrollToAnchor } from "./headingSlugs";
 import { README_SANITIZE_SCHEMA } from "./ReadmeMarkdown";
 
 /** A URL that leaves the project — a scheme, protocol-relative, or a
@@ -66,18 +69,32 @@ export function FileMarkdown({
   text: string;
   /** The folder of the file being shown, for resolving relative links. */
   baseDir?: string;
-  /** Open another project file in the viewer. */
-  onOpenFile?: (path: string) => void;
+  /** Open another project file in the viewer, at ``anchor`` when the
+   *  link names one. */
+  onOpenFile?: (path: string, anchor?: string) => void;
 }) {
   const components = useMemo<Components>(
     () => ({
       pre: FilePre,
       a: ({ node: _node, href, children, ...props }: { node?: unknown } & AnchorHTMLAttributes<HTMLAnchorElement>) => {
         const target = href ?? "";
-        // An outward URL opens in a browser; a bare ``#anchor`` is left
-        // to the page. Everything else names a file in the project.
-        if (!target || target.startsWith("#")) {
-          return <a {...props} href={target}>{children}</a>;
+        // An outward URL opens in a browser; a bare ``#anchor`` scrolls
+        // this document. Everything else names a file in the project.
+        if (!target) return <a {...props}>{children}</a>;
+        if (target.startsWith("#")) {
+          return (
+            <a
+              {...props}
+              href={target}
+              onClick={(e) => {
+                // Never the window's own location: the app routes on it.
+                e.preventDefault();
+                scrollToAnchor(e.currentTarget.closest(".files-md") ?? e.currentTarget.ownerDocument, target);
+              }}
+            >
+              {children}
+            </a>
+          );
         }
         if (isOutward(target)) {
           return <a {...props} href={target} target="_blank" rel="noopener noreferrer">{children}</a>;
@@ -88,7 +105,8 @@ export function FileMarkdown({
             href={target}
             onClick={(e) => {
               e.preventDefault();
-              onOpenFile?.(resolveProjectPath(baseDir, target));
+              const fragment = target.split("#")[1];
+              onOpenFile?.(resolveProjectPath(baseDir, target), fragment || undefined);
             }}
           >
             {children}
@@ -102,7 +120,7 @@ export function FileMarkdown({
   return (
     <ReactMarkdown
       remarkPlugins={[remarkGfm]}
-      rehypePlugins={[rehypeRaw, [rehypeSanitize, README_SANITIZE_SCHEMA], rehypeHighlight]}
+      rehypePlugins={[rehypeRaw, rehypeHeadingSlugs, [rehypeSanitize, README_SANITIZE_SCHEMA], rehypeHighlight]}
       components={components}
     >
       {text}

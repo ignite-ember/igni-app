@@ -12,6 +12,7 @@ import { useEffect, useState } from "react";
 
 import type { IgniClient } from "../protocol/client";
 import type { TrustAnswer, WorkspaceTrustStatus } from "../workspaceTrust/model";
+import { Button } from "./page/Button";
 
 export function WorkspaceTrustDialog({
   client,
@@ -84,35 +85,30 @@ export function WorkspaceTrustDialog({
         <div className="update-prompt-actions">
           {status.can_trust ? (
             <>
-              <button
-                type="button"
-                className="btn"
+              <Button
                 disabled={busy}
                 onClick={() => void answer("distrust")}
               >
                 Don't trust
-              </button>
-              <button
-                type="button"
-                className="btn"
+              </Button>
+              <Button
                 disabled={busy}
                 onClick={() => void answer("once")}
               >
                 This time only
-              </button>
-              <button
-                type="button"
-                className="btn btn-primary"
+              </Button>
+              <Button
+                variant="primary"
                 disabled={busy}
                 onClick={() => void answer("trust")}
               >
                 Trust
-              </button>
+              </Button>
             </>
           ) : (
-            <button type="button" className="btn btn-primary" onClick={onClose}>
+            <Button variant="primary" onClick={onClose}>
               OK
-            </button>
+            </Button>
           )}
         </div>
       </div>

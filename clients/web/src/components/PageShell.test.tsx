@@ -20,7 +20,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 
-import { PageShell } from "./PageShell";
+import { PAGE_REST_SHIFT, PageShell } from "./PageShell";
 import type { PageRoute } from "../chat/pageStack";
 
 // This project does not set ``globals: true``, so testing-library's
@@ -193,5 +193,68 @@ describe("the body", () => {
     expect(body).toBeTruthy();
     expect(measure).toBeTruthy();
     expect(measure?.textContent).toBe("body");
+  });
+});
+
+describe("scrolling under the header", () => {
+  /** Renders the shell inside a ``.main``, as the app does. */
+  function setupInMain(overrides: Partial<Parameters<typeof PageShell>[0]> = {}) {
+    const main = document.createElement("main");
+    main.className = "main main--paged";
+    document.body.appendChild(main);
+    const props = {
+      trail,
+      onCrumb: vi.fn(),
+      onBack: vi.fn(),
+      onClose: vi.fn(),
+      children: <div>body</div>,
+      ...overrides,
+    };
+    const view = render(<PageShell {...props} />, { container: main });
+    const body = document.querySelector(".page-body") as HTMLElement;
+    const scrollTo = (top: number) => {
+      body.scrollTop = top;
+      fireEvent.scroll(body);
+    };
+    return { main, body, scrollTo, view };
+  }
+
+  afterEach(() => {
+    document.querySelectorAll("main").forEach((m) => m.remove());
+  });
+
+  it("scrolls the title row and the toolbar with the list", () => {
+    // They go up under the app header with the content, the way the
+    // chat's first message does, so both live inside the scroller.
+    const { body } = setupInMain({ headerExtras: <button>Sync</button>, toolbar: <div>filters</div> });
+    const kids = Array.from(body.children).map((e) => e.className);
+    expect(kids).toEqual(["page-head", "page-toolbar", "page-measure"]);
+    expect(document.querySelector(".page > .page-head, .page > .page-toolbar")).toBeNull();
+  });
+
+  it("lifts the fade and the blur clear of the title at rest", () => {
+    const { main, body } = setupInMain();
+    expect(main.style.getPropertyValue("--page-rest-shift")).toBe(`${PAGE_REST_SHIFT}px`);
+    // No mask at all at rest: the page is the page it always was.
+    expect(body.hasAttribute("data-scrolled")).toBe(false);
+  });
+
+  it("slides them into the chat's place over the first pixels of scroll", () => {
+    const { main, body, scrollTo } = setupInMain();
+    scrollTo(10);
+    expect(main.style.getPropertyValue("--page-rest-shift")).toBe(`${PAGE_REST_SHIFT - 10}px`);
+    expect(body.hasAttribute("data-scrolled")).toBe(true);
+    scrollTo(500);
+    expect(main.style.getPropertyValue("--page-rest-shift")).toBe("0px");
+    scrollTo(0);
+    expect(main.style.getPropertyValue("--page-rest-shift")).toBe(`${PAGE_REST_SHIFT}px`);
+    expect(body.hasAttribute("data-scrolled")).toBe(false);
+  });
+
+  it("leaves nothing on .main when the page closes", () => {
+    const { main, scrollTo, view } = setupInMain();
+    scrollTo(500);
+    view.unmount();
+    expect(main.style.getPropertyValue("--page-rest-shift")).toBe("");
   });
 });

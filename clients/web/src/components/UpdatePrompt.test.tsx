@@ -52,6 +52,12 @@ describe("UpdatePrompt — version copy", () => {
     // is "Download".
     expect(screen.getByRole("button", { name: "Download" })).toBeTruthy();
   });
+
+  it("draws Later as the kit's secondary and the install as its primary", () => {
+    render(<UpdatePrompt info={info} onDismiss={() => undefined} />);
+    expect(screen.getByRole("button", { name: "Later" }).className).toContain("button--secondary");
+    expect(screen.getByRole("button", { name: "Download" }).className).toContain("button--primary");
+  });
 });
 
 describe("UpdatePrompt — Tauri host", () => {

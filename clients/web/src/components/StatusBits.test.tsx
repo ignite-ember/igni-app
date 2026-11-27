@@ -175,24 +175,30 @@ describe("SessionContext", () => {
     expect(container.querySelector(".session-ctx-id")?.textContent).toBe("—");
   });
 
-  it("ok tone for pct < 60", () => {
-    // The thresholds are not arbitrary — the user starts worrying at
-    // "more than half used" (warn) and panicking at "running out"
-    // (danger). Pin both transitions so a 5% drift can't shift them.
-    const { container } = render(<SessionContext sessionId="s" tokens={1000} max={10000} pct={20} />);
+  it("ok tone below 70", () => {
+    // Green until the window is 70% full, yellow until 90%, then red.
+    const { container } = render(<SessionContext sessionId="s" tokens={6900} max={10000} pct={69} />);
     expect(container.querySelector(".tone-ok")).toBeTruthy();
     expect(container.querySelector(".tone-warn")).toBeNull();
     expect(container.querySelector(".tone-danger")).toBeNull();
   });
 
-  it("warn tone at exactly 60", () => {
-    const { container } = render(<SessionContext sessionId="s" tokens={6000} max={10000} pct={60} />);
-    expect(container.querySelector(".tone-warn")).toBeTruthy();
+  it("warn tone from 70 to 89", () => {
+    for (const pct of [70, 89]) {
+      const { container, unmount } = render(<SessionContext sessionId="s" tokens={pct * 100} max={10000} pct={pct} />);
+      expect(container.querySelector(".session-ctx")?.classList.contains("tone-warn")).toBe(true);
+      unmount();
+    }
   });
 
-  it("danger tone at exactly 85", () => {
-    const { container } = render(<SessionContext sessionId="s" tokens={8500} max={10000} pct={85} />);
-    expect(container.querySelector(".tone-danger")).toBeTruthy();
+  it("danger tone from 90", () => {
+    const { container } = render(<SessionContext sessionId="s" tokens={9000} max={10000} pct={90} />);
+    expect(container.querySelector(".session-ctx")?.classList.contains("tone-danger")).toBe(true);
+  });
+
+  it("puts the tone on the button that holds the ring, which the stylesheet colours", () => {
+    const { container } = render(<SessionContext sessionId="s" tokens={2900} max={10000} pct={29} />);
+    expect(container.querySelector(".session-ctx.tone-ok .ctx-ring-fill")).toBeTruthy();
   });
 
   it("survives a status message with no token count", () => {

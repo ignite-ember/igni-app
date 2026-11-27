@@ -1,6 +1,7 @@
 /** The inline editor that retries a failed sub-agent with a tweaked task. */
 
 import type { OrchestrateAgent } from "../../chat/orchestrateAgentTree";
+import { Button } from "../page/Button";
 import type { RetryDraft } from "./useRetryDraft";
 
 export function RetryEditor({
@@ -41,16 +42,12 @@ export function RetryEditor({
         <span className="orch-retry-hint">
           ⌘↵ to send · Esc to cancel — the main agent decides how to act on this.
         </span>
-        <button className="btn btn-sm" onClick={retry.cancel}>
+        <Button size="sm" onClick={retry.cancel}>
           Cancel
-        </button>
-        <button
-          className="btn btn-sm btn-primary"
-          disabled={!retry.draft.trim()}
-          onClick={() => retry.submit(onRetry)}
-        >
+        </Button>
+        <Button variant="primary" size="sm" disabled={!retry.draft.trim()} onClick={() => retry.submit(onRetry)}>
           Retry
-        </button>
+        </Button>
       </div>
     </div>
   );

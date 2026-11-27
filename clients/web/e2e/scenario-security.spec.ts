@@ -21,6 +21,7 @@ import {
   marker,
   newChat,
   open,
+  openActivity,
   sayExactly,
   send,
   shot,
@@ -163,10 +164,11 @@ test("SEC-008 a hostile file name in a tool result renders as text", async ({ pa
   const token = marker();
   await send(page, `${callTool("run_shell_command", { command: "ls -1" })} then say ${token}`);
   const card = page.locator(".hitl-card");
-  await expect(page.locator(".hitl-card, .tool-card").first()).toBeVisible({ timeout: 30_000 });
+  await expect(page.locator(".hitl-card, .activity-group").first()).toBeVisible({ timeout: 30_000 });
   if (await card.isVisible().catch(() => false)) await card.getByRole("button", { name: "Allow once" }).click();
   await assistantSaid(page, token);
-  await page.locator(".tool-card").first().click().catch(() => undefined);
+  await openActivity(page);
+  await page.locator(".tool-card .tool-card-header").first().click().catch(() => undefined);
   await expect(page.locator(".conversation img[onerror]")).toHaveCount(0);
   // The @ picker lists the same file.
   const editor = page.locator(".composer-editable");

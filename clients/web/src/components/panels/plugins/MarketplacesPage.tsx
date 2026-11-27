@@ -1,8 +1,10 @@
 /** Marketplace management: register one by URL, refresh or unregister. */
 
+import { NamedIcon, RefreshIcon } from "../../Icons";
+import { Button } from "../../page/Button";
+import { CardGridSkeleton } from "../../page/CardGridSkeleton";
 import type { MarketplaceCatalog } from "./marketplace";
 import { PluginAction } from "./pluginAction";
-import { PluginsSkeleton } from "./PluginParts";
 
 export function MarketplacesPage({
   catalog,
@@ -21,7 +23,7 @@ export function MarketplacesPage({
   onRemoveMarketplace: (name: string) => void;
   onRefresh: () => void;
 }) {
-  if (catalog === null) return <PluginsSkeleton />;
+  if (catalog === null) return <CardGridSkeleton />;
   const adding = isRunning(PluginAction.addMarketplace());
   const refreshing = isRunning(PluginAction.refresh());
   return (
@@ -43,31 +45,35 @@ export function MarketplacesPage({
           }
           autoFocus
         />
-        <button
-          className="btn btn-sm btn-primary"
-          disabled={!marketUrl.trim() || adding}
+        <Button
+          variant="primary"
+          icon={<NamedIcon name="plus" size={14} />}
+          disabled={!marketUrl.trim()}
+          busy={adding}
           onClick={() => onAddMarketplace(marketUrl.trim())}
         >
-          {adding ? "…" : "Add marketplace"}
-        </button>
+          Add marketplace
+        </Button>
       </div>
 
       <div className="plugins-markets-list">
         <div className="plugins-markets-list-head">
           <span>Registered marketplaces ({catalog.marketCount})</span>
-          <button
-            className="btn btn-sm"
-            disabled={refreshing || catalog.marketCount === 0}
+          <Button
+            size="sm"
+            icon={<RefreshIcon size={13} />}
+            disabled={catalog.marketCount === 0}
+            busy={refreshing}
             onClick={onRefresh}
             title="Re-fetch all marketplace catalogs"
           >
-            {refreshing ? "…" : "Refresh all"}
-          </button>
+            Refresh all
+          </Button>
         </div>
         {catalog.marketCount === 0 ? (
-          <div className="plugins-empty">
-            <div className="plugins-empty-title">No marketplaces registered</div>
-            <div className="plugins-empty-hint">Add one above to populate the catalog.</div>
+          <div className="page-empty">
+            <div className="page-empty-title">No marketplaces registered</div>
+            <div className="page-empty-hint">Add one above to populate the catalog.</div>
           </div>
         ) : (
           catalog.markets.map((m) => {
@@ -84,14 +90,16 @@ export function MarketplacesPage({
                     {m.lastFetched && ` · fetched ${m.lastFetched}`}
                   </div>
                 </div>
-                <button
-                  className="btn btn-sm btn-danger"
-                  disabled={removing || removable === null}
+                <Button
+                  variant="danger"
+                  size="sm"
+                  disabled={removable === null}
+                  busy={removing}
                   onClick={() => removable !== null && onRemoveMarketplace(removable)}
                   title={removable !== null ? `Unregister ${removable}` : "Cannot remove (no name)"}
                 >
-                  {removing ? "…" : "Remove"}
-                </button>
+                  Remove
+                </Button>
               </div>
             );
           })

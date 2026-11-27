@@ -11,7 +11,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 
 import { expect, test } from "./fixtures/live-be";
-import { assistantSaid, callTool, idle, marker, newChat, open, send, shot } from "./fixtures/chat";
+import { assistantSaid, callTool, idle, marker, newChat, open, openActivity, send, shot } from "./fixtures/chat";
 
 test.describe.configure({ mode: "serial", timeout: 120_000 });
 
@@ -34,6 +34,8 @@ test("TOOL-003 Allow once runs the call and the answer arrives", async ({ page, 
   await card.getByRole("button", { name: "Allow once" }).click();
 
   await assistantSaid(page, token);
+  await expect(page.locator(".activity-group").first()).toBeVisible();
+  await openActivity(page);
   await expect(page.locator(".tool-card").first()).toBeVisible();
   expect(fs.existsSync(path.join(liveBe.projectDir!, "approved-once.txt"))).toBe(true);
   await idle(page);

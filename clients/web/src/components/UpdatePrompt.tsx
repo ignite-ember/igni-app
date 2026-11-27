@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Button } from "./page/Button";
 
 export interface UpdatePromptInfo {
   available: boolean;
@@ -59,22 +60,19 @@ export function UpdatePrompt({
         </div>
         {error && <div className="update-prompt-error">{error}</div>}
         <div className="update-prompt-actions">
-          <button
-            type="button"
-            className="btn"
+          <Button
             onClick={onDismiss}
             disabled={busy}
           >
             Later
-          </button>
-          <button
-            type="button"
-            className="btn btn-primary"
+          </Button>
+          <Button
+            variant="primary"
             onClick={onInstall}
             disabled={busy}
           >
             {busy ? "Installing…" : invoke ? "Install & restart" : "Download"}
-          </button>
+          </Button>
         </div>
       </div>
     </div>

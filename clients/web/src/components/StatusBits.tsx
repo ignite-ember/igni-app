@@ -231,7 +231,7 @@ export function SessionContext({
   const used = Number.isFinite(tokens) ? tokens : 0;
   const ceiling = Number.isFinite(max) ? max : 0;
   const safe = Math.min(100, Math.max(0, Number.isFinite(pct) ? pct : 0));
-  const tone = safe >= 85 ? "danger" : safe >= 60 ? "warn" : "ok";
+  const tone = safe >= 90 ? "danger" : safe >= 70 ? "warn" : "ok";
   // First 8 chars — the id the backend uses everywhere; copy ships the
   // full string for consumers that kept the longer original.
   const short = sessionId ? sessionId.slice(0, 8) : "—";

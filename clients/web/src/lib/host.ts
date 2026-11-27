@@ -337,7 +337,7 @@ export class Host {
   setAppTitle(projectDir: string, org: string): void {
     const setTitle = window.__IGNI_HOST__?.setAppTitle;
     if (typeof setTitle !== "function") return;
-    const folder = projectDir ? projectDir.split("/").filter(Boolean).pop() || projectDir : "";
+    const folder = projectDir ? projectDir.split(/[\\/]/).filter(Boolean).pop() || projectDir : "";
     try {
       setTitle(folder, org);
     } catch {

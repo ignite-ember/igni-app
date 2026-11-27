@@ -190,44 +190,44 @@ export function PluginsCatalogDemo() {
           <div className="header-spacer" />
         </header>
         <div className="page">
-          <div className="page-head">
-            <h1 className="page-title">Plugins</h1>
-            <div className="page-head-extras">
-              <div className="plugins-headerbar">
-                <div className="plugins-tabs">
-                  <button
-                    className={`plugins-tab ${view === "marketplace" ? "active" : ""}`}
-                    onClick={() => setView("marketplace")}
-                  >
-                    Marketplace<span className="plugins-tab-count">{CATALOG.pluginCount}</span>
-                  </button>
-                  <button
-                    className={`plugins-tab ${view === "installed" ? "active" : ""}`}
-                    onClick={() => setView("installed")}
-                  >
-                    Installed<span className="plugins-tab-count">{INSTALLED.count}</span>
-                  </button>
+          <div className="page-body">
+            <div className="page-head">
+              <h1 className="page-title">Plugins</h1>
+              <div className="page-head-extras">
+                <div className="page-headerbar">
+                  <div className="page-tabs">
+                    <button
+                      className={`page-tab ${view === "marketplace" ? "active" : ""}`}
+                      onClick={() => setView("marketplace")}
+                    >
+                      Marketplace<span className="page-tab-count">{CATALOG.pluginCount}</span>
+                    </button>
+                    <button
+                      className={`page-tab ${view === "installed" ? "active" : ""}`}
+                      onClick={() => setView("installed")}
+                    >
+                      Installed<span className="page-tab-count">{INSTALLED.count}</span>
+                    </button>
+                  </div>
+                  {view === "marketplace" && (
+                    <CatalogControls
+                      pluginCount={CATALOG.pluginCount}
+                      marketCount={CATALOG.marketCount}
+                      query={query}
+                      onQueryChange={setQuery}
+                      categories={categories}
+                      sortBy={sortBy}
+                      onSortChange={setSortBy}
+                      filterBy={filterBy}
+                      onFilterChange={setFilterBy}
+                      refreshing={false}
+                      onRefresh={() => {}}
+                      onManage={() => {}}
+                    />
+                  )}
                 </div>
-                {view === "marketplace" && (
-                  <CatalogControls
-                    pluginCount={CATALOG.pluginCount}
-                    marketCount={CATALOG.marketCount}
-                    query={query}
-                    onQueryChange={setQuery}
-                    categories={categories}
-                    sortBy={sortBy}
-                    onSortChange={setSortBy}
-                    filterBy={filterBy}
-                    onFilterChange={setFilterBy}
-                    refreshing={false}
-                    onRefresh={() => {}}
-                    onManage={() => {}}
-                  />
-                )}
               </div>
             </div>
-          </div>
-          <div className="page-body">
             <div className="page-measure">
               {view === "marketplace" ? (
                 <MarketplaceTab

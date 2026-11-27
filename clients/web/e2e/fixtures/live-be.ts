@@ -798,8 +798,11 @@ export const test = base.extend<
       // killed explicitly, and while the rows naming their pids still
       // exist.
       if (orphanScenario) await cleanupOrphans(projectDir, home);
-      await fsp.rm(projectDir, { recursive: true, force: true });
-      await fsp.rm(home, { recursive: true, force: true });
+      // Retried: a child the backend started (the decisions model's
+      // download into home/.cache) can still be writing for a moment after
+      // it stops, and one ENOTEMPTY here failed a passing test.
+      await fsp.rm(projectDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
+      await fsp.rm(home, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
     }
   },
 

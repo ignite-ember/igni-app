@@ -43,6 +43,13 @@ export async function connected(page: Page, timeout = 60_000): Promise<void> {
   );
 }
 
+/** Open every collapsed activity group, so the tool cards and thinking
+ *  inside them are on the page. */
+export async function openActivity(page: Page): Promise<void> {
+  const closed = page.locator('.activity-head[aria-expanded="false"]');
+  for (let i = 0; i < 50 && (await closed.count()) > 0; i++) await closed.first().click();
+}
+
 /** Type into the contenteditable composer and send. */
 export async function send(page: Page, text: string): Promise<void> {
   const editor = page.locator(".composer-editable");

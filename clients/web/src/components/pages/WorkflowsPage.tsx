@@ -2,20 +2,29 @@ import { useCallback, useEffect, useState } from "react";
 
 import { Drawer } from "../panels/Drawer";
 import type { IgniClient } from "../../protocol/client";
+import { countOf } from "../../lib/plural";
+import { Button } from "../page/Button";
+import { CardAction } from "../page/CardAction";
+import { CardGrid } from "../page/CardGrid";
+import { CardGridSkeleton } from "../page/CardGridSkeleton";
+import { EntityCard } from "../page/EntityCard";
+import { HeroChip } from "../page/HeroChip";
+import { PageEmpty } from "../page/PageEmpty";
+import { PageHeaderControls } from "../page/PageHeaderControls";
+import { WorkflowDetail } from "./workflows/WorkflowDetail";
+import {
+  WORKFLOW_FILTERS,
+  WORKFLOW_SORTS,
+  phaseCount,
+  visibleWorkflows,
+  workflowSource,
+  type WorkflowFilter,
+  type WorkflowMeta,
+  type WorkflowSort,
+} from "./workflows/workflowsView";
 
-export interface WorkflowPhase {
-  title?: string;
-  detail?: string;
-  model?: string;
-}
-
-export interface WorkflowMeta {
-  name?: string;
-  description?: string;
-  whenToUse?: string;
-  phases?: WorkflowPhase[];
-  path?: string;
-}
+/** Phase titles a card shows before it says "+N more". */
+const CARD_PHASES = 4;
 
 /**
  * The workflows this project defines.
@@ -30,7 +39,8 @@ export interface WorkflowMeta {
  * A listing is a place, not a message. Running a workflow still
  * streams into the chat, because a run *is* transcript: it has a
  * beginning, output and an end, and belongs in the conversation that
- * asked for it.
+ * asked for it. A card opens the workflow's own page, with every
+ * phase spelled out; its play button seeds the run straight away.
  */
 export function WorkflowsPage({
   client,
@@ -46,13 +56,22 @@ export function WorkflowsPage({
 }) {
   const [workflows, setWorkflows] = useState<WorkflowMeta[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [query, setQuery] = useState("");
+  const [filter, setFilter] = useState<WorkflowFilter>("all");
+  const [sort, setSort] = useState<WorkflowSort>("name");
+  const [selected, setSelected] = useState<WorkflowMeta | null>(null);
 
   const load = useCallback(async () => {
     setError(null);
+    setLoading(true);
     try {
-      setWorkflows((await client.rpc<WorkflowMeta[]>("list_workflows")) ?? []);
+      const listed = await client.rpc<WorkflowMeta[]>("list_workflows");
+      setWorkflows(Array.isArray(listed) ? listed : []);
     } catch (e) {
       setError(String(e));
+    } finally {
+      setLoading(false);
     }
   }, [client]);
 
@@ -60,47 +79,127 @@ export function WorkflowsPage({
     void load();
   }, [load]);
 
+  const all = workflows ?? [];
+  const shown = visibleWorkflows(all, query, filter, sort);
+  const run = (wf: WorkflowMeta) => onRun(`/workflows ${wf.name ?? ""}`);
+  const clear = () => {
+    setQuery("");
+    setFilter("all");
+  };
+
   return (
-    <Drawer title="Workflows" onClose={onClose}>
-      {error && <div className="ctx-error">Could not list workflows: {error}</div>}
-
-      {workflows === null && !error && <div className="ctx-empty">Reading workflows…</div>}
-
-      {workflows?.length === 0 && (
-        <div className="page-empty">
-          <p className="page-empty-lead">
-            No workflows in <code>.igni/workflows/</code>. A workflow is a script that
-            drives several agents through named phases — useful when one prompt would have
-            to do too many things at once.
-          </p>
-        </div>
-      )}
-
-      {workflows?.map((wf) => (
-        <button
-          className="workflow-card"
-          key={wf.path || wf.name}
-          onClick={() => onRun(`/workflows ${wf.name ?? ""}`)}
-        >
-          <span className="workflow-head">
-            <code className="workflow-name">{wf.name ?? "(unnamed)"}</code>
-            <span className="workflow-phases">
-              {(wf.phases ?? []).length} {(wf.phases ?? []).length === 1 ? "phase" : "phases"}
-            </span>
-          </span>
-          {wf.description && <span className="workflow-desc">{wf.description}</span>}
-          {wf.whenToUse && <span className="workflow-when">{wf.whenToUse}</span>}
-          {(wf.phases ?? []).length > 0 && (
-            <span className="workflow-phase-list">
-              {(wf.phases ?? []).map((p, i) => (
-                <span className="workflow-phase" key={`${p.title ?? i}-${i}`}>
-                  {p.title ?? `Phase ${i + 1}`}
-                </span>
-              ))}
-            </span>
+    <Drawer
+      title="Workflows"
+      onClose={onClose}
+      levels={{
+        labels: selected ? [selected.name ?? "(unnamed)"] : [],
+        onTruncate: () => setSelected(null),
+      }}
+      // The workflow's page opens with its own name in the hero.
+      titleInBody={selected !== null}
+      headerExtras={
+        selected ? null : (
+          <PageHeaderControls
+            search={
+              all.length > 0
+                ? {
+                    value: query,
+                    onChange: setQuery,
+                    label: "Search workflows",
+                    placeholder: `Search ${countOf(all.length, "workflow")}…`,
+                  }
+                : undefined
+            }
+            filter={
+              all.length > 0
+                ? { options: WORKFLOW_FILTERS, current: filter, onPick: setFilter }
+                : undefined
+            }
+            sort={
+              all.length > 0 ? { options: WORKFLOW_SORTS, current: sort, onPick: setSort } : undefined
+            }
+            refresh={{
+              onClick: () => void load(),
+              busy: loading,
+              label: "Reload workflows",
+              title: "Read .igni/workflows/ again",
+            }}
+          />
+        )
+      }
+    >
+      {selected ? (
+        <WorkflowDetail workflow={selected} onRun={() => run(selected)} />
+      ) : (
+        <>
+          {error && (
+            <div className="msg-error msg-error--banner">Could not list workflows: {error}</div>
           )}
-        </button>
-      ))}
+
+          {workflows === null && !error && <CardGridSkeleton count={4} />}
+
+          {workflows?.length === 0 && (
+            <PageEmpty
+              title="No workflows yet"
+              hint={
+                <>
+                  Put one in <code>.igni/workflows/</code>. A workflow is a script that drives
+                  several agents through named phases — useful when one prompt would have to do
+                  too many things at once.
+                </>
+              }
+            />
+          )}
+
+          {all.length > 0 && shown.length === 0 && (
+            <PageEmpty
+              title="No workflows match"
+              hint={
+                query.trim() ? `Nothing named or described like “${query.trim()}”.` : "None from this source."
+              }
+              action={<Button onClick={clear}>Show all workflows</Button>}
+            />
+          )}
+
+          {shown.length > 0 && (
+            <CardGrid>
+              {shown.map((wf) => {
+                const name = wf.name ?? "(unnamed)";
+                const phases = wf.phases ?? [];
+                return (
+                  <EntityCard
+                    key={wf.path || wf.name}
+                    glyph={name}
+                    name={name}
+                    label={`Open ${name}`}
+                    onOpen={() => setSelected(wf)}
+                    action={<CardAction label={`Run ${name}`} onClick={() => run(wf)} />}
+                    description={wf.description || wf.whenToUse}
+                    chips={
+                      phases.length > 0 && (
+                        <>
+                          {phases.slice(0, CARD_PHASES).map((p, i) => (
+                            <HeroChip key={`${p.title ?? i}-${i}`}>{p.title ?? `Phase ${i + 1}`}</HeroChip>
+                          ))}
+                          {phases.length > CARD_PHASES && (
+                            <HeroChip>+{phases.length - CARD_PHASES} more</HeroChip>
+                          )}
+                        </>
+                      )
+                    }
+                    footer={
+                      <>
+                        <span className="entity-meta">{workflowSource(wf)}</span>
+                        <span className="entity-meta">{phaseCount(wf)}</span>
+                      </>
+                    }
+                  />
+                );
+              })}
+            </CardGrid>
+          )}
+        </>
+      )}
     </Drawer>
   );
 }

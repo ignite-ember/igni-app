@@ -1,13 +1,11 @@
 /** The list view's chrome: one header row — the Marketplace/Installed
- *  toggle on the left, and search, refresh and manage as quiet icon
- *  controls on the right. Search is an icon that expands inline, so the
- *  page opens with a single uncluttered row rather than a tabs row and a
- *  full-width search bar stacked on top of each other. */
+ *  toggle on the left, and search, filter, sort, refresh and manage as
+ *  quiet icon controls on the right. Both halves are the shared page
+ *  pieces (`PageTabs`, `PageHeaderControls`); this only says what the
+ *  plugins page puts in them. */
 
-import { useEffect, useRef, useState } from "react";
-
-import { FilterIcon, GearIcon, RefreshIcon, SearchIcon, SortIcon, XIcon } from "../../Icons";
-import { ControlMenu } from "../ControlMenu";
+import { PageHeaderControls } from "../../page/PageHeaderControls";
+import { PageTabs } from "../../page/PageTabs";
 import { ALL_CATEGORIES, categoryLabel, SORT_OPTIONS, type SortKey } from "./catalogView";
 import { CategoryIcon } from "./categoryIcon";
 import type { Tab } from "./pluginsView";
@@ -27,25 +25,15 @@ export function PluginsTabs({
   controls?: React.ReactNode;
 }) {
   return (
-    <div className="plugins-headerbar">
-      <div className="plugins-tabs">
-        <button
-          className={`plugins-tab ${tab === "marketplace" ? "active" : ""}`}
-          onClick={() => onSelect("marketplace")}
-        >
-          Marketplace
-          <span className="plugins-tab-count">{catalogCount}</span>
-        </button>
-        <button
-          className={`plugins-tab ${tab === "installed" ? "active" : ""}`}
-          onClick={() => onSelect("installed")}
-        >
-          Installed
-          <span className="plugins-tab-count">{installedCount}</span>
-        </button>
-      </div>
-      {controls}
-    </div>
+    <PageTabs<Tab>
+      tabs={[
+        { key: "marketplace", label: "Marketplace", count: catalogCount },
+        { key: "installed", label: "Installed", count: installedCount },
+      ]}
+      current={tab}
+      onSelect={onSelect}
+      controls={controls}
+    />
   );
 }
 
@@ -76,18 +64,6 @@ export function CatalogControls({
   onRefresh: () => void;
   onManage: () => void;
 }) {
-  // A search that is open while it has text, or while the person is using
-  // it; collapses back to an icon when empty and blurred.
-  const [expanded, setExpanded] = useState(false);
-  // Which dropdown is open, if any — only one at a time.
-  const [openMenu, setOpenMenu] = useState<"sort" | "filter" | null>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
-  const open = expanded || query.length > 0;
-
-  useEffect(() => {
-    if (expanded) inputRef.current?.focus();
-  }, [expanded]);
-
   const filterOptions = [
     { key: ALL_CATEGORIES, label: "All categories" },
     ...categories.map((c) => ({
@@ -98,86 +74,32 @@ export function CatalogControls({
   ];
 
   return (
-    <div className="plugins-controls">
-      {open ? (
-        <div className="plugins-searchbox">
-          <SearchIcon size={13} />
-          <input
-            ref={inputRef}
-            className="plugins-searchbox-input"
-            placeholder={`Search ${pluginCount} plugins across ${marketCount} marketplace${marketCount === 1 ? "" : "s"}…`}
-            value={query}
-            onChange={(e) => onQueryChange(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Escape") {
-                onQueryChange("");
-                setExpanded(false);
-              }
-            }}
-          />
-          <button
-            className="plugins-searchbox-clear"
-            aria-label="Close search"
-            onClick={() => {
-              onQueryChange("");
-              setExpanded(false);
-            }}
-          >
-            <XIcon size={10} />
-          </button>
-        </div>
-      ) : (
-        <button
-          className="kb-icon-btn"
-          aria-label="Search plugins"
-          title="Search plugins"
-          onClick={() => setExpanded(true)}
-        >
-          <SearchIcon />
-        </button>
-      )}
-
-      <ControlMenu
-        label="Filter"
-        active={filterBy !== ALL_CATEGORIES}
-        open={openMenu === "filter"}
-        onToggle={() => setOpenMenu(openMenu === "filter" ? null : "filter")}
-        onClose={() => setOpenMenu(null)}
-        icon={<FilterIcon />}
-        options={filterOptions}
-        current={filterBy}
-        onPick={(key) => onFilterChange(key)}
-      />
-      <ControlMenu
-        label="Sort"
-        active={sortBy !== "default"}
-        open={openMenu === "sort"}
-        onToggle={() => setOpenMenu(openMenu === "sort" ? null : "sort")}
-        onClose={() => setOpenMenu(null)}
-        icon={<SortIcon />}
-        options={SORT_OPTIONS}
-        current={sortBy}
-        onPick={(key) => onSortChange(key)}
-      />
-
-      <button
-        className="kb-icon-btn"
-        disabled={refreshing}
-        onClick={onRefresh}
-        aria-label="Refresh catalogs"
-        title="Re-fetch marketplace catalogs"
-      >
-        {refreshing ? <span className="plugins-spinner" aria-hidden="true" /> : <RefreshIcon />}
-      </button>
-      <button
-        className="kb-icon-btn"
-        onClick={onManage}
-        title="Manage marketplaces"
-        aria-label="Manage marketplaces"
-      >
-        <GearIcon />
-      </button>
-    </div>
+    <PageHeaderControls
+      search={{
+        value: query,
+        onChange: onQueryChange,
+        label: "Search plugins",
+        placeholder: `Search ${pluginCount} plugins across ${marketCount} marketplace${marketCount === 1 ? "" : "s"}…`,
+      }}
+      filter={{
+        options: filterOptions,
+        current: filterBy,
+        onPick: onFilterChange,
+        active: filterBy !== ALL_CATEGORIES,
+      }}
+      sort={{
+        options: SORT_OPTIONS,
+        current: sortBy,
+        onPick: onSortChange,
+        active: sortBy !== "default",
+      }}
+      refresh={{
+        onClick: onRefresh,
+        busy: refreshing,
+        label: "Refresh catalogs",
+        title: "Re-fetch marketplace catalogs",
+      }}
+      settings={{ onClick: onManage, label: "Manage marketplaces" }}
+    />
   );
 }
-

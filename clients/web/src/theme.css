@@ -233,7 +233,7 @@ button {
 .kb-tree-row,
 .mcp-tool-row,
 .panel-form-row,
-.plugin-detail-title-row,
+.entity-hero-title-row,
 .plugins-content-row,
 .plugins-install-row {
   display: flex;
@@ -260,8 +260,7 @@ button {
 .kb-stale-list,
 .mcp-tool-list,
 .plugins-list,
-.plugins-markets-list,
-.watcher-list {
+.plugins-markets-list {
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
@@ -279,8 +278,7 @@ button {
 .compact-card,
 .doc-cite-card,
 .plan-card,
-.prov-card,
-.workflow-card {
+.prov-card {
   display: flex;
   flex-direction: column;
   gap: var(--space-5);
@@ -393,18 +391,20 @@ button {
    text, no border or filled box, just a soft hover highlight — rather
    than a boxed control. flex:1 so it fills the row past the macOS
    traffic-light gutter. */
-/* Scoped to beat the later ``.btn`` rule (equal specificity, defined
-   further down the file, which would otherwise restore the border and
-   fill). */
 .sidebar-head .sidebar-new-chat {
   /* Sized to its text (not flex:1), so the hover highlight hugs the
      label instead of spanning the whole row. margin-left:auto pushes
      it to the right edge of the sidebar, clear of the traffic lights. */
   flex: 0 0 auto;
   margin-left: auto;
+  appearance: none;
   border: none;
   background: transparent;
   color: var(--fg);
+  font: inherit;
+  font-size: var(--text-md);
+  font-weight: 600;
+  cursor: pointer;
   text-align: left;
   border-radius: var(--radius-sm);
   padding: var(--space-3) var(--space-4);
@@ -985,6 +985,7 @@ button {
 }
 :root[data-host="tauri"] .app-header button,
 :root[data-host="tauri"] .app-header .chip,
+:root[data-host="tauri"] .app-header .header-search-pill,
 :root[data-host="tauri"] .app-header .file-pill,
 :root[data-host="tauri"] .app-header .file-pill-wrap,
 :root[data-host="tauri"] .app-header input,
@@ -1350,21 +1351,11 @@ button {
 /* The messages fade to nothing as they reach the top of the window, on a
    smooth (smoothstep-shaped) curve over the top 76px — gone at the very
    edge, fully there just below the header, and no point in between where
-   the opacity jumps. Cheaper than any blur: it is only a mask. */
-.conversation {
-  -webkit-mask-image: linear-gradient(
-    to bottom,
-    transparent 0px,
-    rgba(0, 0, 0, 0.03) 8px,
-    rgba(0, 0, 0, 0.12) 17px,
-    rgba(0, 0, 0, 0.27) 27px,
-    rgba(0, 0, 0, 0.46) 37px,
-    rgba(0, 0, 0, 0.65) 47px,
-    rgba(0, 0, 0, 0.82) 57px,
-    rgba(0, 0, 0, 0.94) 67px,
-    #000 76px
-  );
-  mask-image: linear-gradient(
+   the opacity jumps. Cheaper than any blur: it is only a mask.
+
+   One definition for the chat and every page, so the two cannot drift. */
+:root {
+  --top-fade-mask: linear-gradient(
     to bottom,
     transparent 0px,
     rgba(0, 0, 0, 0.03) 8px,
@@ -1378,15 +1369,39 @@ button {
   );
 }
 
-/* A page (plugins, MCPs, …) starts right under the header with its own
-   title; a fade tail would blur that title, so pages keep the flat bar. */
+/* ``--top-fade-shift`` lifts the curve and the header blur up together.
+   The chat leaves it at 0. A page sets it while its scroller is within
+   the first few pixels of the top (``PageShell``), so the title clears
+   both, and 24px of scroll later both are exactly where the chat has
+   them. At rest a page carries no mask at all (``data-scrolled`` is set
+   from the first pixel): a mask makes the list its own layer, which
+   redraws its text a shade differently, and at rest the page has to be
+   the page it always was. */
+.conversation,
+.page-body[data-scrolled] {
+  -webkit-mask-image: var(--top-fade-mask);
+  mask-image: var(--top-fade-mask);
+  -webkit-mask-size: 100% calc(100% + var(--top-fade-shift, 0px));
+  mask-size: 100% calc(100% + var(--top-fade-shift, 0px));
+  -webkit-mask-position: 0 calc(-1 * var(--top-fade-shift, 0px));
+  mask-position: 0 calc(-1 * var(--top-fade-shift, 0px));
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+}
+
+/* The blur goes the whole of its height (header plus tail, 82px) in the
+   same 24px, so at rest it is above the window and blurs nothing: a blur
+   over flat colour still moves it by a shade. */
 .main--paged .app-header-blur {
-  height: 100%;
-  background: var(--bg);
-  -webkit-backdrop-filter: none;
-  backdrop-filter: none;
-  -webkit-mask-image: none;
-  mask-image: none;
+  transform: translateY(calc(-3.5 * var(--top-fade-shift, 0px)));
+}
+
+/* The header's near-invisible fill (it only has to be there for the
+   Tauri drag region) is the page's own colour over a page, not black:
+   the same layer, but over the page at rest it blends to exactly the
+   page, where the old flat bar used to cover it. */
+.main--paged .app-header {
+  background: color-mix(in srgb, var(--bg) 0.4%, transparent);
 }
 
 /* Floating jump-to-latest button. Absolute-positioned inside the
@@ -1560,140 +1575,145 @@ button {
   }
 }
 
-/* Compact icon-only chip used for the find-in-conversation toggle —
-   sits in the header next to the project chip. ``.chip-search.active``
-   is applied while the search bar is open so the icon reads as a
-   toggle button instead of just a tap target. */
-.chip-search {
-  padding: var(--space-3) var(--space-4);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0;
+/* ── Find in the conversation ───────────────────────────────────────
+   The search icon's own outline grows into the field. ``.header-search``
+   keeps the icon's 30px slot in the header row; the pill inside it is
+   absolute and anchored at the slot's right edge, so opening stretches
+   its left border leftward over the chips and breadcrumb (it stacks
+   above them) without moving anything, up to the sidebar toggle:
+   ``--header-search-room``, measured in ``AppHeader``. */
+.header-search {
+  position: relative;
+  flex: 0 0 auto;
+  width: 30px;
+  height: 30px;
 }
-.chip-search.active {
-  background: color-mix(in srgb, var(--igni-orange) 18%, transparent);
-  border-color: color-mix(in srgb, var(--igni-orange) 55%, transparent);
-  color: var(--accent-orange-text, #f5a088);
-  box-shadow: 0 0 12px 0 color-mix(in srgb, var(--igni-orange) 35%, transparent);
-}
-
-/* ── Find-in-conversation bar ──────────────────────────────────────
-   Docked above the chat list while open. The input has the same
-   visual language as the composer chip controls; results live in a
-   short scrollable list with the matched substring highlighted in
-   the ember accent. */
-.chat-search-bar {
+.header-search-pill {
   position: absolute;
-  top: 58px;
-  left: 50%;
-  width: min(680px, 92%);
-  background: var(--bg-elevated, var(--bg));
-  border: 1px solid var(--border, rgba(255, 255, 255, 0.08));
-  border-radius: 14px;
-  box-shadow:
-    0 16px 40px rgba(0, 0, 0, 0.42),
-    0 4px 8px rgba(0, 0, 0, 0.22),
-    0 0 0 1px color-mix(in srgb, var(--igni-orange) 22%, transparent);
-  z-index: 25;
-  overflow: hidden;
-  /* Centering transform: at rest, the element is anchored by its
-     centerline. Every keyframe of ``search-bar-in`` re-includes
-     this -50% so the element stays centered throughout the
-     animation; without it, the bar snaps to ``left: 50%`` (its
-     LEFT edge at center, not centered) the instant the keyframes
-     finish — looks like a sideways jump after the slide-in. */
-  transform: translateX(-50%);
-  transform-origin: 50% -8px;
-  animation: search-bar-in 0.32s cubic-bezier(0.22, 1.18, 0.36, 1);
+  top: 0;
+  right: 0;
+  z-index: 2;
+  width: 30px;
+  height: 30px;
+  box-sizing: border-box;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--fg-muted);
+  transition:
+    width 0.26s cubic-bezier(0.32, 0.72, 0, 1),
+    height 0.26s cubic-bezier(0.32, 0.72, 0, 1),
+    top 0.26s cubic-bezier(0.32, 0.72, 0, 1),
+    border-color 0.2s ease,
+    background-color 0.2s ease;
 }
-@keyframes search-bar-in {
-  0% {
-    opacity: 0;
-    transform: translate(-50%, -14px) scale(0.94);
-    filter: blur(3px);
-    box-shadow:
-      0 0 0 1px transparent,
-      0 0 0 transparent;
-  }
-  55% {
-    opacity: 1;
-    filter: blur(0);
-  }
-  100% {
-    opacity: 1;
-    transform: translate(-50%, 0) scale(1);
-    filter: blur(0);
-    box-shadow:
-      0 16px 40px rgba(0, 0, 0, 0.42),
-      0 4px 8px rgba(0, 0, 0, 0.22),
-      0 0 0 1px color-mix(in srgb, var(--igni-orange) 22%, transparent);
-  }
+.header-search-pill:hover {
+  border-color: var(--border);
 }
-/* Subtle ember glow that pulses once on open to draw the eye. */
-.chat-search-bar::after {
-  content: "";
+/* Open, the field is taller than the closed icon, grown evenly above
+   and below the slot so the row's centre line holds. */
+.header-search[data-open] .header-search-pill {
+  top: -5px;
+  height: 40px;
+  width: var(--header-search-room, 560px);
+  border-color: var(--border);
+  background: var(--bg);
+  color: var(--fg);
+}
+/* The glyph rides the pill's left edge: the whole closed pill, then the
+   field's leading icon. Clicking it again closes. */
+.header-search-icon {
   position: absolute;
-  inset: -1px;
-  border-radius: inherit;
-  pointer-events: none;
-  box-shadow: 0 0 32px 4px color-mix(in srgb, var(--igni-orange) 28%, transparent);
-  opacity: 0;
-  animation: search-bar-glow 0.9s ease-out 0.05s;
-}
-@keyframes search-bar-glow {
-  0%, 100% { opacity: 0; }
-  40% { opacity: 1; }
-}
-.chat-search-row {
-  padding: var(--space-4) var(--space-5);
-}
-.chat-search-icon {
+  top: 50%;
+  left: 0;
+  transform: translateY(-50%);
+  width: 28px;
+  height: 28px;
   display: flex;
   align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+.header-search:not([data-open]) .header-search-icon:hover {
+  background: var(--bg-surface);
+  color: var(--fg);
+}
+.header-search[data-open] .header-search-icon {
+  left: 4px;
   color: var(--fg-faint);
-  padding: 0 var(--space-1);
+}
+.header-search-icon:focus-visible {
+  outline: 2px solid var(--accent-blue);
+  outline-offset: 1px;
+}
+
+/* The field itself, inside the pill after the glyph. */
+.chat-search-bar {
+  height: 100%;
+}
+.chat-search-row {
+  height: 100%;
+  gap: var(--space-2);
+  padding: 0 var(--space-3) 0 32px;
+  overflow: hidden;
+  animation: chat-search-row-in 0.2s ease-out 0.08s both;
+}
+@keyframes chat-search-row-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 .chat-search-input {
   flex: 1;
+  min-width: 60px;
   background: transparent;
   border: none;
   outline: none;
   color: var(--fg);
   font-size: var(--text-md);
   font-family: inherit;
-  padding: var(--space-2) 0;
+  padding: 0 var(--space-2);
 }
 .chat-search-input::placeholder {
   color: var(--fg-faint);
 }
 .chat-search-status {
-  font-size: var(--text-sm);
+  flex-shrink: 0;
+  font-size: var(--text-xs);
   color: var(--fg-faint);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
-  padding: 0 var(--space-2);
+  padding: 0 var(--space-1);
 }
 
-/* This chat / All chats scope switch. */
+/* This chat / All chats: a compact segmented switch that fits the pill. */
 .chat-search-scope {
   display: inline-flex;
-  gap: 2px;
+  gap: 1px;
   padding: 2px;
   background: var(--bg-raised);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-pill);
   flex-shrink: 0;
 }
 .chat-search-scope-btn {
   appearance: none;
   border: none;
   background: transparent;
-  color: var(--fg-faint);
+  color: var(--fg-muted);
   font: inherit;
   font-size: var(--text-xs);
   font-weight: 600;
-  padding: 3px 9px;
-  border-radius: calc(var(--radius-sm) - 2px);
+  height: 26px;
+  padding: 0 var(--space-3);
+  border-radius: var(--radius-pill);
   cursor: pointer;
   white-space: nowrap;
 }
@@ -1718,49 +1738,59 @@ button {
 }
 .chat-search-nav,
 .chat-search-close {
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 22px;
-  height: 22px;
+  width: 28px;
+  height: 28px;
   background: transparent;
   border: none;
-  border-radius: 6px;
+  border-radius: var(--radius-pill);
   color: var(--fg-faint);
   cursor: pointer;
   padding: 0;
 }
 .chat-search-nav:hover:not(:disabled),
 .chat-search-close:hover {
-  background: color-mix(in srgb, var(--fg) 8%, transparent);
+  background: var(--bg-surface);
   color: var(--fg);
 }
 .chat-search-nav:disabled {
   opacity: 0.35;
   cursor: default;
 }
+/* Matches drop under the pill, right-aligned with it, in a quiet card. */
 .chat-search-results {
+  position: absolute;
+  top: calc(100% + var(--space-3));
+  right: 0;
+  width: min(100%, 640px);
+  box-sizing: border-box;
   list-style: none;
   margin: 0;
-  padding: var(--space-2) 0 var(--space-3);
+  padding: var(--space-2) 0;
   max-height: 280px;
   overflow-y: auto;
-  border-top: 1px solid color-mix(in srgb, var(--fg) 6%, transparent);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-pop);
 }
 .chat-search-result {
   display: flex;
   align-items: baseline;
   gap: var(--space-5);
-  padding: var(--space-3) var(--space-7);
+  padding: var(--space-3) var(--space-6);
   cursor: pointer;
   font-size: var(--text-sm);
   line-height: 1.4;
 }
 .chat-search-result:hover {
-  background: color-mix(in srgb, var(--fg) 5%, transparent);
+  background: var(--bg-surface);
 }
 .chat-search-result.active {
-  background: color-mix(in srgb, var(--igni-orange) 14%, transparent);
+  background: var(--bg-raised);
 }
 .chat-search-result.unreachable {
   opacity: 0.45;
@@ -1771,11 +1801,11 @@ button {
   font-size: var(--text-xs);
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  color: var(--fg-faint);
+  color: var(--fg-muted);
   min-width: 38px;
 }
 .chat-search-role-user {
-  color: color-mix(in srgb, var(--igni-orange) 75%, var(--fg-faint));
+  color: var(--accent-orange-text);
 }
 .chat-search-snippet {
   flex: 1;
@@ -1797,6 +1827,13 @@ button {
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
   padding-left: var(--space-4);
+}
+@media (prefers-reduced-motion: reduce) {
+  .header-search-pill,
+  .chat-search-row {
+    transition: none;
+    animation: none;
+  }
 }
 
 @keyframes caret-blink {
@@ -2014,11 +2051,6 @@ button {
   flex-wrap: nowrap;
 }
 
-.msg-user-actions .btn-sm {
-  white-space: nowrap;
-  flex-shrink: 0;
-}
-
 .msg-user:hover .msg-user-actions,
 .msg-user-actions:focus-within {
   opacity: 1;
@@ -2197,13 +2229,11 @@ button {
  * scrolling up to find the user message and re-editing it from
  * scratch — see [[feedback-interrupted-messages]].
  *
- * Visual treatment: muted background (the same raised-tone as the
- * other in-bubble UI affordances), a small left-border accent in
- * the reason's colour, italic label, and three buttons sized to
- * the bubble's existing pill-button aesthetic. ``:focus-visible``
- * gets a clear ring so keyboard-only users see the focused action
- * after the auto-focus on mount. The fade-in animation is a CSS
- * transition keyed off the banner mount — no JS animation lib.
+ * Visual treatment: the quiet surface the rest of the chat uses — a
+ * soft fill, no border — with the italic label on the left and the
+ * shared Button kit on the right. ``:focus-visible`` gets a clear
+ * ring so keyboard-only users see the focus after the auto-focus on
+ * mount. The fade-in is a CSS animation keyed off the mount.
  */
 .msg-assistant-interrupted {
   display: flex;
@@ -2211,10 +2241,10 @@ button {
   align-items: center;
   gap: 6px 10px;
   margin-top: var(--space-5);
-  padding: var(--space-4) var(--space-6);
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--border-soft);
-  background: color-mix(in srgb, var(--igni-orange) 6%, transparent);
+  padding: var(--space-3) var(--space-3) var(--space-3) var(--space-6);
+  border-radius: 12px;
+  border: none;
+  background: color-mix(in srgb, var(--fg) 4%, transparent);
   color: var(--fg);
   font-size: var(--text-md);
   line-height: 1.4;
@@ -2226,16 +2256,15 @@ button {
   box-shadow: 0 0 0 2px var(--accent-blue);
 }
 
-/* Reason tint — mirrors the .msg-error border/bg blend. Default
-   is a soft orange wash (cancelled). Errored leans redder,
-   abandoned leans warmer. Low alpha so the banner reads as a
-   footer on the message, not a separate alert box. */
+/* Reason tint: the faintest wash of the reason's colour over the
+   same quiet surface, so the banner reads as a footer on the message,
+   not an alert box. Cancelled stays neutral. */
 .msg-assistant-interrupted--errored {
-  background: color-mix(in srgb, var(--danger, #cf222e) 7%, transparent);
+  background: color-mix(in srgb, var(--danger, #cf222e) 6%, transparent);
 }
 
 .msg-assistant-interrupted--abandoned {
-  background: color-mix(in srgb, var(--warning, #d9a644) 7%, transparent);
+  background: color-mix(in srgb, var(--warning, #d9a644) 6%, transparent);
 }
 
 .msg-assistant-interrupted-label {
@@ -2724,6 +2753,793 @@ button {
 
 /* ── Tool cards ─────────────────────────────────────────────────── */
 
+/* ── Activity group ────────────────────────────────────────────────
+   A run of tool calls and thinking between two replies, as one quiet
+   container: the step it is on (or what it did, as chips), a marker per
+   step, and the latest thought under them when collapsed; a timeline of
+   the cards when open (chatItems/ActivityGroupView.tsx).
+
+   Colour carries meaning only. Each kind of step has a hue family (its
+   marker's tint and icon); how a step went is a badge on it: a green
+   check, a red cross, an ember ring while it runs. */
+.activity-group {
+  /* Opaque, so a marker can ring itself in it over the timeline's line. */
+  --activity-bg: color-mix(in srgb, var(--bg-surface) 55%, var(--bg));
+  --kind-command: #4fb6a7;
+  --kind-read: #6aa3f7;
+  --kind-edit: #d9a644;
+  --kind-search: #b5b06a;
+  --kind-fetch: #e58fb7;
+  --kind-mcp: #5bbfe0;
+  --kind-agent: #a991f0;
+  --kind-other: #a5a49e;
+  --kind-thinking: #aaa4bd;
+  --step-ok: var(--success);
+  --step-ok-text: var(--accent-green-text);
+  --step-fail: var(--danger);
+  --step-fail-text: var(--danger-text);
+  --kind: var(--kind-other);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius);
+  background: var(--activity-bg);
+  font-size: var(--text-md);
+}
+
+:root[data-theme="light"] .activity-group,
+:root[data-theme="auto"][data-os-prefers-light="1"] .activity-group {
+  --kind-command: #1b7a6d;
+  --kind-read: #2563c9;
+  --kind-edit: #946300;
+  --kind-search: #6c6820;
+  --kind-fetch: #b03a78;
+  --kind-mcp: #0d7ea8;
+  --kind-agent: #6a4fc6;
+  --kind-other: #64635f;
+  --kind-thinking: #716b85;
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) .activity-group {
+    --kind-command: #1b7a6d;
+    --kind-read: #2563c9;
+    --kind-edit: #946300;
+    --kind-search: #6c6820;
+    --kind-fetch: #b03a78;
+    --kind-mcp: #0d7ea8;
+    --kind-agent: #6a4fc6;
+    --kind-other: #64635f;
+    --kind-thinking: #716b85;
+  }
+}
+
+.activity-group .glyph-command { --kind: var(--kind-command); }
+.activity-group .glyph-read { --kind: var(--kind-read); }
+.activity-group .glyph-edit { --kind: var(--kind-edit); }
+.activity-group .glyph-search { --kind: var(--kind-search); }
+.activity-group .glyph-fetch { --kind: var(--kind-fetch); }
+.activity-group .glyph-mcp { --kind: var(--kind-mcp); }
+.activity-group .glyph-agent { --kind: var(--kind-agent); }
+.activity-group .glyph-other { --kind: var(--kind-other); }
+.activity-group .glyph-thinking { --kind: var(--kind-thinking); }
+
+.activity-group.failed {
+  border-color: color-mix(in srgb, var(--danger) 22%, var(--border-soft));
+}
+
+.activity-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  width: 100%;
+  min-height: 34px;
+  padding: var(--space-4) var(--space-7) var(--space-2);
+  border: 0;
+  border-radius: calc(var(--radius) - 1px) calc(var(--radius) - 1px) 0 0;
+  background: transparent;
+  color: var(--fg-muted);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  user-select: none;
+}
+
+.activity-head:hover {
+  color: var(--fg);
+}
+
+.activity-head:hover .activity-chevron {
+  color: var(--fg);
+}
+
+.activity-head:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+/* ── The markers ── */
+.activity-markers {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  /* Margin, not padding: the strip's measured width is its markers' room. */
+  margin: var(--space-2) var(--space-7) var(--space-5);
+}
+
+.activity-more {
+  flex-shrink: 0;
+  min-width: 31px;
+  height: 22px;
+  padding: 0 var(--space-2);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--fg-faint);
+  font: inherit;
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+
+.activity-more:hover {
+  border-color: var(--border);
+  color: var(--fg);
+}
+
+.step-marker-slot {
+  position: relative;
+  display: flex;
+  flex-shrink: 0;
+}
+
+.step-marker-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  cursor: pointer;
+}
+
+.step-marker-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 0;
+}
+
+.step-marker-btn:hover .step-marker,
+.step-marker-btn:focus-visible .step-marker {
+  transform: translateY(-1px) scale(1.12);
+}
+
+.step-marker {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 19px;
+  height: 19px;
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--kind) 17%, var(--activity-bg));
+  color: var(--kind);
+  transition: transform 0.12s ease;
+}
+
+.step-marker.glyph-thinking {
+  border-radius: var(--radius-circle);
+  background: color-mix(in srgb, var(--kind) 12%, var(--activity-bg));
+}
+
+/* The result badge, cut out of the marker's corner. */
+.step-badge {
+  position: absolute;
+  right: -2px;
+  bottom: -2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 10px;
+  height: 10px;
+  border-radius: var(--radius-circle);
+  background: var(--step-ok);
+  color: var(--activity-bg);
+  box-shadow: 0 0 0 1.5px var(--activity-bg);
+}
+
+.step-badge svg {
+  stroke-width: 3;
+}
+
+/* A failure stands out from across the row: red through and through. */
+.step-marker.state-failed {
+  background: color-mix(in srgb, var(--step-fail) 22%, var(--activity-bg));
+  color: var(--step-fail-text);
+  outline: 1px solid color-mix(in srgb, var(--step-fail) 70%, transparent);
+  outline-offset: -1px;
+}
+
+.step-marker.state-failed .step-badge {
+  background: var(--step-fail);
+}
+
+/* Never ran: refused in the approval dialog. Faded, with a dash. */
+.step-marker.state-rejected {
+  opacity: 0.55;
+}
+
+.step-marker.state-rejected .step-badge {
+  background: var(--fg-faint);
+}
+
+/* Running: an ember ring breathing round the marker. */
+.step-marker.state-live {
+  background: color-mix(in srgb, var(--accent) 18%, var(--activity-bg));
+  color: var(--accent);
+}
+
+.step-marker.glyph-thinking.state-live {
+  background: color-mix(in srgb, var(--kind) 20%, var(--activity-bg));
+  color: var(--kind);
+}
+
+.step-marker.state-live::after {
+  content: "";
+  position: absolute;
+  inset: -3px;
+  border: 1.5px solid var(--accent);
+  border-radius: 7px;
+  animation: step-pulse 1.4s ease-in-out infinite;
+}
+
+.step-marker.glyph-thinking.state-live::after {
+  border-color: var(--kind);
+  border-radius: var(--radius-circle);
+}
+
+@keyframes step-pulse {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.25;
+    transform: scale(1.12);
+  }
+}
+
+
+.step-tooltip {
+  position: absolute;
+  bottom: calc(100% + 4px);
+  left: -4px;
+  z-index: 20;
+  max-width: 380px;
+  padding: 3px var(--space-4);
+  border-radius: 6px;
+  background: var(--fg);
+  color: var(--bg);
+  font-size: var(--text-xs);
+  line-height: 16px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
+}
+
+/* ── The labels ── */
+.activity-label {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.activity-label-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.activity-status {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 14px;
+  height: 14px;
+}
+
+.activity-status.state-done {
+  color: var(--step-ok-text);
+}
+
+.activity-status.state-failed {
+  color: var(--step-fail-text);
+}
+
+.activity-status.state-rejected {
+  color: var(--fg-faint);
+}
+
+.activity-live-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: var(--radius-circle);
+  background: var(--accent);
+  animation: pulse-dot 1.4s ease infinite;
+}
+
+.activity-kind {
+  display: flex;
+  flex-shrink: 0;
+  color: var(--kind);
+}
+
+.activity-tool-name {
+  flex-shrink: 0;
+  color: var(--fg);
+  font-weight: 500;
+}
+
+.activity-tool-args {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  color: var(--fg-muted);
+}
+
+.activity-step-tail {
+  flex-shrink: 0;
+  color: var(--fg-faint);
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.activity-step-tail.state-failed {
+  color: var(--step-fail-text);
+  font-weight: 500;
+}
+
+.activity-chips {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  min-width: 0;
+}
+
+.activity-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-shrink: 0;
+  height: 22px;
+  padding: 0 var(--space-4) 0 var(--space-3);
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--kind) 11%, transparent);
+  color: var(--fg-muted);
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.activity-chip > svg {
+  color: var(--kind);
+}
+
+.activity-chip-count {
+  color: var(--fg);
+  font-weight: 500;
+}
+
+.activity-chip-ok {
+  display: flex;
+  color: var(--step-ok-text);
+}
+
+.activity-chip.activity-failed {
+  background: color-mix(in srgb, var(--step-fail) 14%, transparent);
+  color: var(--step-fail-text);
+  font-weight: 500;
+}
+
+.activity-chip.activity-failed > svg {
+  color: inherit;
+}
+
+.activity-meta {
+  flex-shrink: 0;
+  margin-left: auto;
+  color: var(--fg-faint);
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.activity-chevron {
+  flex-shrink: 0;
+  color: var(--fg-faint);
+}
+
+/* ── The live window ──
+   The last lines of a streaming thought or a command's output. The
+   mask is as tall as the window at its fullest and sits at its bottom,
+   so the top line fades only once the window is full. */
+.live-window {
+  --live-line: 18px;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  max-height: calc(var(--live-lines) * var(--live-line));
+  overflow: hidden;
+  color: var(--fg-faint);
+  font-size: var(--text-sm);
+  line-height: var(--live-line);
+  overflow-wrap: anywhere;
+  -webkit-mask-image: linear-gradient(to bottom, transparent, #000 var(--live-line));
+  mask-image: linear-gradient(to bottom, transparent, #000 var(--live-line));
+  -webkit-mask-size: 100% calc(var(--live-lines) * var(--live-line));
+  mask-size: 100% calc(var(--live-lines) * var(--live-line));
+  -webkit-mask-position: bottom;
+  mask-position: bottom;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+}
+
+.live-window.mono {
+  --live-line: 17px;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  white-space: pre-wrap;
+}
+
+/* ── Under the markers: the thinking, and a command's output ── */
+.activity-feed {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin: calc(-1 * var(--space-1)) var(--space-7) var(--space-5);
+}
+
+.activity-thought-line {
+  display: grid;
+  grid-template-columns: 14px minmax(0, 1fr) auto;
+  align-items: start;
+  column-gap: var(--space-4);
+}
+
+.activity-thought-icon {
+  display: flex;
+  padding-top: 3px;
+  color: var(--kind-thinking);
+}
+
+.activity-thought-line.live .activity-thought-icon {
+  animation: pulse-dot 1.8s ease infinite;
+}
+
+.activity-thought-line .live-window {
+  color: var(--fg-muted);
+}
+
+.activity-thinking-toggle {
+  align-self: end;
+  padding: 0 var(--space-2);
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--fg-faint);
+  font: inherit;
+  font-size: var(--text-xs);
+  line-height: 18px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.activity-thinking-toggle:hover {
+  color: var(--fg);
+  text-decoration: underline;
+}
+
+.activity-thinking-toggle:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 0;
+}
+
+.activity-thoughts-full {
+  max-height: 320px;
+  overflow-y: auto;
+  color: var(--fg-muted);
+  font-size: var(--text-sm);
+  line-height: 18px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.activity-thoughts-full p {
+  margin: 0 0 var(--space-3);
+}
+
+.activity-thoughts-full p:last-child {
+  margin-bottom: 0;
+}
+
+.activity-output-line {
+  display: grid;
+  grid-template-columns: 14px minmax(0, 1fr);
+  align-items: start;
+  column-gap: var(--space-4);
+}
+
+.activity-output-icon {
+  display: flex;
+  padding-top: 5px;
+  color: var(--kind-command);
+}
+
+.activity-output-line .live-window {
+  padding: var(--space-1) var(--space-4);
+  max-height: calc(var(--live-lines) * var(--live-line) + 2 * var(--space-1));
+  border-left: 2px solid color-mix(in srgb, var(--kind-command) 60%, transparent);
+  border-radius: 0 6px 6px 0;
+  background: var(--bg-inset);
+  color: var(--fg-muted);
+  -webkit-mask-image: none;
+  mask-image: none;
+}
+
+/* ── The edited files ── */
+.activity-files {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  padding: 0 var(--space-7) var(--space-5) var(--space-7);
+}
+
+.activity-files-label {
+  color: var(--fg-faint);
+  font-size: var(--text-xs);
+}
+
+.activity-file-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  max-width: 260px;
+  padding: 1px var(--space-4);
+  border: 1px solid color-mix(in srgb, var(--kind-edit) 30%, var(--border-soft));
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--kind-edit) 7%, var(--bg-surface));
+  color: var(--fg-muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  line-height: 18px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.activity-file-chip svg {
+  color: var(--kind-edit);
+}
+
+button.activity-file-chip {
+  cursor: pointer;
+}
+
+button.activity-file-chip:hover {
+  border-color: var(--kind-edit);
+  color: var(--fg);
+}
+
+button.activity-file-chip:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* ── The timeline ── */
+.activity-body {
+  padding: var(--space-3) var(--space-6) var(--space-4) var(--space-3);
+  border-top: 1px solid var(--border-soft);
+}
+
+.activity-body[hidden] {
+  display: none;
+}
+
+.activity-timeline {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.activity-step {
+  --rail-mid: 20px;
+  position: relative;
+  display: grid;
+  grid-template-columns: 26px minmax(0, 1fr) auto;
+  column-gap: var(--space-2);
+  padding: 2px 0;
+  border-radius: var(--radius-sm);
+}
+
+.activity-step.state-failed {
+  background: color-mix(in srgb, var(--step-fail) 6%, transparent);
+}
+
+/* The thin line joining the markers, from the first to the last. */
+.activity-step::before {
+  content: "";
+  position: absolute;
+  left: 12.5px;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--border);
+}
+
+.activity-step:first-child::before {
+  top: var(--rail-mid);
+}
+
+.activity-step:last-child::before {
+  bottom: auto;
+  height: var(--rail-mid);
+}
+
+.activity-step:only-child::before {
+  display: none;
+}
+
+.activity-rail {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 36px;
+}
+
+.activity-rail .step-marker {
+  box-shadow: 0 0 0 3px var(--activity-bg);
+}
+
+.activity-step.state-failed .activity-rail .step-marker {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--step-fail) 6%, var(--activity-bg));
+}
+
+.activity-step-body {
+  min-width: 0;
+}
+
+.activity-step-time {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-3);
+  min-width: 26px;
+  height: 36px;
+  color: var(--fg-faint);
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+.activity-step-exit {
+  color: var(--step-fail-text);
+  font-weight: 500;
+}
+
+.activity-step:focus {
+  outline: none;
+}
+
+.activity-step:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.activity-step.flash {
+  animation: activity-step-flash 1.6s ease-out;
+}
+
+@keyframes activity-step-flash {
+  0%,
+  35% {
+    background: color-mix(in srgb, var(--accent) 13%, transparent);
+  }
+  100% {
+    background: transparent;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .activity-step.flash {
+    animation: none;
+    background: color-mix(in srgb, var(--accent) 10%, transparent);
+  }
+}
+
+/* The rail's marker is the step's status: the card's own dot steps
+   aside, and a card sits flat on the timeline until it is opened. */
+.activity-timeline .tool-status {
+  display: none;
+}
+
+.activity-timeline .tool-card:not(:has(.tool-card-body)) {
+  border-color: transparent;
+  background: transparent;
+}
+
+.activity-timeline .tool-card-header {
+  min-height: 36px;
+}
+
+.activity-timeline .tool-card:not(:has(.tool-card-body)):hover {
+  background: color-mix(in srgb, var(--fg) 4%, transparent);
+}
+
+.activity-timeline .agent-dispatch {
+  display: flex;
+  align-items: center;
+  min-height: 36px;
+  padding: 0 13px;
+}
+
+.activity-thought .thinking-toggle {
+  min-height: 36px;
+  width: 100%;
+  padding: 0 13px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--fg-faint);
+  font: inherit;
+  font-size: var(--text-sm);
+  text-align: left;
+}
+
+.activity-thought .thinking-toggle:hover {
+  color: var(--fg-muted);
+}
+
+.activity-thought .thinking-toggle:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.activity-thought-preview {
+  margin: -6px 13px var(--space-3) 27px;
+  color: var(--fg-muted);
+}
+
+.activity-thought .msg-thinking {
+  margin: 0 13px var(--space-4) 27px;
+  font-size: var(--text-md);
+}
+
+/* Under reduced motion every pulse holds still: the ring, the dot and
+   the thought's icon stay, at full strength. Last, so it wins. */
+@media (prefers-reduced-motion: reduce) {
+  .step-marker.state-live::after,
+  .activity-live-dot,
+  .activity-thought-line.live .activity-thought-icon {
+    animation: none;
+  }
+
+  .step-marker {
+    transition: none;
+  }
+}
+
 .tool-card {
   border: 1px solid var(--border-soft);
   border-radius: var(--radius);
@@ -3181,76 +3997,19 @@ button {
   font-style: italic;
 }
 
-/* ── Stop buttons ──────────────────────────────────────────────
-   Two flavours, same look: red-tinted pill with a filled square
-   icon. ``.orch-stop-team`` sits in the team-progress header and
-   nukes the whole run; ``.orch-stop-agent`` sits in each running
-   agent header and cancels only that sub-agent (siblings continue). */
+/* ── Stop and Retry ─────────────────────────────────────────────
+   Both are the shared Button (Stop its danger variant, Retry its
+   secondary one); these classes only space them from the header.
+   ``.orch-stop-team`` sits in the team-progress header and stops the
+   whole run; ``.orch-stop-agent`` sits in each running agent header
+   and cancels only that sub-agent (siblings continue). Retry appears
+   only when the agent ended in error or was stopped. */
 .orch-stop-btn {
-  appearance: none;
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
   margin-left: var(--space-4);
-  padding: var(--space-2) var(--space-5);
-  font-family: var(--font-ui);
-  font-size: var(--text-sm);
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  border-radius: 6px;
-  cursor: pointer;
-  border: 1px solid color-mix(in srgb, var(--accent-red, #e54848) 40%, transparent);
-  background: color-mix(in srgb, var(--accent-red, #e54848) 12%, transparent);
-  color: var(--accent-red-text);
-  flex-shrink: 0;
 }
 
-.orch-stop-btn:hover {
-  background: color-mix(in srgb, var(--accent-red, #e54848) 22%, transparent);
-  border-color: color-mix(in srgb, var(--accent-red, #e54848) 60%, transparent);
-}
-
-.orch-stop-btn:active {
-  transform: translateY(1px);
-}
-
-.orch-stop-agent {
-  /* Sits inline as the last child of .orch-agent-head, after the
-     counts cluster — flex layout keeps the buttons disjoint and
-     prevents the overlap we had with absolute positioning. */
-  padding: 3px 8px;
-  font-size: var(--text-xs);
-}
-
-/* Retry button — appears only when the agent ended in error or was
-   stopped by the user. Same shape as Stop but tinted with the ember
-   accent so it doesn't read as a destructive action. */
 .orch-retry-btn {
-  appearance: none;
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
   margin-left: var(--space-3);
-  padding: 3px 8px;
-  font-family: var(--font-ui);
-  font-size: var(--text-xs);
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  border-radius: 6px;
-  cursor: pointer;
-  border: 1px solid color-mix(in srgb, var(--igni-orange) 40%, transparent);
-  background: color-mix(in srgb, var(--igni-orange) 12%, transparent);
-  color: var(--accent-orange-text, #f5a088);
-  flex-shrink: 0;
-}
-
-.orch-retry-btn:hover {
-  background: color-mix(in srgb, var(--igni-orange) 22%, transparent);
-  border-color: color-mix(in srgb, var(--igni-orange) 60%, transparent);
-}
-
-.orch-retry-btn:active {
-  transform: translateY(1px);
 }
 
 /* Inline retry editor — opens beneath the agent header when the user
@@ -3946,36 +4705,6 @@ button {
   flex-wrap: wrap;
 }
 
-.plan-card-btn {
-  font-family: var(--font-ui, inherit);
-  font-size: var(--text-sm);
-  font-weight: 600;
-  padding: 7px 14px;
-  border-radius: 6px;
-  border: 1px solid transparent;
-  cursor: pointer;
-  transition: filter 0.12s ease;
-}
-
-.plan-card-btn:hover {
-  filter: brightness(1.08);
-}
-
-.plan-card-btn:active {
-  filter: brightness(0.92);
-}
-
-.plan-card-btn--approve {
-  background: var(--accent-green, #10b981);
-  color: white;
-}
-
-.plan-card-btn--reject {
-  background: transparent;
-  color: var(--fg);
-  border-color: var(--border-soft);
-}
-
 .plan-card-footer {
   font-size: var(--text-sm);
   font-weight: 500;
@@ -4596,9 +5325,9 @@ button {
   flex-wrap: wrap;
 }
 
-/* The session and context moved to the composer dock; watcher, backend
-   and extension chips only appear when there is something to say. With
-   none of them the row collapses rather than leaving a floating gap. */
+/* The session and context moved to the composer dock and the status
+   chips to the header; the update notice only appears when there is
+   one. Without it the row collapses rather than leaving a floating gap. */
 .statusline:empty {
   display: none;
   margin: 0;
@@ -4710,6 +5439,7 @@ button {
    from the extension package entirely, which would have made an
    extension the cause of its host's accessibility findings. */
 .btn:focus-visible,
+.sidebar-new-chat:focus-visible,
 .ui-item:focus-visible,
 .file-pill-menu-item:focus-visible,
 .mention-item:focus-visible,
@@ -4984,62 +5714,98 @@ button {
   padding: var(--space-1) var(--space-3);
 }
 
+/* The legacy ``.btn`` family, drawn exactly like the shared Button kit
+   (``.button`` below): the app itself no longer spells these classes,
+   but an extension's ``Button`` from the SDK floor does, and it should
+   sit in the host looking like every other button. ``.btn`` is the
+   kit's secondary (soft quiet fill), ``.btn-primary`` its primary (the
+   page's inverse), ``.btn-danger`` quiet red text, ``.btn-quiet`` and
+   ``.btn-warn`` quiet text in their colour; ``.btn-sm`` is the kit's
+   28px size and ``.btn-xs`` a dense 24px one. */
 .btn {
   appearance: none;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--bg-surface);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  height: 32px;
+  padding: 0 var(--space-6);
+  margin: 0;
+  border: none;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--fg) 7%, transparent);
   color: var(--fg);
-  padding: 7px 14px;
-  font-size: var(--text-md);
-  font-weight: 600;
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+  text-decoration: none;
   cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease, opacity 0.12s ease;
 }
 
 .btn:hover:not(:disabled) {
-  background: var(--bg-raised);
+  background: color-mix(in srgb, var(--fg) 13%, transparent);
 }
 
 .btn:disabled,
 .btn[aria-disabled="true"] {
   opacity: 0.45;
   cursor: not-allowed;
-  background: var(--bg-surface);
-  box-shadow: none;
 }
 
-.btn-primary {
-  background: var(--igni-gradient);
-  border: none;
-  color: #fff;
+.btn.btn-primary {
+  background: var(--fg);
+  color: var(--bg);
 }
 
-/* Disabled primary needs to stay recognizable as a button — without
-   this it collapses to a borderless rect on the same bg colour as
-   the dialog and effectively disappears. */
-.btn-primary:disabled,
-.btn-primary[aria-disabled="true"] {
-  opacity: 0.6;
-  background: var(--igni-gradient);
-  color: rgba(255, 255, 255, 0.85);
+.btn.btn-primary:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--fg) 86%, var(--bg));
 }
 
-.btn-primary:hover:not(:disabled) {
-  box-shadow: 0 6px 18px rgba(238, 97, 56, 0.3);
-  background: var(--igni-gradient);
+.btn.btn-danger,
+.btn.btn-quiet,
+.btn.btn-warn {
+  background: transparent;
 }
 
-.btn-danger {
-  border-color: color-mix(in srgb, var(--danger) 55%, transparent);
-  /* --danger is 3.74:1 against the raised panel this button sits on;
-   * --danger-text is the same hue at 4.50. The border keeps the
-   * stronger colour. F138. */
+.btn.btn-danger {
   color: var(--danger-text, var(--danger));
 }
 
-.btn-sm {
-  padding: var(--space-2) var(--space-5);
-  font-size: var(--text-sm);
+.btn.btn-danger:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--danger) 14%, transparent);
+}
+
+.btn.btn-quiet {
+  color: var(--fg-muted);
+}
+
+.btn.btn-quiet:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--fg) 10%, transparent);
+  color: var(--fg);
+}
+
+.btn.btn-warn {
+  color: var(--accent-orange-text, var(--warning));
+}
+
+.btn.btn-warn:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--warning) 14%, transparent);
+}
+
+.btn.btn-sm {
+  height: 28px;
+  padding: 0 var(--space-5);
+  border-radius: var(--radius-sm);
+}
+
+.btn.btn-xs {
+  height: 24px;
+  padding: 0 var(--space-4);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-xs);
 }
 
 .overlay {
@@ -5248,12 +6014,28 @@ button {
 /* A page that still has a header row is still cleared by it. Nothing
    in this panel does any more; a page that grows one will not have
    to remember why its hierarchy overlaps its buttons. */
-.page:has(> .page-head) {
+.page:has(> .page-body > .page-head) {
   --tree-dock-top: calc(82px + var(--doc-air));
 }
 
-.page:has(> .page-head) {
+.page:has(> .page-body > .page-head) {
   --page-chrome-h: 82px;
+}
+
+/* Under the app header, the page's scroller reaches up to the top of the
+   window the way ``.conversation`` does, and pads its content back down
+   by the same amount. ``.page`` itself does not move — everything placed
+   against it (the docked hierarchy, the trail) keeps its numbers — and
+   at rest nothing inside moves either. Scrolled, the title, the toolbar
+   and the list go up under the header and dissolve on the chat's curve
+   (``--top-fade-mask``) behind the chat's blur. 0 without a header (a
+   test, a modal), where there is nothing to scroll under. */
+.main--paged .page {
+  --page-under-header: 58px;
+}
+
+.main--paged {
+  --top-fade-shift: var(--page-rest-shift, 24px);
 }
 
 /* The breadcrumb is portaled up into the app header (next to the sidebar
@@ -5314,7 +6096,7 @@ button {
    them out of the flow drops that header underneath them. Which is
    the same distinction ``--page-chrome-h`` is already drawn on, and
    the reason it is two numbers rather than one. */
-.page:not(:has(> .page-head)) > .page-crumbs {
+.page:not(:has(> .page-body > .page-head)) > .page-crumbs {
   position: absolute;
   top: 0;
   left: 0;
@@ -5382,21 +6164,15 @@ button {
   display: flex;
   align-items: center;
   gap: var(--space-4);
+  /* The same centred column as ``.page-measure`` below it, so the
+     title's left edge is the content's left edge. It used to span the
+     window under a full-width rule, which put the title 140px left of
+     everything it was the title of. No rule now — the chat has none,
+     and a heading over its own column does not need a line to say
+     where the page starts. */
+  width: min(900px, 100%);
+  margin: 0 auto;
   padding: 6px 18px 12px;
-  border-bottom: 1px solid var(--border-soft);
-  /* Air below the rule, not above the thing under it.
-     ``--page-chrome-h`` already says this header is 82px tall — more
-     than the box measures — and the difference is exactly this gap:
-     the hierarchy docks at that number and so clears the rule
-     comfortably, while the content in the flow below had only what
-     ``--doc-air`` gave it. That was six pixels when the air was 12,
-     and one pixel once a document needed less of it, which put the
-     search field's focus ring on the rule.
-
-     Here rather than on each view, because all four of them — the
-     list, the comments queue, Ask and Add — sit under this same
-     header and were all one pixel clear of it. */
-  margin-bottom: var(--space-6);
 }
 
 .page-title {
@@ -5406,9 +6182,9 @@ button {
 }
 
 .page-toolbar {
-  flex-shrink: 0;
-  padding: 10px 18px;
-  border-bottom: 1px solid var(--border-soft);
+  width: min(900px, 100%);
+  margin: 0 auto;
+  padding: 10px 18px 0;
 }
 
 /* The scrolling element, full width, so the scrollbar is where a
@@ -5419,6 +6195,13 @@ button {
 .page-body {
   flex: 1;
   overflow-y: auto;
+  margin-top: calc(-1 * var(--page-under-header, 0px));
+  padding-top: var(--page-under-header, 0px);
+  /* A classic scrollbar takes its width from one side only, which
+     would centre the measure a few pixels left of the header above
+     it. Reserving the same gutter on both sides keeps the two
+     columns on one axis; overlay scrollbars reserve nothing. */
+  scrollbar-gutter: stable both-edges;
   overscroll-behavior: contain;
   font-size: var(--text-md);
   /* Deliberately *not* ``position: relative``. This box scrolls, and
@@ -5752,22 +6535,86 @@ button {
   font-size: var(--text-sm);
 }
 
-.kv {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  gap: 4px 14px;
-  font-size: var(--text-md);
+/* ── Loop page ─────────────────────────────────────────────────── */
+
+.loop-page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
 }
 
-.kv dt {
+.loop-stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-5);
+}
+
+.loop-stat,
+.loop-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-7);
+  border-radius: var(--radius-lg);
+  background: var(--bg-surface);
+}
+
+.loop-stat-label,
+.loop-card-label {
+  margin: 0;
+  font-size: var(--text-xs);
+  font-weight: 600;
   color: var(--fg-faint);
 }
 
-.kv dd {
-  margin: 0;
-  font-family: var(--font-mono);
+.loop-stat-value {
+  font-size: var(--text-2xl);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--fg);
+}
+
+.loop-stat-of {
+  color: var(--fg-faint);
+  font-weight: 600;
+}
+
+.loop-state {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: var(--radius-pill);
   font-size: var(--text-sm);
-  word-break: break-all;
+  font-weight: 600;
+  vertical-align: middle;
+}
+
+.loop-state--running {
+  background: color-mix(in srgb, var(--success) 10%, transparent);
+  color: var(--accent-green-text, var(--success));
+}
+
+.loop-state--paused {
+  background: color-mix(in srgb, var(--warning) 10%, transparent);
+  color: var(--accent-orange-text, var(--warning));
+}
+
+.loop-prompt {
+  margin: 0;
+  font-size: var(--text-md);
+  line-height: 1.5;
+  color: var(--fg);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.loop-actions {
+  display: flex;
+  gap: var(--space-4);
+  margin-top: var(--space-4);
+}
+
+.loop-actions .btn {
+  border-radius: var(--radius-pill);
 }
 
 /* Model dropdown */
@@ -5834,23 +6681,11 @@ button {
 
 /* ── Agents panel ──────────────────────────────────────────────── */
 
-.agent-head {
-  display: flex;
-  align-items: center;
-  gap: var(--space-5);
-  padding: 11px 8px;
-  border-bottom: 1px solid var(--border-soft);
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-}
-
-.agent-head:hover {
-  background: var(--bg-raised);
-}
-
-.agent-open-chevron {
+/* An unsaved agent's keep / keep-for-me / discard: three card actions
+   side by side in the card's action slot. */
+.agent-card-actions {
   display: inline-flex;
-  color: var(--fg-faint);
+  gap: var(--space-1);
   flex-shrink: 0;
 }
 
@@ -5900,12 +6735,50 @@ button {
   border-color: color-mix(in srgb, var(--igni-orange) 40%, transparent);
 }
 
-.agent-tags .mini-tag {
-  margin: 0 4px 4px 0;
+.breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  font-size: var(--text-lg);
+  margin: 2px 0 8px;
 }
 
-.agent-body {
-  padding: var(--space-1) var(--space-4) var(--space-7) var(--space-16);
+.breadcrumb-link {
+  appearance: none;
+  border: none;
+  background: transparent;
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--text-lg);
+  color: var(--accent-orange-text, #f5a088);
+  cursor: pointer;
+  border-radius: 6px;
+}
+
+.breadcrumb-link:hover {
+  background: var(--bg-raised);
+}
+
+.breadcrumb-sep {
+  color: var(--fg-faint);
+}
+
+.mini-tag {
+  display: inline-block;
+  margin-left: var(--space-3);
+  padding: 1px 7px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border-soft);
+  background: var(--bg-surface);
+  color: var(--fg-muted);
+  font-size: var(--text-xs);
+  font-weight: 500;
+  line-height: 1.6;
+  vertical-align: 1px;
+}
+
+.mini-tag.ephemeral {
+  color: var(--accent-orange-text, #f5a088);
+  border-color: color-mix(in srgb, var(--igni-orange) 40%, transparent);
 }
 
 .agent-kv {
@@ -6238,36 +7111,81 @@ button {
   background: var(--fg-faint);
 }
 
-/* ── Watcher pill in the footer ───────────────────────────────── */
+/* ── Status chips in the header ───────────────────────────────── */
 
-/* Same geometry as ``.status-pill`` so the two pills look like
-   siblings. The dot pulses while at least one process is running
-   — it's a "you have invisible work" signal; static would let
-   the user miss it. */
-.watcher-pill {
-  appearance: none;
-  display: inline-flex;
+/* Right of the sidebar toggle, left to right: igni's own, then
+   extensions'. One row that scrolls sideways when it runs out of room
+   rather than wrapping or pushing the breadcrumb off. The 4px padding
+   (cancelled by the margin) keeps focus rings inside the clip. */
+.header-status-chips {
+  display: flex;
   align-items: center;
-  gap: var(--space-3);
-  height: 22px;
-  padding: 0 9px;
-  border-radius: var(--radius-pill);
+  gap: var(--space-2);
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 50%;
+  padding: 4px;
+  margin: -4px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior: contain;
+  touch-action: pan-x;
+  scrollbar-width: none;
+}
+.header-status-chips::-webkit-scrollbar {
+  display: none;
+}
+.header-status-chips:empty {
+  display: none;
+}
+.header-status-chips > * {
+  flex: 0 0 auto;
+}
+
+/* A status is a chip: an outlined pill, unlike the bare icon buttons
+   on the right; a fill on hover. */
+.chip-status {
+  height: 28px;
+  padding: 0 var(--space-4);
   border: 1px solid var(--border-soft);
+  background: transparent;
+  color: var(--fg-muted);
+  font-family: var(--font-ui);
+}
+.chip-status:hover {
+  border-color: var(--border);
   background: var(--bg-surface);
   color: var(--fg);
-  font-size: var(--text-sm);
-  cursor: pointer;
-  white-space: nowrap;
-  font-family: var(--font-ui);
-  transition: border-color 0.12s ease, background 0.12s ease;
 }
 
-.watcher-pill:hover {
-  border-color: var(--accent-orange-text, #f5a088);
-  background: color-mix(in srgb, var(--igni-orange) 6%, var(--bg-surface));
+/* Extensions' chips are the host's quiet button around a ``Status``;
+   in the header they take the same outlined pill as igni's own. */
+.header-status-chips > .btn {
+  height: 28px;
+  padding: 0 var(--space-4);
+  border: 1px solid var(--border-soft);
+  background: transparent;
+  border-radius: var(--radius-pill);
+}
+.header-status-chips > .btn:hover {
+  border-color: var(--border);
+  background: var(--bg-surface);
 }
 
-.watcher-pill-dot {
+/* More chips than room: the clipped edge fades, so the row reads as
+   one that scrolls rather than one that was cut. */
+.header-status-chips[data-overflow="end"] {
+  mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
+}
+.header-status-chips[data-overflow="start"] {
+  mask-image: linear-gradient(to left, #000 calc(100% - 28px), transparent);
+}
+.header-status-chips[data-overflow="both"] {
+  mask-image: linear-gradient(to right, transparent, #000 28px, #000 calc(100% - 28px), transparent);
+}
+
+/* Pulses while a process runs — "you have invisible work". */
+.chip-watcher-dot {
   width: 7px;
   height: 7px;
   border-radius: var(--radius-circle);
@@ -6275,6 +7193,33 @@ button {
   box-shadow: 0 0 0 2px color-mix(in srgb, #34c759 25%, transparent);
   flex-shrink: 0;
   animation: pulse-dot 1.8s ease infinite;
+}
+
+/* Nothing runs: a still, grey dot and a quiet zero. */
+.chip-watcher.idle .chip-watcher-dot {
+  background: var(--fg-muted);
+  box-shadow: none;
+  animation: none;
+}
+.chip-watcher.idle .chip-status-count {
+  background: var(--bg-raised);
+  color: var(--fg-muted);
+}
+
+/* The bell's count badge, inline rather than perched on a corner. */
+.chip-status-count {
+  min-width: 15px;
+  height: 15px;
+  padding: 0 4px;
+  box-sizing: border-box;
+  border-radius: var(--radius-pill);
+  background: var(--igni-gradient);
+  color: #fff;
+  font-size: var(--text-2xs);
+  font-weight: 700;
+  line-height: 15px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
 }
 
 /* ── Footer status bits ────────────────────────────────────────── */
@@ -6448,20 +7393,20 @@ button {
 }
 
 .ctx-ring-track {
-  stroke: var(--bg-raised);
+  stroke: var(--border-soft);
 }
 
 .ctx-ring-fill {
   transition: stroke-dasharray 0.3s ease, stroke 0.3s ease;
 }
 
-.ctx-ring.tone-ok .ctx-ring-fill {
+.session-ctx.tone-ok .ctx-ring-fill {
   stroke: var(--success);
 }
-.ctx-ring.tone-warn .ctx-ring-fill {
+.session-ctx.tone-warn .ctx-ring-fill {
   stroke: var(--warning);
 }
-.ctx-ring.tone-danger .ctx-ring-fill {
+.session-ctx.tone-danger .ctx-ring-fill {
   stroke: var(--danger);
 }
 
@@ -6569,89 +7514,43 @@ button {
   font-variant-numeric: tabular-nums;
 }
 
-/* ── Scheduled tasks panel ─────────────────────────────────────── */
+/* ── Scheduled tasks page ──────────────────────────────────────── */
 
-.task-entry {
-  border-bottom: 1px solid var(--border-soft);
-}
-
-.task-head {
-  display: flex;
-  align-items: center;
-  gap: var(--space-5);
-  padding: var(--space-5) var(--space-4);
-  cursor: pointer;
-  border-radius: var(--radius-sm);
+/* A task is the shared card; the card opens the task's own page. */
+.task-glyph {
+  width: 38px;
+  height: 38px;
 }
 
-.task-head:hover {
-  background: var(--bg-raised);
-}
-
-.task-id {
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-  color: var(--fg-faint);
-  margin-left: var(--space-4);
-}
-
-.task-status {
-  display: inline-block;
-  margin-left: var(--space-4);
-  padding: 1px 7px;
-  border-radius: var(--radius-pill);
-  font-size: var(--text-xs);
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  text-transform: uppercase;
-  vertical-align: 1px;
-}
-
-.task-status.tone-ok {
-  background: color-mix(in srgb, var(--success) 14%, transparent);
-  color: var(--success);
-}
-.task-status.tone-warn {
-  background: color-mix(in srgb, var(--warning) 14%, transparent);
-  color: var(--warning);
-}
-.task-status.tone-bad {
-  background: color-mix(in srgb, var(--danger) 14%, transparent);
-  color: var(--danger);
-}
-.task-status.tone-muted {
-  background: var(--bg-raised);
-  color: var(--fg-faint);
-}
-
-.task-body {
-  padding: var(--space-1) var(--space-4) var(--space-7) var(--space-16);
-  display: grid;
-  gap: var(--space-6);
-}
-
-.task-block-label {
-  font-size: var(--text-xs);
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--fg-faint);
-  margin: 0 0 4px;
-}
-
-.task-block-error pre {
+/* Long text on a detail page — a task's output, a hook's script — whole,
+   in mono, in a block that scrolls rather than a page that never ends. */
+.mono-block {
   margin: 0;
+  max-height: min(70vh, 640px);
+  overflow: auto;
   padding: var(--space-5) var(--space-6);
-  border-radius: 8px;
-  background: color-mix(in srgb, var(--danger) 10%, transparent);
-  border: 1px solid color-mix(in srgb, var(--danger) 35%, transparent);
-  color: var(--danger);
+  border-radius: var(--radius-md, 8px);
+  background: var(--bg);
+  color: var(--fg);
   font-family: var(--font-mono);
   font-size: var(--text-sm);
+  line-height: 1.55;
   white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  tab-size: 4;
 }
 
-/* ── Scheduled tasks toolbar (filter + search) ─────────────────── */
+.mono-block:focus-visible {
+  outline: 2px solid var(--focus-ring, var(--accent));
+  outline-offset: 2px;
+}
+
+.mono-block.is-danger {
+  background: color-mix(in srgb, var(--danger) 8%, transparent);
+  border-left: 2px solid var(--danger);
+}
+
+/* ── Drawer toolbar ────────────────────────────────────────────── */
 
 /* Non-scrolling row docked under the drawer header. Centred so
    the filter pill bar sits in the middle, like a segmented tab
@@ -6672,91 +7571,6 @@ button {
   justify-content: stretch;
   padding: 0 var(--space-7);
   min-width: 0;
-}
-
-.drawer-head-extras .task-search {
-  /* Fill all available header space between title and close. */
-  width: 100%;
-  max-width: none;
-  text-align: left;
-}
-
-.task-filters {
-  /* Wrap to a second row when the panel is too narrow — beats overflowing the parent and
-     beats horizontal scrolling, which hides the count badges users
-     came here for. The pill background stays a single rounded shape
-     because the inner buttons each have their own rounded corners.
-     ``min-width: 0`` lets it actually shrink inside the toolbar's
-     centered flex column. */
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: var(--space-2);
-  background: var(--bg-raised);
-  padding: 3px;
-  border-radius: 14px;
-  min-width: 0;
-  max-width: 100%;
-}
-
-.task-filter {
-  appearance: none;
-  background: transparent;
-  border: none;
-  padding: var(--space-2) var(--space-5);
-  border-radius: var(--radius-pill);
-  font-size: var(--text-sm);
-  color: var(--fg-muted);
-  cursor: pointer;
-  font-family: var(--font-ui);
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-3);
-}
-
-.task-filter:hover {
-  color: var(--fg);
-}
-
-.task-filter.active {
-  background: var(--bg-surface);
-  color: var(--fg);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
-}
-
-.task-filter-count {
-  font-variant-numeric: tabular-nums;
-  font-size: var(--text-xs);
-  color: var(--fg-faint);
-  background: var(--bg-inset);
-  padding: 0 5px;
-  border-radius: var(--radius-pill);
-  min-width: 16px;
-  text-align: center;
-}
-
-.task-filter.active .task-filter-count {
-  color: var(--accent-orange-text, #f5a088);
-  background: color-mix(in srgb, var(--igni-orange) 14%, transparent);
-}
-
-.task-search {
-  /* width comes from the grid column (matches the filter group). */
-  width: 100%;
-  height: 28px;
-  padding: 0 var(--space-6);
-  border-radius: var(--radius-pill);
-  border: 1px solid var(--border-soft);
-  background: var(--bg-inset);
-  color: var(--fg);
-  font-family: var(--font-ui);
-  font-size: var(--text-sm);
-  text-align: center;
-}
-
-.task-search:focus {
-  outline: none;
-  border-color: var(--accent-orange-text, #f5a088);
 }
 
 /* Composer textarea tints to match the rendered mode bubbles. */
@@ -7471,72 +8285,12 @@ button {
 .hitl-diff-del::before { content: "- "; opacity: 0.6; }
 .hitl-diff-add::before { content: "+ "; opacity: 0.6; }
 
-/* ── MCP: header action ───────────────────────────────────────── */
-.mcp-head-actions {
-  display: flex;
-  justify-content: flex-end;
-  width: 100%;
-}
-
-/* ── MCP: server row ──────────────────────────────────────────── */
-/* Each server is a card, matching the extensions and plugins lists;
-   the header stays a full-width button so expand/collapse still works. */
-.mcp-server {
-  border: 1px solid var(--border-soft);
-  border-radius: var(--radius-lg);
-  background: var(--bg-surface);
-  padding: var(--space-4) var(--space-5);
-  margin-bottom: var(--space-3);
-}
-
-:is(.drawer-body, .page-body) .row.mcp-server-row {
-  border-bottom: none;
-  padding: 0;
-}
-
-/* The heading is a button when the server has something to open, so
-   it is reachable by keyboard; it keeps the look of the plain row. */
-.mcp-server-head {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  text-align: left;
-  background: none;
-  border: none;
-  padding: 0;
-  margin: 0;
-  color: inherit;
-  font: inherit;
-}
-
-button.mcp-server-head {
-  cursor: pointer;
-}
-
-button.mcp-server-head:focus-visible {
-  outline: 2px solid var(--accent-blue);
-  outline-offset: 2px;
-  border-radius: 4px;
-}
-
-.mcp-server-chevron {
-  display: inline-flex;
-}
-
-/* The name line is a flex row so the status dot — an inline <span> —
-   takes its 8px instead of collapsing to nothing, and every name starts
-   at the same edge whether or not the server can be opened. */
-.mcp-server-name {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-3);
-  min-width: 0;
-}
-
-.mcp-server-name .tool-status {
+/* ── MCP: a server's status dot and its own page ───────────────── */
+/* The dot inside a status chip or before the hero's name; a span, so it
+   needs a box to take its 8px. */
+.mcp-dot {
   display: inline-block;
+  align-self: center;
 }
 
 /* Off, with nothing wrong: a quiet ring rather than the red of a failure. */
@@ -7545,85 +8299,37 @@ button.mcp-server-head:focus-visible {
   box-shadow: inset 0 0 0 1.5px var(--fg-faint);
 }
 
-.mcp-server-status {
-  color: var(--fg-muted);
-  line-height: 1.45;
-}
-
-.mcp-server-actions {
-  display: flex;
-  gap: var(--space-4);
-  flex-shrink: 0;
-}
-
 /* Waiting for the person's approval: amber, but still, not a spinner. */
 .tool-status.running.mcp-waiting {
   animation: none;
 }
 
-.mcp-skeleton {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
+.mcp-detail-text {
+  margin: 0;
+  line-height: 1.5;
 }
 
-.mcp-skeleton-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 10px 0;
-  border-bottom: 1px solid var(--border-soft);
+.mcp-detail-note {
+  margin: 0 0 var(--space-4);
 }
 
-.mcp-skeleton-text {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-/* ── MCP: server expansion (tools / resources / prompts) ──────── */
-.mcp-server-body {
-  padding: 4px 0 14px 26px;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-6);
-}
-
-.mcp-section {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-}
-
-.mcp-section-head {
-  display: flex;
-  align-items: center;
-  gap: var(--space-4);
-  font-size: var(--text-xs);
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--fg-faint);
-}
-
-.mcp-section-count {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 20px;
-  height: 18px;
-  padding: 0 var(--space-3);
-  border-radius: var(--radius-pill);
+/* The transport's own words, as it raised them. */
+.mcp-detail-error {
+  margin: 0;
+  padding: var(--space-4) var(--space-5);
+  border-radius: var(--radius-sm);
   background: var(--bg-raised);
-  color: var(--fg);
+  color: var(--fg-muted);
+  font-family: var(--font-mono);
   font-size: var(--text-xs);
-  font-weight: 600;
-  letter-spacing: 0;
-  text-transform: none;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 240px;
+  overflow: auto;
 }
 
+/* ── MCP: a server's tools, resources and prompts ─────────────── */
 .mcp-tool-row {
   gap: var(--space-5);
   align-items: flex-start;
@@ -7838,10 +8544,10 @@ button.mcp-server-head:focus-visible {
    (which carries ``margin-left: auto``) — so other pages that use the
    slot keep their content sizing. Without the span the controls have no
    room to push against and sit against the title on the left. */
-.page-head-extras:has(.plugins-headerbar),
-.page-head-extras:has(> .plugins-controls),
-.drawer-head-extras:has(.plugins-headerbar),
-.drawer-head-extras:has(> .plugins-controls) {
+.page-head-extras:has(.page-headerbar),
+.page-head-extras:has(> .page-controls),
+.drawer-head-extras:has(.page-headerbar),
+.drawer-head-extras:has(> .page-controls) {
   flex: 1;
   min-width: 0;
 }
@@ -7850,82 +8556,49 @@ button.mcp-server-head:focus-visible {
    with no headerbar around it. The group carries ``margin-left: auto``
    to sit at the far edge, but that only pushes inside a flex row — so
    make the slot one. (The headerbar case is already its own flex row.) */
-.page-head-extras:has(> .plugins-controls),
-.drawer-head-extras:has(> .plugins-controls) {
+.page-head-extras:has(> .page-controls),
+.drawer-head-extras:has(> .page-controls) {
   display: flex;
 }
 
-/* On a card-grid page (plugins, MCPs, extensions) a card scrolling up
-   must pass cleanly behind the header, not into a dark strip below the
-   rule. The header's margin below it left exactly that strip — a card's
-   top would clip there with the page's darker background above it. Drop
-   the margin so the scroll clips flush at the rule, make the header
-   opaque and raise it so the card goes behind it, and give the resting
-   content its air from the scroll's own top padding instead. */
-.page:has(.plugins-headerbar) > .page-head,
-.page:has(.plugins-grid) > .page-head {
-  position: relative;
-  z-index: 2;
-  background: var(--bg);
-  margin-bottom: 0;
-}
-
-.page:has(.plugins-headerbar) > .page-body > .page-measure,
-.page:has(.plugins-grid) > .page-body > .page-measure {
-  padding-top: var(--space-6);
-}
-
-.plugins-headerbar {
+.page-headerbar {
   display: flex;
   align-items: center;
   gap: var(--space-4);
   width: 100%;
 }
 
-.plugins-tabs {
+.page-tabs {
   display: flex;
   gap: var(--space-2);
 }
 
-.plugins-controls {
+.page-controls {
   display: flex;
   align-items: center;
   gap: var(--space-2);
   margin-left: auto;
 }
 
-/* Bare icons in the header — no boxed border around each one. A soft
-   round hover is the only affordance, so the row reads as controls, not
-   a row of buttons. */
-.plugins-controls .kb-icon-btn {
-  border: none;
-  background: transparent;
-  width: 28px;
-  height: 28px;
-  border-radius: var(--radius-circle);
-  color: var(--fg-faint);
-}
-
-.plugins-controls .kb-icon-btn:hover:not(:disabled),
-.plugins-controls .kb-icon-btn.is-active {
-  border: none;
-  color: var(--fg);
-  background: var(--bg-surface);
+/* The header's icons are the page button's ``icon`` variant; the
+   primary "+ Add" sits a little apart from them. */
+.page-controls .page-controls-add {
+  margin-left: var(--space-3);
 }
 
 /* Filter / sort dropdowns. */
-.plugins-menu-wrap {
+.control-menu-wrap {
   position: relative;
   display: inline-flex;
 }
 
-.plugins-menu-backdrop {
+.control-menu-backdrop {
   position: fixed;
   inset: 0;
   z-index: 40;
 }
 
-.plugins-menu {
+.control-menu {
   position: absolute;
   top: calc(100% + 6px);
   right: 0;
@@ -7943,7 +8616,7 @@ button.mcp-server-head:focus-visible {
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.22);
 }
 
-.plugins-menu-head {
+.control-menu-head {
   position: sticky;
   top: 0;
   z-index: 1;
@@ -7953,7 +8626,7 @@ button.mcp-server-head:focus-visible {
   background: var(--bg-surface);
 }
 
-.plugins-menu-head {
+.control-menu-head {
   padding: var(--space-3) var(--space-3) var(--space-2);
   font-size: var(--text-xs);
   font-weight: 600;
@@ -7962,7 +8635,7 @@ button.mcp-server-head:focus-visible {
   color: var(--fg-faint);
 }
 
-.plugins-menu-item {
+.control-menu-item {
   appearance: none;
   width: 100%;
   display: flex;
@@ -7980,22 +8653,22 @@ button.mcp-server-head:focus-visible {
   cursor: pointer;
 }
 
-.plugins-menu-item:hover {
+.control-menu-item:hover {
   background: var(--bg-raised);
 }
 
-.plugins-menu-item.active {
+.control-menu-item.active {
   color: var(--fg);
 }
 
-.plugins-menu-item svg {
+.control-menu-item svg {
   color: var(--accent, #ee6138);
   flex-shrink: 0;
 }
 
 /* The label side of a menu item, so a category's icon sits beside its
    name while the selected-check stays on the right. */
-.plugins-menu-item-label {
+.control-menu-item-label {
   display: inline-flex;
   align-items: center;
   gap: var(--space-3);
@@ -8004,16 +8677,18 @@ button.mcp-server-head:focus-visible {
 
 /* The category glyph reads as a marker, not the accent-coloured check —
    keep it muted so the check is the one orange mark in the row. */
-.plugins-menu-item-icon {
+.control-menu-item-icon {
   display: inline-flex;
 }
 
-.plugins-menu-item-icon svg {
+.control-menu-item-icon svg {
   color: var(--fg-muted);
 }
 
-/* A category chip on a plugin card: its glyph and name, quiet. */
-.plugins-cat-chip {
+/* A category chip on a plugin card: its glyph and name, quiet.
+   ``.entity-chip`` is the same chip for any card. */
+.plugins-cat-chip,
+.entity-chip {
   display: inline-flex;
   align-items: center;
   gap: var(--space-2);
@@ -8021,14 +8696,15 @@ button.mcp-server-head:focus-visible {
   font-size: var(--text-xs);
 }
 
-.plugins-cat-chip svg {
+.plugins-cat-chip svg,
+.entity-chip svg {
   color: var(--fg-faint);
   flex-shrink: 0;
 }
 
 /* The label side of a menu item, so a category's icon sits beside its
    name while the selected-check stays on the right. */
-.plugins-menu-item-label {
+.control-menu-item-label {
   display: inline-flex;
   align-items: center;
   gap: var(--space-3);
@@ -8037,16 +8713,18 @@ button.mcp-server-head:focus-visible {
 
 /* The category glyph reads as a marker, not the accent-coloured check —
    keep it muted so the check is the one orange mark in the row. */
-.plugins-menu-item-icon {
+.control-menu-item-icon {
   display: inline-flex;
 }
 
-.plugins-menu-item-icon svg {
+.control-menu-item-icon svg {
   color: var(--fg-muted);
 }
 
-/* A category chip on a plugin card: its glyph and name, quiet. */
-.plugins-cat-chip {
+/* A category chip on a plugin card: its glyph and name, quiet.
+   ``.entity-chip`` is the same chip for any card. */
+.plugins-cat-chip,
+.entity-chip {
   display: inline-flex;
   align-items: center;
   gap: var(--space-2);
@@ -8054,13 +8732,14 @@ button.mcp-server-head:focus-visible {
   font-size: var(--text-xs);
 }
 
-.plugins-cat-chip svg {
+.plugins-cat-chip svg,
+.entity-chip svg {
   color: var(--fg-faint);
   flex-shrink: 0;
 }
 
 /* Search as a pill that only appears once opened. */
-.plugins-searchbox {
+.page-search {
   display: flex;
   align-items: center;
   gap: var(--space-3);
@@ -8074,7 +8753,7 @@ button.mcp-server-head:focus-visible {
   max-width: 42vw;
 }
 
-.plugins-searchbox-input {
+.page-search-input {
   flex: 1;
   min-width: 0;
   border: none;
@@ -8085,7 +8764,7 @@ button.mcp-server-head:focus-visible {
   outline: none;
 }
 
-.plugins-searchbox-clear {
+.page-search-clear {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -8099,14 +8778,14 @@ button.mcp-server-head:focus-visible {
   cursor: pointer;
 }
 
-.plugins-searchbox-clear:hover {
+.page-search-clear:hover {
   color: var(--fg);
   background: var(--bg-raised);
 }
 
 /* A real ring spinner in the refresh button while a fetch is in flight,
    rather than rotating the refresh glyph itself. */
-.plugins-spinner {
+.icon-spinner {
   display: inline-block;
   width: 13px;
   height: 13px;
@@ -8116,7 +8795,7 @@ button.mcp-server-head:focus-visible {
   animation: igni-spin 0.8s linear infinite;
 }
 
-.plugins-tab {
+.page-tab {
   appearance: none;
   background: transparent;
   border: none;
@@ -8131,16 +8810,16 @@ button.mcp-server-head:focus-visible {
   gap: var(--space-3);
 }
 
-.plugins-tab:hover {
+.page-tab:hover {
   color: var(--fg);
 }
 
-.plugins-tab.active {
+.page-tab.active {
   background: var(--bg-raised);
   color: var(--fg);
 }
 
-.plugins-tab-count {
+.page-tab-count {
   font-size: var(--text-xs);
   padding: 1px 6px;
   border-radius: var(--radius-pill);
@@ -8149,7 +8828,7 @@ button.mcp-server-head:focus-visible {
   font-variant-numeric: tabular-nums;
 }
 
-.plugins-tab.active .plugins-tab-count {
+.page-tab.active .page-tab-count {
   /* Match the notification badge: orange gradient, white text. */
   background: var(--igni-gradient);
   color: #fff;
@@ -8181,8 +8860,8 @@ button.mcp-server-head:focus-visible {
   width: 100%;
 }
 
-/* Toolbar uses align-items: stretch; the panel-input drives height,
-   and .btn-sm stretches to match. The icon button has a fixed 23×23
+/* Toolbar uses align-items: stretch; the panel-input drives height.
+   The icon button has a fixed 23×23
    default — bump it to match so the gear sits flush with Refresh. */
 .plugins-toolbar .kb-icon-btn {
   width: 31px;
@@ -8205,14 +8884,14 @@ button.mcp-server-head:focus-visible {
 
 /* Marketplace catalog — a grid of cards, the way a store of things to add
    reads, rather than a stack of full-width rows. */
-.plugins-grid {
+.card-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--space-5);
 }
 
 @media (max-width: 760px) {
-  .plugins-grid {
+  .card-grid {
     grid-template-columns: 1fr;
   }
 }
@@ -8220,7 +8899,7 @@ button.mcp-server-head:focus-visible {
 /* Soft filled cards, no border — the fill alone separates them from the
    page, the way Claude's marketplace reads. A border on every card plus
    a coloured icon on every card is what made the grid feel busy. */
-.plugins-gcard {
+.entity-card {
   display: flex;
   gap: var(--space-5);
   padding: var(--space-7);
@@ -8232,8 +8911,8 @@ button.mcp-server-head:focus-visible {
   transition: border-color 0.12s ease, background 0.12s ease;
 }
 
-.plugins-gcard:hover,
-.plugins-gcard:focus-visible {
+.entity-card:hover,
+.entity-card:focus-visible {
   border-color: var(--border-soft);
   background: var(--bg-raised);
   outline: none;
@@ -8254,12 +8933,12 @@ button.mcp-server-head:focus-visible {
   letter-spacing: 0.01em;
 }
 
-.plugins-gcard-icon {
+.entity-card-icon {
   flex-shrink: 0;
   display: inline-flex;
 }
 
-.plugins-gcard-body {
+.entity-card-body {
   min-width: 0;
   flex: 1;
   display: flex;
@@ -8267,20 +8946,53 @@ button.mcp-server-head:focus-visible {
   gap: var(--space-2);
 }
 
-.plugins-gcard-top {
+.entity-card-top {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--space-3);
+  min-height: 24px;
+  /* The action is 28px; let it overhang rather than push the name down. */
+  margin: -2px 0;
 }
 
-.plugins-gcard-top .plugins-name {
+/* One name style for every card: plain sans, whatever the thing is — a
+   slash command, a workflow id, a task's prompt. */
+.entity-card-name {
+  min-width: 0;
+  font-weight: 600;
+  color: var(--fg);
+  font-size: var(--text-md);
+}
+
+.entity-card-name,
+.entity-card-name * {
+  font-family: var(--font-ui);
+}
+
+.entity-card-top > .button--icon {
+  margin: -2px -6px -2px 0;
+}
+
+/* Soft neutral chips (``HeroChip``) in their own row. */
+.entity-card-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-1);
+}
+
+.entity-card-chips:empty {
+  display: none;
+}
+
+.entity-card-top :is(.entity-card-name, .plugins-name) {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.plugins-gcard-desc {
+.entity-card-desc {
   margin: 0;
   font-size: var(--text-sm);
   color: var(--fg-muted);
@@ -8292,75 +9004,25 @@ button.mcp-server-head:focus-visible {
   overflow: hidden;
 }
 
-.plugins-gcard-foot {
+/* Faint meta along the bottom: plain words, spaced, never coloured. */
+.entity-card-foot {
   display: flex;
   align-items: center;
-  gap: var(--space-3);
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-5);
   margin-top: auto;
   padding-top: var(--space-2);
-}
-
-/* An extension card: a soft clickable card like a plugin card. The whole
-   card is the button, so it keeps the gcard's own pointer and hover; the
-   foot carries the id and a chevron that says it opens onto a page.
-   A <button> takes the browser's own text colour and font rather than
-   inheriting, which left the id black on the dark card — so set both. */
-.plugins-gcard.ext-card {
-  color: var(--fg);
-  font: inherit;
-}
-
-.ext-card .meta {
+  font-size: var(--text-xs);
   color: var(--fg-faint);
 }
 
-.ext-card .ext-card-id {
+.entity-card-foot > * {
   min-width: 0;
-  color: var(--fg-muted);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.ext-card .plugins-chevron-end {
-  margin-left: auto;
-  color: var(--fg-faint);
 }
 
 /* The extension detail page reuses the plugin detail's vocabulary
    (`.plugin-detail-*`, `.plugins-content-*`) so the two read as one
    surface; only the settings form's width is its own. */
-
-/* The add control: a quiet + that turns into a green check once added. */
-.plugins-add {
-  appearance: none;
-  flex-shrink: 0;
-  width: 26px;
-  height: 26px;
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--border-soft);
-  background: var(--bg-raised);
-  color: var(--fg-muted);
-  font-size: var(--text-lg);
-  line-height: 1;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition: color 0.12s, border-color 0.12s, background 0.12s;
-}
-
-.plugins-add:hover:not(:disabled) {
-  color: var(--fg);
-  border-color: var(--border);
-}
-
-.plugins-add.is-installed {
-  color: var(--success, #10b981);
-  background: color-mix(in srgb, var(--success, #10b981) 14%, transparent);
-  border-color: transparent;
-  cursor: default;
-}
 
 .plugins-card {
   padding: var(--space-5) var(--space-6);
@@ -8405,6 +9067,11 @@ button.mcp-server-head:focus-visible {
   background: var(--fg-faint);
 }
 
+.plugins-status.is-failed {
+  background: var(--danger);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--danger) 30%, transparent);
+}
+
 .plugins-name {
   font-weight: 700;
   color: var(--fg);
@@ -8417,7 +9084,8 @@ button.mcp-server-head:focus-visible {
   color: var(--fg-faint);
 }
 
-.plugins-source {
+.plugins-source,
+.entity-meta {
   font-size: var(--text-xs);
   color: var(--fg-faint);
 }
@@ -8488,7 +9156,7 @@ button.mcp-server-head:focus-visible {
   color: var(--fg-faint);
 }
 
-.plugins-empty {
+.page-empty {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -8499,14 +9167,46 @@ button.mcp-server-head:focus-visible {
   color: var(--fg-muted);
 }
 
-.plugins-empty-title {
+.page-empty-title {
   font-size: var(--text-lg);
   font-weight: 700;
   color: var(--fg);
 }
 
-.plugins-empty-hint {
+.page-empty-hint {
   margin-top: var(--space-2);
+  font-size: var(--text-sm);
+}
+
+/* The longer hints (Hooks, Workflows) wrap at a readable width rather
+   than across the whole column. */
+.page-empty-hint:has(code) {
+  max-width: 60ch;
+  line-height: 1.5;
+}
+
+.page-empty-hint code {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  padding: 1px 6px;
+  background: var(--bg-raised);
+  border-radius: 4px;
+  color: var(--fg-muted);
+}
+
+.page-empty-action {
+  margin-top: var(--space-6);
+}
+
+/* A first read in flight: one quiet line, not a blank page and not a
+   skeleton of a layout the page may not end up having. */
+.page-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  min-height: 46vh;
+  color: var(--fg-faint);
   font-size: var(--text-sm);
 }
 
@@ -8595,11 +9295,7 @@ button.mcp-server-head:focus-visible {
   border-top: none;
 }
 
-/* Install-by-URL row at the top of the Installed tab. Both children
-   share the same explicit height so the .btn-primary doesn't render
-   taller than the input — .panel-input is 31px (7px+13px+7px+border),
-   and .btn-primary without an explicit height would render at ~22-30px
-   depending on flex alignment. Lock both. */
+/* Install-by-URL row at the top of the Installed tab. */
 .plugins-install-row {
   align-items: stretch;
   margin-bottom: var(--space-7);
@@ -8608,8 +9304,7 @@ button.mcp-server-head:focus-visible {
 /* The install field reads like the chat composer — raised above the
    page rather than inset into it, taller, and the same soft rounded
    box — so it is the obvious place to type, not a thin dark slot. */
-.plugins-install-row .panel-input,
-.plugins-install-row .btn {
+.plugins-install-row .panel-input {
   height: auto;
   min-height: 44px;
   box-sizing: border-box;
@@ -8627,13 +9322,6 @@ button.mcp-server-head:focus-visible {
 
 .plugins-install-row .panel-input:focus {
   border-color: color-mix(in srgb, var(--igni-orange) 55%, var(--border));
-}
-
-.plugins-install-row .btn {
-  flex-shrink: 0;
-  border-radius: var(--radius-lg);
-  padding: 0 var(--space-6);
-  font-size: var(--text-md);
 }
 
 .plugins-section-head {
@@ -8692,61 +9380,381 @@ button.mcp-server-head:focus-visible {
   margin-left: var(--space-4);
 }
 
-/* Detail page (post-routing) */
-.plugin-detail {
+/* ── Detail page ───────────────────────────────────────────────
+   Every thing's own page — plugin, extension, agent, skill, workflow,
+   process — is the same layout: an EntityHero with one rule under it,
+   then DetailSections one gap apart. */
+.entity-detail {
+  --detail-gap: var(--space-5);
   display: flex;
   flex-direction: column;
-  gap: 0;
+  gap: var(--detail-gap);
+  min-width: 0;
 }
 
-.plugin-detail-hero {
+.entity-hero {
   display: flex;
   gap: var(--space-6);
-  padding-bottom: var(--space-7);
-  margin-bottom: var(--space-2);
+  padding-bottom: var(--space-8);
+  margin-bottom: var(--space-3);
   border-bottom: 1px solid var(--border-soft);
 }
 
-.plugin-detail-icon {
+.entity-hero-icon {
   flex-shrink: 0;
   display: inline-flex;
   margin-top: 2px;
 }
 
-.plugin-detail-main {
+.entity-hero-main {
   min-width: 0;
   flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
 }
 
-.plugin-detail-title-row {
+.entity-hero-title-row {
   gap: var(--space-5);
   flex-wrap: wrap;
+  align-items: baseline;
+  min-height: 28px;
 }
 
-.plugin-detail-caps {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-3);
-  margin-bottom: var(--space-5);
-}
-
-.plugin-detail-title {
+/* The name is the page's heading in the normal face, whatever it is: a
+   slash command, a shell command, a plugin id. */
+.entity-hero-title {
   margin: 0;
+  font-family: var(--font-ui);
   font-size: var(--text-2xl);
-  font-weight: 700;
+  font-weight: 600;
   letter-spacing: -0.01em;
+  color: var(--fg);
+  word-break: break-word;
 }
 
-.plugin-detail-desc {
-  margin: 8px 0 12px;
+.entity-hero-meta {
+  display: inline-flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+  font-size: var(--text-xs);
+  color: var(--fg-faint);
+}
+
+.entity-hero-meta,
+.entity-hero-meta * {
+  font-family: var(--font-ui);
+}
+
+.entity-hero-desc {
   color: var(--fg-muted);
   font-size: var(--text-md);
   line-height: 1.5;
 }
 
-.plugin-detail-actions {
+.entity-hero-chips {
   display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.hero-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 1px 7px;
+  border-radius: 4px;
+  /* A tint of the text colour, so a chip reads on the page, on a card,
+     and on a card's hover alike — 6%, the most that keeps the muted text
+     at 4.5:1 on a hovered card in both themes. */
+  background: color-mix(in srgb, var(--fg) 6%, transparent);
+  color: var(--fg-muted);
+  font-size: var(--text-xs);
+  font-weight: 500;
+  line-height: 1.6;
+}
+
+.hero-chip,
+.hero-chip * {
+  font-family: var(--font-ui);
+}
+
+/* The hero's buttons (see the shared `.button` below): one primary, the
+   rest quiet. */
+.entity-hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  margin-top: var(--space-1);
+}
+
+/* ── The page button ─────────────────────────────────────────────
+   One button for every page, in Claude's style (``page/Button.tsx``):
+   no gradient and no border. ``primary`` is a filled rounded rectangle
+   in the page's inverse — light on the dark theme, dark on the light one
+   — so it reads at full contrast in both; ``secondary`` a soft quiet
+   fill; ``danger`` quiet red text that only fills on hover; ``icon`` a
+   bare round icon. The variants carry two classes so they win over any
+   older single-class rule on the same element. */
+.button {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  flex-shrink: 0;
+  height: 32px;
+  padding: 0 var(--space-6);
+  margin: 0;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--fg);
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease, opacity 0.12s ease;
+}
+
+.button.button--sm {
+  height: 28px;
+  padding: 0 var(--space-5);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+}
+
+.button:focus-visible {
+  outline: 2px solid var(--accent-blue);
+  outline-offset: 2px;
+}
+
+.button:disabled,
+.button[aria-disabled="true"] {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.button[aria-busy="true"] {
+  opacity: 0.7;
+  cursor: progress;
+}
+
+.button-icon,
+.button-chevron {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.button-icon {
+  margin-left: -2px;
+}
+
+.button-chevron {
+  margin-right: -4px;
+  opacity: 0.7;
+}
+
+.button.button--primary {
+  background: var(--fg);
+  color: var(--bg);
+}
+
+.button.button--primary:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--fg) 86%, var(--bg));
+  text-decoration: none;
+}
+
+.button.button--primary .icon-spinner {
+  border-color: color-mix(in srgb, var(--bg) 35%, transparent);
+  border-top-color: var(--bg);
+}
+
+.button.button--secondary {
+  background: color-mix(in srgb, var(--fg) 7%, transparent);
+  color: var(--fg);
+}
+
+.button.button--secondary:hover:not(:disabled),
+.button.button--secondary.is-active {
+  background: color-mix(in srgb, var(--fg) 13%, transparent);
+  color: var(--fg);
+  text-decoration: none;
+}
+
+.button.button--danger {
+  background: transparent;
+  color: var(--danger-text, var(--danger));
+}
+
+.button.button--danger:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--danger) 14%, transparent);
+  text-decoration: none;
+}
+
+/* Bare round icon — the page header's controls, a card's action. A soft
+   round hover is the only affordance. */
+.button.button--icon {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border-radius: var(--radius-circle);
+  background: transparent;
+  color: var(--fg-faint);
+}
+
+.button.button--icon.button--md {
+  width: 32px;
+  height: 32px;
+}
+
+.button.button--icon:hover:not(:disabled),
+.button.button--icon.is-active {
+  background: color-mix(in srgb, var(--fg) 10%, transparent);
+  color: var(--fg);
+}
+
+.button.button--icon.is-danger:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--danger) 14%, transparent);
+  color: var(--danger-text, var(--danger));
+}
+
+/* A card's action is the small icon size whatever it is given. */
+.button.button--icon.card-action {
+  width: 28px;
+  height: 28px;
+}
+
+/* Added already: a quiet green check that does nothing. */
+.button.button--icon.card-action.is-installed,
+.button.button--icon.card-action.is-installed:disabled {
+  opacity: 1;
+  cursor: default;
+  color: var(--accent-green-text, var(--success));
+  background: transparent;
+}
+
+.detail-section {
+  display: flex;
+  flex-direction: column;
   gap: var(--space-4);
+  min-width: 0;
+  padding: var(--space-6) var(--space-7);
+  border-radius: var(--radius-lg);
+  background: var(--bg-surface);
+}
+
+.detail-section-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  min-height: 18px;
+  font-size: var(--text-xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--fg-faint);
+}
+
+.detail-section-count {
+  font-weight: 600;
+  letter-spacing: 0;
+  padding: 0 6px;
+  background: var(--bg-raised);
+  border-radius: var(--radius-pill);
+  color: var(--fg);
+}
+
+.detail-section-actions {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+  text-transform: none;
+  letter-spacing: normal;
+  font-weight: 500;
+}
+
+.detail-section-body {
+  min-width: 0;
+  font-size: var(--text-sm);
+  color: var(--fg-muted);
+}
+
+.detail-facts {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  column-gap: var(--space-10);
+  row-gap: var(--space-3);
+  margin: 0;
+  font-size: var(--text-sm);
+}
+
+.detail-fact {
+  display: contents;
+}
+
+.detail-facts dt {
+  color: var(--fg-faint);
+}
+
+.detail-facts dd {
+  margin: 0;
+  min-width: 0;
+  color: var(--fg-muted);
+  overflow-wrap: anywhere;
+}
+
+.detail-facts dd.is-mono {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  line-height: 1.7;
+}
+
+.detail-facts a {
+  /* The accent itself is 4.0:1 on a section; this is its text shade. */
+  color: var(--accent-orange-text, var(--accent));
+  text-decoration: none;
+}
+
+.detail-facts a:hover {
+  text-decoration: underline;
+}
+
+/* Pills and rows inside a section: tools, tags, servers, hooks. */
+.detail-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.detail-pill {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--fg-muted);
+  padding: 2px 8px;
+  background: var(--bg-raised);
+  border-radius: var(--radius-pill);
+}
+
+.detail-pill.is-flagged {
+  color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+}
+
+.detail-note {
+  font-size: var(--text-xs);
+  color: var(--fg-faint);
+}
+
+.detail-note.is-danger {
+  color: var(--danger);
 }
 
 .plugins-chevron {
@@ -8755,69 +9763,6 @@ button.mcp-server-head:focus-visible {
   font-size: var(--text-xs);
   width: 12px;
   transition: transform 0.15s ease;
-}
-
-.plugins-contents {
-  margin-top: var(--space-5);
-  padding-top: var(--space-5);
-  border-top: 1px dashed var(--border-soft);
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-5);
-}
-
-.plugins-content-path {
-  display: flex;
-  gap: var(--space-4);
-  align-items: baseline;
-  font-size: var(--text-sm);
-}
-
-.plugins-content-label {
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  font-weight: 700;
-  color: var(--fg-faint);
-  font-size: var(--text-xs);
-}
-
-.plugins-content-path code {
-  font-family: var(--font-mono);
-  color: var(--fg-muted);
-  font-size: var(--text-sm);
-  word-break: break-all;
-}
-
-.plugins-source-link {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-3);
-  flex-wrap: wrap;
-}
-
-.plugins-source-link a {
-  color: var(--accent, #ee6138);
-  font-size: var(--text-sm);
-  text-decoration: none;
-  word-break: break-all;
-}
-
-.plugins-source-link a:hover {
-  text-decoration: underline;
-}
-
-.plugins-source-subdir {
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-  padding: 1px 6px;
-  background: var(--bg-raised);
-  border-radius: 4px;
-  color: var(--fg-muted);
-}
-
-.plugins-source-subdir::before {
-  content: "subdir: ";
-  color: var(--fg-faint);
 }
 
 /* ── Knowledge panel ───────────────────────────────────────────── */
@@ -9051,42 +9996,6 @@ button.mcp-server-head:focus-visible {
   background: color-mix(in srgb, var(--warning, #f59e0b) 14%, transparent);
 }
 
-/* ── Knowledge: empty / disabled states ──────────────────────── */
-.kb-empty {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  text-align: center;
-  padding: 48px 24px 32px;
-  color: var(--fg-muted);
-}
-
-.kb-empty-inline {
-  padding: var(--space-12) var(--space-4);
-}
-
-.kb-empty-title {
-  font-size: var(--text-lg);
-  font-weight: 700;
-  color: var(--fg);
-}
-
-.kb-empty-hint {
-  margin-top: var(--space-2);
-  font-size: var(--text-md);
-  max-width: 360px;
-  line-height: 1.5;
-}
-
-.kb-empty-hint code {
-  font-family: var(--font-mono);
-  font-size: var(--text-sm);
-  padding: 1px 6px;
-  background: var(--bg-raised);
-  border-radius: 4px;
-  color: var(--fg-muted);
-}
-
 .kb-detail-hero {
   padding-bottom: var(--space-7);
   margin-bottom: var(--space-7);
@@ -9262,173 +10171,200 @@ button.mcp-server-head:focus-visible {
   border-radius: 4px;
 }
 
-.plugins-readme {
-  background: var(--bg-raised);
-  padding: var(--space-6) var(--space-7);
-  border-radius: 8px;
-  font-size: var(--text-sm);
+/* Markdown on a detail page — README, instructions, system prompt —
+   straight on the section's card: no inner panel, the chat's quiet
+   inline code, one heading scale. */
+.detail-md {
+  font-size: var(--text-md);
   color: var(--fg);
-  line-height: 1.5;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
 }
 
-.plugins-readme > :first-child {
+.detail-md > :first-child {
   margin-top: 0;
 }
 
-.plugins-readme > :last-child {
+.detail-md > :last-child {
   margin-bottom: 0;
 }
 
-.plugins-readme h1,
-.plugins-readme h2,
-.plugins-readme h3,
-.plugins-readme h4 {
-  margin: 14px 0 6px;
-  font-weight: 700;
+.detail-md h1,
+.detail-md h2,
+.detail-md h3,
+.detail-md h4,
+.detail-md h5,
+.detail-md h6 {
+  margin: 18px 0 6px;
+  font-weight: 600;
   color: var(--fg);
   line-height: 1.3;
 }
 
-.plugins-readme h1 { font-size: 16px; }
-.plugins-readme h2 { font-size: 14px; }
-.plugins-readme h3 { font-size: 13px; }
-.plugins-readme h4 { font-size: 12.5px; }
+.detail-md h1 { font-size: var(--text-xl); }
+.detail-md h2 { font-size: var(--text-lg); }
+.detail-md h3,
+.detail-md h4,
+.detail-md h5,
+.detail-md h6 { font-size: var(--text-md); }
 
-.plugins-readme p {
-  margin: 6px 0;
+.detail-md p {
+  margin: 8px 0;
 }
 
-.plugins-readme ul,
-.plugins-readme ol {
-  margin: 6px 0;
+.detail-md ul,
+.detail-md ol {
+  margin: 8px 0;
   padding-left: var(--space-10);
 }
 
-.plugins-readme li {
-  margin: 2px 0;
+.detail-md li {
+  margin: 3px 0;
 }
 
-.plugins-readme code {
+.detail-md code {
   font-family: var(--font-mono);
-  font-size: var(--text-sm);
-  background: var(--bg-surface);
-  padding: 1px 5px;
-  border-radius: 4px;
+  font-size: 0.9em;
+  background: var(--bg-raised);
+  padding: 1px 6px;
+  border-radius: 5px;
   color: var(--fg);
 }
 
-.plugins-readme pre {
-  background: var(--bg-surface);
-  padding: var(--space-5) var(--space-6);
-  border-radius: 6px;
+.detail-md pre {
+  background: var(--bg-inset);
+  border: 1px solid var(--border-soft);
+  padding: var(--space-6) var(--space-7);
+  border-radius: var(--radius);
   font-family: var(--font-mono);
   font-size: var(--text-sm);
   overflow-x: auto;
-  margin: 8px 0;
-  line-height: 1.45;
+  margin: 10px 0;
+  line-height: 1.55;
 }
 
-.plugins-readme pre code {
+.detail-md pre code {
   background: transparent;
   padding: 0;
   font-size: inherit;
 }
 
-.plugins-readme a {
-  color: var(--accent, #ee6138);
+.detail-md a {
+  /* The accent itself is 4.0:1 on a section; this is its text shade. */
+  color: var(--accent-orange-text, var(--accent));
   text-decoration: none;
 }
 
-.plugins-readme a:hover {
+.detail-md a:hover {
   text-decoration: underline;
 }
 
-.plugins-readme blockquote {
+.detail-md blockquote {
   border-left: 3px solid var(--border);
   margin: 8px 0;
   padding: var(--space-1) var(--space-6);
   color: var(--fg-muted);
 }
 
-.plugins-readme table {
+.detail-md table {
   border-collapse: collapse;
-  margin: 8px 0;
+  margin: 10px 0;
   font-size: var(--text-sm);
 }
 
-.plugins-readme th,
-.plugins-readme td {
+.detail-md th,
+.detail-md td {
   border: 1px solid var(--border-soft);
   padding: var(--space-2) var(--space-4);
   text-align: left;
 }
 
-.plugins-readme th {
-  background: var(--bg-surface);
-  font-weight: 700;
+.detail-md th {
+  background: var(--bg-raised);
+  font-weight: 600;
 }
 
-.plugins-readme img {
+.detail-md img {
   max-width: 100%;
   height: auto;
   border-radius: 6px;
 }
 
 /* HTML wrappers READMEs use for hero / badge layout. */
-.plugins-readme p[align="center"],
-.plugins-readme div[align="center"],
-.plugins-readme h1[align="center"],
-.plugins-readme h2[align="center"],
-.plugins-readme h3[align="center"] {
+.detail-md p[align="center"],
+.detail-md div[align="center"],
+.detail-md h1[align="center"],
+.detail-md h2[align="center"],
+.detail-md h3[align="center"] {
   text-align: center;
 }
 
-.plugins-readme picture {
+.detail-md picture {
   display: inline-block;
   max-width: 100%;
 }
 
-.plugins-readme hr {
+.detail-md hr {
   border: none;
   border-top: 1px solid var(--border-soft);
-  margin: 12px 0;
+  margin: 14px 0;
 }
 
-/* ── Programs panel ─────────────────────────────────────────────── */
+/* ── Programs page ──────────────────────────────────────────────── */
 
 .programs {
   display: flex;
   flex-direction: column;
-  gap: var(--space-4);
-  max-width: 62ch;
+  gap: var(--space-5);
+  max-width: 72ch;
+  padding: var(--space-8) var(--space-8) var(--space-7);
+  border-radius: var(--radius-lg);
+  background: var(--bg-surface);
+}
+
+.programs-title {
+  margin: 0;
+  font-size: var(--text-md);
+  font-weight: 700;
 }
 
 .programs-lead {
   margin: 0;
   color: var(--fg);
+  line-height: 1.5;
 }
 
 .programs-note {
   margin: 0;
   font-size: var(--text-sm);
   color: var(--fg-muted);
+  line-height: 1.5;
 }
 
 .programs-token {
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
-  padding: var(--space-4);
-  border: 1px solid var(--border-soft);
-  border-radius: var(--radius-sm);
+  gap: var(--space-3);
 }
 
 .programs-token-label {
   font-size: var(--text-sm);
+  font-weight: 600;
   color: var(--fg-muted);
 }
 
+.programs-token-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-3) var(--space-3) var(--space-3) var(--space-6);
+  border-radius: var(--radius-md, 8px);
+  background: var(--bg);
+}
+
 .programs-token-value {
+  flex: 1;
+  min-width: 0;
   font-family: var(--font-mono);
   font-size: var(--text-sm);
   overflow-wrap: anywhere;
@@ -9438,7 +10374,12 @@ button.mcp-server-head:focus-visible {
 .programs-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--space-2);
+  gap: var(--space-4);
+  margin-top: var(--space-2);
+}
+
+:is(.programs-actions, .programs-token-row) .btn {
+  border-radius: var(--radius-pill);
 }
 
 /* ── Hooks panel ────────────────────────────────────────────────── */
@@ -9450,58 +10391,45 @@ button.mcp-server-head:focus-visible {
   font-weight: 500;
 }
 
-.hooks-groups {
-  display: flex;
-  flex-direction: column;
-  gap: 18px;
-}
-
+/* One soft card per lifecycle event; its hooks are quiet rows inside
+   it that fill on hover, with soft chips under each. */
 .hooks-group {
-  display: flex;
-  flex-direction: column;
+  cursor: default;
 }
 
-.hooks-group-head {
-  display: flex;
-  align-items: baseline;
-  gap: var(--space-4);
-  margin-bottom: var(--space-2);
+/* The card itself opens nothing, so it does not light up; its rows do. */
+.hooks-group:hover {
+  border-color: transparent;
+  background: var(--bg-surface);
 }
 
-.hooks-event-name {
-  font-family: var(--font-mono);
-  font-size: var(--text-sm);
-  font-weight: 700;
-  color: var(--fg);
-  letter-spacing: 0.01em;
+.hooks-glyph {
+  width: 38px;
+  height: 38px;
 }
 
 .hooks-event-count {
+  flex-shrink: 0;
   font-size: var(--text-xs);
   color: var(--fg-faint);
   padding: 1px 7px;
-  border-radius: 9px;
-  background: var(--bg-raised);
-}
-
-.hooks-event-blurb {
-  font-size: var(--text-sm);
-  color: var(--fg-faint);
-  margin-bottom: var(--space-4);
-  line-height: 1.45;
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--fg) 8%, transparent);
+  font-variant-numeric: tabular-nums;
 }
 
 .hooks-list {
-  gap: var(--space-3);
+  margin-top: var(--space-4);
+  margin-left: calc(-1 * var(--space-4));
+  gap: var(--space-1);
 }
 
 .hooks-row {
   align-items: flex-start;
   gap: var(--space-5);
-  padding: var(--space-4) var(--space-5);
-  border: 1px solid var(--border-soft);
-  border-radius: 8px;
-  background: var(--bg-surface);
+  width: 100%;
+  padding: var(--space-4);
+  border-radius: var(--radius-md, 8px);
 }
 
 .hooks-row-icon {
@@ -9511,15 +10439,13 @@ button.mcp-server-head:focus-visible {
   justify-content: center;
   width: 22px;
   height: 22px;
-  border-radius: 6px;
-  background: var(--bg-raised);
-  color: var(--fg-muted);
+  color: var(--fg-faint);
 }
 
 .hooks-row-main {
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
+  gap: var(--space-3);
   min-width: 0;
   flex: 1;
 }
@@ -9533,6 +10459,7 @@ button.mcp-server-head:focus-visible {
   white-space: nowrap;
   background: transparent;
   padding: 0;
+  line-height: 22px;
 }
 
 .hooks-row-tags {
@@ -9543,25 +10470,21 @@ button.mcp-server-head:focus-visible {
 
 .hooks-tag {
   font-size: var(--text-xs);
-  font-family: var(--font-mono);
   color: var(--fg-muted);
-  padding: 1px 7px;
-  border-radius: 9px;
-  background: var(--bg-raised);
-  border: 1px solid var(--border-soft);
+  padding: 1px 8px;
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--fg) 8%, transparent);
 }
 
 .hooks-tag.tone-good {
-  /* --success on --bg-raised is under 4.5:1 at this size in both
-     themes; the text-weight green clears it (R683). */
+  /* --success on a tint is under 4.5:1 at this size in both themes;
+     the text-weight green clears it (R683). */
   color: var(--accent-green-text, var(--success));
-  border-color: color-mix(in srgb, var(--success) 35%, transparent);
 }
 
 .hooks-row-link {
   background: transparent;
   border: none;
-  padding: 0;
   margin: 0;
   text-align: left;
   color: inherit;
@@ -9569,8 +10492,12 @@ button.mcp-server-head:focus-visible {
   font: inherit;
 }
 
+.hooks-row-link:hover,
+.hooks-row-link:focus-visible {
+  background: var(--bg);
+}
+
 .hooks-row-link:hover .hooks-row-ident {
-  text-decoration: underline;
   color: var(--accent-orange-text, #f5a088);
 }
 
@@ -9595,61 +10522,32 @@ button.mcp-server-head:focus-visible {
   word-break: break-word;
 }
 
-/* ── Watcher panel (background processes) ────────────────────────────
-   Two-pane: list on top, tail pane below. The list is bounded so the
-   tail always has at least ~50% of the drawer; with many processes
-   the list scrolls internally before the tail surrenders space. */
-.watcher-count {
-  color: var(--fg-muted);
-  font-weight: 400;
-}
-
-.watcher-layout {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-6);
-  height: 100%;
-  min-height: 0;
-}
-
-.watcher-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  gap: var(--space-3);
-  overflow-y: auto;
-  flex-shrink: 0;
-}
-
-/* When a process is selected, the list is bounded so the tail
-   pane gets at least 60% of the drawer. Without a selection
-   the list takes the full height. */
-.watcher-layout--split .watcher-list {
-  max-height: 40%;
-}
-
-.watcher-layout--list-only .watcher-list {
-  flex: 1;
-  max-height: none;
-}
-
+/* ── Watcher page (background processes) ─────────────────────────────
+   The shared card, one per process: the toggle on its command stretches
+   over the card, and Kill sits above that layer as a sibling card
+   action. One process's page is a hero and its tail in a
+   soft panel. */
 .watcher-row {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--space-4);
-  padding: var(--space-4) var(--space-5);
-  border: 1px solid var(--border-soft);
-  border-radius: 6px;
-  background: var(--bg-surface);
-  transition: border-color 0.12s, background 0.12s;
+  position: relative;
+  cursor: default;
+}
+
+.watcher-glyph {
+  position: relative;
+}
+
+.watcher-glyph .watcher-status {
+  position: absolute;
+  right: -3px;
+  bottom: -3px;
+  border: 2px solid var(--bg-surface);
+  box-sizing: content-box;
 }
 
 .watcher-row-toggle {
-  flex: 1;
   min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
+  max-width: 100%;
+  display: block;
   padding: 0;
   border: none;
   background: none;
@@ -9659,30 +10557,25 @@ button.mcp-server-head:focus-visible {
   cursor: pointer;
 }
 
-.watcher-row:hover {
-  border-color: var(--border);
+.watcher-row-toggle::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
 }
 
-.watcher-row--selected {
-  border-color: var(--accent-orange-text, #f5a088);
-  background: color-mix(in srgb, var(--igni-orange) 6%, var(--bg-surface));
+.watcher-row-toggle:focus-visible {
+  outline: none;
 }
 
-.watcher-row--stopped .watcher-pid,
-.watcher-row--stopped .watcher-cmd {
-  /* Dimmed by colour, not opacity: a faded row took its 'exit -15'
-     down to 2.8:1 (R683). */
-  color: var(--fg-muted);
+.watcher-row:has(.watcher-row-toggle:focus-visible) {
+  border-color: var(--border-soft);
+  background: var(--bg-raised);
 }
 
-.watcher-row--stopped .watcher-status {
-  opacity: 0.65;
-}
-
-.watcher-row-head {
-  display: flex;
-  align-items: center;
-  gap: var(--space-4);
+.watcher-kill {
+  position: relative;
+  z-index: 1;
 }
 
 .watcher-status {
@@ -9694,108 +10587,80 @@ button.mcp-server-head:focus-visible {
 
 .watcher-status--running {
   background: #34c759;
-  box-shadow: 0 0 0 2px color-mix(in srgb, #34c759 25%, transparent);
 }
 
 .watcher-status--stopped {
   background: var(--fg-muted);
 }
 
-.watcher-pid {
-  font-family: var(--font-mono);
-  font-size: var(--text-sm);
-  color: var(--fg);
-  font-weight: 600;
-}
-
-.watcher-elapsed {
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-  color: var(--fg-muted);
-  margin-left: auto;
-}
-
-.watcher-row .btn-danger {
-  padding: var(--space-1) var(--space-4);
-  font-size: var(--text-xs);
-  background: transparent;
-  /* --danger is 4.33:1 on the dark surface at 11px (R683). */
-  color: var(--accent-red-text, var(--danger));
-  border-color: var(--danger);
-}
-
-.watcher-row .btn-danger:hover {
-  background: var(--danger);
-  color: #fff;
-}
-
 .watcher-cmd {
-  font-family: var(--font-mono);
-  font-size: var(--text-sm);
+  display: block;
   color: var(--fg);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* Dimmed by colour, not opacity: a faded row took its 'exit -15' down
+   to 2.8:1 (R683). */
+.watcher-row--stopped .watcher-cmd {
+  color: var(--fg-muted);
 }
 
 .watcher-lastline {
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-  color: var(--fg-muted);
+  display: block;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
+.watcher-elapsed {
+  font-variant-numeric: tabular-nums;
+}
+
+/* The tail sits in the page's Output section. */
 .watcher-tail {
-  flex: 1;
   display: flex;
   flex-direction: column;
-  min-height: 0;
   gap: var(--space-4);
 }
 
 .watcher-filter {
   flex: 1;
-  padding: var(--space-3) var(--space-5);
+  height: 31px;
+  padding: 0 var(--space-6);
   font-size: var(--text-sm);
-  font-family: var(--font-mono);
-  border: 1px solid var(--border-soft);
-  border-radius: 6px;
-  background: var(--bg-inset);
+  border: 1px solid transparent;
+  border-radius: var(--radius-pill);
+  background: var(--bg);
   color: var(--fg);
 }
 
 .watcher-filter:focus {
   outline: none;
-  border-color: var(--accent-orange-text, #f5a088);
+  border-color: var(--border-soft);
 }
 
 .watcher-resume {
   display: inline-flex;
   align-items: center;
   gap: var(--space-2);
-}
-
-.watcher-row-toggle:focus-visible {
-  outline: 2px solid var(--accent-orange-text, #f5a088);
-  outline-offset: 2px;
+  border-radius: var(--radius-pill);
 }
 
 .watcher-log {
-  flex: 1;
   margin: 0;
   padding: var(--space-6);
   font-family: var(--font-mono);
   font-size: var(--text-sm);
   line-height: 1.45;
   color: var(--fg);
-  background: var(--bg-inset);
-  border: 1px solid var(--border-soft);
-  border-radius: 6px;
+  background: var(--bg);
+  border-radius: var(--radius-md, 8px);
   white-space: pre-wrap;
   overflow-y: auto;
-  min-height: 0;
+  min-height: 240px;
+  max-height: 62vh;
 }
 
 .watcher-log-empty {
@@ -9807,8 +10672,6 @@ button.mcp-server-head:focus-visible {
   padding: var(--space-10);
   text-align: center;
   font-size: var(--text-md);
-  border: 1px dashed var(--border-soft);
-  border-radius: 6px;
 }
 
 /* Unfolded ``language-md`` block. Renders a fenced code block whose
@@ -10080,14 +10943,20 @@ button.mcp-server-head:focus-visible {
    Commands grouped by what you are trying to do. Clicking one seeds
    the composer rather than firing it — see ``HelpPage``. */
 .help-intro {
+  margin: 0 0 var(--space-8);
   color: var(--fg-muted);
-  padding-bottom: var(--space-7);
-  border-bottom: 1px solid var(--border-soft);
-  margin-bottom: var(--space-8);
+}
+
+.help-intro code {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--bg-surface);
 }
 
 .help-group {
-  margin-bottom: 22px;
+  margin-bottom: var(--space-12);
 }
 
 .help-group-title {
@@ -10114,15 +10983,15 @@ button.mcp-server-head:focus-visible {
   gap: var(--space-5);
   text-align: left;
   background: none;
-  border: 1px solid transparent;
-  border-radius: var(--radius-sm);
-  padding: 7px 10px;
+  border: none;
+  border-radius: var(--radius-lg);
+  padding: 8px 12px;
   font: inherit;
   cursor: pointer;
 }
 
-.help-command:hover {
-  border-color: var(--border-soft);
+.help-command:hover,
+.help-command:focus-visible {
   background: var(--bg-surface);
 }
 
@@ -10213,79 +11082,67 @@ button.mcp-server-head:focus-visible {
   color: var(--danger);
 }
 
-.ctx-empty {
-  color: var(--fg-muted);
-}
-
-/* ── A page with nothing to show yet ──────────────────────────── */
-.page-empty {
-  padding: 18px 0 6px;
-}
-
-.page-empty-lead {
-  margin: 0 0 16px;
-  max-width: 60ch;
-  line-height: 1.6;
-  color: var(--fg-muted);
-}
-
-.page-empty-lead strong {
-  color: var(--fg);
-}
-
 /* ── Workflows page ──────────────────────────────────────────────
-   One card per workflow: what it is, when to reach for it, and the
-   phases it walks through. Clicking seeds the composer — several take
-   a JSON argument object. See ``WorkflowsPage``. */
-.workflow-card {
-  gap: var(--space-3);
-  width: 100%;
-  text-align: left;
-  background: none;
-  border-radius: var(--radius-md, 8px);
-  margin-bottom: var(--space-4);
-  font: inherit;
-  cursor: pointer;
+   The shared card grid: a card opens the workflow's own page with every
+   phase spelled out; its round play button seeds the run.
+   Running still streams into the chat — several take a JSON argument
+   object. See ``WorkflowsPage``. */
+.workflow-detail-text {
+  margin: 0;
+  color: var(--fg-muted);
+  font-size: var(--text-md);
+  line-height: 1.5;
 }
 
-.workflow-card:hover {
-  border-color: var(--accent, #ee6138);
-  background: var(--bg-surface);
-}
-
-.workflow-head {
+/* A workflow's phases, as numbered rows inside its Phases section. */
+.workflow-steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
   display: flex;
-  align-items: baseline;
+  flex-direction: column;
+  gap: var(--space-6);
+}
+
+.workflow-step {
+  display: flex;
   gap: var(--space-5);
 }
 
-.workflow-name {
-  font-family: var(--mono, ui-monospace, monospace);
+.workflow-step-num {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  border-radius: var(--radius-circle);
+  background: var(--bg);
+  border: 1px solid var(--border-soft);
+  color: var(--fg-muted);
+  font-size: var(--text-xs);
   font-weight: 600;
-  font-size: var(--text-md);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
-.workflow-phases {
-  font-size: var(--text-sm);
-  color: var(--fg-faint);
+.workflow-step-body {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
 }
 
-.workflow-desc {
+.workflow-step-title {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-4);
+  font-weight: 600;
+  color: var(--fg);
+}
+
+.workflow-step-detail {
   font-size: var(--text-sm);
   color: var(--fg-muted);
-}
-
-.workflow-when {
-  font-size: var(--text-sm);
-  color: var(--fg-faint);
-  font-style: italic;
-}
-
-.workflow-phase-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-  margin-top: var(--space-1);
+  line-height: 1.45;
 }
 
 .workflow-phase {
@@ -10294,32 +11151,6 @@ button.mcp-server-head:focus-visible {
   border-radius: var(--radius-pill);
   background: var(--bg-raised);
   color: var(--fg-muted);
-}
-
-.btn-warn {
-  color: var(--warning);
-  border-color: var(--warning);
-}
-
-.btn-xs {
-  padding: 2px 7px;
-  font-size: var(--text-xs);
-  line-height: 1.5;
-  color: var(--fg);
-  background: var(--bg-surface);
-  border: 1px solid var(--border);
-  border-radius: 5px;
-  cursor: pointer;
-}
-
-.btn-xs:disabled {
-  opacity: 0.5;
-  cursor: default;
-}
-
-.btn-quiet {
-  color: var(--fg-muted);
-  border-color: var(--border-soft);
 }
 
 .kb-share-audience {
@@ -10500,6 +11331,14 @@ button.mcp-server-head:focus-visible {
 .chip-bell svg {
   width: 15px;
   height: 15px;
+}
+
+/* The bell is the menus' glyph, which is drawn quieter than its label
+   (thinner, 72% opacity). Here it stands with the folder and terminal,
+   so it takes their full strength and weight. */
+.chip-bell .menu-icon {
+  opacity: 1;
+  stroke-width: 1.6;
 }
 
 /* Lit only when something is actually waiting. A bell that is always
@@ -11029,14 +11868,6 @@ button.mcp-server-head:focus-visible {
   user-select: none;
 }
 
-/* The header control that is currently on. Used by Compare, which is
-   a mode rather than an action — it stays pressed while the page is
-   in its comparison state. */
-.btn.btn-active {
-  border-color: var(--accent-blue);
-  color: var(--accent-blue-text);
-}
-
 /* ── The sign-in wall ─────────────────────────────────────────────
    A session with no account sees this and nothing else: igni is
    self-hosted, so a session with nowhere to write has nothing to
@@ -11107,10 +11938,10 @@ button.mcp-server-head:focus-visible {
   border-color: var(--accent, #e8613c);
 }
 
-.wall-go {
+.button.wall-go {
   width: 100%;
-  padding: var(--space-5) var(--space-6);
-  font-size: var(--text-lg);
+  height: 40px;
+  font-size: var(--text-md);
 }
 
 /* The portal address, for a deployment that serves its sign-in page
@@ -11287,10 +12118,11 @@ button.mcp-server-head:focus-visible {
    header row; a frame cannot know to leave room for it, so the body
    does. */
 .page:has(.extension-frame) .page-body {
+  scrollbar-gutter: auto;
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  padding-top: var(--crumb-row-h);
+  padding-top: calc(var(--page-under-header, 0px) + var(--crumb-row-h));
 }
 
 .page:has(.extension-frame) .page-measure {
@@ -11383,15 +12215,6 @@ button.mcp-server-head:focus-visible {
   align-items: center;
   gap: var(--space-3);
   margin-top: var(--space-2);
-}
-
-/* Nothing to save yet is a quiet state, not a faded warning: a disabled
-   primary reads as neutral grey rather than washed-out orange. */
-.ext-settings-actions .btn-primary:disabled {
-  background: var(--bg-raised);
-  border-color: transparent;
-  color: var(--fg-faint);
-  opacity: 1;
 }
 
 .ext-settings-error {
@@ -11651,28 +12474,6 @@ button.mcp-server-head:focus-visible {
   gap: var(--space-4);
 }
 
-.backend-banner-btn {
-  padding: var(--space-2) var(--space-6);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-pill);
-  background: var(--bg-raised);
-  color: var(--fg);
-  font: inherit;
-  font-size: var(--text-sm);
-  cursor: pointer;
-}
-
-.backend-banner-btn.primary {
-  border-color: transparent;
-  background: var(--igni-gradient);
-  color: #fff;
-}
-
-.backend-banner-btn:disabled {
-  cursor: progress;
-  opacity: 0.6;
-}
-
 .backend-banner-error {
   flex-basis: 100%;
   color: var(--danger-text);
@@ -11724,13 +12525,22 @@ button.mcp-server-head:focus-visible {
    centred reading measure the other pages sit in and manages its own
    scroll inside each pane. */
 .page:has(.files-layout) .page-body {
+  scrollbar-gutter: auto;
   display: flex;
+  flex-direction: column;
   overflow: hidden;
-  padding: 0;
+  padding: var(--page-under-header, 0px) 0 0;
 }
+/* Full-bleed, so its header row is too. */
+.page:has(.files-layout) .page-body > .page-head,
+.page:has(.files-layout) .page-body > .page-toolbar {
+  width: 100%;
+}
+
 .page:has(.files-layout) .page-measure {
   flex: 1;
   min-width: 0;
+  min-height: 0;
   width: 100%;
   max-width: none;
   margin: 0;
@@ -11772,7 +12582,12 @@ button.mcp-server-head:focus-visible {
   display: flex;
   gap: 4px;
   padding: 7px 10px 0;
+  /* Sideways only, on rails: with overflow-y left visible it computes to
+     auto, and a trackpad swipe dragged the strip up and down too. */
   overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior: contain;
+  touch-action: pan-x;
   border-bottom: 1px solid var(--border-soft);
   scrollbar-width: none;
 }
@@ -12082,11 +12897,166 @@ button.mcp-server-head:focus-visible {
 }
 .files-code-state { flex: 1; }
 
-/* The header's folder button, beside the bell. */
-.chip-files.active {
+/* The bell, then the folder and terminal toggles: bare glyphs, square,
+   with no outline — a fill shows hover and an open dock. */
+.chip-bell,
+.chip-files,
+.chip-terminal {
+  width: 30px;
+  padding: 0;
+  justify-content: center;
+  gap: 0;
+  border-color: transparent;
+  background: transparent;
+}
+.chip-bell:hover,
+.chip-files:hover,
+.chip-terminal:hover {
+  border-color: transparent;
+  background: var(--bg-surface);
+}
+.chip-files.active,
+.chip-terminal.active {
+  color: var(--fg);
+  background: var(--bg-raised);
+  border-color: transparent;
+}
+
+/* Between what is waiting and the dock's toggles. */
+.chip-divider {
+  flex: 0 0 auto;
+  width: 1px;
+  height: 18px;
+  margin: 0 2px;
+  background: var(--border-soft);
+}
+
+/* The dock's sections: the files, the terminal, or the files above the
+   terminal with a splitter between. Each grows by its share of the
+   height; the shares live on the elements while the splitter drags. */
+.dock-section {
+  flex: 1 1 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.dock-section--terminal {
+  min-height: 90px;
+}
+.dock-split {
+  flex: 0 0 auto;
+  height: 7px;
+  margin: -3px 0;
+  position: relative;
+  z-index: 6;
+  cursor: row-resize;
+  touch-action: none;
+  border-top: 1px solid var(--border-soft);
+  background-clip: content-box;
+}
+.dock-split:hover {
+  background: color-mix(in srgb, var(--accent) 35%, transparent);
+}
+
+/* ── Terminal: xterm on the inset background, its head like the files' */
+.terminal-pane {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-inset);
+}
+.terminal-head {
+  padding-bottom: 0;
+  background: var(--bg);
+}
+.terminal-head .files-tabs {
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  border-bottom: none;
+  /* Sideways only, on rails: overflow-x alone left overflow-y auto, and
+     a trackpad swipe dragged the strip up and down. */
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior: contain;
+  touch-action: pan-x;
+}
+.terminal-tablist {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+}
+.terminal-tab.is-active {
+  background: var(--bg-inset);
+}
+.terminal-tab.is-exited .files-tab-label {
+  color: var(--fg-faint);
+}
+.terminal-tab-exited {
+  font-size: var(--text-xs);
+  font-style: italic;
+}
+.terminal-plus {
+  display: block;
+  font-size: 16px;
+  line-height: 14px;
+  width: 14px;
+  text-align: center;
+}
+.terminal-screen {
+  height: 100%;
+}
+.terminal-empty {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  font-size: var(--text-sm);
+  color: var(--fg-muted);
+}
+.terminal-empty .terminal-notice-btn {
+  margin-left: 0;
+}
+.terminal-host {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 6px 4px 4px 10px;
+  overflow: hidden;
+}
+.terminal-host .xterm {
+  height: 100%;
+}
+/* xterm's stylesheet paints its viewport black; the rows rarely fill
+   the pane exactly, and the remainder showed as a black strip. */
+.terminal-host .xterm .xterm-viewport {
+  background-color: transparent;
+}
+.terminal-notice {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 12px;
+  border-top: 1px solid var(--border-soft);
+  font-size: var(--text-sm);
+  color: var(--fg-muted);
+  background: var(--bg);
+}
+.terminal-notice-btn {
+  margin-left: auto;
+  padding: 3px 10px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  font: inherit;
   color: var(--fg);
   background: var(--bg-surface);
-  border-color: var(--border);
+  cursor: pointer;
+}
+.terminal-notice-btn:hover {
+  background: var(--bg-raised);
 }
 
 /* Full screen: the dock takes the whole window; the chat and the
@@ -12120,13 +13090,13 @@ button.mcp-server-head:focus-visible {
    and keep the empty row a drag handle with the tabs and controls
    excluded. In the split it sits on the right, clear of the lights, so
    this is full-screen only. */
-:root[data-host="tauri"][data-platform="mac"] .files-dock--full .files-dock-head {
+:root[data-host="tauri"][data-platform="mac"] .files-dock--full .dock-section:first-child .files-dock-head {
   padding-left: 80px;
   -webkit-app-region: drag;
   app-region: drag;
 }
-:root[data-host="tauri"][data-platform="mac"] .files-dock--full .files-dock-head .files-tab,
-:root[data-host="tauri"][data-platform="mac"] .files-dock--full .files-dock-head button {
+:root[data-host="tauri"][data-platform="mac"] .files-dock--full .dock-section:first-child .files-dock-head .files-tab,
+:root[data-host="tauri"][data-platform="mac"] .files-dock--full .dock-section:first-child .files-dock-head button {
   -webkit-app-region: no-drag;
   app-region: no-drag;
 }
@@ -12322,25 +13292,13 @@ button.mcp-server-head:focus-visible {
    (no ResizeObserver) it is still a grid, just an uneven one. An opened
    MCP server simply grows in its own column and the cards below it move
    down — spanning both columns would leave a hole beside the card above. */
-.plugins-grid--flow {
+.card-grid--flow {
   grid-auto-rows: 1px;
   row-gap: 0;
   align-items: start;
 }
 
-.mcp-server {
-  display: flex;
-  gap: var(--space-5);
-  padding: var(--space-7);
-  margin-bottom: 0;
-  border: 1px solid transparent;
-  border-radius: var(--radius-lg);
-  background: var(--bg-surface);
-}
-.mcp-server:hover { border-color: var(--border-soft); background: var(--bg-raised); }
-.mcp-server-main { gap: var(--space-3); }
-
-.plugins-grid .ext-row {
+.card-grid .ext-row {
   align-items: flex-start;
   gap: var(--space-5);
   padding: var(--space-7);
@@ -12350,7 +13308,7 @@ button.mcp-server-head:focus-visible {
   border-radius: var(--radius-lg);
   background: var(--bg-surface);
 }
-.plugins-grid .ext-row:hover { border-color: var(--border-soft); background: var(--bg-raised); }
+.card-grid .ext-row:hover { border-color: var(--border-soft); background: var(--bg-raised); }
 
 /* ?demo=panels toggle bar. */
 .demo-panels-switch { display: flex; gap: 8px; padding: 10px 16px; }

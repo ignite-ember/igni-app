@@ -235,4 +235,14 @@ export const APP_SCREENS: readonly AppScreen[] = [
     ready: { selector: '[data-testid="cloud-extension"] iframe' },
     axeBothThemes: true,
   },
+  {
+    // A turn's tools and thinking as one container: running with its
+    // latest thought, a command's output tail, finished with a failure,
+    // opened, and twenty-two steps. Its colours carry meaning in both
+    // themes, so both are checked.
+    name: '26-activity-groups',
+    demo: 'activity',
+    ready: { selector: '.activity-group', count: 5 },
+    axeBothThemes: true,
+  },
 ]
