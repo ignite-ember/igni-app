@@ -9,6 +9,7 @@ import { InterruptedBannerDemo } from "./dev/InterruptedBannerDemo";
 import { OrchestrateDemo } from "./dev/OrchestrateDemo";
 import { PanelsDemo } from "./dev/PanelsDemo";
 import { PlanModeDemo } from "./dev/PlanModeDemo";
+import { FadeDemo } from "./dev/FadeDemo";
 import { PluginsCatalogDemo } from "./dev/PluginsCatalogDemo";
 import { VisualizerStreamDemo } from "./dev/VisualizerStreamDemo";
 import { WorkflowDemo } from "./dev/WorkflowDemo";
@@ -43,6 +44,9 @@ document.documentElement.dataset.host = host.kind;
 //   ?demo=activity       — the activity group in each of its
 //                          states, clocks fixed — see
 //                          ``dev/ActivityDemo.tsx``.
+//   ?demo=fade           — a playground for the top fade: blur
+//                          strength, layers and reach, and where the
+//                          opacity starts and ends — see ``dev/FadeDemo.tsx``.
 //   ?demo=app            — force-load the real app (otherwise
 //                          the dev Tauri shell, which has no
 //                          address bar to type a query into,
@@ -63,6 +67,7 @@ function pickRoot() {
   if (demo === "panels") return <PanelsDemo />;
   if (demo === "plugins") return <PluginsCatalogDemo />;
   if (demo === "activity") return <ActivityDemo />;
+  if (demo === "fade") return <FadeDemo />;
   return <App />;
 }
 
