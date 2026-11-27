@@ -131,7 +131,7 @@ export function McpPanel({
             }}
             add={{
               text: "Add server",
-              label: "Add an MCP server",
+              label: "Add server (MCP)",
               onClick: () => onAddServer(ADD_SERVER_PROMPT),
             }}
           />
