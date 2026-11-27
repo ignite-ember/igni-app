@@ -2,8 +2,9 @@ import { memo, useCallback, useEffect, useRef, useState } from "react";
 import type { ChatSearchMatch, GlobalChatSearchMatch } from "../protocol/backendCallResults";
 import type { IgniClient } from "../protocol/client";
 
-/** Find-in-conversation bar. Search runs on the BE against the Agno
- *  SQLite session (so a 10k-turn dialogue doesn't jank the JS thread),
+/** Find in the conversation: the body of the header's search pill,
+ *  which grows leftward out of the search icon (``AppHeader``).
+ *  Search runs on the BE against the Agno SQLite session (so a 10k-turn dialogue doesn't jank the JS thread),
  *  results carry ``history_index`` from ``get_chat_history``'s
  *  emission order, and the parent translates those to FE item
  *  indices via the parallel map built at session-load time.
@@ -34,26 +35,6 @@ export interface ChatSearchBarProps {
 
 const DEBOUNCE_MS = 150;
 const LIMIT = 50;
-
-function MagnifierIcon() {
-  return (
-    <svg
-      width="14"
-      height="14"
-      viewBox="0 0 16 16"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.6"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-      style={{ display: "block", flexShrink: 0 }}
-    >
-      <circle cx="7" cy="7" r="4.5" />
-      <path d="M10.5 10.5L13.5 13.5" />
-    </svg>
-  );
-}
 
 function ChevronGlyph({ up }: { up?: boolean }) {
   return (
@@ -297,6 +278,12 @@ export const ChatSearchBar = memo(function ChatSearchBar({
     [resultCount, activeIdx, scope, jump],
   );
 
+  // Switching scope keeps typing (and Enter / Esc) in the field.
+  const pickScope = useCallback((next: "chat" | "all") => {
+    setScope(next);
+    inputRef.current?.focus();
+  }, []);
+
   const nextMatch = useCallback(() => moveHighlight(1), [moveHighlight]);
   const prevMatch = useCallback(() => moveHighlight(-1), [moveHighlight]);
 
@@ -342,11 +329,18 @@ export const ChatSearchBar = memo(function ChatSearchBar({
   })();
 
   return (
-    <div className="chat-search-bar" role="search">
+    <div
+      className="chat-search-bar"
+      role="search"
+      // Esc closes from anywhere in the pill, not only the field.
+      onKeyDown={(e) => {
+        if (e.key !== "Escape") return;
+        e.preventDefault();
+        e.stopPropagation();
+        onClose();
+      }}
+    >
       <div className="chat-search-row">
-        <span className="chat-search-icon">
-          <MagnifierIcon />
-        </span>
         {/* Scope switch: this conversation, or every chat in the project. */}
         <div className="chat-search-scope" role="tablist" aria-label="Search scope">
           <button
@@ -354,7 +348,7 @@ export const ChatSearchBar = memo(function ChatSearchBar({
             role="tab"
             aria-selected={scope === "chat"}
             className={`chat-search-scope-btn${scope === "chat" ? " active" : ""}`}
-            onClick={() => setScope("chat")}
+            onClick={() => pickScope("chat")}
           >
             This chat
           </button>
@@ -363,7 +357,7 @@ export const ChatSearchBar = memo(function ChatSearchBar({
             role="tab"
             aria-selected={scope === "all"}
             className={`chat-search-scope-btn${scope === "all" ? " active" : ""}`}
-            onClick={() => setScope("all")}
+            onClick={() => pickScope("all")}
           >
             All chats
           </button>
@@ -374,6 +368,7 @@ export const ChatSearchBar = memo(function ChatSearchBar({
           type="text"
           value={query}
           placeholder={scope === "all" ? "Find in all chats" : "Find in conversation"}
+          aria-label={scope === "all" ? "Find in all chats" : "Find in conversation"}
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={onKeyDown}
           spellCheck={false}
@@ -386,7 +381,7 @@ export const ChatSearchBar = memo(function ChatSearchBar({
           type="button"
           className="chat-search-nav"
           onClick={prevMatch}
-          disabled={!matches.length}
+          disabled={!resultCount}
           title="Previous match (Shift+Enter)"
           aria-label="Previous match"
         >
@@ -396,7 +391,7 @@ export const ChatSearchBar = memo(function ChatSearchBar({
           type="button"
           className="chat-search-nav"
           onClick={nextMatch}
-          disabled={!matches.length}
+          disabled={!resultCount}
           title="Next match (Enter)"
           aria-label="Next match"
         >
