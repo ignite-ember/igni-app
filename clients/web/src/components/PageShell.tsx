@@ -1,4 +1,4 @@
-import { createContext, useEffect, useState, type ReactNode } from "react";
+import { createContext, useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 import { createPortal } from "react-dom";
 
 import type { PageRoute } from "../chat/pageStack";
@@ -34,6 +34,42 @@ export const PageContext = createContext<PageContextValue | null>(null);
  * the real thing is what showed it: the title changed and the trail
  * did not.)
  */
+/** How far the page's top fade and the header blur sit above the chat's
+ *  at rest, in px. ``--top-fade-shift`` in theme.css. */
+export const PAGE_REST_SHIFT = 24;
+
+/**
+ * Slides the page's top fade and the header blur into the chat's place
+ * over the first ``PAGE_REST_SHIFT`` pixels of scroll.
+ *
+ * At rest the page's title sits where the chat's curve and blur would
+ * reach it; lifted by this much, they clear it and the page looks as it
+ * always did. Written on ``.main`` because the blur lives in the header,
+ * not under the page. ``data-scrolled`` turns the fade on at all:
+ * at rest the page carries none.
+ */
+function useRestShift(scroller: RefObject<HTMLDivElement | null>) {
+  useEffect(() => {
+    const el = scroller.current;
+    const main = el?.closest<HTMLElement>(".main");
+    if (!el || !main) return;
+    let last = -1;
+    const update = () => {
+      const shift = Math.max(0, PAGE_REST_SHIFT - Math.max(0, el.scrollTop));
+      if (shift === last) return;
+      last = shift;
+      main.style.setProperty("--page-rest-shift", `${shift}px`);
+      el.toggleAttribute("data-scrolled", shift < PAGE_REST_SHIFT);
+    };
+    update();
+    el.addEventListener("scroll", update, { passive: true });
+    return () => {
+      el.removeEventListener("scroll", update);
+      main.style.removeProperty("--page-rest-shift");
+    };
+  }, [scroller]);
+}
+
 export interface PanelLevels {
   labels: string[];
   onTruncate: (index: number) => void;
@@ -58,8 +94,8 @@ export function PageShell({
   /** Between the title and the close button — inline search, status
    *  pills. Same slot `Drawer` offers. */
   headerExtras?: ReactNode;
-  /** Non-scrolling row under the header, outside the scroll area so
-   *  list items cannot peek above it. Same slot `Drawer` offers. */
+  /** Row under the header. It scrolls with the list and goes up under
+   *  the app header with it, like the title. Same slot `Drawer` offers. */
   toolbar?: ReactNode;
   /** The body opens with its own heading, so this bar must not draw
    *  one too. See where it is read, below. */
@@ -120,6 +156,9 @@ export function PageShell({
     return () => window.removeEventListener("keydown", onKey, true);
     // `back` closes over the current levels; re-bind when they change.
   }, [onBack, levels, panelCrumbs.length]);
+
+  const body = useRef<HTMLDivElement>(null);
+  useRestShift(body);
 
   const here = trail[trail.length - 1];
   const leaf = panelCrumbs.length ? panelCrumbs[panelCrumbs.length - 1] : here?.label;
@@ -213,24 +252,25 @@ export function PageShell({
           chat's own <h1>, is hidden (``.main--paged``), so with an <h2>
           here assistive technology found no <h1> at all (R683). A body
           that carries its own title still gets one, out of sight. */}
-      {titleInBody && <h1 className="sr-only">{title ?? leaf}</h1>}
-      {(!titleInBody || headerExtras) && (
-        <div className="page-head">
-          {titleInBody ? null : <h1 className="page-title">{title ?? leaf}</h1>}
-          {headerExtras ? (
-            <div className="page-head-extras">{headerExtras}</div>
-          ) : (
-            <div className="header-spacer" />
-          )}
-        </div>
-      )}
-
-      {toolbar && <div className="page-toolbar">{toolbar}</div>}
-      {/* Two elements, not one: the outer scrolls full-bleed so the
-          scrollbar sits at the window's edge, the inner holds the
-          measure. Together they were a centred box that scrolled,
-          and its bar landed in the middle of the page. */}
-      <div className="page-body">
+      {/* The title row and the toolbar are inside the scroller, so they
+          go up under the app header with the list the way the chat's
+          first message does. At rest they sit exactly where they did
+          above it. Two elements, not one: the outer scrolls full-bleed
+          so the scrollbar sits at the window's edge, the inner holds
+          the measure. */}
+      <div className="page-body" ref={body}>
+        {titleInBody && <h1 className="sr-only">{title ?? leaf}</h1>}
+        {(!titleInBody || headerExtras) && (
+          <div className="page-head">
+            {titleInBody ? null : <h1 className="page-title">{title ?? leaf}</h1>}
+            {headerExtras ? (
+              <div className="page-head-extras">{headerExtras}</div>
+            ) : (
+              <div className="header-spacer" />
+            )}
+          </div>
+        )}
+        {toolbar && <div className="page-toolbar">{toolbar}</div>}
         <div className="page-measure">{children}</div>
       </div>
     </section>
