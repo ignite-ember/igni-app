@@ -42,14 +42,14 @@ interface FadeParams {
 
 const CURRENT: FadeParams = {
   headerH: 58,
-  maxBlur: 6,
-  layers: 1,
-  blurStart: 82,
-  blurFull: 0,
-  fadeSolid: 57,
+  maxBlur: 5,
+  layers: 8,
+  blurStart: 68,
+  blurFull: 18,
+  fadeSolid: 58,
   fadeGone: 0,
   geometric: false,
-  overscan: false,
+  overscan: true,
 };
 
 const BLUR_FIRST: FadeParams = {
