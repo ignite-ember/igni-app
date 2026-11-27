@@ -9,14 +9,15 @@
  *   • Copy → ``navigator.clipboard.writeText(path)`` with the
  *     FULL path (not the basename — file paths are only useful
  *     when complete).
- *   • Open → routes through ``host.openFile`` (the host abstraction
- *     handles Tauri and the browser differently).
+ *   • View → opens the in-app viewer; nothing opens the OS editor
+ *     or the preview dialog.
  */
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { FilePill } from "./FilePill";
 import { host } from "../lib/host";
+import { FileViewerContext } from "./pages/files/viewerContext";
 
 afterEach(() => {
   cleanup();
@@ -135,26 +136,38 @@ describe("FilePill — copy path", () => {
   });
 });
 
-describe("FilePill — Open / Preview routing", () => {
-  it("clicking Open / Preview routes through host.openFile with the full path", () => {
-    // The button label flips per host (Open on IDEs, Preview
-    // on web), but the action is the same — delegate to the
-    // host abstraction. Without this routing, IDE users can't
-    // click their attachment to land in the editor.
+describe("FilePill — View, and nothing else opens it", () => {
+  function withViewer(path: string, open = vi.fn()) {
+    const view = render(
+      <FileViewerContext.Provider value={{ open }}>
+        <FilePill path={path} />
+      </FileViewerContext.Provider>,
+    );
+    fireEvent.click(view.container.querySelector(".file-pill") as HTMLElement);
+    return { ...view, open };
+  }
+
+  it("View opens the full path in the in-app viewer and closes the menu", () => {
     const openFile = vi.spyOn(host, "openFile").mockResolvedValue(true);
-    const { container } = render(<FilePill path="/full/path/x.py" />);
-    fireEvent.click(container.querySelector(".file-pill") as HTMLElement);
-    // Match by role + flexible name because the label varies.
-    const btn = screen.getByRole("button", { name: /Open|Preview/ });
-    fireEvent.click(btn);
-    expect(openFile).toHaveBeenCalledWith("/full/path/x.py");
+    const { container, open } = withViewer("/full/path/x.py");
+    fireEvent.click(screen.getByRole("button", { name: "View" }));
+    expect(open).toHaveBeenCalledWith("/full/path/x.py");
+    expect(openFile).not.toHaveBeenCalled();
+    expect(container.querySelector(".file-pill-menu")).toBeNull();
   });
 
-  it("clicking Open / Preview closes the menu", () => {
-    vi.spyOn(host, "openFile").mockResolvedValue(true);
+  it("offers no editor or preview, even where the host could open files natively", () => {
+    vi.spyOn(host, "canOpenNatively", "get").mockReturnValue(true);
+    withViewer("x.py");
+    const items = screen.getAllByRole("button").filter((b) => b.classList.contains("file-pill-menu-item"));
+    expect(items.map((b) => b.textContent)).toEqual(["Copy path", "View"]);
+  });
+
+  it("offers only Copy path where no viewer is wired, never the preview dialog", () => {
+    const openFile = vi.spyOn(host, "openFile").mockResolvedValue(true);
     const { container } = render(<FilePill path="x.py" />);
     fireEvent.click(container.querySelector(".file-pill") as HTMLElement);
-    fireEvent.click(screen.getByRole("button", { name: /Open|Preview/ }));
-    expect(container.querySelector(".file-pill-menu")).toBeNull();
+    expect(screen.queryByRole("button", { name: /View|Open|Preview/ })).toBeNull();
+    expect(openFile).not.toHaveBeenCalled();
   });
 });
