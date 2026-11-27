@@ -1290,12 +1290,13 @@ button {
    lands inside the header rectangle where the OS-level drag region
    intercepts events before any DOM listener — buttons silently
    stop working on the topmost message. 78 px = ~58px header height
-   + 10 px chip offset + ~10 px safety margin. Sits inside the
+   + 10 px chip offset + ~10 px safety margin, plus 20 px of air the
+   owner asked for. Sits inside the
    scroll content so it scrolls away along with the messages —
    that's what lets content slide *behind* the header for the blur
    to pick up. */
 .conversation > .col {
-  padding-top: 78px;
+  padding-top: 98px;
 }
 
 /* Solid opaque background painted behind the header content
