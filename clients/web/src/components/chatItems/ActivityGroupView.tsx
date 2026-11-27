@@ -58,9 +58,9 @@ export const MARKER_GAP = 4;
 /** Room kept for the "+k" lead-in when the markers do not all fit; px. */
 export const MORE_WIDTH = 35;
 /** Lines of the latest thought shown while the group runs. */
-const THOUGHT_LINES = 3;
+const THOUGHT_LINES = 4;
 /** Lines of the last thought shown once the group is done. */
-const DONE_THOUGHT_LINES = 2;
+const DONE_THOUGHT_LINES = 3;
 /** Lines of a running command's output shown. */
 const OUTPUT_LINES = 2;
 /** How long a step picked from its marker stays highlighted. */
@@ -335,7 +335,7 @@ function HeadlineLabel({ step, duration }: { step: ActivityStep | null; duration
 
 /** Under the markers: the latest thought, a few lines of it with the
  *  top one fading, and a running command's last output lines. Once
- *  done, the last thought in two lines, opening to all of the thinking. */
+ *  done, the last thought in three lines, opening to all of the thinking. */
 function ThoughtFeed({
   steps,
   running,

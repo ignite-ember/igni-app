@@ -497,11 +497,11 @@ describe("the step markers", () => {
 });
 
 describe("the thinking under the markers", () => {
-  it("shows only the last three lines of a streaming thought, and follows it", () => {
+  it("shows only the last four lines of a streaming thought, and follows it", () => {
     const store = new ActivityDisclosure(null);
-    const t = { kind: "thinking", id: nextId++, text: "one\ntwo\nthree\nfour" } as const;
+    const t = { kind: "thinking", id: nextId++, text: "zero\none\ntwo\nthree\nfour" } as const;
     const { rerender } = render(<ActivityGroupView group={group([t])} running store={store} />);
-    expect(thoughtLines()).toEqual(["two", "three", "four"]);
+    expect(thoughtLines()).toEqual(["one", "two", "three", "four"]);
     expect(document.querySelector(".activity-thought-line")?.classList.contains("live")).toBe(true);
     expect(document.querySelector(".activity-live")?.getAttribute("aria-hidden")).toBe("true");
     // Under the markers, inside the group.
@@ -510,9 +510,9 @@ describe("the thinking under the markers", () => {
     expect(markersEl.compareDocumentPosition(feed) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(feed.querySelector(".live-window")?.classList.contains("mono")).toBe(false);
     rerender(<ActivityGroupView group={group([{ ...t, text: `${t.text}\nfive and` }])} running store={store} />);
-    expect(thoughtLines()).toEqual(["three", "four", "five and"]);
+    expect(thoughtLines()).toEqual(["two", "three", "four", "five and"]);
     rerender(<ActivityGroupView group={group([{ ...t, text: `${t.text}\nfive and six` }])} running store={store} />);
-    expect(thoughtLines()).toEqual(["three", "four", "five and six"]);
+    expect(thoughtLines()).toEqual(["two", "three", "four", "five and six"]);
   });
 
   it("reads a long thought from its end only", () => {
@@ -538,16 +538,16 @@ describe("the thinking under the markers", () => {
     expect(document.querySelector(".activity-thought-line")?.classList.contains("live")).toBe(true);
   });
 
-  it("keeps the last thought in two lines once done, opening to all of the thinking and back", () => {
+  it("keeps the last thought in three lines once done, opening to all of the thinking and back", () => {
     const store = new ActivityDisclosure(null);
     render(
       <ActivityGroupView
-        group={group([thinking("first idea"), tool("Read", "a"), thinking("1\n2\n3\n4")])}
+        group={group([thinking("first idea"), tool("Read", "a"), thinking("1\n2\n3\n4\n5")])}
         running={false}
         store={store}
       />,
     );
-    expect(thoughtLines()).toEqual(["3", "4"]);
+    expect(thoughtLines()).toEqual(["3", "4", "5"]);
     const toggle = screen.getByRole("button", { name: "All thinking" });
     expect(toggle.getAttribute("aria-expanded")).toBe("false");
     fireEvent.click(toggle);
@@ -555,14 +555,14 @@ describe("the thinking under the markers", () => {
     expect(toggle.textContent).toBe("Less");
     expect([...document.querySelectorAll(".activity-thoughts-full p")].map((p) => p.textContent)).toEqual([
       "first idea",
-      "1\n2\n3\n4",
+      "1\n2\n3\n4\n5",
     ]);
     // The group itself stays collapsed.
     expect(head().getAttribute("aria-expanded")).toBe("false");
     expect(store.isOpen("run-1:0:thinking")).toBe(true);
     fireEvent.click(toggle);
     expect(document.querySelector(".activity-thoughts-full")).toBeNull();
-    expect(thoughtLines()).toEqual(["3", "4"]);
+    expect(thoughtLines()).toEqual(["3", "4", "5"]);
   });
 
   it("keeps all of the thinking open across an unmount", () => {
@@ -770,15 +770,15 @@ describe("the timeline", () => {
   it("keeps the thoughts inline, in order: their last lines until opened, all of it then", () => {
     const store = new ActivityDisclosure(null);
     store.set("run-1:0", true);
-    render(<ActivityGroupView group={group([tool("Read", "a"), thinking("1\n2\n3\n4\n5"), tool("Read", "b")])} running={false} store={store} />);
+    render(<ActivityGroupView group={group([tool("Read", "a"), thinking("1\n2\n3\n4\n5\n6"), tool("Read", "b")])} running={false} store={store} />);
     const kinds = [...document.querySelectorAll(".activity-timeline > .activity-step")].map((s) => s.className.split(" ")[1]);
     expect(kinds).toEqual(["glyph-read", "glyph-thinking", "glyph-read"]);
     const toggle = screen.getByRole("button", { name: /Thought/, expanded: false });
     const preview = [...document.querySelectorAll(".activity-thought-preview .live-window-line")].map((l) => l.textContent);
-    expect(preview).toEqual(["3", "4", "5"]);
+    expect(preview).toEqual(["3", "4", "5", "6"]);
     fireEvent.click(toggle);
     expect(document.querySelector(".activity-thought-preview")).toBeNull();
-    expect(document.querySelector(".activity-thought .msg-thinking")?.textContent).toBe("1\n2\n3\n4\n5");
+    expect(document.querySelector(".activity-thought .msg-thinking")?.textContent).toBe("1\n2\n3\n4\n5\n6");
   });
 });
 
