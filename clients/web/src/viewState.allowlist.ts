@@ -175,7 +175,9 @@ export const VIEW_STATE: Record<string, Partial<Record<Category, string[]>>> = {
     field: ["retryDraft"],
   },
   "components/chatItems/ActivityGroupView.tsx": {
-    animation: ["now"],
+    animation: ["now", "flash"],
+    hover: ["tip"],
+    disclosure: ["open"],
   },
   "components/chatItems/ToolCardView.tsx": {
     disclosure: ["open"],

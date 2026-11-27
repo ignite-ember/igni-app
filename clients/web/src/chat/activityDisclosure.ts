@@ -18,12 +18,17 @@ const STORED_MAX = 400;
 
 type Listener = () => void;
 
+/** A step's clock key: apart from the group keys in the same map. */
+const stepKey = (group: string, index: number): string => `${group}#${index}`;
+
 /** The open-group set, with its storage. */
 export class ActivityDisclosure {
   private open: ReadonlySet<string>;
   private readonly listeners = new Set<Listener>();
   /** When each group was first and last seen running, for its clock. */
   private readonly clocks = new Map<string, { start: number; end: number | null }>();
+  /** The steps of each group whose clocks run, by group key. */
+  private readonly liveSteps = new Map<string, ReadonlySet<number>>();
 
   constructor(private readonly storage: Storage | null) {
     this.open = new Set(this.read());
@@ -63,6 +68,24 @@ export class ActivityDisclosure {
     }
     if (seen && seen.end === null) seen.end = now;
     return seen ?? null;
+  }
+
+  /** Mark the steps at ``live`` of group ``key`` running at ``now``, and
+   *  stop the clocks of its steps that were and are no longer. */
+  stepClocks(key: string, live: readonly number[], now: number): void {
+    const before = this.liveSteps.get(key);
+    if (!before && live.length === 0) return;
+    for (const index of before ?? []) {
+      if (!live.includes(index)) this.clock(stepKey(key, index), false, now);
+    }
+    for (const index of live) this.clock(stepKey(key, index), true, now);
+    if (live.length === 0) this.liveSteps.delete(key);
+    else this.liveSteps.set(key, new Set(live));
+  }
+
+  /** When step ``index`` of group ``key`` was seen running; null when never. */
+  stepTime(key: string, index: number): { start: number; end: number | null } | null {
+    return this.clocks.get(stepKey(key, index)) ?? null;
   }
 
   private read(): string[] {

@@ -593,3 +593,51 @@ export function ExpandIcon({ size = 14, full = false }: IconProps & { full?: boo
     </Svg>
   );
 }
+
+/** A prompt chevron and cursor: a shell command. */
+export function TerminalIcon({ size = 12 }: IconProps) {
+  return (
+    <Svg size={size}>
+      <path d="M3 4.5l3.5 3.5L3 11.5" />
+      <path d="M8.5 12h4.5" />
+    </Svg>
+  );
+}
+
+/** A thought bubble: the model thinking. */
+export function ThoughtIcon({ size = 12 }: IconProps) {
+  return (
+    <Svg size={size}>
+      <path d="M8 2.5c3 0 5.3 1.9 5.3 4.3S11 11 8 11c-.6 0-1.2-.1-1.7-.2L3.5 12.5l.7-2.6C3.3 9.1 2.7 8 2.7 6.8 2.7 4.4 5 2.5 8 2.5z" />
+    </Svg>
+  );
+}
+
+/** A globe: a page fetched from the web. */
+export function GlobeIcon({ size = 12 }: IconProps) {
+  return (
+    <Svg size={size}>
+      <circle cx="8" cy="8" r="5.6" />
+      <path d="M2.4 8h11.2M8 2.4c1.6 1.6 2.3 3.5 2.3 5.6S9.6 12 8 13.6C6.4 12 5.7 10.1 5.7 8S6.4 4 8 2.4z" />
+    </Svg>
+  );
+}
+
+/** A head and shoulders: a sub-agent. */
+export function AgentIcon({ size = 12 }: IconProps) {
+  return (
+    <Svg size={size}>
+      <circle cx="8" cy="5.5" r="2.6" />
+      <path d="M3 13.5c.6-2.4 2.6-3.9 5-3.9s4.4 1.5 5 3.9" />
+    </Svg>
+  );
+}
+
+/** A wrench: any other tool. */
+export function WrenchIcon({ size = 12 }: IconProps) {
+  return (
+    <Svg size={size}>
+      <path d="M10.3 2.6a3.2 3.2 0 0 0-3.9 4.1L2.7 10.4a1.3 1.3 0 0 0 1.9 1.9l3.7-3.7a3.2 3.2 0 0 0 4.1-3.9l-1.9 1.9-1.6-.4-.4-1.6z" />
+    </Svg>
+  );
+}

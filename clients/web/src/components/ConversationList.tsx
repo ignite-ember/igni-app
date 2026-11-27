@@ -3,6 +3,7 @@ import { Virtuoso, type VirtuosoHandle } from "react-virtuoso";
 
 import { activityDisclosure } from "../chat/activityDisclosure";
 import { TranscriptRows } from "../chat/activityGroups";
+import { liveStepIndexes } from "../chat/activitySteps";
 import type { ChatItem } from "../chat/chatItem";
 import type { ChatTranscript } from "../chat/chatTranscript";
 import { isProcessing, phaseLabel, shouldShowSpinner, type RunPhase } from "../chat/runPhase";
@@ -104,13 +105,15 @@ export function ConversationList({
   );
   // A run paused on an approval is still the turn's: its group stays live.
   const live = processing || awaitingApproval;
-  // When each group ran, read off the rows as they are rebuilt.
+  // When each group and step ran, read off the rows as they are rebuilt.
   const clocks = useMemo(() => {
     const now = Date.now();
     const out = new Map<string, { start: number; end: number | null }>();
     for (const row of rows.rows) {
       if (row.kind !== "activity") continue;
-      const clock = activityDisclosure.clock(row.group.key, live && row.group.tail, now);
+      const running = live && row.group.tail;
+      const clock = activityDisclosure.clock(row.group.key, running, now);
+      activityDisclosure.stepClocks(row.group.key, liveStepIndexes(row.group.items, running), now);
       if (clock) out.set(row.group.key, { ...clock });
     }
     return out;

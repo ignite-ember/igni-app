@@ -91,3 +91,72 @@ test("the progress row follows the turn, and the keyboard opens and closes it", 
   await expect(second).toHaveClass(/failed/);
   await expect(second.locator(".activity-failed")).toHaveText("1 failed");
 });
+
+test("a dot per step: a tooltip on hover, and a click opens the group at its step", async ({
+  page,
+  backend,
+  appUrl,
+}) => {
+  const runId = await startTurn(page, backend, appUrl);
+  backend.pushEvent({ type: "content_delta", id: runId, text: "Look first.", is_thinking: true });
+  toolStarted(backend, runId, "Grep", "--btn- src/");
+  toolDone(backend, runId, "3 matches");
+  toolStarted(backend, runId, "Read", "src/theme.css");
+  toolDone(backend, runId, "body { }");
+  toolStarted(backend, runId, "Bash", "npm run lint");
+  toolDone(backend, runId, "1 error", true);
+  toolStarted(backend, runId, "Bash", "npm test");
+
+  const dots = page.locator(".activity-dots .step-dot");
+  await expect(dots).toHaveCount(5);
+  await expect(dots.nth(0)).toHaveClass(/glyph-thinking state-done/);
+  await expect(dots.nth(3)).toHaveClass(/glyph-command state-failed/);
+  await expect(dots.nth(4)).toHaveClass(/state-live/);
+
+  await page.locator(".step-dot-btn").nth(2).hover();
+  await expect(page.getByRole("tooltip")).toHaveText(/^Read src\/theme\.css/);
+
+  await page.locator(".step-dot-btn").nth(3).click();
+  const head = page.locator(".activity-head");
+  await expect(head).toHaveAttribute("aria-expanded", "true");
+  const step = page.locator('.activity-step[data-step-index="3"]');
+  await expect(step).toHaveClass(/flash/);
+  await expect(step).toBeInViewport();
+  await expect(step).toBeFocused();
+  await expect(page.locator(".activity-timeline > .activity-step")).toHaveCount(5);
+});
+
+test("the last lines of a streaming thought slide under the row, and go when it ends", async ({
+  page,
+  backend,
+  appUrl,
+}) => {
+  const runId = await startTurn(page, backend, appUrl);
+  const window = page.locator(".activity-live");
+  backend.pushEvent({ type: "content_delta", id: runId, text: "one\ntwo\n", is_thinking: true });
+  await expect(window.locator(".live-window-line")).toHaveText(["one", "two"]);
+  backend.pushEvent({ type: "content_delta", id: runId, text: "three\nfour", is_thinking: true });
+  await expect(window.locator(".live-window-line")).toHaveText(["two", "three", "four"]);
+  // However long the thought, the window is three lines tall at most.
+  backend.pushEvent({ type: "content_delta", id: runId, text: " and then ".repeat(60), is_thinking: true });
+  await expect(window.locator(".live-window-line").last()).toContainText("and then and then");
+  const box = await window.boundingBox();
+  expect(box!.height).toBeGreaterThan(2 * 18);
+  expect(box!.height).toBeLessThanOrEqual(3 * 18 + 1);
+
+  toolStarted(backend, runId, "Bash", "npm test");
+  await expect(window).toHaveCount(0);
+  await expect(page.locator(".activity-head")).toContainText("npm test");
+});
+
+test("under reduced motion the live dot holds still", async ({ page, backend, appUrl }) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  const runId = await startTurn(page, backend, appUrl);
+  toolStarted(backend, runId, "Bash", "npm test");
+  const live = page.locator(".activity-dots .step-dot.state-live");
+  await expect(live).toHaveCount(1);
+  expect(await live.evaluate((el) => getComputedStyle(el).animationName)).toBe("none");
+
+  await page.emulateMedia({ reducedMotion: "no-preference" });
+  expect(await live.evaluate((el) => getComputedStyle(el).animationName)).toBe("pulse-dot");
+});

@@ -426,10 +426,10 @@ describe("a conversation", () => {
       ],
     });
     await screen.findAllByText(/rm -rf build/, {}, { timeout: 5000 });
-    const group = screen.getByRole("button", { name: /ls build/ });
-    expect(group.getAttribute("aria-expanded")).toBe("false");
+    const group = screen.getByRole("button", { name: /ls build/, expanded: false });
     // Paused on the person, the turn is not over: the row stays live.
-    expect(group.querySelector(".activity-dot.live")).not.toBeNull();
+    const row = group.closest(".activity-group")!;
+    expect(row.querySelector(".step-dot.state-live")).not.toBeNull();
     // The dialog is the composer's, never inside the group.
     const dialog = document.querySelector(".hitl-card");
     expect(dialog).not.toBeNull();
