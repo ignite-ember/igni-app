@@ -34,6 +34,10 @@ interface FadeParams {
   fadeGone: number;
   /** Grows each layer's blur geometrically (true) or linearly. */
   geometric: boolean;
+  /** Extends each layer's box below its band (the mask hides it), so its
+   *  blur has content to sample on every side instead of smearing at the
+   *  box's edge. */
+  overscan: boolean;
 }
 
 const CURRENT: FadeParams = {
@@ -45,6 +49,7 @@ const CURRENT: FadeParams = {
   fadeSolid: 57,
   fadeGone: 0,
   geometric: false,
+  overscan: false,
 };
 
 const BLUR_FIRST: FadeParams = {
@@ -56,6 +61,33 @@ const BLUR_FIRST: FadeParams = {
   fadeSolid: 50,
   fadeGone: 4,
   geometric: true,
+  overscan: true,
+};
+
+/** The owner's pick of 27 Nov, with the layers overscanned. */
+const OWNER_PICK: FadeParams = {
+  headerH: 58,
+  maxBlur: 5,
+  layers: 8,
+  blurStart: 62,
+  blurFull: 18,
+  fadeSolid: 58,
+  fadeGone: 0,
+  geometric: false,
+  overscan: true,
+};
+
+/** Blur strong enough to take the letters' shapes before the opacity starts. */
+const SUGGESTED: FadeParams = {
+  headerH: 58,
+  maxBlur: 10,
+  layers: 12,
+  blurStart: 72,
+  blurFull: 30,
+  fadeSolid: 44,
+  fadeGone: 0,
+  geometric: false,
+  overscan: true,
 };
 
 const STORAGE_KEY = "igni:fade-demo";
@@ -113,10 +145,15 @@ function blurLayers(p: FadeParams): BlurLayer[] {
   });
 }
 
-function layerStyle(layer: BlurLayer): CSSProperties {
-  const mask = `linear-gradient(to bottom, #000 0px, ${smoothStops(layer.solidTo, layer.goneAt, 1, 0).join(", ")}, transparent 100%)`;
+/** How far below its band an overscanned layer's box reaches. */
+function overscanPx(layer: BlurLayer): number {
+  return Math.ceil(Math.max(24, layer.blur * 4));
+}
+
+function layerStyle(layer: BlurLayer, overscan: boolean): CSSProperties {
+  const mask = `linear-gradient(to bottom, #000 0px, ${smoothStops(layer.solidTo, layer.goneAt, 1, 0).join(", ")}, transparent ${(layer.goneAt + 0.01).toFixed(2)}px, transparent 100%)`;
   return {
-    height: Math.ceil(layer.goneAt) + 1,
+    height: Math.ceil(layer.goneAt) + 1 + (overscan ? overscanPx(layer) : 0),
     backdropFilter: `blur(${layer.blur.toFixed(2)}px)`,
     WebkitBackdropFilter: `blur(${layer.blur.toFixed(2)}px)`,
     maskImage: mask,
@@ -268,7 +305,7 @@ export function FadeDemo() {
           )}
         </div>
         {layers.map((layer, k) => (
-          <div key={k} className="fade-demo-blur" style={layerStyle(layer)} />
+          <div key={k} className="fade-demo-blur" style={layerStyle(layer, p.overscan)} />
         ))}
         <div className="fade-demo-header" style={{ height: p.headerH }}>
           <span className="fade-demo-title">Plugins</span>
@@ -305,16 +342,26 @@ export function FadeDemo() {
           <button type="button" className="fade-demo-btn" onClick={() => setP(BLUR_FIRST)}>
             Blur first
           </button>
+          <button type="button" className="fade-demo-btn" onClick={() => setP(OWNER_PICK)}>
+            Your pick
+          </button>
+          <button type="button" className="fade-demo-btn" onClick={() => setP(SUGGESTED)}>
+            Suggested
+          </button>
         </div>
 
         <h2>Blur</h2>
         <Slider label="Strength at the top" value={p.maxBlur} min={0} max={40} step={0.5} onChange={set("maxBlur")} />
-        <Slider label="Layers" value={p.layers} min={1} max={8} unit="" onChange={set("layers")} />
+        <Slider label="Layers" value={p.layers} min={1} max={16} unit="" onChange={set("layers")} />
         <Slider label="Starts at (from top)" value={p.blurStart} min={0} max={260} onChange={set("blurStart")} />
         <Slider label="Strongest at (from top)" value={p.blurFull} min={0} max={200} onChange={set("blurFull")} />
         <label className="fade-demo-check">
           <input type="checkbox" checked={p.geometric} onChange={(e) => set("geometric")(e.target.checked)} />
           Each layer doubles the blur (otherwise even steps)
+        </label>
+        <label className="fade-demo-check">
+          <input type="checkbox" checked={p.overscan} onChange={(e) => set("overscan")(e.target.checked)} />
+          Extend each layer below its band (no edge smear)
         </label>
 
         <h2>Opacity</h2>
