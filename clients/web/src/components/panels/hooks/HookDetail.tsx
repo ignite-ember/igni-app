@@ -9,6 +9,7 @@ import { DetailSection } from "../../page/DetailSection";
 import { EntityHero } from "../../page/EntityHero";
 import { HeroChip } from "../../page/HeroChip";
 import { useFileContents } from "../../pages/files/useFileContents";
+import { useFileViewer } from "../../pages/files/viewerContext";
 import { CopyTextButton, MonoBlock } from "../MonoBlock";
 import { EventIcon } from "./HookIcons";
 import { EVENT_BLURB, formatTimeout, identOf, isWebhook, scriptPath, sourceOf, type HookEntry } from "./hooksView";
@@ -20,8 +21,9 @@ export function HookDetail({ hook, client }: { hook: HookEntry; client: IgniClie
   const ident = identOf(hook);
   const type = hook.type || (webhook ? "webhook" : "command");
   const headers = hook.header_names ?? [];
-  // A script's path is on the VM on the desktop's cloud side: nothing here opens it.
-  const canOpen = !!script && !host.onCloud;
+  const viewer = useFileViewer();
+  // The viewer reads over the live connection, so it opens a script on a cloud VM too.
+  const canOpen = !!script && (!!viewer || !host.onCloud);
 
   return (
     <div className="entity-detail hook-detail">
@@ -43,8 +45,8 @@ export function HookDetail({ hook, client }: { hook: HookEntry; client: IgniClie
         }
         actions={
           canOpen && (
-            <Button onClick={() => void host.openFile(script)}>
-              {host.canOpenNatively ? "Open in editor" : "Preview file"}
+            <Button variant="primary" onClick={() => (viewer ? viewer.open(script) : void host.openFile(script))}>
+              Open in viewer
             </Button>
           )
         }

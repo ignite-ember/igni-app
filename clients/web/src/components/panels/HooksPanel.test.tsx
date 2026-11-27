@@ -14,6 +14,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 
 import { PageContext } from "../PageShell";
 import { HooksPanel } from "./HooksPanel";
+import { FileViewerContext } from "../pages/files/viewerContext";
 import { host } from "../../lib/host";
 import { formatTimeout, scriptPath, sourceOf, type HookEntry } from "./hooks/hooksView";
 
@@ -39,7 +40,11 @@ const SCRIPT = "#!/bin/sh\n# refuse live payment keys\ngrep -q sk_live && exit 2
 
 function panelWith(
   answer: unknown,
-  { files = {}, asPage = false }: { files?: Record<string, unknown>; asPage?: boolean } = {},
+  {
+    files = {},
+    asPage = false,
+    viewer = null,
+  }: { files?: Record<string, unknown>; asPage?: boolean; viewer?: { open: (path: string) => void } | null } = {},
 ) {
   const rpc = vi.fn(async (method: string, params?: { path?: string }) => {
     if (method === "read_file") {
@@ -50,7 +55,11 @@ function panelWith(
     if (answer instanceof Error) throw answer;
     return answer;
   });
-  const panel = <HooksPanel client={{ rpc } as never} onClose={() => {}} />;
+  const panel = (
+    <FileViewerContext.Provider value={viewer}>
+      <HooksPanel client={{ rpc } as never} onClose={() => {}} />
+    </FileViewerContext.Provider>
+  );
   const trail = [{ kind: "hooks", label: "Hooks" } as never];
   render(
     asPage ? (
@@ -232,7 +241,7 @@ describe("a hook's page", () => {
     fireEvent.click(screen.getByRole("button", { name: "Copy the command" }));
     await waitFor(() => expect(writeText).toHaveBeenCalledWith("echo started >> log"));
     // Nothing to open in an editor.
-    expect(screen.queryByRole("button", { name: /Open in editor|Preview file/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Open in viewer" })).toBeNull();
   });
 
   it("shows a webhook's URL and header names, never as a file", async () => {
@@ -244,7 +253,7 @@ describe("a hook's page", () => {
     expect(facts()).toMatchObject({ URL: "https://hooks.acme.test/igni", Headers: "Authorization, X-Team" });
     expect(screen.getByRole("region", { name: "URL" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Copy the URL" })).toBeTruthy();
-    expect(screen.queryByRole("button", { name: /Open in editor|Preview file/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Open in viewer" })).toBeNull();
   });
 
   it("still opens a hook with nothing to run, named as such", async () => {
@@ -258,19 +267,40 @@ describe("a hook's page", () => {
     expect(facts().Command).toBe("(no command)");
   });
 
-  it("opens the script in the editor from its page", async () => {
+  it("opens the script in igni's own viewer, never the OS, as the page's main action", async () => {
+    const openFile = vi.spyOn(host, "openFile").mockResolvedValue(true);
+    const open = vi.fn();
+    panelWith([hook()], { viewer: { open } });
+    fireEvent.click(await screen.findByRole("button", { name: /guard\.sh/ }));
+    const button = screen.getByRole("button", { name: "Open in viewer" });
+    expect(button.className).toContain("button--primary");
+    fireEvent.click(button);
+    expect(open).toHaveBeenCalledWith(".igni/hooks/guard.sh");
+    expect(openFile).not.toHaveBeenCalled();
+  });
+
+  it("opens the script in the viewer on the cloud side too, which reads it over the connection", async () => {
+    vi.spyOn(host, "onCloud", "get").mockReturnValue(true);
+    const open = vi.fn();
+    panelWith([hook()], { viewer: { open } });
+    fireEvent.click(await screen.findByRole("button", { name: /guard\.sh/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Open in viewer" }));
+    expect(open).toHaveBeenCalledWith(".igni/hooks/guard.sh");
+  });
+
+  it("falls back to the host where no viewer is wired", async () => {
     const openFile = vi.spyOn(host, "openFile").mockResolvedValue(true);
     panelWith([hook()]);
     fireEvent.click(await screen.findByRole("button", { name: /guard\.sh/ }));
-    fireEvent.click(screen.getByRole("button", { name: /Open in editor|Preview file/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Open in viewer" }));
     expect(openFile).toHaveBeenCalledWith(".igni/hooks/guard.sh");
   });
 
-  it("offers no editor on the desktop's cloud side, where the script is on the VM", async () => {
+  it("offers nothing on the cloud side with no viewer, where the script is on the VM", async () => {
     vi.spyOn(host, "onCloud", "get").mockReturnValue(true);
     panelWith([hook()]);
     fireEvent.click(await screen.findByRole("button", { name: /guard\.sh/ }));
-    expect(screen.queryByRole("button", { name: /Open in editor|Preview file/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Open in viewer" })).toBeNull();
   });
 
   it("goes back to the list where it was left", async () => {
