@@ -2,7 +2,8 @@
  * UI sandbox for the plugins marketplace (``?demo=plugins``, see main.tsx).
  * Renders the real catalog header and card grid with canned data that
  * carries categories, so the category-icon avatars and the category
- * filter can be seen without a backend.
+ * filter can be seen without a backend. Framed by the real `PageShell`
+ * under a real app header, so it scrolls and fades as the app does.
  */
 
 import { useState } from "react";
@@ -13,6 +14,7 @@ import {
   categoriesOf,
   type SortKey,
 } from "../components/panels/plugins/catalogView";
+import { PageShell } from "../components/PageShell";
 import { InstalledPlugins } from "../components/panels/plugins/installedPlugin";
 import { InstalledTab } from "../components/panels/plugins/InstalledTab";
 import { MarketplaceCatalog } from "../components/panels/plugins/marketplace";
@@ -170,6 +172,8 @@ const INSTALLED = InstalledPlugins.parse([
   },
 ]);
 
+const TRAIL = [{ kind: "plugins", label: "Plugins" }];
+
 export function PluginsCatalogDemo() {
   const [view, setView] = useState<"marketplace" | "installed">("marketplace");
   const [query, setQuery] = useState("");
@@ -184,73 +188,70 @@ export function PluginsCatalogDemo() {
       <main className="main main--paged" style={{ position: "relative" }}>
         <header className="app-header">
           <div className="app-header-blur" aria-hidden="true" />
-          <div className="header-crumbs" id="app-header-crumbs">
-            <nav className="page-crumbs">Chat / plugins</nav>
-          </div>
+          <div className="header-crumbs" id="app-header-crumbs" />
           <div className="header-spacer" />
         </header>
-        <div className="page">
-          <div className="page-body">
-            <div className="page-head">
-              <h1 className="page-title">Plugins</h1>
-              <div className="page-head-extras">
-                <div className="page-headerbar">
-                  <div className="page-tabs">
-                    <button
-                      className={`page-tab ${view === "marketplace" ? "active" : ""}`}
-                      onClick={() => setView("marketplace")}
-                    >
-                      Marketplace<span className="page-tab-count">{CATALOG.pluginCount}</span>
-                    </button>
-                    <button
-                      className={`page-tab ${view === "installed" ? "active" : ""}`}
-                      onClick={() => setView("installed")}
-                    >
-                      Installed<span className="page-tab-count">{INSTALLED.count}</span>
-                    </button>
-                  </div>
-                  {view === "marketplace" && (
-                    <CatalogControls
-                      pluginCount={CATALOG.pluginCount}
-                      marketCount={CATALOG.marketCount}
-                      query={query}
-                      onQueryChange={setQuery}
-                      categories={categories}
-                      sortBy={sortBy}
-                      onSortChange={setSortBy}
-                      filterBy={filterBy}
-                      onFilterChange={setFilterBy}
-                      refreshing={false}
-                      onRefresh={() => {}}
-                      onManage={() => {}}
-                    />
-                  )}
-                </div>
+        <PageShell
+          trail={TRAIL}
+          title="Plugins"
+          headerExtras={
+            <div className="page-headerbar">
+              <div className="page-tabs">
+                <button
+                  className={`page-tab ${view === "marketplace" ? "active" : ""}`}
+                  onClick={() => setView("marketplace")}
+                >
+                  Marketplace<span className="page-tab-count">{CATALOG.pluginCount}</span>
+                </button>
+                <button
+                  className={`page-tab ${view === "installed" ? "active" : ""}`}
+                  onClick={() => setView("installed")}
+                >
+                  Installed<span className="page-tab-count">{INSTALLED.count}</span>
+                </button>
               </div>
-            </div>
-            <div className="page-measure">
-              {view === "marketplace" ? (
-                <MarketplaceTab
-                  catalog={CATALOG}
-                  entries={entries}
-                  installed={INSTALLED}
-                  isRunning={() => false}
-                  onInstall={() => {}}
-                  onOpen={() => {}}
-                />
-              ) : (
-                <InstalledTab
-                  installed={INSTALLED}
-                  installRef=""
-                  onInstallRefChange={() => {}}
-                  installing={false}
-                  onInstall={() => {}}
-                  onOpen={() => {}}
+              {view === "marketplace" && (
+                <CatalogControls
+                  pluginCount={CATALOG.pluginCount}
+                  marketCount={CATALOG.marketCount}
+                  query={query}
+                  onQueryChange={setQuery}
+                  categories={categories}
+                  sortBy={sortBy}
+                  onSortChange={setSortBy}
+                  filterBy={filterBy}
+                  onFilterChange={setFilterBy}
+                  refreshing={false}
+                  onRefresh={() => {}}
+                  onManage={() => {}}
                 />
               )}
             </div>
-          </div>
-        </div>
+          }
+          onCrumb={() => {}}
+          onBack={() => {}}
+          onClose={() => {}}
+        >
+          {view === "marketplace" ? (
+            <MarketplaceTab
+              catalog={CATALOG}
+              entries={entries}
+              installed={INSTALLED}
+              isRunning={() => false}
+              onInstall={() => {}}
+              onOpen={() => {}}
+            />
+          ) : (
+            <InstalledTab
+              installed={INSTALLED}
+              installRef=""
+              onInstallRefChange={() => {}}
+              installing={false}
+              onInstall={() => {}}
+              onOpen={() => {}}
+            />
+          )}
+        </PageShell>
       </main>
     </div>
   );

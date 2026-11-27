@@ -118,7 +118,8 @@ const PAGE_HTML = String.raw`<!doctype html>
     visibility: hidden;
   }
   body.ready { visibility: visible; }
-  .wrap { display: flex; flex-direction: column; height: 100%; padding: 10px 26px 0; gap: 14px; }
+  /* --inset-top: the room the host's chrome needs above the content (the frame reaches under it). */
+  .wrap { display: flex; flex-direction: column; height: 100%; padding: calc(10px + var(--inset-top, 0px)) 26px 0; gap: 14px; }
   header { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; }
   h1 { margin: 0; font-size: var(--text-2xl); font-weight: 600; letter-spacing: -0.01em; }
   .sub { color: var(--fg-muted); font-size: var(--text-sm); margin-top: 3px; }
@@ -164,7 +165,7 @@ const PAGE_HTML = String.raw`<!doctype html>
            border: 1px solid var(--border); background: var(--bg-surface); color: var(--fg); }
   button.primary { background: var(--igni-gradient); color: #fff; border: 0; font-weight: 600; }
   @media (max-width: 760px) {
-    .wrap { padding: 8px 12px 0; gap: 10px; }
+    .wrap { padding: calc(8px + var(--inset-top, 0px)) 12px 0; gap: 10px; }
     .body { grid-template-columns: 1fr; overflow: auto; }
     .tabs .tab:not(.on) { display: none; }
     th.hide, td.hide { display: none; }

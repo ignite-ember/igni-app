@@ -1,7 +1,8 @@
-import { createContext, useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
+import { createContext, useEffect, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 
 import type { PageRoute } from "../chat/pageStack";
+import { FadeScroll } from "./page/FadeScroll";
 import { isTerminalKey } from "./terminal/terminalKeys";
 
 export interface PageContextValue {
@@ -34,42 +35,6 @@ export const PageContext = createContext<PageContextValue | null>(null);
  * the real thing is what showed it: the title changed and the trail
  * did not.)
  */
-/** How far the page's top fade and the header blur sit above the chat's
- *  at rest, in px. ``--top-fade-shift`` in theme.css. */
-export const PAGE_REST_SHIFT = 24;
-
-/**
- * Slides the page's top fade and the header blur into the chat's place
- * over the first ``PAGE_REST_SHIFT`` pixels of scroll.
- *
- * At rest the page's title sits where the chat's curve and blur would
- * reach it; lifted by this much, they clear it and the page looks as it
- * always did. Written on ``.main`` because the blur lives in the header,
- * not under the page. ``data-scrolled`` turns the fade on at all:
- * at rest the page carries none.
- */
-function useRestShift(scroller: RefObject<HTMLDivElement | null>) {
-  useEffect(() => {
-    const el = scroller.current;
-    const main = el?.closest<HTMLElement>(".main");
-    if (!el || !main) return;
-    let last = -1;
-    const update = () => {
-      const shift = Math.max(0, PAGE_REST_SHIFT - Math.max(0, el.scrollTop));
-      if (shift === last) return;
-      last = shift;
-      main.style.setProperty("--page-rest-shift", `${shift}px`);
-      el.toggleAttribute("data-scrolled", shift < PAGE_REST_SHIFT);
-    };
-    update();
-    el.addEventListener("scroll", update, { passive: true });
-    return () => {
-      el.removeEventListener("scroll", update);
-      main.style.removeProperty("--page-rest-shift");
-    };
-  }, [scroller]);
-}
-
 export interface PanelLevels {
   labels: string[];
   onTruncate: (index: number) => void;
@@ -82,6 +47,7 @@ export function PageShell({
   headerExtras,
   toolbar,
   titleInBody,
+  selfScrolling,
   onCrumb,
   onBack,
   onClose,
@@ -94,12 +60,14 @@ export function PageShell({
   /** Between the title and the close button — inline search, status
    *  pills. Same slot `Drawer` offers. */
   headerExtras?: ReactNode;
-  /** Row under the header. It scrolls with the list and goes up under
-   *  the app header with it, like the title. Same slot `Drawer` offers. */
+  /** Row under the header. Fixed with it: the list scrolls and fades
+   *  under both. Same slot `Drawer` offers. */
   toolbar?: ReactNode;
   /** The body opens with its own heading, so this bar must not draw
    *  one too. See where it is read, below. */
   titleInBody?: boolean;
+  /** The body is a frame that scrolls itself (an extension's page). */
+  selfScrolling?: boolean;
   /** Depth inside the rendered panel, if it has any. */
   levels?: PanelLevels;
   /** A crumb was clicked: truncate to `index`. */
@@ -156,9 +124,6 @@ export function PageShell({
     return () => window.removeEventListener("keydown", onKey, true);
     // `back` closes over the current levels; re-bind when they change.
   }, [onBack, levels, panelCrumbs.length]);
-
-  const body = useRef<HTMLDivElement>(null);
-  useRestShift(body);
 
   const here = trail[trail.length - 1];
   const leaf = panelCrumbs.length ? panelCrumbs[panelCrumbs.length - 1] : here?.label;
@@ -237,6 +202,25 @@ export function PageShell({
     </nav>
   );
 
+  const head =
+    !titleInBody || headerExtras ? (
+      <div className="page-head">
+        {titleInBody ? null : <h1 className="page-title">{title ?? leaf}</h1>}
+        {headerExtras ? (
+          <div className="page-head-extras">{headerExtras}</div>
+        ) : (
+          <div className="header-spacer" />
+        )}
+      </div>
+    ) : null;
+  const chrome =
+    head || toolbar ? (
+      <>
+        {head}
+        {toolbar && <div className="page-toolbar">{toolbar}</div>}
+      </>
+    ) : undefined;
+
   return (
     <section className="page" aria-label={here?.label ?? "Page"}>
       {crumbSlot ? createPortal(crumbs, crumbSlot) : crumbs}
@@ -252,27 +236,15 @@ export function PageShell({
           chat's own <h1>, is hidden (``.main--paged``), so with an <h2>
           here assistive technology found no <h1> at all (R683). A body
           that carries its own title still gets one, out of sight. */}
-      {/* The title row and the toolbar are inside the scroller, so they
-          go up under the app header with the list the way the chat's
-          first message does. At rest they sit exactly where they did
-          above it. Two elements, not one: the outer scrolls full-bleed
-          so the scrollbar sits at the window's edge, the inner holds
-          the measure. */}
-      <div className="page-body" ref={body}>
-        {titleInBody && <h1 className="sr-only">{title ?? leaf}</h1>}
-        {(!titleInBody || headerExtras) && (
-          <div className="page-head">
-            {titleInBody ? null : <h1 className="page-title">{title ?? leaf}</h1>}
-            {headerExtras ? (
-              <div className="page-head-extras">{headerExtras}</div>
-            ) : (
-              <div className="header-spacer" />
-            )}
-          </div>
-        )}
-        {toolbar && <div className="page-toolbar">{toolbar}</div>}
+      {/* The header row — title, tabs, search, filter, sort, actions —
+          and the toolbar are the scroller's fixed chrome: they stay put
+          and the list fades out under them. Without either, the body
+          scrolls up under the app header like the chat. FadeScroll
+          owns all of it, so no page decides how it scrolls. */}
+      {titleInBody && <h1 className="sr-only">{title ?? leaf}</h1>}
+      <FadeScroll chrome={chrome} className="page-body" selfScrolling={selfScrolling}>
         <div className="page-measure">{children}</div>
-      </div>
+      </FadeScroll>
     </section>
   );
 }
