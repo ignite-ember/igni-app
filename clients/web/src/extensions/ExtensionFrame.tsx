@@ -39,7 +39,28 @@ import {
   isGuestMessage,
   methodAllowed,
 } from "@ignite-ember/extension-bridge/protocol";
-import { readThemeTokens } from "@ignite-ember/extension-bridge/tokens";
+import { readThemeTokens, type ThemeTokens } from "@ignite-ember/extension-bridge/tokens";
+
+/**
+ * The token that tells a page how far down its content has to start.
+ *
+ * The frame reaches up under the page's fixed chrome and the app header,
+ * where the content scrolls under them and fades like the chat's
+ * (`FadeScroll`). The frame cannot be masked from inside, and the host
+ * cannot see its scroll offset, so the page leaves this much room at the
+ * top of its scrolling content: `padding-top: var(--inset-top, 0px)`.
+ */
+export const INSET_TOKEN = "--inset-top";
+
+/** The tokens, plus the inset the page around the frame asks for. */
+function frameTokens(frame: HTMLIFrameElement | null): ThemeTokens {
+  const tokens = readThemeTokens();
+  if (!frame) return tokens;
+  // A registered <length> (theme.css), so this is already in px.
+  const inset = getComputedStyle(frame).getPropertyValue("--fade-inset-top").trim();
+  if (/^\d+(\.\d+)?px$/.test(inset)) tokens[INSET_TOKEN] = inset;
+  return tokens;
+}
 
 /**
  * Are these the same parameters?
@@ -439,7 +460,7 @@ export function ExtensionFrame({
   // do anything until it has the nonce, so `hello` goes on load.
   const onLoad = useCallback(() => {
     const sent = params ?? {};
-    const tokens = readThemeTokens();
+    const tokens = frameTokens(frameRef.current);
     sentTokens.current = JSON.stringify(tokens);
     delivered.current = sent;
     const waitingSignals = queuedSignals.current;
@@ -512,7 +533,7 @@ export function ExtensionFrame({
   // than a reload: a panel that reloaded every time the user flipped
   // to light mode would lose whatever they were in the middle of.
   useEffect(() => {
-    const tokens = readThemeTokens();
+    const tokens = frameTokens(frameRef.current);
     sentTokens.current = JSON.stringify(tokens);
     post({
       igni: BRIDGE_VERSION,
@@ -531,7 +552,7 @@ export function ExtensionFrame({
     if (typeof MutationObserver === "undefined") return;
     const observer = new MutationObserver(() => {
       if (sentTokens.current === null) return;
-      const tokens = readThemeTokens();
+      const tokens = frameTokens(frameRef.current);
       const serial = JSON.stringify(tokens);
       if (serial === sentTokens.current) return;
       sentTokens.current = serial;

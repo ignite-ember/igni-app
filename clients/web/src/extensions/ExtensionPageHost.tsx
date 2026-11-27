@@ -4,6 +4,7 @@ import { Drawer } from "../components/panels/Drawer";
 import type { IgniClient } from "../protocol/client";
 import { HostModelReply, ServiceTokenReply } from "../protocol/rpcResults";
 import { ExtensionPage, type ExtensionPageProps, type ExtensionSummary } from "./ExtensionPage";
+import { OpenOnWeb } from "./OpenOnWeb";
 
 /** A dialog an extension opens waits on the person, for as long as they take. */
 export const DIALOG_WAIT_MS = 24 * 3_600_000;
@@ -62,7 +63,19 @@ export function ExtensionPageHost({
       await caller.rpc<unknown>("extension_service_token", refresh ? { refresh: true } : {}),
     );
   return (
-    <Drawer title={page.label} titleInBody onClose={onClose}>
+    // The frame scrolls itself, so the page cannot watch its offset:
+    // ``selfScrolling`` keeps the fade on and tells the frame the inset
+    // to leave. "Open on the web" is a header-row action like any
+    // page's, so it sits in the fixed row the frame scrolls under.
+    <Drawer
+      title={page.label}
+      titleInBody
+      selfScrolling
+      headerExtras={
+        extension.web_url ? <OpenOnWeb url={extension.web_url} name={extension.name} /> : undefined
+      }
+      onClose={onClose}
+    >
       <ExtensionPage
         key={generation}
         extension={extension}
@@ -77,6 +90,7 @@ export function ExtensionPageHost({
         onNavigate={onNavigate}
         onLocation={onLocation}
         onCall={(method, args) => caller.rpc(method, args)}
+        showWebLink={false}
       />
     </Drawer>
   );

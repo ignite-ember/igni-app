@@ -639,8 +639,8 @@ button {
   z-index: 5;
   pointer-events: none;
   background: transparent;
-  -webkit-backdrop-filter: blur(6px);
-  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: var(--top-blur);
+  backdrop-filter: var(--top-blur);
   -webkit-mask-image: linear-gradient(
     to bottom,
     #000 0%,
@@ -1320,32 +1320,35 @@ button {
   top: 0;
   left: 0;
   right: 0;
-  height: calc(100% + 24px);
-  pointer-events: none;
+  height: calc(100% + var(--top-blur-tail));
   z-index: -1;
+}
+
+/* The blur itself, one definition for the chat's header and for the
+   chrome over every page (``FadeScroll``), so the two cannot drift. */
+:root {
+  --top-blur: blur(6px);
+  --top-blur-tail: 24px;
+  --top-blur-mask: linear-gradient(
+    to bottom,
+    #000 0%,
+    rgba(0, 0, 0, 0.9) 22%,
+    rgba(0, 0, 0, 0.7) 42%,
+    rgba(0, 0, 0, 0.45) 60%,
+    rgba(0, 0, 0, 0.22) 77%,
+    rgba(0, 0, 0, 0.07) 90%,
+    transparent 100%
+  );
+}
+
+.app-header-blur,
+.fade-scroll-blur {
+  pointer-events: none;
   background: transparent;
-  -webkit-backdrop-filter: blur(6px);
-  backdrop-filter: blur(6px);
-  -webkit-mask-image: linear-gradient(
-    to bottom,
-    #000 0%,
-    rgba(0, 0, 0, 0.9) 22%,
-    rgba(0, 0, 0, 0.7) 42%,
-    rgba(0, 0, 0, 0.45) 60%,
-    rgba(0, 0, 0, 0.22) 77%,
-    rgba(0, 0, 0, 0.07) 90%,
-    transparent 100%
-  );
-  mask-image: linear-gradient(
-    to bottom,
-    #000 0%,
-    rgba(0, 0, 0, 0.9) 22%,
-    rgba(0, 0, 0, 0.7) 42%,
-    rgba(0, 0, 0, 0.45) 60%,
-    rgba(0, 0, 0, 0.22) 77%,
-    rgba(0, 0, 0, 0.07) 90%,
-    transparent 100%
-  );
+  -webkit-backdrop-filter: var(--top-blur);
+  backdrop-filter: var(--top-blur);
+  -webkit-mask-image: var(--top-blur-mask);
+  mask-image: var(--top-blur-mask);
 }
 
 /* The messages fade to nothing as they reach the top of the window, on a
@@ -1369,31 +1372,33 @@ button {
   );
 }
 
-/* ``--top-fade-shift`` lifts the curve and the header blur up together.
-   The chat leaves it at 0. A page sets it while its scroller is within
-   the first few pixels of the top (``PageShell``), so the title clears
-   both, and 24px of scroll later both are exactly where the chat has
-   them. At rest a page carries no mask at all (``data-scrolled`` is set
-   from the first pixel): a mask makes the list its own layer, which
-   redraws its text a shade differently, and at rest the page has to be
-   the page it always was. */
+/* One rule for the chat and every page's scroller, so the two cannot
+   drift. ``--fade-top`` is where the curve starts, from the scroller's
+   top: 0 for the chat, which runs up to the top of the window under the
+   app header; a page's fixed header row (``FadeScroll``) moves it down
+   by the row's height, so the content dissolves under that row the way
+   the chat's dissolves under the app header. The area above the curve
+   is outside the mask image, so it is hidden. A page carries no mask at
+   rest (``data-scrolled`` comes with the first scrolled pixel): a mask
+   makes the list its own layer, which redraws its text a shade
+   differently, and at rest a page has to be the page it always was. */
 .conversation,
-.page-body[data-scrolled] {
+.fade-scroll[data-scrolled] > .fade-scroll-body {
   -webkit-mask-image: var(--top-fade-mask);
   mask-image: var(--top-fade-mask);
-  -webkit-mask-size: 100% calc(100% + var(--top-fade-shift, 0px));
-  mask-size: 100% calc(100% + var(--top-fade-shift, 0px));
-  -webkit-mask-position: 0 calc(-1 * var(--top-fade-shift, 0px));
-  mask-position: 0 calc(-1 * var(--top-fade-shift, 0px));
+  -webkit-mask-size: 100% calc(100% - var(--fade-top, 0px));
+  mask-size: 100% calc(100% - var(--fade-top, 0px));
+  -webkit-mask-position: 0 var(--fade-top, 0px);
+  mask-position: 0 var(--fade-top, 0px);
   -webkit-mask-repeat: no-repeat;
   mask-repeat: no-repeat;
 }
 
-/* The blur goes the whole of its height (header plus tail, 82px) in the
-   same 24px, so at rest it is above the window and blurs nothing: a blur
-   over flat colour still moves it by a shade. */
+/* Over a page the blur is the page's own (``.fade-scroll-blur``): it has
+   to sit under a header row's text, which this one, in the app header,
+   is above. Two would blur twice. */
 .main--paged .app-header-blur {
-  transform: translateY(calc(-3.5 * var(--top-fade-shift, 0px)));
+  visibility: hidden;
 }
 
 /* The header's near-invisible fill (it only has to be there for the
@@ -6014,28 +6019,19 @@ button.activity-file-chip:focus-visible {
 /* A page that still has a header row is still cleared by it. Nothing
    in this panel does any more; a page that grows one will not have
    to remember why its hierarchy overlaps its buttons. */
-.page:has(> .page-body > .page-head) {
+.page:has(> .fade-scroll > .fade-scroll-chrome > .page-head) {
   --tree-dock-top: calc(82px + var(--doc-air));
 }
 
-.page:has(> .page-body > .page-head) {
+.page:has(> .fade-scroll > .fade-scroll-chrome > .page-head) {
   --page-chrome-h: 82px;
 }
 
-/* Under the app header, the page's scroller reaches up to the top of the
-   window the way ``.conversation`` does, and pads its content back down
-   by the same amount. ``.page`` itself does not move — everything placed
-   against it (the docked hierarchy, the trail) keeps its numbers — and
-   at rest nothing inside moves either. Scrolled, the title, the toolbar
-   and the list go up under the header and dissolve on the chat's curve
-   (``--top-fade-mask``) behind the chat's blur. 0 without a header (a
-   test, a modal), where there is nothing to scroll under. */
+/* Under the app header a page's scroller reaches up to the top of the
+   window, as ``.conversation`` does (``FadeScroll``). 0 without a header
+   (a test, a modal), where there is nothing to scroll under. */
 .main--paged .page {
   --page-under-header: 58px;
-}
-
-.main--paged {
-  --top-fade-shift: var(--page-rest-shift, 24px);
 }
 
 /* The breadcrumb is portaled up into the app header (next to the sidebar
@@ -6096,7 +6092,7 @@ button.activity-file-chip:focus-visible {
    them out of the flow drops that header underneath them. Which is
    the same distinction ``--page-chrome-h`` is already drawn on, and
    the reason it is two numbers rather than one. */
-.page:not(:has(> .page-body > .page-head)) > .page-crumbs {
+.page:not(:has(> .fade-scroll > .fade-scroll-chrome > .page-head)) > .page-crumbs {
   position: absolute;
   top: 0;
   left: 0;
@@ -6187,23 +6183,98 @@ button.activity-file-chip:focus-visible {
   padding: 10px 18px 0;
 }
 
+/* ── FadeScroll: the one way a page scrolls ──────────────────────────
+   ``.fade-scroll`` only carries the state (``--fade-chrome-h``,
+   ``--fade-rest-shift``, ``data-scrolled``); it lays out nothing, so its
+   three children are the page's own flex items and the docked hierarchy
+   stays positioned against ``.page``.
+
+   The scroller reaches up under the chrome to the top of the window and
+   pads its content back down by the same amount, so at rest the content
+   is exactly where it would be below the chrome. Scrolled, it goes up
+   under the chrome and dissolves on the chat's curve (``--fade-top``)
+   behind the chat's blur. */
+/* Registered so a frame's host reads it resolved, in px
+   (``ExtensionFrame`` passes it on as ``--inset-top``). */
+@property --fade-inset-top {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 0px;
+}
+
+.fade-scroll {
+  display: contents;
+  --fade-top: calc(var(--fade-chrome-h, 0px) - var(--fade-rest-shift, 0px));
+  /* Where content that cannot be told the scroll offset (a frame) has
+     to start to sit clear of the fade and the blur at rest. */
+  --fade-inset-top: calc(
+    var(--page-under-header, 0px) + var(--fade-chrome-h, 0px) + var(--top-blur-tail)
+  );
+}
+
+/* The header row and the toolbar: fixed, over the content that scrolls
+   under them, and over the blur, so they stay crisp. No background —
+   the dissolving content is meant to show through. */
+.fade-scroll-chrome {
+  flex: none;
+  z-index: 2;
+}
+
+/* Behind the chrome's text, over the content: the app header's blur,
+   at the chat's place relative to the chrome — from where the curve
+   starts, header plus tail tall. Hidden at rest, so the page's flat
+   colour is never blurred a shade. */
+.fade-scroll-blur {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(var(--fade-top) - var(--page-under-header, 0px));
+  height: calc(var(--page-under-header, 0px) + var(--top-blur-tail));
+  z-index: 1;
+}
+
+.fade-scroll:not([data-scrolled]) > .fade-scroll-blur {
+  visibility: hidden;
+}
+
 /* The scrolling element, full width, so the scrollbar is where a
-   scrollbar belongs: at the right edge of the window. It used to be
-   the measure as well, which put the bar against the text — a rail
-   floating in the middle of the page that reads as belonging to
-   whatever it happens to be beside. */
-.page-body {
+   scrollbar belongs: at the right edge of the window. */
+.fade-scroll-body {
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
-  margin-top: calc(-1 * var(--page-under-header, 0px));
-  padding-top: var(--page-under-header, 0px);
+  margin-top: calc(-1 * (var(--page-under-header, 0px) + var(--fade-chrome-h, 0px)));
+  padding-top: calc(var(--page-under-header, 0px) + var(--fade-chrome-h, 0px));
+  /* Its own stacking context under the chrome, so nothing positioned in
+     the list paints over the fixed rows. Not ``position: relative`` —
+     see ``.page-body``. */
+  isolation: isolate;
+  z-index: 0;
+  overscroll-behavior: contain;
+}
+
+/* A frame scrolls itself, so this one does not: the frame reaches up
+   under the chrome to the top of the window, keeps the fade and blur on,
+   and is told ``--fade-inset-top`` to leave (``ExtensionFrame``). */
+.fade-scroll[data-self-scrolling] > .fade-scroll-body {
+  overflow: hidden;
+  padding-top: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* The page's type size, for the fixed rows and the list alike (it
+   inherits through ``.fade-scroll``, which draws no box). */
+.page > .fade-scroll {
+  font-size: var(--text-md);
+}
+
+.page-body {
   /* A classic scrollbar takes its width from one side only, which
      would centre the measure a few pixels left of the header above
      it. Reserving the same gutter on both sides keeps the two
      columns on one axis; overlay scrollbars reserve nothing. */
   scrollbar-gutter: stable both-edges;
-  overscroll-behavior: contain;
-  font-size: var(--text-md);
   /* Deliberately *not* ``position: relative``. This box scrolls, and
      the hierarchy is positioned against ``.page`` above it, which
      does not — that is the whole of what keeps the tree still while
@@ -7523,11 +7594,11 @@ button.activity-file-chip:focus-visible {
 }
 
 /* Long text on a detail page — a task's output, a hook's script — whole,
-   in mono, in a block that scrolls rather than a page that never ends. */
+   in mono. No cap and no scroll of its own: it wraps, and the page
+   scrolls it (``FadeScroll``), so it fades under the header like every
+   other page's content instead of being cut off at the box's edge. */
 .mono-block {
   margin: 0;
-  max-height: min(70vh, 640px);
-  overflow: auto;
   padding: var(--space-5) var(--space-6);
   border-radius: var(--radius-md, 8px);
   background: var(--bg);
@@ -8325,8 +8396,9 @@ button.activity-file-chip:focus-visible {
   line-height: 1.6;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
-  max-height: 240px;
-  overflow: auto;
+  /* No cap and no scroll of its own: it wraps, and the page scrolls
+     (``FadeScroll``). A box that scrolls inside the page cuts the
+     error off at a line. */
 }
 
 /* ── MCP: a server's tools, resources and prompts ─────────────── */
@@ -12111,18 +12183,12 @@ button.activity-file-chip:focus-visible {
   min-height: 0;
 }
 
-/* An extension's page is its frame, edge to edge: the page body does
-   not scroll (the frame scrolls itself) and the measure gives up its
-   900px column and padding. Without this the frame kept an iframe's
-   default 300x150. The trail floats over the top of a page with no
-   header row; a frame cannot know to leave room for it, so the body
-   does. */
+/* An extension's page is its frame, edge to edge: the frame scrolls
+   itself, so the page body does not (``FadeScroll``'s ``selfScrolling``),
+   and the measure gives up its 900px column and padding. Without this
+   the frame kept an iframe's default 300x150. */
 .page:has(.extension-frame) .page-body {
   scrollbar-gutter: auto;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  padding-top: calc(var(--page-under-header, 0px) + var(--crumb-row-h));
 }
 
 .page:has(.extension-frame) .page-measure {
@@ -12521,32 +12587,8 @@ button.activity-file-chip:focus-visible {
 }
 
 /* ── Files: a read-only view of the project tree ──────────────────────
-   A full-bleed two-pane page (code + navigator), so it opts out of the
-   centred reading measure the other pages sit in and manages its own
-   scroll inside each pane. */
-.page:has(.files-layout) .page-body {
-  scrollbar-gutter: auto;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  padding: var(--page-under-header, 0px) 0 0;
-}
-/* Full-bleed, so its header row is too. */
-.page:has(.files-layout) .page-body > .page-head,
-.page:has(.files-layout) .page-body > .page-toolbar {
-  width: 100%;
-}
-
-.page:has(.files-layout) .page-measure {
-  flex: 1;
-  min-width: 0;
-  min-height: 0;
-  width: 100%;
-  max-width: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-}
+   A full-bleed two-pane view (code + navigator) in the side dock, not
+   a page; it manages its own scroll inside each pane. */
 .files-layout {
   flex: 1;
   min-width: 0;

@@ -1,5 +1,5 @@
 /** Long text on a detail page — a task's output, a hook's script — set in
- *  mono, whole, in a block that scrolls; and the Copy button that goes in
+ *  mono, whole (the page scrolls it, not the block); and the Copy button that goes in
  *  its section's head. */
 
 import { useCopiedFlag } from "../CopyButton";
