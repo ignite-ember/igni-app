@@ -117,6 +117,8 @@ switch ($Action) {
       Format-Table Id, ProcessName, StartTime -AutoSize | Out-String | Write-Host
     if ($backend.Count -eq 0) { throw "no igni_core.backend for the project within 120 s (the app is running: $(-not $app.HasExited))" }
     Write-Host "backend: $($backend[0].CommandLine)"
+    $consoles = @(Get-ConsoleWindows)
+    if ($consoles.Count -gt 0) { throw "the app's backend opened a console window: $(($consoles | ForEach-Object { "$($_.ProcessName): $($_.MainWindowTitle)" }) -join '; ')" }
     if ($backend[0].CommandLine -notlike "*$($env:IGNI_E2E_PYTHON)*") { throw "the backend is not on IGNI_RUNTIME_PYTHON" }
     # Close it the way a person does (WM_CLOSE), then make sure.
     $null = $app.CloseMainWindow()
