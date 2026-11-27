@@ -6448,20 +6448,20 @@ button {
 }
 
 .ctx-ring-track {
-  stroke: var(--bg-raised);
+  stroke: var(--border-soft);
 }
 
 .ctx-ring-fill {
   transition: stroke-dasharray 0.3s ease, stroke 0.3s ease;
 }
 
-.ctx-ring.tone-ok .ctx-ring-fill {
+.session-ctx.tone-ok .ctx-ring-fill {
   stroke: var(--success);
 }
-.ctx-ring.tone-warn .ctx-ring-fill {
+.session-ctx.tone-warn .ctx-ring-fill {
   stroke: var(--warning);
 }
-.ctx-ring.tone-danger .ctx-ring-fill {
+.session-ctx.tone-danger .ctx-ring-fill {
   stroke: var(--danger);
 }
 
