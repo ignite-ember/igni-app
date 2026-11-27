@@ -595,7 +595,7 @@ export function ExpandIcon({ size = 14, full = false }: IconProps & { full?: boo
 }
 
 /** A prompt chevron and cursor: a shell command. */
-export function TerminalIcon({ size = 12 }: IconProps) {
+export function CommandIcon({ size = 12 }: IconProps) {
   return (
     <Svg size={size}>
       <path d="M3 4.5l3.5 3.5L3 11.5" />
@@ -629,6 +629,17 @@ export function AgentIcon({ size = 12 }: IconProps) {
     <Svg size={size}>
       <circle cx="8" cy="5.5" r="2.6" />
       <path d="M3 13.5c.6-2.4 2.6-3.9 5-3.9s4.4 1.5 5 3.9" />
+    </Svg>
+  );
+}
+
+/** A plug: a tool from an MCP server or an extension. */
+export function PlugIcon({ size = 12 }: IconProps) {
+  return (
+    <Svg size={size}>
+      <path d="M6 2.5v3M10 2.5v3" />
+      <path d="M4.5 5.5h7v2.2a3.5 3.5 0 0 1-7 0z" />
+      <path d="M8 11.2v2.3" />
     </Svg>
   );
 }

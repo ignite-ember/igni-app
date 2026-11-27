@@ -21,6 +21,8 @@ export interface ActivityStep {
   state: StepState;
   /** The step in a few words: ``Bash npm test``, ``Thought``. */
   label: string;
+  /** A finished command's exit code, when its output says it. */
+  exitCode: number | null;
 }
 
 /** The step a group's ``item`` is, at ``index``; ``live`` when the turn is on it. */
@@ -34,13 +36,65 @@ function stepOf(item: ChatItem, index: number, live: boolean): ActivityStep {
           ? "rejected"
           : "done";
     const label = item.args ? `${item.name} ${item.args}` : item.name;
-    return { index, item, glyph: stepKindOf(item.name), state, label };
+    const glyph = stepKindOf(item.name);
+    const exitCode = glyph === "command" && state !== "live" ? exitCodeOf(item.result) : null;
+    return { index, item, glyph, state, label, exitCode };
   }
   if (item.kind === "thinking") {
-    return { index, item, glyph: "thinking", state: live ? "live" : "done", label: live ? "Thinking" : "Thought" };
+    const label = live ? "Thinking" : "Thought";
+    return { index, item, glyph: "thinking", state: live ? "live" : "done", label, exitCode: null };
   }
   const text = item.kind === "agent" ? item.text : item.kind;
-  return { index, item, glyph: "agent", state: live ? "live" : "done", label: text };
+  return { index, item, glyph: "agent", state: live ? "live" : "done", label: text, exitCode: null };
+}
+
+/** The ways igni-core's shell tools say how a command exited
+ *  (``core/tools/shell.py``, ``process_supervisor.py``). */
+const EXIT_CODE = /\bexit(?:ed with)? code[:\s]+(-?\d+)/i;
+/** Characters of a result searched for its exit code, at each end. */
+const EXIT_SCAN = 200;
+
+/** A command's exit code, from the first or last lines of its output. */
+export function exitCodeOf(result: string): number | null {
+  const head = result.slice(0, EXIT_SCAN);
+  const m = EXIT_CODE.exec(head) ?? (result.length > EXIT_SCAN ? EXIT_CODE.exec(result.slice(-EXIT_SCAN)) : null);
+  return m ? Number(m[1]) : null;
+}
+
+/** How a step went, in a word or two: ``failed · exit 1``, ``running``. */
+export function stepResultText(step: ActivityStep): string | null {
+  if (step.glyph === "thinking") return null;
+  if (step.state === "live") return step.item.kind === "tool" ? "running" : null;
+  if (step.state === "rejected") return "not run";
+  if (step.item.kind !== "tool") return null;
+  const code = step.exitCode === null ? null : `exit ${step.exitCode}`;
+  if (step.state === "failed") return code ? `failed · ${code}` : "failed";
+  return code && step.exitCode !== 0 ? `done · ${code}` : "done";
+}
+
+/** The group's latest thought, and whether it is still streaming. */
+export function latestThought(steps: readonly ActivityStep[]): { text: string; live: boolean } | null {
+  for (let i = steps.length - 1; i >= 0; i--) {
+    const s = steps[i];
+    if (s.item.kind === "thinking" && s.item.text.trim()) return { text: s.item.text, live: s.state === "live" };
+  }
+  return null;
+}
+
+/** The step a group's row names: the one running, else the last. */
+export function headlineStep(steps: readonly ActivityStep[]): ActivityStep | null {
+  for (let i = steps.length - 1; i >= 0; i--) {
+    if (steps[i].state === "live" && steps[i].item.kind === "tool") return steps[i];
+  }
+  return steps[steps.length - 1] ?? null;
+}
+
+/** How many of ``count`` markers a strip ``width`` px wide shows, each
+ *  ``slot`` px with ``gap`` px between, keeping ``more`` px for the
+ *  "+k" when they do not all fit. An unmeasured strip shows them all. */
+export function fitMarkers(width: number, count: number, slot: number, gap: number, more: number): number {
+  if (width <= 0 || count * slot + (count - 1) * gap <= width) return count;
+  return Math.max(1, Math.floor((width - more + gap) / (slot + gap)));
 }
 
 /** The indexes of the steps the turn is on: a tool waiting on its
@@ -61,14 +115,6 @@ export function liveStepIndexes(items: readonly ChatItem[], running: boolean): n
 export function activitySteps(items: readonly ChatItem[], running: boolean): ActivityStep[] {
   const live = new Set(liveStepIndexes(items, running));
   return items.map((item, i) => stepOf(item, i, live.has(i)));
-}
-
-/** The steps a strip of ``max`` dots shows, and how many earlier ones it leaves out. */
-export function visibleSteps<T>(steps: readonly T[], max: number): { hidden: number; shown: readonly T[] } {
-  if (steps.length <= max) return { hidden: 0, shown: steps };
-  // One slot goes to the "+k" lead-in.
-  const keep = Math.max(1, max - 1);
-  return { hidden: steps.length - keep, shown: steps.slice(-keep) };
 }
 
 /** Characters a window reads back from the end; more never shows. */

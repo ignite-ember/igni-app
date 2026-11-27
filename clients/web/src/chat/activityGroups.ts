@@ -133,10 +133,10 @@ function firstToolRun(items: readonly ChatItem[], from: number): string {
 }
 
 /** What kind of step a tool call is, for the finished summary. */
-export type StepKind = "command" | "read" | "edit" | "search" | "fetch" | "agent" | "other";
+export type StepKind = "command" | "read" | "edit" | "search" | "fetch" | "mcp" | "agent" | "other";
 
 /** Tool names, raw and display (``ToolFriendlyNames`` in igni-core), by step kind. */
-const STEP_KINDS: Record<Exclude<StepKind, "other">, readonly string[]> = {
+const STEP_KINDS: Record<Exclude<StepKind, "other" | "mcp">, readonly string[]> = {
   command: ["bash", "shell", "python", "run_shell_command", "run_python_code"],
   read: ["read", "read_file"],
   edit: ["edit", "write", "edit_file", "edit_file_replace_all", "save_file", "create_file"],
@@ -151,6 +151,9 @@ const STEP_KINDS: Record<Exclude<StepKind, "other">, readonly string[]> = {
 /** The step kind of a tool called ``name``. */
 export function stepKindOf(name: string): StepKind {
   const key = name.trim().toLowerCase();
+  // An MCP server's tools, an extension's among them, are registered
+  // under ``mcp_<server>_`` (``igni_core.core.mcp.naming``).
+  if (key.startsWith("mcp_")) return "mcp";
   for (const [kind, names] of Object.entries(STEP_KINDS)) {
     if (names.includes(key)) return kind as StepKind;
   }
@@ -166,10 +169,13 @@ export interface ActivityCounts {
   edit: number;
   search: number;
   fetch: number;
+  mcp: number;
   agent: number;
   other: number;
   thoughts: number;
   failed: number;
+  /** Commands that finished without an error. */
+  commandsOk: number;
   /** A tool still waiting on its result. */
   runningTools: number;
 }
@@ -183,18 +189,22 @@ export function countActivity(items: readonly ChatItem[]): ActivityCounts {
     edit: 0,
     search: 0,
     fetch: 0,
+    mcp: 0,
     agent: 0,
     other: 0,
     thoughts: 0,
     failed: 0,
+    commandsOk: 0,
     runningTools: 0,
   };
   for (const it of items) {
     if (it.kind === "thinking") counts.thoughts++;
     else if (it.kind === "agent") counts.agent++;
     else if (it.kind === "tool") {
-      counts[stepKindOf(it.name)]++;
+      const kind = stepKindOf(it.name);
+      counts[kind]++;
       if (it.status === "error") counts.failed++;
+      if (kind === "command" && it.status === "done") counts.commandsOk++;
       if (it.status === "running") counts.runningTools++;
     }
   }
@@ -214,6 +224,7 @@ export function summaryText(c: ActivityCounts): string {
   if (c.edit) parts.push(`edited ${plural(c.edit, "file", "files")}`);
   if (c.search) parts.push(`ran ${plural(c.search, "search", "searches")}`);
   if (c.fetch) parts.push(`fetched ${plural(c.fetch, "page", "pages")}`);
+  if (c.mcp) parts.push(`called ${plural(c.mcp, "MCP tool", "MCP tools")}`);
   if (c.agent) parts.push(`started ${plural(c.agent, "agent", "agents")}`);
   if (c.other) parts.push(`used ${plural(c.other, "tool", "tools")}`);
   if (c.thoughts) parts.push(c.thoughts === 1 ? "thought" : `thought ${c.thoughts} times`);

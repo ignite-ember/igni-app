@@ -429,7 +429,7 @@ describe("a conversation", () => {
     const group = screen.getByRole("button", { name: /ls build/, expanded: false });
     // Paused on the person, the turn is not over: the row stays live.
     const row = group.closest(".activity-group")!;
-    expect(row.querySelector(".step-dot.state-live")).not.toBeNull();
+    expect(row.querySelector(".step-marker.state-live")).not.toBeNull();
     // The dialog is the composer's, never inside the group.
     const dialog = document.querySelector(".hitl-card");
     expect(dialog).not.toBeNull();

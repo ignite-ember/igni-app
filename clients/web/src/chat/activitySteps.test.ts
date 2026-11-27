@@ -1,18 +1,29 @@
 import { describe, expect, it } from "vitest";
 
 import { ActivityDisclosure } from "./activityDisclosure";
-import { activitySteps, baseName, editedFiles, liveStepIndexes, tailLines, visibleSteps } from "./activitySteps";
+import {
+  activitySteps,
+  baseName,
+  editedFiles,
+  exitCodeOf,
+  fitMarkers,
+  headlineStep,
+  latestThought,
+  liveStepIndexes,
+  stepResultText,
+  tailLines,
+} from "./activitySteps";
 import type { ChatItem, ToolItem, ToolStatus } from "./chatItem";
 
 let nextId = 1;
-const tool = (name: string, args: string, status: ToolStatus = "done"): ToolItem => ({
+const tool = (name: string, args: string, status: ToolStatus = "done", result = ""): ToolItem => ({
   kind: "tool",
   id: nextId++,
   runId: "r",
   name,
   args,
   status,
-  result: "",
+  result,
   isError: status === "error",
   diffRows: null,
 });
@@ -47,12 +58,98 @@ describe("activitySteps", () => {
   });
 });
 
-describe("visibleSteps", () => {
-  it("keeps the last ones and counts the rest, one slot for the count", () => {
-    const all = [1, 2, 3, 4, 5];
-    expect(visibleSteps(all, 5)).toEqual({ hidden: 0, shown: all });
-    expect(visibleSteps(all, 4)).toEqual({ hidden: 2, shown: [3, 4, 5] });
-    expect(visibleSteps(all, 1)).toEqual({ hidden: 4, shown: [5] });
+describe("fitMarkers", () => {
+  // 22 px a marker, 4 between, 35 for the "+k".
+  const fit = (width: number, count: number) => fitMarkers(width, count, 22, 4, 35);
+
+  it("shows them all while they fit, to the last pixel", () => {
+    expect(fit(22 * 22 + 21 * 4, 22)).toBe(22);
+    expect(fit(740, 22)).toBe(22);
+    expect(fit(22, 1)).toBe(1);
+    expect(fit(500, 0)).toBe(0);
+  });
+
+  it("folds the earliest into +k only when the width runs out, keeping room for it", () => {
+    expect(fit(22 * 22 + 21 * 4 - 1, 22)).toBe(20);
+    // (300 - 35 + 4) / 26 = 10.3
+    expect(fit(300, 22)).toBe(10);
+    expect(fit(10, 22)).toBe(1);
+  });
+
+  it("shows them all before the strip is measured", () => {
+    expect(fit(0, 40)).toBe(40);
+  });
+});
+
+describe("exitCodeOf", () => {
+  it("reads the exit code the way igni-core's shell tools say it", () => {
+    expect(exitCodeOf("Command exited with code 2:\nboom")).toBe(2);
+    expect(exitCodeOf("[Finished — exit code 0]\nok")).toBe(0);
+    expect(exitCodeOf("Background process exited with code 137:\n")).toBe(137);
+    expect(exitCodeOf("Exit code: -1")).toBe(-1);
+    expect(exitCodeOf(`${"x\n".repeat(400)}exit code 3`)).toBe(3);
+  });
+
+  it("says nothing when the output does not", () => {
+    expect(exitCodeOf("")).toBeNull();
+    expect(exitCodeOf("12 passed")).toBeNull();
+    // Only the ends are read: a code in the middle of a long log is a line of it.
+    expect(exitCodeOf(`${"a".repeat(300)} exit code 4 ${"b".repeat(300)}`)).toBeNull();
+  });
+
+  it("is a finished command's only", () => {
+    const [bash, read, live] = activitySteps(
+      [tool("Bash", "x", "error", "Command exited with code 1:\n"), tool("Read", "f", "done", "exit code 1"), tool("Bash", "y", "running", "exit code 5")],
+      true,
+    );
+    expect([bash.exitCode, read.exitCode, live.exitCode]).toEqual([1, null, null]);
+  });
+});
+
+describe("stepResultText", () => {
+  it("says how each step went", () => {
+    const steps = activitySteps(
+      [
+        tool("Bash", "a", "error", "Command exited with code 1:\n"),
+        tool("Bash", "b", "error", "boom"),
+        tool("Bash", "c", "done", "[Finished — exit code 0]"),
+        tool("Read", "d"),
+        tool("Bash", "e", "rejected"),
+        thinking("t"),
+        agent("→ helper"),
+        tool("Bash", "f", "running"),
+      ],
+      true,
+    );
+    expect(steps.map(stepResultText)).toEqual([
+      "failed · exit 1",
+      "failed",
+      "done",
+      "done",
+      "not run",
+      null,
+      null,
+      "running",
+    ]);
+    expect(stepResultText(activitySteps([thinking("t")], true)[0])).toBeNull();
+  });
+});
+
+describe("latestThought and headlineStep", () => {
+  it("finds the group's last thought, and whether it still streams", () => {
+    expect(latestThought(activitySteps([tool("Read", "a")], true))).toBeNull();
+    expect(latestThought(activitySteps([thinking("one"), tool("Read", "a"), thinking("  ")], false))).toEqual({
+      text: "one",
+      live: false,
+    });
+    expect(latestThought(activitySteps([thinking("one"), thinking("two")], true))).toEqual({ text: "two", live: true });
+  });
+
+  it("names the running tool, else the last step", () => {
+    const steps = activitySteps([tool("Bash", "a", "running"), thinking("t")], true);
+    expect(headlineStep(steps)?.label).toBe("Bash a");
+    expect(headlineStep(activitySteps([tool("Read", "a"), tool("Bash", "b", "error")], true))?.label).toBe("Bash b");
+    expect(headlineStep([])).toBeNull();
   });
 });
 

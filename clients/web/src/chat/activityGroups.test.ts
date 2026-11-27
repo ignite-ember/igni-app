@@ -154,6 +154,27 @@ describe("activity counts and summary", () => {
       .toEqual(["command", "command", "read", "edit", "edit", "search", "fetch", "agent", "other"]);
   });
 
+  it("knows an MCP server's or an extension's tool by its registered prefix", () => {
+    expect(["mcp_github_create_issue", "mcp_ext:acme.scanner_list", "MCP_x_y", "mcp", "mcpish"].map(stepKindOf))
+      .toEqual(["mcp", "mcp", "mcp", "other", "other"]);
+    const c = countActivity([tool("mcp_github_list"), tool("mcp_github_get")]);
+    expect(c.mcp).toBe(2);
+    expect(summaryText(c)).toBe("Called 2 MCP tools");
+    expect(summaryText(countActivity([tool("mcp_x_y")]))).toBe("Called 1 MCP tool");
+  });
+
+  it("counts the commands that went through apart from the ones that did not", () => {
+    const c = countActivity([
+      tool("Bash"),
+      tool("Bash", "", "error"),
+      tool("Bash", "", "rejected"),
+      tool("Bash", "", "running"),
+      tool("Read"),
+    ]);
+    expect(c.command).toBe(4);
+    expect(c.commandsOk).toBe(1);
+  });
+
   it("says what a finished group did", () => {
     const c = countActivity([
       tool("Bash"),
