@@ -15,6 +15,7 @@ import {
   isFinalizing,
   isAwaitingApproval,
   canStop,
+  canStopSession,
   shouldShowSpinner,
   phaseLabel,
   phaseFromProcFinalizing,
@@ -101,6 +102,12 @@ describe("RunPhase — a run paused on an approval", () => {
       "done",
     ];
     expect(all.filter(canStop).sort()).toEqual(["awaiting_approval", "starting", "streaming"]);
+  });
+
+  it("Stop is offered in every phase while the backend says the session has a run going", () => {
+    const all: RunPhase[] = ["idle", "starting", "streaming", "finalizing", "awaiting_approval", "cancelled", "errored", "done"];
+    expect(all.filter((p) => canStopSession(p, true))).toEqual(all);
+    expect(all.filter((p) => canStopSession(p, false))).toEqual(all.filter(canStop));
   });
 
   it("the observer's flag shape keeps the pause: a stream_end is not the run ending", () => {

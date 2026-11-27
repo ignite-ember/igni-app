@@ -155,3 +155,51 @@ test("a new message instead of an answer clears the approval the backend dropped
   await expect(stop(page)).toHaveCount(0, { timeout: 30_000 });
   untouched(liveBe, "abandoned.txt");
 });
+
+// Session 6fa3e09e: the run went on after its approval, and every later
+// call the permission policy allowed by itself paused and resumed — each
+// pause sends `streaming_done` first. The window took the run for one
+// finishing: "Finalizing…", Send and no Stop, and Escape did nothing while
+// the run produced for minutes.
+test("a run going on after its approval keeps Stop, and Escape ends it", { tag: "@needs-model" }, async ({
+  page,
+  liveBe,
+}) => {
+  await page.goto(`/?ws=${encodeURIComponent(liveBe.wsUrl)}`);
+  await connected(page);
+  await newChat(page);
+  const token = marker();
+  // The same call twice: answered "Always allow" the first time, the
+  // second is allowed by that rule — a pause the backend resumes by itself.
+  const touch = JSON.stringify({ command: "touch going-on.txt" });
+  await send(
+    page,
+    `[[tool run_shell_command ${touch}]] [[tool run_shell_command ${touch}]] ` +
+      `Use your shell tool to run \`touch going-on.txt\` twice, then count from 1 to 400 and say ${token}.`,
+  );
+  await expect(page.locator(".hitl-card")).toBeVisible({ timeout: 120_000 });
+  await page.getByRole("button", { name: /Always allow/i }).click();
+  await expect(page.locator(".hitl-card")).toHaveCount(0, { timeout: 15_000 });
+
+  // Past the second call, which the rule allowed: the reply is counting.
+  await expect(page.locator(".msg-assistant").filter({ hasText: /\b12\b/ }).first()).toBeVisible({
+    timeout: 120_000,
+  });
+  await expect(stop(page)).toBeVisible();
+  await expect(stop(page)).toHaveAttribute("title", "Stop (Esc)");
+  await expect(page.locator(".send-btn:not(.stop)")).toHaveCount(0);
+  await expect(page.getByText("Finalizing…")).toHaveCount(0);
+
+  await page.keyboard.press("Escape");
+  await expect(stop(page)).toHaveCount(0, { timeout: 30_000 });
+  await expect(page.locator(".typing-indicator")).toHaveCount(0, { timeout: 30_000 });
+  // The run is over: the count stops short and the token never comes.
+  await page.waitForTimeout(3_000);
+  await expect(page.locator(".msg-assistant").filter({ hasText: token })).toHaveCount(0);
+  await expect(page.locator(".msg-assistant").filter({ hasText: /\b400\b/ })).toHaveCount(0);
+
+  // And the window takes the next message as a new run.
+  const next = marker();
+  await send(page, `Reply with exactly ${next}.`);
+  await assistantSaid(page, next);
+});

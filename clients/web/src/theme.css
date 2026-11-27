@@ -5252,10 +5252,16 @@ button.activity-file-chip:focus-visible {
   cursor: default;
 }
 
-.send-btn.stop {
-  background: var(--bg-raised);
-  color: var(--fg);
-  border: 1px solid var(--border);
+/* Stop is the kit's primary button (``Button``), square to Send's size:
+   a filled inverse tile with the stop glyph, as Claude's composer has. */
+.button.button--primary.send-btn.stop {
+  width: 30px;
+  height: 30px;
+  padding: 0;
+}
+
+.button.send-btn.stop .button-icon {
+  margin: 0;
 }
 
 /* Compound selector (``.popup-menu.send-mode-menu``) beats
