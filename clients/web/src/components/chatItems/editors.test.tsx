@@ -65,7 +65,7 @@ describe("Retry editor", () => {
     fireEvent.click(screen.getByTitle(/Retry researcher/));
     fireEvent.change(textarea(), { target: { value: "" } });
     expect(textarea().value).toBe("");
-    const send = document.querySelector(".orch-retry-bar .btn-primary") as HTMLButtonElement;
+    const send = document.querySelector(".orch-retry-bar .button--primary") as HTMLButtonElement;
     expect(send.disabled).toBe(true);
 
     fireEvent.keyDown(textarea(), { key: "Escape" });

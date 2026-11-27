@@ -23,6 +23,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { Status, Tooltip } from "@ignite-ember/ui-react";
 
+import { Button } from "../components/page/Button";
 import { badgeText } from "../notifications/model";
 
 /** The four the design system publishes, and nothing else. */
@@ -164,14 +165,13 @@ export function ExtensionIndicator({
     );
     if (!indicator.opens || onOpen === undefined) return label;
     return (
-      <button
-        type="button"
-        className="btn btn-quiet btn-xs"
+      <Button
+        size="sm"
         aria-label={`${indicator.label}: ${unread} unread. Open.`}
         onClick={() => onOpen(indicator.opens)}
       >
         {label}
-      </button>
+      </Button>
     );
   }
 
@@ -187,15 +187,14 @@ export function ExtensionIndicator({
   }
 
   const button = (
-    <button
-      type="button"
-      className="btn btn-quiet btn-xs"
+    <Button
+      size="sm"
       // The label is the state; the name says what clicking does.
       aria-label={`${indicator.label}: ${state.label}${unread > 0 ? `, ${unread} unread` : ""}. Open.`}
       onClick={() => onOpen(indicator.opens)}
     >
       {chip}
-    </button>
+    </Button>
   );
 
   return state.detail ? <Tooltip text={state.detail}>{button}</Tooltip> : button;

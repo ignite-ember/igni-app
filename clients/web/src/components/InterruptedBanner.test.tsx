@@ -70,6 +70,15 @@ describe("AssistantMessage banner — visible on interrupted runs", () => {
     expect(screen.getByRole("button", { name: /discard the partial response/i })).toBeTruthy();
   });
 
+  it("draws the actions with the shared Button kit, by meaning", () => {
+    render(<ChatItemView item={assistant(1, "cancelled")} />);
+    const cls = (name: RegExp) => screen.getByRole("button", { name }).className;
+    expect(cls(/retry: run cancelled/i)).toContain("button--primary");
+    expect(cls(/edit prompt for retry/i)).toContain("button--secondary");
+    expect(cls(/discard the partial response/i)).toContain("button--danger");
+    for (const b of screen.getAllByRole("button")) expect(b.className).not.toMatch(/\bbtn\b/);
+  });
+
   it("applies the reason-specific CSS modifier class", () => {
     render(<ChatItemView item={assistant(1, "errored")} />);
     const banner = screen.getByRole("status");
@@ -95,7 +104,7 @@ describe("AssistantMessage banner — click handlers", () => {
     // Anchor on the primary action's class so the test isn't
     // ambiguous with the Edit-prompt button (which contains
     // "retry" in its aria-label).
-    fireEvent.click(document.querySelector(".btn.btn-primary")!);
+    fireEvent.click(document.querySelector(".button.button--primary")!);
     expect(onRetry).toHaveBeenCalledWith(42);
   });
 

@@ -8,6 +8,7 @@ import { useEffect, useRef, type KeyboardEvent } from "react";
 
 import type { AssistantInterrupted } from "../../chat/chatItem";
 import { ASSISTANT_INTERRUPTED_LABELS } from "../interruptedLabels";
+import { Button } from "../page/Button";
 
 /** A missing action disables its button and its shortcut. */
 export interface InterruptedActions {
@@ -57,33 +58,33 @@ export function InterruptedBanner({
     >
       <span className="msg-assistant-interrupted-label">{label}</span>
       <div className="msg-assistant-interrupted-actions">
-        <button
-          type="button"
-          className="btn btn-sm btn-primary"
+        <Button
+          variant="primary"
+          size="sm"
           onClick={actions.retry}
           disabled={!actions.retry}
           aria-label={`Retry: ${label.toLowerCase()}`}
         >
           Retry
-        </button>
-        <button
-          type="button"
-          className="btn btn-sm"
+        </Button>
+        <Button
+          variant="secondary"
+          size="sm"
           onClick={actions.editPrompt}
           disabled={!actions.editPrompt}
           aria-label="Edit prompt for retry"
         >
           Edit prompt
-        </button>
-        <button
-          type="button"
-          className="btn btn-sm btn-danger"
+        </Button>
+        <Button
+          variant="danger"
+          size="sm"
           onClick={actions.discard}
           disabled={!actions.discard}
           aria-label="Discard the partial response"
         >
           Discard
-        </button>
+        </Button>
       </div>
     </div>
   );

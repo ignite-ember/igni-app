@@ -13,6 +13,7 @@
 import { useEffect, useState } from "react";
 
 import type { Dialog } from "../clientState";
+import { Button } from "./page/Button";
 
 interface Button {
   id: string;
@@ -99,14 +100,9 @@ export function HostDialog({
         )}
         <div className="update-prompt-actions">
           {buttons.map((b) => (
-            <button
-              key={b.id}
-              type="button"
-              className={b.primary ? "btn btn-primary" : "btn"}
-              onClick={() => answer(b.id)}
-            >
+            <Button key={b.id} variant={b.primary ? "primary" : "secondary"} onClick={() => answer(b.id)}>
               {b.label}
-            </button>
+            </Button>
           ))}
         </div>
       </div>

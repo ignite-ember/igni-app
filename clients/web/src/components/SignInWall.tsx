@@ -29,6 +29,7 @@ import { useState } from "react";
 
 import { FlameIcon } from "./Icons";
 import type { IgniClient } from "../protocol/client";
+import { Button } from "./page/Button";
 
 type Found = {
   api_url?: string;
@@ -161,13 +162,14 @@ export function SignInWall({
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
               />
-              <button
-                className="btn btn-primary wall-go"
+              <Button
+                variant="primary"
+                className="wall-go"
                 type="submit"
                 disabled={busy || !email.trim()}
               >
                 {busy ? "Looking…" : "Continue"}
-              </button>
+              </Button>
             </form>
           </>
         )}
@@ -211,13 +213,14 @@ export function SignInWall({
                   onChange={(e) => setPortal(e.target.value)}
                 />
               </details>
-              <button
-                className="btn btn-primary wall-go"
+              <Button
+                variant="primary"
+                className="wall-go"
                 type="submit"
                 disabled={busy || !server.trim()}
               >
                 {busy ? "Saving…" : "Connect"}
-              </button>
+              </Button>
             </form>
             <button
               className="wall-back"
@@ -243,14 +246,14 @@ export function SignInWall({
                 ? ", found from your address."
                 : "."}
             </p>
-            <button
-              className="btn btn-primary wall-go"
-              type="button"
+            <Button
+              variant="primary"
+              className="wall-go"
               autoFocus
               onClick={onSignIn}
             >
               Sign in
-            </button>
+            </Button>
             <button
               className="wall-back"
               type="button"

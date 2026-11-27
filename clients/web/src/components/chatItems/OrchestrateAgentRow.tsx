@@ -6,6 +6,7 @@ import { useState } from "react";
 import type { OrchestrateAgent } from "../../chat/orchestrateAgentTree";
 import { AgentSummary } from "../../chat/orchestrateSummary";
 import { ChevronIcon, RetryIcon, StopSquareIcon } from "../Icons";
+import { Button } from "../page/Button";
 import { formatTokenCount } from "../statsLine";
 import { RetryEditor } from "./RetryEditor";
 import { ToolCardView } from "./ToolCardView";
@@ -98,8 +99,10 @@ export function OrchestrateAgentRow({
         </span>
         <ToolCountChips summary={summary} />
         {summary.isActive && onStop && agent.runId && (
-          <button
-            type="button"
+          <Button
+            variant="danger"
+            size="sm"
+            icon={<StopSquareIcon />}
             className="orch-stop-btn orch-stop-agent"
             title={`Stop ${agent.name} — siblings keep running`}
             onClick={(e) => {
@@ -107,13 +110,13 @@ export function OrchestrateAgentRow({
               onStop(agent.runId);
             }}
           >
-            <StopSquareIcon />
             Stop
-          </button>
+          </Button>
         )}
         {canRetry && (
-          <button
-            type="button"
+          <Button
+            size="sm"
+            icon={<RetryIcon />}
             className="orch-retry-btn"
             title={`Retry ${agent.name} — tweak the prompt and try again`}
             onClick={(e) => {
@@ -121,9 +124,8 @@ export function OrchestrateAgentRow({
               retry.toggle();
             }}
           >
-            <RetryIcon />
             Retry
-          </button>
+          </Button>
         )}
       </div>
       {retry.open && canRetry && <RetryEditor agent={agent} retry={retry} onRetry={canRetry} />}

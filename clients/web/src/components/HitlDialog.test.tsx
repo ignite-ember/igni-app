@@ -170,7 +170,7 @@ describe("HitlDialog — single requirement", () => {
   });
 
   it("shows all four action buttons", () => {
-    // Reject must be visually distinct (btn-danger). The three
+    // Reject must be visually distinct (the danger Button). The three
     // confirm flavors map to BE choice strings — drift here
     // means the BE gets the wrong allow-rule type.
     render(<HitlDialog requirements={[req()]} onResolve={() => undefined} />);
@@ -178,6 +178,15 @@ describe("HitlDialog — single requirement", () => {
     expect(screen.getByRole("button", { name: "Always allow" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Allow similar" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Reject" })).toBeTruthy();
+  });
+
+  it("draws the actions with the shared Button kit, by meaning", () => {
+    render(<HitlDialog requirements={[req()]} onResolve={() => undefined} />);
+    const cls = (name: string) => screen.getByRole("button", { name }).className;
+    expect(cls("Allow once")).toContain("button--primary");
+    expect(cls("Always allow")).toContain("button--secondary");
+    expect(cls("Allow similar")).toContain("button--secondary");
+    expect(cls("Reject")).toContain("button--danger");
   });
 
   it("'Allow once' resolves with action=confirm + choice=once", () => {
