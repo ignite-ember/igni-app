@@ -96,8 +96,8 @@ test("plugins marketplace grid", { tag: "@manual" }, async ({ page, backend, app
   await page.emulateMedia({ colorScheme: "light" });
   // Open the Plugins page from the sidebar.
   await page.locator(".sidebar-link", { hasText: "Plugins" }).click();
-  await expect(page.locator(".plugins-grid")).toBeVisible();
-  await expect(page.locator(".plugins-gcard").first()).toBeVisible();
+  await expect(page.locator(".card-grid")).toBeVisible();
+  await expect(page.locator(".entity-card").first()).toBeVisible();
   await page.waitForTimeout(300);
   await page.screenshot({ path: "account-shots/plugins-light.png" });
 
@@ -108,30 +108,30 @@ test("plugins marketplace grid", { tag: "@manual" }, async ({ page, backend, app
   // The filter (category) dropdown.
   await page.emulateMedia({ colorScheme: "light" });
   await page.getByRole("button", { name: "Filter" }).click();
-  await expect(page.locator(".plugins-menu")).toBeVisible();
+  await expect(page.locator(".control-menu")).toBeVisible();
   await page.waitForTimeout(150);
   await page.screenshot({ path: "account-shots/plugins-filter-menu.png" });
-  await page.locator(".plugins-menu-backdrop").click();
+  await page.locator(".control-menu-backdrop").click();
 
   // The sort dropdown.
   await page.getByRole("button", { name: "Sort" }).click();
-  await expect(page.locator(".plugins-menu")).toBeVisible();
+  await expect(page.locator(".control-menu")).toBeVisible();
   await page.waitForTimeout(150);
   await page.screenshot({ path: "account-shots/plugins-sort-menu.png" });
-  await page.locator(".plugins-menu-backdrop").click();
+  await page.locator(".control-menu-backdrop").click();
 
   // The search expands inline from its icon.
   await page.emulateMedia({ colorScheme: "light" });
   await page.getByRole("button", { name: "Search plugins" }).click();
-  await expect(page.locator(".plugins-searchbox")).toBeVisible();
+  await expect(page.locator(".page-search")).toBeVisible();
   await page.waitForTimeout(200);
   await page.screenshot({ path: "account-shots/plugins-search-open.png" });
 
   // Open a plugin's detail page to capture the polished hero.
   await page.emulateMedia({ colorScheme: "light" });
-  await page.locator(".plugins-gcard", { hasText: "api-security-testing" }).click();
-  await expect(page.locator(".plugin-detail-hero")).toBeVisible();
-  await expect(page.locator(".plugin-detail-caps")).toBeVisible();
+  await page.locator(".entity-card", { hasText: "api-security-testing" }).click();
+  await expect(page.locator(".entity-hero")).toBeVisible();
+  await expect(page.locator(".entity-hero-chips")).toBeVisible();
   await page.waitForTimeout(300);
   await page.screenshot({ path: "account-shots/plugin-detail-light.png" });
   await page.emulateMedia({ colorScheme: "dark" });

@@ -193,19 +193,19 @@ export function PluginsCatalogDemo() {
           <div className="page-head">
             <h1 className="page-title">Plugins</h1>
             <div className="page-head-extras">
-              <div className="plugins-headerbar">
-                <div className="plugins-tabs">
+              <div className="page-headerbar">
+                <div className="page-tabs">
                   <button
-                    className={`plugins-tab ${view === "marketplace" ? "active" : ""}`}
+                    className={`page-tab ${view === "marketplace" ? "active" : ""}`}
                     onClick={() => setView("marketplace")}
                   >
-                    Marketplace<span className="plugins-tab-count">{CATALOG.pluginCount}</span>
+                    Marketplace<span className="page-tab-count">{CATALOG.pluginCount}</span>
                   </button>
                   <button
-                    className={`plugins-tab ${view === "installed" ? "active" : ""}`}
+                    className={`page-tab ${view === "installed" ? "active" : ""}`}
                     onClick={() => setView("installed")}
                   >
-                    Installed<span className="plugins-tab-count">{INSTALLED.count}</span>
+                    Installed<span className="page-tab-count">{INSTALLED.count}</span>
                   </button>
                 </div>
                 {view === "marketplace" && (

@@ -3,6 +3,7 @@ import type { IgniClient } from "../../protocol/client";
 import { Drawer } from "./Drawer";
 import { Skeleton } from "@ignite-ember/ui-react";
 import { host } from "../../lib/host";
+import { PageEmpty } from "../page/PageEmpty";
 
 // ── Types ────────────────────────────────────────────────────────
 
@@ -225,15 +226,17 @@ function HookRow({ hook }: { hook: HookEntry }) {
 
 function EmptyHero() {
   return (
-    <div className="kb-empty">
-      <div className="kb-empty-title">No hooks configured</div>
-      <div className="kb-empty-hint">
-        Drop scripts into <code>.igni/hooks/</code> or declare hooks under{" "}
-        <code>hooks</code> in <code>.igni/settings.json</code>. Each hook binds
-        a lifecycle event (e.g. <code>PreToolUse</code>) to a script or webhook
-        — see the docs for matcher patterns and the JSON payload shape.
-      </div>
-    </div>
+    <PageEmpty
+      title="No hooks configured"
+      hint={
+        <>
+          Drop scripts into <code>.igni/hooks/</code> or declare hooks under{" "}
+          <code>hooks</code> in <code>.igni/settings.json</code>. Each hook binds
+          a lifecycle event (e.g. <code>PreToolUse</code>) to a script or webhook
+          — see the docs for matcher patterns and the JSON payload shape.
+        </>
+      }
+    />
   );
 }
 

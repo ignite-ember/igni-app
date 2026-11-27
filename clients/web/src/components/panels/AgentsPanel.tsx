@@ -3,6 +3,7 @@ import ReactMarkdown from "react-markdown";
 import type { IgniClient } from "../../protocol/client";
 import { Drawer } from "./Drawer";
 import { ChevronIcon } from "../Icons";
+import { PageLoading } from "../page/PageLoading";
 
 interface AgentRow {
   name?: string;
@@ -138,7 +139,7 @@ export function AgentsPanel({
         <AgentDetail agent={selected} />
       ) : (
         <>
-          {agents === null && <div className="msg-info">Loading…</div>}
+          {agents === null && <PageLoading />}
           {agents?.map((a) => (
             <div className="agent-head" key={a.name} onClick={() => setSelected(a)}>
               <div style={{ flex: 1, minWidth: 0 }}>

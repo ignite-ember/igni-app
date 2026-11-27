@@ -1,9 +1,12 @@
 /** The Installed tab: install from a git ref, and the installed plugins. */
 
-import { EntityGlyph } from "../../EntityGlyph";
-import { useMasonry } from "../useMasonry";
+import { Button } from "../../page/Button";
+import { CardGrid } from "../../page/CardGrid";
+import { CardGridSkeleton } from "../../page/CardGridSkeleton";
+import { EntityCard } from "../../page/EntityCard";
+import { PageEmpty } from "../../page/PageEmpty";
 import type { InstalledPlugin, InstalledPlugins } from "./installedPlugin";
-import { PluginCapabilities, PluginsSkeleton } from "./PluginParts";
+import { PluginCapabilities } from "./PluginParts";
 
 export function InstalledTab({
   installed,
@@ -20,8 +23,7 @@ export function InstalledTab({
   onInstall: (ref: string) => void;
   onOpen: (plugin: InstalledPlugin) => void;
 }) {
-  const flow = useMasonry();
-  if (installed === null) return <PluginsSkeleton />;
+  if (installed === null) return <CardGridSkeleton />;
   return (
     <>
       <div className="plugins-install-row">
@@ -32,62 +34,52 @@ export function InstalledTab({
           onChange={(e) => onInstallRefChange(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && installRef.trim() && onInstall(installRef.trim())}
         />
-        <button
-          className="btn btn-sm btn-primary"
-          disabled={!installRef.trim() || installing}
+        <Button
+          variant="primary"
+          disabled={!installRef.trim()}
+          busy={installing}
           onClick={() => onInstall(installRef.trim())}
         >
-          {installing ? "…" : "Install"}
-        </button>
+          Install
+        </Button>
       </div>
       {installed.count === 0 ? (
-        <div className="plugins-empty">
-          <div className="plugins-empty-title">No plugins installed yet</div>
-          <div className="plugins-empty-hint">
-            Open the Marketplace tab to browse and install plugins, or paste a git URL above.
-          </div>
-        </div>
+        <PageEmpty
+          title="No plugins installed yet"
+          hint="Open the Marketplace tab to browse and install plugins, or paste a git URL above."
+        />
       ) : (
-        <div className="plugins-grid plugins-grid--flow" ref={flow}>
+        <CardGrid flow>
           {installed.rows.map((p) => (
-            <div
-              className="plugins-gcard"
+            <EntityCard
               key={p.name}
-              role="button"
-              tabIndex={0}
-              onClick={() => onOpen(p)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" || e.key === " ") {
-                  e.preventDefault();
-                  onOpen(p);
-                }
-              }}
-            >
-              <span className="plugins-gcard-icon" aria-hidden="true">
-                <EntityGlyph name={p.name} size={38} />
-              </span>
-              <div className="plugins-gcard-body">
-                <div className="plugins-gcard-top">
-                  <span className="plugins-name">
-                    <span className={`plugins-status ${p.enabled ? "is-on" : "is-off"}`} /> {p.name}
-                    {p.version && <span className="meta"> · {p.version}</span>}
-                  </span>
-                  <span className="plugins-chevron-end" aria-hidden="true">
-                    ›
-                  </span>
-                </div>
-                {p.description && <p className="plugins-gcard-desc">{p.description}</p>}
-                <PluginCapabilities plugin={p} />
-                {(p.sourceRoot || !p.enabled) && (
-                  <div className="plugins-gcard-foot">
-                    {!p.enabled && <span className="plugins-cat-chip">disabled</span>}
-                    {p.sourceRoot && <span className="plugins-source">{p.sourceRoot}</span>}
-                  </div>
-                )}
-              </div>
-            </div>
+              glyph={p.name}
+              name={
+                <>
+                  <span className={`plugins-status ${p.enabled ? "is-on" : "is-off"}`} /> {p.name}
+                </>
+              }
+              label={p.name}
+              onOpen={() => onOpen(p)}
+              action={
+                <span className="plugins-chevron-end" aria-hidden="true">
+                  ›
+                </span>
+              }
+              description={p.description}
+              chips={<PluginCapabilities plugin={p} />}
+              footer={
+                (p.sourceRoot || !p.enabled || p.version) && (
+                  <>
+                    {!p.enabled && <span className="entity-meta">disabled</span>}
+                    {p.version && <span className="entity-meta">{p.version}</span>}
+                    {p.sourceRoot && <span className="entity-meta">{p.sourceRoot}</span>}
+                  </>
+                )
+              }
+            />
           ))}
-        </div>
+        </CardGrid>
       )}
     </>
   );

@@ -90,6 +90,8 @@ export function PluginsPanel({ client, onClose }: PluginsPanelProps) {
     <Drawer
       title={view.title}
       levels={levels}
+      // The plugin's page opens with its own name in the hero.
+      titleInBody={screen.page === "detail"}
       onClose={onClose}
       headerExtras={headerExtras}
     >

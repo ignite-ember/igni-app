@@ -2,6 +2,8 @@ import { useCallback, useEffect, useState } from "react";
 
 import { Drawer } from "../panels/Drawer";
 import type { IgniClient } from "../../protocol/client";
+import { PageEmpty } from "../page/PageEmpty";
+import { PageLoading } from "../page/PageLoading";
 
 export interface WorkflowPhase {
   title?: string;
@@ -64,16 +66,19 @@ export function WorkflowsPage({
     <Drawer title="Workflows" onClose={onClose}>
       {error && <div className="ctx-error">Could not list workflows: {error}</div>}
 
-      {workflows === null && !error && <div className="ctx-empty">Reading workflows…</div>}
+      {workflows === null && !error && <PageLoading label="Reading workflows…" />}
 
       {workflows?.length === 0 && (
-        <div className="page-empty">
-          <p className="page-empty-lead">
-            No workflows in <code>.igni/workflows/</code>. A workflow is a script that
-            drives several agents through named phases — useful when one prompt would have
-            to do too many things at once.
-          </p>
-        </div>
+        <PageEmpty
+          title="No workflows yet"
+          hint={
+            <>
+              Put one in <code>.igni/workflows/</code>. A workflow is a script that drives several
+              agents through named phases — useful when one prompt would have to do too many
+              things at once.
+            </>
+          }
+        />
       )}
 
       {workflows?.map((wf) => (

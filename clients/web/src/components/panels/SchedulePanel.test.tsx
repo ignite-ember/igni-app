@@ -138,7 +138,7 @@ describe("what is scheduled", () => {
     fireEvent.change(search, { target: { value: "audit" } });
     expect(screen.getByText("Nightly dependency audit")).toBeTruthy();
     fireEvent.change(search, { target: { value: "nothing like this" } });
-    expect(screen.getByText("No tasks match.")).toBeTruthy();
+    expect(screen.getByText("No tasks match")).toBeTruthy();
   });
 });
 

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import type { IgniClient } from "../../protocol/client";
 import { Drawer } from "./Drawer";
+import { PageEmpty } from "../page/PageEmpty";
 
 interface LoopStatus {
   active?: boolean;
@@ -67,9 +68,14 @@ export function LoopPanel({
   return (
     <Drawer title="Loop" onClose={onClose}>
       {!status?.active && (
-        <div className="msg-info">
-          No active loop. Start one with <code>/loop &lt;prompt&gt;</code>.
-        </div>
+        <PageEmpty
+          title="No active loop"
+          hint={
+            <>
+              Start one with <code>/loop &lt;prompt&gt;</code>.
+            </>
+          }
+        />
       )}
       {status?.active && (
         <>

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 
 import { Drawer } from "../panels/Drawer";
 import type { IgniClient } from "../../protocol/client";
+import { PageLoading } from "../page/PageLoading";
 
 export interface ContextBreakdown {
   total: number;
@@ -146,7 +147,7 @@ export function ContextPage({
         </>
       )}
 
-      {!breakdown && !error && <div className="ctx-empty">Reading the context…</div>}
+      {!breakdown && !error && <PageLoading label="Reading the context…" />}
     </Drawer>
   );
 }
