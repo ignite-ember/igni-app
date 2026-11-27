@@ -1,5 +1,8 @@
+import { useState } from "react";
 import { Drawer } from "../panels/Drawer";
 import { BUILTIN_COMMANDS, type SlashCommand } from "../../chat/slashCommands";
+import { PageEmpty } from "../page/PageEmpty";
+import { PageHeaderControls } from "../page/PageHeaderControls";
 
 /**
  * Every command, grouped.
@@ -85,24 +88,52 @@ export function HelpPage({
   onClose: () => void;
 }) {
   const byName = new Map(BUILTIN_COMMANDS.map((c) => [c.name, c]));
+  const [query, setQuery] = useState("");
 
   // Anything the groups above have not placed still has to appear —
   // a command missing from help because nobody updated a list here is
   // worse than one in the wrong section.
   const { ungrouped } = groupingDrift(BUILTIN_COMMANDS);
+  const q = query.trim().toLowerCase();
+  const matches = (name: string, description?: string) =>
+    !q || name.toLowerCase().includes(q) || (description ?? "").toLowerCase().includes(q);
   const sections = [
     ...GROUPS.map((g) => ({ ...g, commands: g.commands.filter((n) => byName.has(n)) })),
-    ...(ungrouped.length
-      ? [{ title: "Other", blurb: "", commands: ungrouped }]
-      : []),
-  ];
+    ...(ungrouped.length ? [{ title: "Other", blurb: "", commands: ungrouped }] : []),
+    {
+      title: "Skills",
+      blurb: "Workflows from this project and its installed plugins.",
+      commands: skills.map((s) => s.name),
+    },
+  ]
+    .map((g) => ({ ...g, commands: g.commands.filter((n) => matches(n, descriptionOf(n))) }))
+    .filter((g) => g.commands.length > 0);
+
+  function descriptionOf(name: string): string | undefined {
+    return byName.get(name)?.description ?? skills.find((s) => s.name === name)?.description;
+  }
 
   return (
-    <Drawer title="Help" onClose={onClose}>
-      <div className="help-intro">
+    <Drawer
+      title="Help"
+      onClose={onClose}
+      headerExtras={
+        <PageHeaderControls
+          search={{
+            value: query,
+            onChange: setQuery,
+            placeholder: "Search commands…",
+            label: "Search commands",
+          }}
+        />
+      }
+    >
+      <p className="help-intro">
         Type <code>/</code> in the composer to search these, <code>@</code> for files, and{" "}
         <code>$</code> to run a shell command.
-      </div>
+      </p>
+
+      {sections.length === 0 && <PageEmpty title="No commands match" hint="Try a shorter word." />}
 
       {sections.map((group) => (
         <section className="help-group" key={group.title}>
@@ -112,29 +143,12 @@ export function HelpPage({
             {group.commands.map((name) => (
               <button className="help-command" key={name} onClick={() => onRun(name)}>
                 <code className="help-command-name">{name}</code>
-                <span className="help-command-desc">{byName.get(name)?.description}</span>
+                <span className="help-command-desc">{descriptionOf(name)}</span>
               </button>
             ))}
           </div>
         </section>
       ))}
-
-      {skills.length > 0 && (
-        <section className="help-group">
-          <h2 className="help-group-title">Skills</h2>
-          <p className="help-group-blurb">
-            Workflows from this project and its installed plugins.
-          </p>
-          <div className="help-commands">
-            {skills.map((s) => (
-              <button className="help-command" key={s.name} onClick={() => onRun(s.name)}>
-                <code className="help-command-name">{s.name}</code>
-                <span className="help-command-desc">{s.description}</span>
-              </button>
-            ))}
-          </div>
-        </section>
-      )}
     </Drawer>
   );
 }

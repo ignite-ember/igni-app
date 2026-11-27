@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { IgniClient } from "../../protocol/client";
 import { Drawer } from "./Drawer";
+import { Button } from "../page/Button";
 
 /**
  * Programs — who besides this window may answer the agent's approval
@@ -66,7 +67,10 @@ export function ProgramsPanel({
 
   return (
     <Drawer title="Programs" onClose={onClose}>
-      <div className="programs">
+      <section className="programs" aria-labelledby="programs-title">
+        <h2 className="programs-title" id="programs-title">
+          Approver tokens
+        </h2>
         <p className="programs-lead">
           A program attached to igni, such as a script using the SDK, can run
           sessions but cannot answer the agent's approval requests. To let one
@@ -83,11 +87,11 @@ export function ProgramsPanel({
             <span className="programs-token-label">
               Approver token. It is shown once, so copy it now.
             </span>
-            <code className="programs-token-value">{token}</code>
-            <div className="programs-actions">
-              <button className="btn btn-sm" onClick={() => void copy()}>
+            <div className="programs-token-row">
+              <code className="programs-token-value">{token}</code>
+              <Button size="sm" className="programs-copy" onClick={() => void copy()}>
                 {copied ? "Copied" : "Copy"}
-              </button>
+              </Button>
             </div>
           </div>
         ) : null}
@@ -99,18 +103,14 @@ export function ProgramsPanel({
           </p>
         )}
         <div className="programs-actions">
-          <button className="btn btn-sm" disabled={busy} onClick={() => void make()}>
+          <Button variant="primary" disabled={busy} onClick={() => void make()}>
             Make an approver token
-          </button>
-          <button
-            className="btn btn-sm btn-danger"
-            disabled={busy}
-            onClick={() => void revokeAll()}
-          >
+          </Button>
+          <Button variant="danger" disabled={busy} onClick={() => void revokeAll()}>
             Revoke all approver tokens
-          </button>
+          </Button>
         </div>
-      </div>
+      </section>
     </Drawer>
   );
 }

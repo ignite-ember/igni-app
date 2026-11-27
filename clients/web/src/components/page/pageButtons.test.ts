@@ -29,13 +29,7 @@ const NOT_PAGES = new Set([
 const NOT_PAGE_DIRS = ["pages/files/"];
 /** Pages still to move over; each entry must still need it. */
 const PENDING = new Set<string>([
-  "panels/LoopPanel.tsx",
-  "panels/ProgramsPanel.tsx",
-  "panels/SchedulePanel.tsx",
   "panels/SkillsPanel.tsx",
-  "panels/watcher/WatcherRow.tsx",
-  "panels/watcher/WatcherTail.tsx",
-  "pages/ContextPage.tsx",
 ]);
 
 /** The old styles, and the SDK's Button (which draws `.btn`). */

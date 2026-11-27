@@ -289,6 +289,9 @@ export const VIEW_STATE: Record<string, Partial<Record<Category, string[]>>> = {
   "components/WorkflowRun.tsx": {
     disclosure: ["collapsed"],
   },
+  "components/pages/HelpPage.tsx": {
+    field: ["query"],
+  },
   "components/pages/ContextPage.tsx": {
     data: ["breakdown"],
     pending: ["error", "loading"],
@@ -346,6 +349,7 @@ export const VIEW_STATE: Record<string, Partial<Record<Category, string[]>>> = {
   },
   "components/panels/HooksPanel.tsx": {
     data: ["rows"],
+    page: ["selected"],
     pending: ["error"],
   },
   "components/panels/ProgramsPanel.tsx": {
@@ -382,16 +386,18 @@ export const VIEW_STATE: Record<string, Partial<Record<Category, string[]>>> = {
     data: ["contents"],
   },
   "components/panels/SchedulePanel.tsx": {
-    menu: ["open"],
     data: ["tasks"],
-    page: ["filter"],
+    page: ["filter", "sortBy", "selected"],
     field: ["query"],
+  },
+  "components/panels/schedule/TaskDetail.tsx": {
+    pending: ["running", "runAnswer", "runError", "cancelling"],
   },
   "components/panels/SkillsPanel.tsx": {
     data: ["skills"],
   },
   "components/panels/WatcherPanel.tsx": {
-    page: ["filter"],
+    page: ["filter", "tab"],
   },
   "components/panels/watcher/useNow.ts": {
     animation: ["now"],
