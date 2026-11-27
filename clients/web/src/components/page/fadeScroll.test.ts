@@ -322,7 +322,7 @@ describe("(d) the chat and FadeScroll share one fade and one blur", () => {
   it("defines the fade curve once", () => {
     expect(CSS.match(/--top-fade-mask\s*:/g)).toHaveLength(1);
     // The curve's last stop, written anywhere else, is a second copy.
-    expect(CSS.match(/#000 57px/g)).toHaveLength(1);
+    expect(CSS.match(/#000 58px/g)).toHaveLength(1);
   });
 
   it("applies it in one rule to the chat and to a scrolled page", () => {
@@ -332,16 +332,24 @@ describe("(d) the chat and FadeScroll share one fade and one blur", () => {
     expect(shared[0].body).toMatch(/-webkit-mask-image:\s*var\(--top-fade-mask\)/);
   });
 
-  it("defines the blur once and applies it in one rule to both", () => {
-    expect(CSS.match(/--top-blur\s*:/g)).toHaveLength(1);
-    expect(CSS.match(/--top-blur-mask\s*:/g)).toHaveLength(1);
-    expect(CSS.match(/blur\(6px\)/g)).toHaveLength(1);
-    const shared = RULES.filter(
+  it("draws the blur only through TopBlur's layers, whose boxes add none of their own", () => {
+    expect(CSS).not.toMatch(/--top-blur\s*:/);
+    expect(CSS).not.toMatch(/--top-blur-mask\s*:/);
+    const boxes = RULES.filter(
       (r) => r.selectors.includes(".app-header-blur") && r.selectors.includes(".fade-scroll-blur"),
     );
-    expect(shared).toHaveLength(1);
-    expect(shared[0].body).toMatch(/(^|[^-])backdrop-filter:\s*var\(--top-blur\)/);
-    expect(shared[0].body).toMatch(/(^|[^-])mask-image:\s*var\(--top-blur-mask\)/);
+    expect(boxes).toHaveLength(1);
+    expect(boxes[0].body).not.toMatch(/backdrop-filter|mask/);
+    const layer = RULES.filter((r) => r.selectors.includes(".top-blur-layer"));
+    expect(layer).toHaveLength(1);
+    expect(layer[0].body).not.toMatch(/backdrop-filter|mask/);
+  });
+
+  it("renders the same TopBlur inside the chat header's box and every page's", () => {
+    const header = readFileSync(path.join(SRC, "components/AppHeader.tsx"), "utf8");
+    const fade = readFileSync(path.join(SRC, "components/page/FadeScroll.tsx"), "utf8");
+    expect(header).toMatch(/className="app-header-blur"[^>]*>\s*<TopBlur \/>/);
+    expect(fade).toMatch(/className="fade-scroll-blur"[^>]*>\s*<TopBlur \/>/);
   });
 
   it("is not overridden for any of them", () => {

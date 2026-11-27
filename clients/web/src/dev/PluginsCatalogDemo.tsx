@@ -20,6 +20,7 @@ import { InstalledTab } from "../components/panels/plugins/InstalledTab";
 import { MarketplaceCatalog } from "../components/panels/plugins/marketplace";
 import { MarketplaceTab } from "../components/panels/plugins/MarketplaceTab";
 import { CatalogControls } from "../components/panels/plugins/PluginsChrome";
+import { TopBlur } from "../components/page/TopBlur";
 
 const CATALOG = MarketplaceCatalog.parse([
   {
@@ -187,7 +188,9 @@ export function PluginsCatalogDemo() {
     <div className="shell">
       <main className="main main--paged" style={{ position: "relative" }}>
         <header className="app-header">
-          <div className="app-header-blur" aria-hidden="true" />
+          <div className="app-header-blur" aria-hidden="true">
+            <TopBlur />
+          </div>
           <div className="header-crumbs" id="app-header-crumbs" />
           <div className="header-spacer" />
         </header>
