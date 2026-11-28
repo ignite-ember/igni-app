@@ -80,6 +80,20 @@ export const REPO_ROOT = path.resolve(HERE, "..", "..", "..", "..");
 export const IGNI_CORE = process.env.IGNI_CORE_DIR ?? path.resolve(REPO_ROOT, "..", "igni-core");
 export const VENV_PYTHON = path.join(IGNI_CORE, ".venv", "bin", "python");
 
+// One Hugging Face cache for every backend the suite starts, across tests and
+// runs. Each chat message asks the decisions service (Laya) how it feels, and
+// the service downloads its model (~800 MB) into its Hugging Face cache — which
+// was the test's own temp home, so a full run downloaded it once per test and
+// filled the disk. Only the model cache is shared; each igni home stays the
+// test's own. ``IGNI_E2E_HF_CACHE`` moves it (CI points it at its cached path).
+export const HF_CACHE =
+  process.env.IGNI_E2E_HF_CACHE ?? path.join(os.tmpdir(), "igni-e2e-hf-cache");
+
+/** The shared model cache, as the Hugging Face libraries read it. */
+export function hfCacheEnv(cache: string = HF_CACHE): NodeJS.ProcessEnv {
+  return { HF_HOME: cache, HF_HUB_CACHE: path.join(cache, "hub") };
+}
+
 /** The reason a run cannot have a backend, or null if it can. */
 export function whyNoBackend(
   env: NodeJS.ProcessEnv = process.env,
@@ -744,10 +758,12 @@ export const test = base.extend<
     // Without this every live spec sat at "Connecting to backend…".
     const token = randomBytes(32).toString("base64url");
     await giveToken(context, token);
+    await fsp.mkdir(HF_CACHE, { recursive: true });
 
     const env = {
       ...process.env,
       ...homeEnv(home),
+      ...hfCacheEnv(),
       // ``_watch_parent`` self-terminates the backend when our PID
       // disappears — no orphaned backends even if Playwright dies
       // mid-test.
@@ -798,9 +814,9 @@ export const test = base.extend<
       // killed explicitly, and while the rows naming their pids still
       // exist.
       if (orphanScenario) await cleanupOrphans(projectDir, home);
-      // Retried: a child the backend started (the decisions model's
-      // download into home/.cache) can still be writing for a moment after
-      // it stops, and one ENOTEMPTY here failed a passing test.
+      // Retried: a child the backend started can still be writing for a
+      // moment after it stops, and one ENOTEMPTY here failed a passing test.
+      // The decisions model no longer downloads into the home (hfCacheEnv).
       await fsp.rm(projectDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
       await fsp.rm(home, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
     }
