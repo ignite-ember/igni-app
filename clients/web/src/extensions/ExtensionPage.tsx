@@ -107,6 +107,9 @@ export interface ExtensionPageProps {
   /** Launch parameters — the host's URL state for this extension. */
   params?: Record<string, unknown>;
   onLocation?: (state: Record<string, string>) => void;
+  /** Draw "Open on the web" over the frame. Off where the host puts it
+   *  in the page's header row instead (`ExtensionPageHost`). */
+  showWebLink?: boolean;
 }
 
 /**
@@ -129,6 +132,7 @@ export function ExtensionPage({
   onServiceToken,
   params,
   onLocation,
+  showWebLink = true,
 }: ExtensionPageProps) {
   const page = useMemo(
     () => extension.pages.find((p) => p.kind === kind),
@@ -216,7 +220,7 @@ export function ExtensionPage({
       title={page.label}
     />
   );
-  if (!extension.web_url) return frame;
+  if (!extension.web_url || !showWebLink) return frame;
   return (
     <div className="extension-page">
       <div className="extension-page-bar">
