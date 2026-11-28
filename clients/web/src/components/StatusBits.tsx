@@ -189,6 +189,17 @@ function readBackendVersionParams(): BackendVersionInfo | null {
   return { expected, actual, source };
 }
 
+/** What the session readout can do to the open chat. */
+export interface SessionContextActions {
+  compact: () => void;
+  openContext: () => void;
+  clear: () => void;
+  fork: () => void;
+}
+
+/** The tooltip on an operation that waits for the running reply. */
+const WAIT_FOR_REPLY = "Wait for the reply to finish";
+
 /** Session + context in one control: a ring that fills as the session's
  *  context does (calm → warning → danger), with the short session id
  *  beside it, opening one readout — the session (click to copy its full
@@ -205,11 +216,17 @@ export function SessionContext({
   tokens,
   max,
   pct,
+  actions,
+  busy = false,
 }: {
   sessionId: string;
   tokens: number;
   max: number;
   pct: number;
+  /** The context operations listed under the bar; absent lists none. */
+  actions?: SessionContextActions;
+  /** A reply is running: the operations that change the chat wait. */
+  busy?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -312,6 +329,33 @@ export function SessionContext({
                 ? `${used.toLocaleString()} of ${ceiling.toLocaleString()} tokens`
                 : `${used.toLocaleString()} tokens`}
             </div>
+            {actions && (
+              <>
+                <div className="ctx-pop-divider" />
+                <div className="ctx-pop-actions" role="group" aria-label="Context operations">
+                  {[
+                    { label: "Compact conversation", run: actions.compact, waits: true },
+                    { label: "Context details", run: actions.openContext, waits: false },
+                    { label: "Clear conversation", run: actions.clear, waits: true },
+                    { label: "Fork conversation", run: actions.fork, waits: true },
+                  ].map(({ label, run, waits }) => (
+                    <button
+                      key={label}
+                      type="button"
+                      className="ctx-pop-action"
+                      disabled={waits && busy}
+                      title={waits && busy ? WAIT_FOR_REPLY : undefined}
+                      onClick={() => {
+                        close();
+                        run();
+                      }}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
           </div>
         </>
       )}

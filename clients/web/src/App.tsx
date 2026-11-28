@@ -210,6 +210,8 @@ export default function App() {
           folder ? actions.attachFolder(folder) : actions.newChat()
         }
         onPickSession={actions.pickSession}
+        onCompact={actions.compact}
+        busy={run.processing}
         status={status}
         client={client}
         auth={auth}

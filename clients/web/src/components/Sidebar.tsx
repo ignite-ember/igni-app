@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { AccountMenu } from "./AccountMenu";
 import { BlocksIcon, ChevronIcon, CircleIcon, McpIcon, NamedIcon, PuzzleIcon } from "./Icons";
 import { useGroupBadge } from "./GroupIndicator";
 import { ScrollIndicator } from "./ScrollIndicator";
+import { SessionMenu } from "./SessionMenu";
 import type { AuthPhase } from "../chat/useShellStatus";
 import { badgeText } from "../notifications/model";
 import type { IgniClient } from "../protocol/client";
@@ -94,6 +95,8 @@ export function Sidebar({
   onNewChat,
   onNewChatInFolder,
   onPick,
+  onCompact,
+  busy = false,
   onClose,
   section = null,
   onSection,
@@ -122,6 +125,11 @@ export function Sidebar({
    *  header. */
   onNewChatInFolder?: (folder: string) => void;
   onPick: (id: string) => void;
+  /** Compact the open chat — the open chat's row's right-click menu.
+   *  Absent, the row keeps the browser's own menu. */
+  onCompact?: () => void;
+  /** A reply is running in the open chat. */
+  busy?: boolean;
   onClose: () => void;
   /** The part of the list in view — ``ui.sidebar.section``: `links`
    *  (the destinations) or `sessions`. Set from outside, the list
@@ -153,6 +161,9 @@ export function Sidebar({
       return next;
     });
   const groups = groupByFolder(sessions);
+  // Where the open chat's right-click menu was opened, while it is open.
+  const [sessionMenu, setSessionMenu] = useState<{ x: number; y: number } | null>(null);
+  const closeSessionMenu = useCallback(() => setSessionMenu(null), []);
   const listRef = useRef<HTMLDivElement>(null);
   const topRef = useRef<HTMLDivElement>(null);
   const sessionsRef = useRef<HTMLDivElement>(null);
@@ -331,6 +342,14 @@ export function Sidebar({
                           className={`session-item${current ? " current" : ""}${unread ? " unread" : ""}`}
                           title={s.detail || s.name}
                           onClick={() => onPick(s.session_id)}
+                          onContextMenu={
+                            current && onCompact
+                              ? (e) => {
+                                  e.preventDefault();
+                                  setSessionMenu({ x: e.clientX, y: e.clientY });
+                                }
+                              : undefined
+                          }
                         >
                           <span className="session-name">{s.name || s.session_id}</span>
                           {running && (
@@ -368,6 +387,15 @@ export function Sidebar({
             })}
           </div>
         </div>
+        {sessionMenu && onCompact && (
+          <SessionMenu
+            x={sessionMenu.x}
+            y={sessionMenu.y}
+            busy={busy || sessions.some((s) => s.session_id === currentId && s.activity === "running")}
+            onCompact={onCompact}
+            onClose={closeSessionMenu}
+          />
+        )}
         {/* The account at the foot of the sidebar, under the chats —
             where most apps keep "who am I signed in as". The group this
             person's agents come from is its second line, so the two read

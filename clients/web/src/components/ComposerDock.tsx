@@ -7,7 +7,7 @@ import type { PermissionMode } from "./composer/permissionModes";
 import type { PermissionModeName, StatusUpdate } from "../protocol/messages";
 import { BackendSwitch } from "./BackendSwitch";
 import { CheckIcon, ChevronIcon, CloudIcon, FolderIcon } from "./Icons";
-import { SessionContext } from "./StatusBits";
+import { SessionContext, type SessionContextActions } from "./StatusBits";
 
 /**
  * The row under the composer: where igni runs, and the folder it is
@@ -27,6 +27,8 @@ export function ComposerDock({
   status,
   permissionMode,
   onPickMode,
+  contextActions,
+  busy,
 }: {
   backend: BackendSnapshot | null;
   projectDir: string;
@@ -35,6 +37,10 @@ export function ComposerDock({
   status: StatusUpdate | null;
   permissionMode?: PermissionModeName;
   onPickMode?: (mode: PermissionMode) => void;
+  /** The context operations in the session readout. */
+  contextActions?: SessionContextActions;
+  /** A reply is running in the open chat. */
+  busy?: boolean;
 }) {
   // The folder is the VM's on the cloud side; there is no dialog for it.
   const folderReadOnly = backend?.side === "cloud";
@@ -104,6 +110,8 @@ export function ComposerDock({
             tokens={status.context_tokens}
             max={status.max_context}
             pct={ctxPct}
+            actions={contextActions}
+            busy={busy}
           />
         )}
       </span>

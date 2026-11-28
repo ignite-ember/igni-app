@@ -12,6 +12,7 @@ import type { IgniClient } from "../protocol/client";
 import type { ChatController } from "../chat/useChatController";
 import type { StatusUpdate } from "../protocol/messages";
 import { ComposerDock } from "./ComposerDock";
+import type { SessionContextActions } from "./StatusBits";
 import { Composer } from "./composer/Composer";
 import type { ComposerActions, ComposerCatalog, ComposerHandle } from "./composer/composerContract";
 import { HitlDialog } from "./HitlDialog";
@@ -24,7 +25,7 @@ export interface AppComposerProps {
   ready: boolean;
   brandName: string;
   status: StatusUpdate | null;
-  run: Pick<RunPhaseState, "runPhase" | "controls">;
+  run: Pick<RunPhaseState, "runPhase" | "controls" | "processing">;
   /** The backend says this session has a run going (``running`` or
    *  ``waiting``): Stop shows whatever this view's phase is. */
   sessionActive: boolean;
@@ -32,7 +33,10 @@ export interface AppComposerProps {
   contributions: Pick<Contributions, "tools">;
   hitl: Pick<HitlState, "pending" | "stop">;
   onResolveHitl: ChatController["resolveHitl"];
-  actions: Pick<ShellActions, "runCommand" | "submit">;
+  actions: Pick<
+    ShellActions,
+    "runCommand" | "submit" | "compact" | "openContext" | "newChat" | "fork"
+  >;
   switcher: RunSettingsSwitcher;
   /** The dock under the composer: where igni runs, the folder, and the
    *  session + its context. */
@@ -87,6 +91,15 @@ export function AppComposer({
     }),
     [switcher, actions, stop, permissionMode, onSend],
   );
+  const contextActions = useMemo<SessionContextActions>(
+    () => ({
+      compact: actions.compact,
+      openContext: actions.openContext,
+      clear: actions.newChat,
+      fork: actions.fork,
+    }),
+    [actions],
+  );
   // Read every render: the tools menu fills in place as extensions
   // install.
   const catalog: ComposerCatalog = {
@@ -126,6 +139,8 @@ export function AppComposer({
           status={status}
           permissionMode={permissionMode}
           onPickMode={composerActions.onPickMode}
+          contextActions={contextActions}
+          busy={run.processing}
         />
       }
     />

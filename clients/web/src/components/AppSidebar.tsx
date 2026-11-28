@@ -26,6 +26,10 @@ export interface AppSidebarProps {
   onNewChat: () => void;
   onNewChatInFolder: (folder: string) => void;
   onPickSession: (id: string) => void;
+  /** Compact the open chat, from its row's right-click menu. */
+  onCompact?: () => void;
+  /** A reply is running in the open chat. */
+  busy?: boolean;
   /** The account menu lives at the foot of the sidebar. */
   status: StatusUpdate | null;
   client: Pick<IgniClient, "rpc">;
@@ -52,6 +56,8 @@ export function AppSidebar({
   onNewChat,
   onNewChatInFolder,
   onPickSession,
+  onCompact,
+  busy,
   status,
   client,
   auth,
@@ -75,6 +81,8 @@ export function AppSidebar({
       onNewChat={onNewChat}
       onNewChatInFolder={onNewChatInFolder}
       onPick={onPickSession}
+      onCompact={onCompact}
+      busy={busy}
       onClose={layout.close}
       section={sidebar.section}
       onSection={layout.setSection}
