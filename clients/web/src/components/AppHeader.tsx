@@ -42,6 +42,8 @@ export interface AppHeaderProps {
   status: StatusUpdate | null;
   /** Unread notifications: the bell's count. */
   waiting: number;
+  /** Whether the notifications sheet is open — lights the bell. */
+  notificationsOpen?: boolean;
   onToggleNotifications: () => void;
   /** Installed extensions — their status chips sit left in the header,
    *  after igni's own, right of the sidebar toggle. */
@@ -145,13 +147,14 @@ export function AppHeader(props: AppHeaderProps) {
       {(status?.cloud_connected || waiting > 0) && (
         <>
           <button
-            className={waiting ? "chip chip-bell has-waiting" : "chip chip-bell"}
+            className={`chip chip-bell${waiting ? " has-waiting" : ""}${props.notificationsOpen ? " active" : ""}`}
             title={
               waiting
                 ? `${waiting} unread ${waiting === 1 ? "notification" : "notifications"}`
                 : "Nothing is waiting on you"
             }
             aria-label="Notifications"
+            aria-expanded={!!props.notificationsOpen}
             onClick={props.onToggleNotifications}
           >
             <Glyph name="bell" />

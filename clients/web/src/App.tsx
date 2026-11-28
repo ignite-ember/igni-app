@@ -246,6 +246,7 @@ export default function App() {
           onToggleTerminal={toggleTerminal}
           status={status}
           waiting={notificationCounts.unread}
+          notificationsOpen={panel?.kind === "notifications"}
           onToggleNotifications={() => windowModel.togglePanel("notifications")}
           extensions={extensions}
           notificationCounts={notificationCounts}

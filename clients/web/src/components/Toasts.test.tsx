@@ -199,3 +199,176 @@ describe("Toasts — auto-dismiss TTL", () => {
   });
 
 });
+
+describe("Toasts — holding the countdown", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  it("does not hide while the pointer is on it, and resumes from what was left", () => {
+    const onDismiss = vi.fn();
+    const { container } = render(<Toasts items={[toast(7, "x")]} onDismiss={onDismiss} />);
+    const card = container.querySelector(".toast")!;
+    act(() => {
+      vi.advanceTimersByTime(5000);
+    });
+    fireEvent.mouseEnter(card);
+    act(() => {
+      vi.advanceTimersByTime(60_000);
+    });
+    expect(onDismiss).not.toHaveBeenCalled();
+    expect(card.className).not.toContain("is-closing");
+    fireEvent.mouseLeave(card);
+    act(() => {
+      vi.advanceTimersByTime(2999);
+    });
+    expect(card.className).not.toContain("is-closing");
+    act(() => {
+      vi.advanceTimersByTime(1 + 200);
+    });
+    expect(onDismiss).toHaveBeenCalledWith("t7");
+  });
+
+  it("does not hide while keyboard focus is inside it", () => {
+    const onDismiss = vi.fn();
+    render(<Toasts items={[toast(7, "x")]} onDismiss={onDismiss} />);
+    const close = screen.getByRole("button", { name: "Dismiss" });
+    act(() => close.focus());
+    act(() => {
+      vi.advanceTimersByTime(60_000);
+    });
+    expect(onDismiss).not.toHaveBeenCalled();
+    act(() => close.blur());
+    act(() => {
+      vi.advanceTimersByTime(8200);
+    });
+    expect(onDismiss).toHaveBeenCalledWith("t7");
+  });
+
+  it("keeps holding when focus moves between its own buttons", () => {
+    const onDismiss = vi.fn();
+    render(<Toasts items={[toast(7, "x", { target: SCHEDULE })]} onDismiss={onDismiss} />);
+    const open = screen.getByRole("button", { name: "Open" });
+    const close = screen.getByRole("button", { name: "Dismiss" });
+    act(() => open.focus());
+    act(() => close.focus());
+    act(() => {
+      vi.advanceTimersByTime(60_000);
+    });
+    expect(onDismiss).not.toHaveBeenCalled();
+  });
+
+  it("holds once for hover and focus together, released by both", () => {
+    const onDismiss = vi.fn();
+    const { container } = render(<Toasts items={[toast(7, "x")]} onDismiss={onDismiss} />);
+    const card = container.querySelector(".toast")!;
+    fireEvent.mouseEnter(card);
+    fireEvent.mouseEnter(card);
+    act(() => screen.getByRole("button", { name: "Dismiss" }).focus());
+    fireEvent.mouseLeave(card);
+    act(() => {
+      vi.advanceTimersByTime(60_000);
+    });
+    expect(onDismiss).not.toHaveBeenCalled();
+    act(() => screen.getByRole("button", { name: "Dismiss" }).blur());
+    act(() => {
+      vi.advanceTimersByTime(8200);
+    });
+    expect(onDismiss).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("Toasts — Escape and the action", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  it("Escape with focus inside dismisses it, and goes no further", () => {
+    const onDismiss = vi.fn();
+    const outer = vi.fn();
+    document.addEventListener("keydown", outer);
+    render(<Toasts items={[toast(7, "x")]} onDismiss={onDismiss} />);
+    fireEvent.keyDown(screen.getByRole("button", { name: "Dismiss" }), { key: "Escape" });
+    act(() => {
+      vi.advanceTimersByTime(150);
+    });
+    expect(onDismiss).toHaveBeenCalledWith("t7");
+    expect(outer).not.toHaveBeenCalled();
+    document.removeEventListener("keydown", outer);
+  });
+
+  it("other keys do nothing", () => {
+    const onDismiss = vi.fn();
+    render(<Toasts items={[toast(7, "x")]} onDismiss={onDismiss} />);
+    fireEvent.keyDown(screen.getByRole("button", { name: "Dismiss" }), { key: "Enter" });
+    act(() => {
+      vi.advanceTimersByTime(150);
+    });
+    expect(onDismiss).not.toHaveBeenCalled();
+  });
+
+  it("offers Open only when it points somewhere, which opens and dismisses", () => {
+    const onOpen = vi.fn();
+    const onDismiss = vi.fn();
+    render(
+      <Toasts items={[toast(1, "a", { target: SCHEDULE }), toast(2, "b")]} onDismiss={onDismiss} onOpen={onOpen} />,
+    );
+    const opens = screen.getAllByRole("button", { name: "Open" });
+    expect(opens).toHaveLength(1);
+    expect(opens[0].getAttribute("title")).toBe("Open Scheduled tasks");
+    fireEvent.click(opens[0]);
+    expect(onOpen).toHaveBeenCalledWith(SCHEDULE);
+    act(() => {
+      vi.advanceTimersByTime(150);
+    });
+    expect(onDismiss).toHaveBeenCalledWith("t1");
+  });
+
+  it("closes once however many times it is asked", () => {
+    const onDismiss = vi.fn();
+    render(<Toasts items={[toast(7, "x")]} onDismiss={onDismiss} />);
+    fireEvent.click(screen.getByRole("button", { name: "Dismiss" }));
+    fireEvent.click(screen.getByRole("button", { name: "Dismiss" }));
+    act(() => {
+      vi.advanceTimersByTime(10_000);
+    });
+    expect(onDismiss).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("Toasts — how loudly each is announced", () => {
+  it.each([
+    ["info", "status"],
+    ["success", "status"],
+    ["warning", "alert"],
+    ["error", "alert"],
+  ])("a %s toast is a %s with its severity mark", (kind, role) => {
+    const { container } = render(<Toasts items={[toast(1, "x", { kind })]} onDismiss={() => {}} />);
+    const card = screen.getByRole(role as "status" | "alert");
+    expect(card.className).toContain(`toast--${kind}`);
+    expect(card.getAttribute("aria-atomic")).toBe("true");
+    expect(container.querySelector(".toast-mark svg")).toBeTruthy();
+  });
+});
+
+describe("Toasts — clear of the composer", () => {
+  it("lifts the stack above a composer it would cover", () => {
+    const composer = document.createElement("div");
+    composer.className = "composer";
+    composer.getBoundingClientRect = () =>
+      ({ left: 0, right: window.innerWidth, top: window.innerHeight - 120, bottom: window.innerHeight - 16 }) as DOMRect;
+    document.body.appendChild(composer);
+    try {
+      const { container } = render(<Toasts items={[toast(1, "x")]} onDismiss={() => {}} />);
+      const stack = container.querySelector<HTMLElement>(".toasts")!;
+      expect(stack.style.getPropertyValue("--toasts-bottom")).toBe("136px");
+    } finally {
+      composer.remove();
+    }
+  });
+
+  it("sits in the corner with no composer", () => {
+    const { container } = render(<Toasts items={[toast(1, "x")]} onDismiss={() => {}} />);
+    expect(container.querySelector<HTMLElement>(".toasts")!.style.getPropertyValue("--toasts-bottom")).toBe("16px");
+  });
+});
