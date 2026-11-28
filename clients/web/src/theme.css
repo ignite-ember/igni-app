@@ -8657,6 +8657,22 @@ button.activity-file-chip:focus-visible {
   background: var(--bg-raised);
 }
 
+.control-menu-item:disabled {
+  color: var(--fg-faint);
+  background: transparent;
+  cursor: default;
+}
+
+/* The open chat's right-click menu: placed at the pointer, over
+   everything, with no header row to pad under. */
+.control-menu.session-menu {
+  position: fixed;
+  right: auto;
+  z-index: 200;
+  min-width: 200px;
+  padding: var(--space-2);
+}
+
 .control-menu-item.active {
   color: var(--fg);
 }

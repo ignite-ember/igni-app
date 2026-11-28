@@ -129,6 +129,7 @@ export const VIEW_STATE: Record<string, Partial<Record<Category, string[]>>> = {
   },
   "components/Sidebar.tsx": {
     disclosure: ["collapsed"],
+    menu: ["sessionMenu"],
   },
   "components/ComposerDock.tsx": {
     menu: ["open"],

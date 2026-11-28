@@ -615,6 +615,43 @@ describe("slash commands that change the conversation", () => {
     expect((await screen.findAllByText(/Context compacted/)).length).toBeGreaterThan(0);
   });
 
+  it("Compact conversation on the open chat's row runs /compact and shows the card", async () => {
+    await boot({
+      list_sessions: () => ({
+        sessions: [
+          { session_id: "test-session-001", name: "Open chat" },
+          { session_id: "sess-other", name: "Other chat" },
+        ],
+      }),
+    });
+    const other = (await screen.findByText("Other chat")).closest(".session-item")!;
+    fireEvent.contextMenu(other);
+    expect(screen.queryByRole("menuitem", { name: "Compact conversation" })).toBeNull();
+
+    fireEvent.contextMenu(screen.getByText("Open chat").closest(".session-item")!);
+    fireEvent.click(screen.getByRole("menuitem", { name: "Compact conversation" }));
+    await answerCommand("/compact", { action: "compact", content: "Context compacted: 40k → 6k tokens." });
+
+    expect(received("command").map((m) => m.text)).toEqual(["/compact"]);
+    expect(received("user_message")).toHaveLength(0);
+    expect((await screen.findAllByText(/Context compacted/)).length).toBeGreaterThan(0);
+  });
+
+  it("Compact conversation is off while a reply is running", async () => {
+    const editor = await boot({
+      list_sessions: () => ({ sessions: [{ session_id: "test-session-001", name: "Open chat" }] }),
+    });
+    typeAndSend(editor, "a long task");
+    const runId = await sentRun("a long task");
+    push({ type: "run_started", id: runId, run_id: runId, parent_run_id: null, agent_name: "igni", model: "test-model" });
+
+    fireEvent.contextMenu((await screen.findByText("Open chat")).closest(".session-item")!);
+    const item = screen.getByRole("menuitem", { name: "Compact conversation" }) as HTMLButtonElement;
+    await waitFor(() => expect(item.disabled).toBe(true));
+    fireEvent.click(item);
+    expect(received("command")).toHaveLength(0);
+  });
+
   it("/quit says how to quit instead", async () => {
     const editor = await boot();
     typeAndSend(editor, "/quit");

@@ -58,6 +58,13 @@ describe("ShellActions", () => {
     ]);
   });
 
+  it("compacts the open chat from the chat, not from a page over it", () => {
+    const { deps, actions } = setup();
+    actions.compact();
+    expect(deps.navigator.closePages).toHaveBeenCalledTimes(1);
+    expect(deps.controller.commands.run.mock.calls).toEqual([["/compact", false]]);
+  });
+
   it("says who signed in, and refreshes the status after either answer", () => {
     const { deps, actions } = setup();
     actions.signedIn("a@b");

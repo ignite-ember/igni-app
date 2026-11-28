@@ -55,6 +55,12 @@ export class ShellActions {
 
   newChat = (): void => this.runCommand("/clear");
 
+  /** Compact the open chat, back on the chat to watch it happen. */
+  compact = (): void => {
+    this.deps.navigator.closePages();
+    this.runCommand("/compact");
+  };
+
   /** Sign the desktop out. On the cloud side `/logout` would reach the
    *  VM's igni, so the account call goes to this computer's backend; the
    *  shell sees the credentials go and takes the windows to sign-in. */
@@ -107,10 +113,7 @@ export class ShellActions {
         navigator.closePages();
         seeder.seed(text);
       },
-      compact: () => {
-        navigator.closePages();
-        this.runCommand("/compact");
-      },
+      compact: this.compact,
       resumeLoop: (prompt) => {
         navigator.closePages();
         void controller.streamer.sendLoopIteration(prompt);
