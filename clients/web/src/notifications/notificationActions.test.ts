@@ -129,6 +129,19 @@ describe("a page", () => {
     ]);
   });
 
+  it("gives the route the page's own name, not the button's", () => {
+    const { actions, followed } = actionWorld({
+      pages: { "acme.review": "Code review › Findings" },
+      routeLabels: { "acme.review": "Findings" },
+    });
+    const action = actions.forFloor(at("acme.review"))!;
+    expect(action.label).toBe("Open Code review › Findings");
+    action.run();
+    expect(followed).toEqual([
+      { to: "page", route: { kind: "acme.review", label: "Findings", params: {} } },
+    ]);
+  });
+
   it("names the thing on it when the notification says which", () => {
     const { actions } = actionWorld({ pages: { schedule: "Scheduled tasks" } });
     expect(actions.forFloor(at("schedule", { name: "nightly sync" }))?.label).toBe(

@@ -15,6 +15,9 @@ export interface WorldOptions {
   approvals?: OpenApproval[] | null;
   /** Pages that exist, by kind; every page when not given. */
   pages?: Record<string, string>;
+  /** The names a route's breadcrumb says, when they differ from the
+   *  name on the button. */
+  routeLabels?: Record<string, string>;
   update?: UpdateInfo | null;
 }
 
@@ -44,6 +47,12 @@ export function actionWorld(options: WorldOptions = {}): { actions: Notification
     pages: {
       has: (kind) => (pages ? kind in pages : true),
       label: (kind) => (pages ? (pages[kind] ?? null) : kind),
+      routeLabel: (kind) =>
+        options.routeLabels
+          ? (options.routeLabels[kind] ?? null)
+          : pages
+            ? (pages[kind] ?? null)
+            : kind,
     },
     update: options.update ?? null,
   };

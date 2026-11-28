@@ -40,6 +40,12 @@ describe("the page directory", () => {
     expect(directory.label("plugins")).toBe("Plugins");
   });
 
+  it("calls a page by its own name in a breadcrumb", () => {
+    const directory = new PageDirectory(contributions(true), [EXTENSION]);
+    expect(directory.routeLabel("findings")).toBe("Findings");
+    expect(directory.routeLabel("schedule")).toBeNull();
+  });
+
   it("says nothing for a page that is not here", () => {
     const directory = new PageDirectory(contributions(), []);
     expect(directory.has("acme.gone")).toBe(false);

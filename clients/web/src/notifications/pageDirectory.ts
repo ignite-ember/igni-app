@@ -17,7 +17,15 @@ export class PageDirectory {
     return this.contributions.pages.has(kind);
   }
 
-  /** The page's name; `null` for a page that is not here. */
+  /** The page's own name, as a route's breadcrumb says it. */
+  routeLabel(kind: string): string | null {
+    if (!this.has(kind)) return null;
+    const owner = this.contributions.pages.ownerOf(kind);
+    const extension = this.extensions.find((e) => e.id === owner);
+    return extension?.pages.find((p) => p.kind === kind)?.label ?? extension?.name ?? null;
+  }
+
+  /** The page's name on a button; `null` for a page that is not here. */
   label(kind: string): string | null {
     if (!this.has(kind)) return null;
     const owner = this.contributions.pages.ownerOf(kind);

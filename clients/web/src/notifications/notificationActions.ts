@@ -37,8 +37,14 @@ export interface ActionWorld {
   currentChat: string;
   /** The approvals open in the chat on screen. */
   approvals: readonly OpenApproval[] | null;
-  /** Whether a page exists, and its name. */
-  pages: { has(kind: string): boolean; label(kind: string): string | null };
+  /** Whether a page exists, and what it is called. */
+  pages: {
+    has(kind: string): boolean;
+    /** The name on a button: "Code review › Findings". */
+    label(kind: string): string | null;
+    /** The name in a breadcrumb: "Findings". */
+    routeLabel(kind: string): string | null;
+  };
   /** The update waiting, if one is. */
   update: UpdateInfo | null;
 }
@@ -67,7 +73,7 @@ export class NotificationActions {
       states: { of: () => ({ activity: "idle", unread: false }) },
       currentChat: "",
       approvals: null,
-      pages: { has: () => false, label: () => null },
+      pages: { has: () => false, label: () => null, routeLabel: () => null },
       update: null,
     },
     { openChat: () => {}, openPage: () => {}, showUpdate: () => {} },
@@ -77,7 +83,7 @@ export class NotificationActions {
   forFloor(row: Pick<FloorNotification, "target">): NotificationAction | null {
     if (!row.target) return null;
     const { page, params } = row.target;
-    return this.about(page, params) ?? this.place(page, params, this.world.pages.label(page));
+    return this.about(page, params) ?? this.place(page, params);
   }
 
   /** A toast's button, or `null`. */
@@ -125,8 +131,13 @@ export class NotificationActions {
     return paused ? NotificationAction.named("decision", "Answer the approval in ", name, "", go) : null;
   }
 
-  /** The chat or page a target names, while it exists. */
-  private place(page: string, params: Record<string, string> | undefined, label: string | null): NotificationAction | null {
+  /** The chat or page a target names, while it exists. `ownLabel` is
+   *  the name a toast's target carries with it. */
+  private place(
+    page: string,
+    params: Record<string, string> | undefined,
+    ownLabel?: string,
+  ): NotificationAction | null {
     if (CHAT_PAGES.has(page)) {
       const chat = this.world.chats.find((c) => c.session_id === params?.session_id);
       if (!chat) return null;
@@ -135,8 +146,12 @@ export class NotificationActions {
       );
     }
     if (!this.world.pages.has(page)) return null;
-    const pageName = label || page;
-    const route: PageRoute = { kind: page, label: pageName, ...(params ? { params } : {}) };
+    const pageName = ownLabel || this.world.pages.label(page) || page;
+    const route: PageRoute = {
+      kind: page,
+      label: ownLabel || this.world.pages.routeLabel(page) || pageName,
+      ...(params ? { params } : {}),
+    };
     const go = () => this.effects.openPage(route);
     if (params?.name) return NotificationAction.named("page", "Show ", params.name, ` in ${pageName}`, go);
     return NotificationAction.plain("page", `Open ${pageName}`, go);

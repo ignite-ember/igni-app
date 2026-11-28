@@ -248,7 +248,11 @@ export function NotificationsDemo() {
           states: { of: () => ({ activity: "idle", unread: false }) },
           currentChat: "ebbc7eff",
           approvals: answered ? null : APPROVALS,
-          pages: { has: (kind) => kind in PAGES, label: (kind) => PAGES[kind] ?? null },
+          pages: {
+            has: (kind) => kind in PAGES,
+            label: (kind) => PAGES[kind] ?? null,
+            routeLabel: (kind) => PAGES[kind] ?? null,
+          },
           update: UPDATE,
         },
         { openChat: () => {}, openPage: () => {}, showUpdate: () => {} },

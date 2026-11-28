@@ -24,7 +24,7 @@ import { UpdateInfo } from "../update/updateInfo";
 /** Every page installed; following a toast to one calls `onOpen`. */
 function opens(onOpen: (route: PageRoute) => void): NotificationActions {
   return new NotificationActions(
-    { ...NOWHERE, pages: { has: () => true, label: (kind) => kind } },
+    { ...NOWHERE, pages: { has: () => true, label: (kind) => kind, routeLabel: (kind) => kind } },
     { openChat: () => {}, openPage: onOpen, showUpdate: () => {} },
   );
 }
