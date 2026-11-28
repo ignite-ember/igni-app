@@ -274,6 +274,71 @@ describe("while a turn is running", () => {
   });
 });
 
+// Session 6fa3e09e: a run resumed after its approval went on for minutes
+// while this view had settled — no Stop anywhere. Whenever the backend
+// says the session has a run going, Stop is there, whatever the phase.
+describe("while the session has any run going", () => {
+  const PHASES = [
+    "idle",
+    "starting",
+    "streaming",
+    "finalizing",
+    "awaiting_approval",
+    "cancelled",
+    "errored",
+    "done",
+  ] as const;
+
+  it.each(PHASES)("shows Stop in phase %s when the backend says a run goes on", (runPhase) => {
+    const { container, props, sendButton } = mount({ runPhase, sessionActive: true });
+
+    expect(sendButton()).toBeNull();
+    const stop = container.querySelector(".send-btn.stop") as HTMLButtonElement;
+    expect(stop).not.toBeNull();
+    act(() => stop.click());
+    expect(props.actions.onStop).toHaveBeenCalledOnce();
+  });
+
+  it.each(["starting", "streaming", "awaiting_approval"] as const)(
+    "shows Stop in phase %s on this view's word alone",
+    (runPhase) => {
+      const { container } = mount({ runPhase, sessionActive: false });
+      expect(container.querySelector(".send-btn.stop")).not.toBeNull();
+    },
+  );
+
+  it.each(["idle", "finalizing", "cancelled", "errored", "done"] as const)(
+    "shows Send in phase %s when nothing runs",
+    (runPhase) => {
+      const { container, sendButton } = mount({ runPhase, sessionActive: false });
+      expect(container.querySelector(".send-btn.stop")).toBeNull();
+      expect(sendButton()).not.toBeNull();
+    },
+  );
+
+  it("draws Stop with the button kit: the primary button, named and titled", () => {
+    const { container } = mount({ runPhase: "done", sessionActive: true });
+    const stop = container.querySelector(".send-btn.stop") as HTMLButtonElement;
+
+    expect(stop.classList).toContain("button");
+    expect(stop.classList).toContain("button--primary");
+    expect(stop.getAttribute("aria-label")).toBe("Stop");
+    expect(stop.title).toBe("Stop (Esc)");
+    expect(stop.type).toBe("button");
+  });
+
+  it("goes back to Send once the backend says the run is over", () => {
+    const { container, rerender, props, sendButton } = mount({
+      runPhase: "done",
+      sessionActive: true,
+    });
+    rerender(<Composer {...props} sessionActive={false} />);
+
+    expect(container.querySelector(".send-btn.stop")).toBeNull();
+    expect(sendButton()).not.toBeNull();
+  });
+});
+
 describe("disabled states", () => {
   it("without a backend the editor is not editable and nothing can be sent", () => {
     const { editor, sendButton } = mount({ connected: false });

@@ -69,6 +69,39 @@ describe("StreamEventRouter", () => {
     expect(s.run.runPhaseRef.current).toBe("awaiting_approval");
   });
 
+  // Session 6fa3e09e: each pause the permission policy answered by itself
+  // sent streaming_done, then the run went on — the view sat at
+  // "finalizing", with Send and no Stop, and a new message started a
+  // second run instead of queueing.
+  it.each([
+    ["content_delta", { type: "content_delta", text: "more", is_thinking: false }],
+    ["tool_started", { type: "tool_started", tool_name: "run_shell_command", friendly_name: "Bash", args_summary: "ls", run_id: "r" }],
+    ["reasoning_started", { type: "reasoning_started" }],
+  ] as const)("a run working again after streaming_done is streaming (%s)", (_, frame) => {
+    const s = setup();
+    s.router.route({ type: "streaming_done", run_id: "r" } as ServerMessage);
+    s.router.route(frame as unknown as ServerMessage);
+    expect(s.run.runPhaseRef.current).toBe("streaming");
+  });
+
+  it("a run still working after another run completed is streaming", () => {
+    const s = setup();
+    s.run.runPhaseRef.current = "done";
+    s.router.route({ type: "content_delta", text: "more", is_thinking: false } as ServerMessage);
+    expect(s.run.runPhaseRef.current).toBe("streaming");
+    expect(s.t.kinds()).toContain("assistant");
+  });
+
+  it.each(["cancelled", "errored", "awaiting_approval"] as const)(
+    "a late frame leaves phase %s as it is",
+    (p) => {
+      const s = setup();
+      s.run.runPhaseRef.current = p;
+      s.router.route({ type: "content_delta", text: "late", is_thinking: false } as ServerMessage);
+      expect(s.run.runPhaseRef.current).toBe(p);
+    },
+  );
+
   it("a streaming_done after the pause leaves it paused", () => {
     const s = setup();
     s.router.route({ type: "run_paused", run_id: "r", requirements: [req("a")] } as ServerMessage);

@@ -1,12 +1,13 @@
-import { canStop, type RunPhase } from "../../chat/runPhase";
+import { canStopSession, type RunPhase } from "../../chat/runPhase";
 import type { ComposerMode } from "../../clientState";
 import { ArrowUpIcon, ChevronIcon, StopIcon } from "../Icons";
+import { Button } from "../page/Button";
 import type { ModeUi } from "./modeUi";
 import type { ComposerPopupApi } from "./useComposerPopup";
 
 /** The row under the editor: the tools and attach buttons, the mode
- *  badge, the model chip, and Send — or Stop while the model is replying
- *  or the run waits on an approval. */
+ *  badge, the model chip, and Send — or Stop while the session has any
+ *  run going: replying, waiting on an approval, or going on after one. */
 export function ComposerBar({
   ui,
   draftMode,
@@ -14,6 +15,7 @@ export function ComposerBar({
   onAttach,
   model,
   runPhase,
+  sessionActive,
   connected,
   canSend,
   onSubmit,
@@ -25,6 +27,8 @@ export function ComposerBar({
   onAttach: () => void;
   model?: string;
   runPhase: RunPhase;
+  /** The backend says the session has a run going (``canStopSession``). */
+  sessionActive: boolean;
   connected: boolean;
   canSend: boolean;
   onSubmit: () => void;
@@ -51,10 +55,16 @@ export function ComposerBar({
           {model} <ChevronIcon size={9} down />
         </button>
       )}
-      {canStop(runPhase) ? (
-        <button className="send-btn stop" title="Stop (Esc)" onClick={onStop}>
-          <StopIcon />
-        </button>
+      {canStopSession(runPhase, sessionActive) ? (
+        <Button
+          variant="primary"
+          size="sm"
+          className="send-btn stop"
+          label="Stop"
+          title="Stop (Esc)"
+          icon={<StopIcon />}
+          onClick={onStop}
+        />
       ) : (
         <button
           type="button"

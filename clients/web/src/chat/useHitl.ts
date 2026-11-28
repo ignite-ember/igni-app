@@ -3,7 +3,8 @@
  *
  * Esc is one global handler (see ``escHandler.ts``): with the dialog
  * open it rejects every pending requirement and cancels; during a run
- * it cancels; idle, it lets the OS have it. In macOS fullscreen WebKit
+ * — this view's, or any the backend says the session has going — it
+ * cancels; idle, it lets the OS have it. In macOS fullscreen WebKit
  * hands Esc to JS before the OS exits fullscreen, and
  * ``preventDefault`` keeps it in-app.
  *
@@ -17,7 +18,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { IgniClient } from "../protocol/client";
 import { handleEsc } from "./escHandler";
 import { HitlRequests, type OpenApprovals } from "./hitlRequests";
-import { shouldShowSpinner } from "./runPhase";
+import { canStopSession, shouldShowSpinner } from "./runPhase";
 import type { RunControls } from "./useRunPhase";
 
 export interface HitlState {
@@ -30,7 +31,7 @@ export interface HitlState {
 
 export function useHitl(
   client: Pick<IgniClient, "resolveHitlBatch">,
-  run: Pick<RunControls, "runPhaseRef" | "cancel">,
+  run: Pick<RunControls, "runPhaseRef" | "cancel" | "sessionActiveRef">,
 ): HitlState {
   const [pending, setPending] = useState<OpenApprovals>(null);
   const requests = useMemo(() => new HitlRequests(setPending), []);
@@ -54,7 +55,11 @@ export function useHitl(
     const onKey = (e: KeyboardEvent) => {
       const action = handleEsc(e, {
         hitl: pending,
-        isProcessing: shouldShowSpinner(run.runPhaseRef.current),
+        // A run the backend says goes on stops too, though this view's
+        // phase settled (``canStopSession``).
+        isProcessing:
+          shouldShowSpinner(run.runPhaseRef.current) ||
+          canStopSession(run.runPhaseRef.current, run.sessionActiveRef.current),
         isFullscreen: document.documentElement.dataset.fullscreen === "true",
       });
       if (action.preventDefault) e.preventDefault();
