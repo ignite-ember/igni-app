@@ -12,6 +12,10 @@ import type { IgniClient } from "../protocol/client";
 /** The largest file worth a miniature. */
 export const MAX_THUMBNAIL_BYTES = 5 * 1024 * 1024;
 
+/** How many miniatures are kept at once. A long transcript of photos
+ *  would otherwise hold every one of them in memory. */
+export const MAX_CACHED_THUMBNAILS = 64;
+
 /** A miniature of an image, or the nothing that stands in for one. */
 export interface Thumbnail {
   /** A data URL of the image; "" when the file cannot be shown. */
@@ -47,7 +51,18 @@ export class ThumbnailCache {
       return value;
     });
     this.entries.set(path, entry);
+    this.forgetOldest();
     return entry.promise;
+  }
+
+  /** Drop the oldest miniature, so the cache does not grow with the
+   *  transcript. The map keeps its insertion order. */
+  private forgetOldest(): void {
+    while (this.entries.size > MAX_CACHED_THUMBNAILS) {
+      const oldest = this.entries.keys().next();
+      if (oldest.done) return;
+      this.entries.delete(oldest.value);
+    }
   }
 
   /** What is already known about `path`, without reading it. */

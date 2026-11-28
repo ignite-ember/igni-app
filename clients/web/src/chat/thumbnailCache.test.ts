@@ -11,7 +11,7 @@
 
 import { describe, expect, it, vi } from "vitest";
 
-import { MAX_THUMBNAIL_BYTES, ThumbnailCache } from "./thumbnailCache";
+import { MAX_CACHED_THUMBNAILS, MAX_THUMBNAIL_BYTES, ThumbnailCache } from "./thumbnailCache";
 import type { IgniClient } from "../protocol/client";
 
 function fakeClient(rpc: (method: string, args?: Record<string, unknown>) => Promise<unknown>): IgniClient {
@@ -105,5 +105,22 @@ describe("a file that cannot be shown", () => {
     await cache.load("x", client);
     await cache.load("x", client);
     expect(rpc).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("how many miniatures are kept", () => {
+  it("drops the oldest when there are too many", async () => {
+    const cache = new ThumbnailCache();
+    const client = fakeClient(async (_method, args) => ({
+      path: String(args?.path),
+      data: PIXEL,
+      size: 120,
+      media_type: "image/png",
+    }));
+    for (let i = 0; i <= MAX_CACHED_THUMBNAILS; i++) {
+      await cache.load(`shot-${i}.png`, client);
+    }
+    expect(cache.peek("shot-0.png")).toBeUndefined();
+    expect(cache.peek(`shot-${MAX_CACHED_THUMBNAILS}.png`)?.url).toContain("data:image/png");
   });
 });
