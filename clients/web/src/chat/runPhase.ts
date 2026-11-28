@@ -68,6 +68,17 @@ export function isProcessing(phase: RunPhase): boolean {
 }
 
 /**
+ * True while a turn is working, so a message typed now is queued for it
+ * rather than sent as a run of its own. ``finalizing`` counts: the
+ * backend says ``streaming_done`` before every tool call, so the phase
+ * reads ``finalizing`` between a turn's steps as well as in its tail. A
+ * turn waiting on an approval does not: a message then ends that turn.
+ */
+export function isTurnWorking(phase: RunPhase): boolean {
+  return isProcessing(phase) || isFinalizing(phase);
+}
+
+/**
  * True while the BE tail is still draining after content ended.
  * Composer is unblocked (per TUI parity) but the spinner stays
  * visible with a distinct label. Cancel + error don't count — the

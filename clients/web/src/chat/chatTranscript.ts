@@ -62,6 +62,52 @@ export class ChatTranscript {
     return this.with([...this.items.slice(0, start), started, ...tail.slice(next)]);
   }
 
+  /** The queued messages' texts, oldest first. */
+  get queuedTexts(): string[] {
+    return this.items
+      .slice(this.tailStart)
+      .flatMap((it) => (it.kind === "user" ? [it.text] : []));
+  }
+
+  /** The running turn took in the ``count`` oldest queued messages at the
+   *  item at ``index`` (a tool call): they join the transcript right
+   *  after it, as the backend's history keeps them, owned by ``runId``,
+   *  and their notes go. */
+  takeQueued(count: number, index: number, runId: string): ChatTranscript {
+    if (count <= 0) return this;
+    const start = this.tailStart;
+    const tail = this.items.slice(start);
+    const taken: ChatItem[] = [];
+    const left: ChatItem[] = [];
+    let users = 0;
+    for (const it of tail) {
+      if (it.kind === "user") users++;
+      if (users > count) left.push(it);
+      else if (it.kind === "user") taken.push({ ...it, queued: undefined, runId: runId || undefined });
+    }
+    const main = this.items.slice(0, start);
+    return this.with([...main.slice(0, index + 1), ...taken, ...main.slice(index + 1), ...left]);
+  }
+
+  /** The backend queued a message this view sent as a run: its bubble
+   *  ``itemId`` moves to the end of the queued tail, with its note. */
+  requeue(itemId: number, note: string): ChatTranscript {
+    const at = this.items.findIndex((it) => it.id === itemId && it.kind === "user" && !it.queued);
+    const item = this.items[at];
+    if (item?.kind !== "user") return this;
+    const queued: UserItem = { ...item, queued: true, runId: undefined, startedAt: undefined };
+    const rest = this.with([...this.items.slice(0, at), ...this.items.slice(at + 1)]);
+    return rest.with([...rest.items, queued, { ...this.factory.info(note), queued: true }]);
+  }
+
+  /** The user message that started run ``runId``: the first it owns (a
+   *  message the run took in while working is owned by it too). */
+  runOwner(runId: string): ItemAt<UserItem> | null {
+    const index = this.items.findIndex((it) => it.kind === "user" && it.runId === runId);
+    const item = this.items[index];
+    return item?.kind === "user" ? { index, item } : null;
+  }
+
   /** No run is in flight any more: whatever is still queued is an
    *  ordinary message, and the notes go. */
   settleQueued(): ChatTranscript {
@@ -88,14 +134,15 @@ export class ChatTranscript {
     return this.append(thinking ? this.factory.thinking(text) : this.factory.assistant(text));
   }
 
-  /** The BE persisted ``runId``: its user message can be truncated
-   *  server-side. Only the latest turn is searched. */
+  /** The BE persisted ``runId``: its user messages can be truncated
+   *  server-side. */
   markRunPersisted(runId: string): ChatTranscript {
-    const hit = this.lastWhere(
-      (it): it is UserItem => it.kind === "user" && it.runId === runId && !it.persisted,
-      true,
-    );
-    return hit ? this.replaceAt(hit.index, { ...hit.item, persisted: true }) : this;
+    let next: ChatTranscript = this;
+    this.items.forEach((item, index) => {
+      if (item.kind === "user" && item.runId === runId && !item.persisted)
+        next = next.replaceAt(index, { ...item, persisted: true });
+    });
+    return next;
   }
 
   /** Stamp the latest turn's assistant bubble, walking past the tool,

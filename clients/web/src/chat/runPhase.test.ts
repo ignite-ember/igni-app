@@ -12,6 +12,7 @@ import {
   ACTIVE_PHASES,
   TERMINAL_PHASES,
   isProcessing,
+  isTurnWorking,
   isFinalizing,
   isAwaitingApproval,
   canStop,
@@ -237,5 +238,23 @@ describe("RunPhase — cancel is a single transition", () => {
       // active, otherwise there's nothing to cancel.
       expect(shouldShowSpinner(from)).toBe(true);
     }
+  });
+});
+
+describe("isTurnWorking — a message typed now is queued for the turn", () => {
+  it.each<[RunPhase, boolean]>([
+    ["starting", true],
+    ["streaming", true],
+    // Between a turn's steps (streaming_done comes before each tool
+    // call) and in its tail: the turn still takes a queued message (F10).
+    ["finalizing", true],
+    // A message to a turn waiting on an approval ends that turn.
+    ["awaiting_approval", false],
+    ["idle", false],
+    ["done", false],
+    ["cancelled", false],
+    ["errored", false],
+  ])("%s → %s", (phase, working) => {
+    expect(isTurnWorking(phase)).toBe(working);
   });
 });

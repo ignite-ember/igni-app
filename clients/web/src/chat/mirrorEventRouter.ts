@@ -25,6 +25,7 @@ import { nextObserverBusyState } from "./observerBusy";
 import type { HitlRequests } from "./hitlRequests";
 import type { PushChannelRouter } from "./pushChannelRouter";
 import { phaseFromProcFinalizing, phaseToProcFinalizing } from "./runPhase";
+import type { SentMessages } from "./sentMessages";
 import type { ShellPort } from "./shellPort";
 import type { TranscriptView } from "./transcriptView";
 import type { RunControls } from "./useRunPhase";
@@ -38,6 +39,7 @@ export interface MirrorEventRouterDeps {
   run: Pick<RunControls, "runPhaseRef" | "setRunPhase">;
   shell: Pick<ShellPort, "setStatus">;
   pushRouter: Pick<PushChannelRouter, "route">;
+  sent: Pick<SentMessages, "echoed">;
 }
 
 type MirrorRoutes = {
@@ -69,10 +71,14 @@ export class MirrorEventRouter {
 
   /** An extension's message (``host.chat.post``) is nobody's echo: every
    *  view paints it, labelled as the extension's. Another view's message
-   *  is painted here; this view's own echo was painted on submit. */
+   *  is painted here; this view's own was painted on submit, and its echo
+   *  says whether the backend ran it or queued it. */
   private onUserMessage(m: UserMessageReceived): void {
     const { view, client } = this.deps;
-    if (!m.extension_id && m.client_id === client.clientId) return;
+    if (!m.extension_id && m.client_id === client.clientId) {
+      this.deps.sent.echoed(m);
+      return;
+    }
     const ext = m.extension_id || undefined;
     if (m.queued) {
       view.append(view.chatItems.queuedUser(m.text, ext));

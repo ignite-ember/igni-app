@@ -4,7 +4,7 @@
  */
 
 import type { RunCompleted } from "../protocol/messages";
-import type { OrchestrateItem, UserItem } from "./chatItem";
+import type { ChatItem, OrchestrateItem, UserItem } from "./chatItem";
 import type { ChatTranscript, ItemAt } from "./chatTranscript";
 
 /** Rough chars-to-tokens estimate. A browser tokenizer would cost
@@ -58,9 +58,13 @@ export class RunCompletion {
 
   private ownerUser(transcript: ChatTranscript): ItemAt<UserItem> | null {
     if (!this.msg.run_id) return null;
-    return transcript.lastWhere(
-      (it): it is UserItem => it.kind === "user" && it.runId === this.msg.run_id,
-    );
+    return transcript.runOwner(this.msg.run_id);
+  }
+
+  /** A user message of another turn: where this turn ends. A message the
+   *  run took in while working is part of it. */
+  private endsTurn(it: ChatItem, owned: boolean): boolean {
+    return it.kind === "user" && !(owned && it.runId === this.msg.run_id);
   }
 
   /** What the user waited for: run start to the end of the visible
@@ -81,7 +85,7 @@ export class RunCompletion {
       userIdx >= 0 ? userIdx + 1 : (transcript.lastWhere((it) => it.kind === "user")?.index ?? -1) + 1;
     const turn: TurnText = { thinking: "", assistant: "" };
     for (const it of items.slice(start)) {
-      if (it.kind === "user") break;
+      if (this.endsTurn(it, userIdx >= 0)) break;
       if (it.kind === "thinking") turn.thinking += it.text + " ";
       else if (it.kind === "assistant") turn.assistant += it.text + " ";
     }
@@ -91,7 +95,7 @@ export class RunCompletion {
   /** Just before the next user message, so a fast follow-up's reply
    *  does not land above this run's stats. */
   private insertionIndex(transcript: ChatTranscript, userIdx: number): number {
-    const next = transcript.items.findIndex((it, i) => i > userIdx && it.kind === "user");
+    const next = transcript.items.findIndex((it, i) => i > userIdx && this.endsTurn(it, true));
     return next < 0 ? transcript.items.length : next;
   }
 }

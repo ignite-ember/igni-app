@@ -23,6 +23,7 @@ import { MessageSubmitter } from "./messageSubmitter";
 import { MirrorEventRouter } from "./mirrorEventRouter";
 import type { PushChannelRouter } from "./pushChannelRouter";
 import { RunStreamer } from "./runStreamer";
+import { SentMessages } from "./sentMessages";
 import { SessionSwitcher } from "./sessionSwitcher";
 import type { ShellPort } from "./shellPort";
 import { SlashCommandRouter } from "./slashCommandRouter";
@@ -86,8 +87,9 @@ function wireChatController(deps: ChatControllerDeps): ChatController {
     shell,
     onEvent,
   });
-  const mirror = new MirrorEventRouter({ client, view, hitl, run, shell, pushRouter });
-  const submitter = new MessageSubmitter({ client, view, run, commands, streamer });
+  const sent = new SentMessages(view);
+  const mirror = new MirrorEventRouter({ client, view, hitl, run, shell, pushRouter, sent });
+  const submitter = new MessageSubmitter({ client, view, run, commands, streamer, sent });
   const edits = new TranscriptEdits({ client, view, streamer, windowModel, shell });
   const items = new ItemActions({ client, view, streamer, workflows });
   const handlers: ChatItemHandlers = {

@@ -462,3 +462,104 @@ describe("a message queued behind a run in flight (R645)", () => {
     expect(settled.hasQueued).toBe(false);
   });
 });
+
+describe("a queued message the working turn takes in at a tool call (F10)", () => {
+  const runStarted = (run_id: string): ServerMessage =>
+    ({ type: "run_started", run_id, parent_run_id: "", agent_name: "igni" }) as ServerMessage;
+  const runCompleted = (run_id: string): ServerMessage =>
+    ({
+      type: "run_completed",
+      input_tokens: 1000,
+      output_tokens: 40,
+      reasoning_tokens: 0,
+      duration: 9,
+      run_id,
+      parent_run_id: "",
+    }) as ServerMessage;
+  const tool = (full_result: string, summary = "ok"): ServerMessage[] => [
+    toolStarted,
+    { ...toolCompleted, full_result, summary } as ServerMessage,
+  ];
+  const carrying = (result: string, ...texts: string[]) =>
+    `${result}\n\n[USER MESSAGE WHILE YOU WERE WORKING]\n${texts.map((x) => `- ${x}`).join("\n")}\n[END USER MESSAGE]`;
+  const texts = (items: ChatItem[]) =>
+    items.map((i) => `${i.kind}:${"text" in i ? i.text : ""}${"queued" in i && i.queued ? " (queued)" : ""}`);
+  const queue = (t: ChatTranscript, text: string) =>
+    t.append(factory.queuedUser(text)).append(factory.queuedNote("Queued"));
+
+  it("stays queued below the turn until a tool call carries it, then is sent right after that call", () => {
+    let t = transcript([factory.user("Who gave the dream speech?")]);
+    t = t.applyServerMessage(runStarted("r1")).applyServerMessage(delta("Let me look."));
+    t = queue(t, "No, search the internet");
+    // The turn runs a tool the message did not reach yet.
+    for (const e of tool("12 files")) t = t.applyServerMessage(e);
+    expect(texts(t.items).slice(-2)).toEqual(["user:No, search the internet (queued)", "info:Queued (queued)"]);
+    // The next call carries it to the model.
+    for (const e of tool(carrying("results", "No, search the internet"))) t = t.applyServerMessage(e);
+    t = t.applyServerMessage(delta("Searching the web instead.")).applyServerMessage(runCompleted("r1"));
+    expect(texts(t.items)).toEqual([
+      "user:Who gave the dream speech?",
+      "assistant:Let me look.",
+      "tool:",
+      "tool:",
+      "user:No, search the internet",
+      "assistant:Searching the web instead.",
+      "stats:",
+    ]);
+    expect(t.items[4]).toMatchObject({ runId: "r1" });
+    expect(t.hasQueued).toBe(false);
+  });
+
+  it("keeps two quick follow-ups in the order they were typed", () => {
+    let t = transcript([factory.user("ask")]).applyServerMessage(runStarted("r1"));
+    t = queue(queue(t, "first"), "second");
+    for (const e of tool(carrying("out", "first", "second"))) t = t.applyServerMessage(e);
+    expect(texts(t.items)).toEqual(["user:ask", "tool:", "user:first", "user:second"]);
+  });
+
+  it("takes only what the call carried; the rest waits for its own turn, in order", () => {
+    let t = transcript([factory.user("ask")]).applyServerMessage(runStarted("r1"));
+    t = queue(t, "first");
+    for (const e of tool(carrying("out", "first"))) t = t.applyServerMessage(e);
+    t = queue(t, "second");
+    t = t.applyServerMessage(runCompleted("r1"));
+    expect(texts(t.items).slice(-3)).toEqual(["stats:", "user:second (queued)", "info:Queued (queued)"]);
+    t = t.applyServerMessage(runStarted("r2"));
+    expect(texts(t.items)).toEqual(["user:ask", "tool:", "user:first", "stats:", "user:second"]);
+    expect(t.items[4]).toMatchObject({ runId: "r2" });
+  });
+
+  it("reads the summary when a diff left the full result empty", () => {
+    let t = transcript([factory.user("ask")]).applyServerMessage(runStarted("r1"));
+    t = queue(t, "first");
+    for (const e of tool("", carrying("Edited", "first"))) t = t.applyServerMessage(e);
+    expect(texts(t.items)).toEqual(["user:ask", "tool:", "user:first"]);
+  });
+
+  it("leaves the queue alone for a note that names other messages", () => {
+    let t = transcript([factory.user("ask")]).applyServerMessage(runStarted("r1"));
+    t = queue(t, "mine");
+    for (const e of tool(carrying("out", "someone else's"))) t = t.applyServerMessage(e);
+    expect(t.queuedTexts).toEqual(["mine"]);
+  });
+
+  it("the run's stats and timing stay its first message's", () => {
+    let t = transcript([factory.user("ask")]).applyServerMessage(runStarted("r1"));
+    t = t.applyServerMessage(delta("aaaa"));
+    t = queue(t, "first");
+    for (const e of tool(carrying("out", "first"))) t = t.applyServerMessage(e);
+    t = t.applyServerMessage(delta("bbbbbbbb"));
+    t = t.applyServerMessage({ type: "streaming_done", run_id: "r1" } as ServerMessage);
+    t = t.applyServerMessage(runCompleted("r1"));
+    expect((t.items[0] as UserItem).streamingEndedAt).toBeDefined();
+    expect(t.items[3]).toMatchObject({ kind: "user", text: "first" });
+    expect((t.items[3] as UserItem).streamingEndedAt).toBeUndefined();
+    // Both replies count, and the line closes the whole turn.
+    expect(texts(t.items).at(-1)).toBe("stats:");
+    expect((t.items.at(-1) as StatsItem).visibleOutTokens).toBe(3);
+    expect(t.markRunPersisted("r1").items.filter((i) => i.kind === "user").map((i) => (i as UserItem).persisted)).toEqual([
+      true,
+      true,
+    ]);
+  });
+});

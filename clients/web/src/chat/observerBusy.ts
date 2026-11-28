@@ -66,6 +66,8 @@ export function nextObserverBusyState(
       return { proc: false, finalizing: true };
 
     case "run_completed":
+      // A sub-agent's run ending leaves its parent turn working.
+      if (msg.parent_run_id) return prev;
       // Tail done — release the indicator. ``proc`` was already
       // cleared by ``streaming_done``; preserve it just in case a
       // run_completed slips through without a prior streaming_done

@@ -49,8 +49,14 @@ export class ReplyCorrelator {
   }
 
   /** Hand every frame carrying ``id`` to ``onMessage``, then ``send``;
-   *  resolves on ``stream_end``. */
-  stream(id: string, send: () => void, onMessage: StreamHandler): Promise<void> {
+   *  resolves on ``stream_end``, or when ``signal`` aborts: the caller
+   *  knows no frame will come. */
+  stream(
+    id: string,
+    send: () => void,
+    onMessage: StreamHandler,
+    signal?: AbortSignal,
+  ): Promise<void> {
     return new Promise((resolve, reject) => {
       this.streams.set(id, (m) => {
         if (m.type === "stream_end") {
@@ -59,6 +65,10 @@ export class ReplyCorrelator {
           return;
         }
         onMessage(m);
+      });
+      signal?.addEventListener("abort", () => {
+        this.streams.delete(id);
+        resolve();
       });
       try {
         send();
