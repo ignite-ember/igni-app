@@ -77,17 +77,27 @@ export class NotificationActions {
   forFloor(row: Pick<FloorNotification, "target">): NotificationAction | null {
     if (!row.target) return null;
     const { page, params } = row.target;
-    return this.decision(params ?? {}) ?? this.place(page, params, this.world.pages.label(page));
+    return this.about(page, params) ?? this.place(page, params, this.world.pages.label(page));
   }
 
   /** A toast's button, or `null`. */
   forToast(toast: Pick<ModelToast, "target" | "category">): NotificationAction | null {
     const target = toast.target ?? null;
     if (target) {
-      const action = this.decision(target.params ?? {}) ?? this.place(target.kind, target.params, target.label);
+      const action =
+        this.about(target.kind, target.params) ?? this.place(target.kind, target.params, target.label);
       if (action) return action;
     }
     return toast.category === "update" ? this.update() : null;
+  }
+
+  /** The decision a target is about, if it is about one: a chat, or a
+   *  target that names the requirement. An extension's own page that
+   *  happens to carry a session id is still its page. */
+  private about(page: string, params: Record<string, string> | undefined): NotificationAction | null {
+    const named = params ?? {};
+    const aboutDecision = CHAT_PAGES.has(page) || !!named.requirement_id;
+    return aboutDecision ? this.decision(named) : null;
   }
 
   /** The decision `params` names, while it is still waiting. */

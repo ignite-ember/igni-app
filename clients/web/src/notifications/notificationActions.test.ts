@@ -76,6 +76,31 @@ describe("a decision", () => {
   });
 });
 
+describe("an extension's page", () => {
+  it("opens its page, even when it carries a session id", () => {
+    // A session id in an extension's own params is the extension's
+    // business; it is not a decision waiting in that chat — even when
+    // that chat does have an approval open.
+    const { actions, followed } = actionWorld({
+      pages: { "acme.review": "Code review" },
+      approvals: [NPM],
+      currentChat: "cv",
+    });
+    const action = actions.forFloor(at("acme.review", { session_id: "cv" }))!;
+    expect(action.decides).toBe(false);
+    expect(action.label).toBe("Open Code review");
+    action.run();
+    expect(followed).toEqual([{ to: "page", route: { kind: "acme.review", label: "Code review", params: { session_id: "cv" } } }]);
+  });
+
+  it("is a decision when it names the requirement, whatever its page", () => {
+    const { actions } = actionWorld({ approvals: [NPM], pages: { "acme.review": "Code review" } });
+    const action = actions.forFloor(at("acme.review", { requirement_id: "r1" }))!;
+    expect(action.decides).toBe(true);
+    expect(action.label).toBe("Approve npm install in ‘CV review’");
+  });
+});
+
 describe("a chat", () => {
   it("opens by name while it is listed", () => {
     const { actions, followed } = actionWorld();
