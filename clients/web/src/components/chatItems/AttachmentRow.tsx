@@ -15,6 +15,7 @@ export function AttachmentRow({ attachment }: { attachment: MessageAttachment })
       type="button"
       className="msg-att-row"
       title={attachment.path}
+      aria-label={attachment.name}
       onClick={() => viewer?.open(attachment.path)}
     >
       <span className="msg-att-glyph">
