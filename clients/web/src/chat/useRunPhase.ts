@@ -10,10 +10,11 @@
  * repeating the clean-up. See ``chat/runPhase.ts`` for the transitions.
  */
 
-import { useCallback, useMemo, useRef, useState, type MutableRefObject } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject } from "react";
 
 import type { IgniClient } from "../protocol/client";
 import { isProcessing, type RunPhase } from "./runPhase";
+import type { SessionStates } from "./sessionStates";
 
 /** The parts of the run lifecycle that never change identity: what a
  *  controller built once per window holds, so it can never read a stale
@@ -24,6 +25,10 @@ export interface RunControls {
   readonly setRunPhase: (phase: RunPhase) => void;
   /** Stop the run: phase ``cancelled``, then tell the backend. */
   readonly cancel: () => void;
+  /** Whether the backend says this session has a run going (``running``
+   *  or ``waiting``), as of its last push: Escape stops it even when the
+   *  view's own phase has settled (see ``canStopSession``). */
+  readonly sessionActiveRef: MutableRefObject<boolean>;
   /** Bumped when the view starts over (``/clear``, ``/fork``): late
    *  events from a run started before it are dropped. */
   readonly viewGenRef: { readonly current: number };
@@ -62,6 +67,7 @@ export function useRunPhase(client: IgniClient): RunPhaseState {
   const runPhaseRef = useRef<RunPhase>("idle");
   const viewGenRef = useRef(0);
   const autoAcceptForRunRef = useRef(false);
+  const sessionActiveRef = useRef(false);
   const setRunPhase = useCallback((phase: RunPhase) => {
     runPhaseRef.current = phase;
     setRunPhaseState(phase);
@@ -79,6 +85,7 @@ export function useRunPhase(client: IgniClient): RunPhaseState {
       runPhaseRef,
       setRunPhase,
       cancel,
+      sessionActiveRef,
       viewGenRef,
       bumpViewGen,
       autoAcceptForRunRef,
@@ -102,4 +109,19 @@ export function useRunPhase(client: IgniClient): RunPhaseState {
     }),
     [runPhase, controls, setRunPhase, cancel, bumpViewGen, processing],
   );
+}
+
+/** Whether the backend says ``sessionId`` has a run going — ``running`` or
+ *  ``waiting`` — kept on ``controls.sessionActiveRef`` for Escape and
+ *  returned for the composer's Stop (``canStopSession``). */
+export function useSessionActive(
+  controls: Pick<RunControls, "sessionActiveRef">,
+  states: SessionStates,
+  sessionId: string,
+): boolean {
+  const active = !!sessionId && states.of(sessionId).activity !== "idle";
+  useEffect(() => {
+    controls.sessionActiveRef.current = active;
+  }, [controls, active]);
+  return active;
 }

@@ -840,3 +840,106 @@ describe("while a run is going", () => {
   });
 });
 
+// Session 6fa3e09e: a run went on after its approval. Every pause the
+// permission policy answered by itself sent `streaming_done`, so the window
+// took the run for one finishing — no Stop, and a message sent then started
+// a second run. Once that run completed, the window was idle while the first
+// went on for minutes: no Stop, and Escape sent nothing.
+describe("a run going on after its approval", () => {
+  const SESSION = "test-session-001";
+
+  function states(state: "running" | "waiting" | "idle") {
+    push({
+      type: "push_notification",
+      channel: "session_states_changed",
+      payload: {
+        sessions: state === "idle" ? [] : [{ session_id: SESSION, state, unread: false }],
+        cause: "activity",
+      },
+    });
+  }
+
+  /** Pause on one approval, answer it, and return the resumed stream's id. */
+  async function resumed(): Promise<{ editor: HTMLElement; hitlId: string }> {
+    const editor = await boot();
+    typeAndSend(editor, "who gave the dream speech");
+    const runId = await sentRun("who gave the dream speech");
+    push({ type: "run_started", id: runId, run_id: runId, parent_run_id: null, agent_name: "igni", model: "test-model" });
+    push({ type: "streaming_done", id: runId, run_id: runId });
+    push({
+      type: "run_paused",
+      id: runId,
+      run_id: runId,
+      requirements: [
+        {
+          type: "hitl_request",
+          requirement_id: "req-1",
+          tool_name: "run_shell_command",
+          friendly_name: "Bash",
+          tool_args: { command: "sqlite3 state.db" },
+          details: "",
+          agent_path: [],
+        },
+      ],
+    });
+    push({ type: "stream_end", id: runId });
+    expect((await screen.findAllByText(/sqlite3 state\.db/)).length).toBeGreaterThan(0);
+    const allow = screen
+      .getAllByRole("button")
+      .find((b) => /^(Allow|Yes|Approve|Run)/i.test(b.textContent || ""));
+    fireEvent.click(allow!);
+    await waitFor(() => expect(received("hitl_response_batch")).toHaveLength(1));
+    return { editor, hitlId: String(received("hitl_response_batch")[0].id) };
+  }
+
+  it("a pause answered by the policy leaves Stop up, and a message sent then queues", async () => {
+    const { editor, hitlId } = await resumed();
+    push({ type: "streaming_done", id: hitlId, run_id: "run-1" });
+    push({ type: "tool_started", id: hitlId, tool_name: "run_shell_command", friendly_name: "Bash", args_summary: "rg dream", run_id: "run-1" });
+    expect((await screen.findAllByText(/rg dream/)).length).toBeGreaterThan(0);
+
+    expect(screen.getByTitle("Stop (Esc)")).toBeTruthy();
+    typeAndSend(editor, "No, search the internet for this one");
+    await waitFor(() => expect(received("queue_message")).toHaveLength(1));
+    expect(received("user_message")).toHaveLength(1);
+  });
+
+  it("while the backend says the run goes on, Stop shows and Escape cancels, whatever this view thinks", async () => {
+    const { hitlId } = await resumed();
+    // The view settles — another run's completion took it to `done`.
+    push({ type: "run_completed", id: hitlId, run_id: "run-2", parent_run_id: null, input_tokens: 1, output_tokens: 1, duration: 1 });
+    states("idle");
+    await waitFor(() => expect(screen.queryByTitle("Stop (Esc)")).toBeNull());
+    states("running");
+
+    expect(await screen.findByTitle("Stop (Esc)")).toBeTruthy();
+    act(() => {
+      fireEvent.keyDown(window, { key: "Escape" });
+    });
+    await waitFor(() => expect(received("cancel")).toHaveLength(1));
+    act(() => {
+      fireEvent.click(screen.getByTitle("Stop (Esc)"));
+    });
+    await waitFor(() => expect(received("cancel")).toHaveLength(2));
+
+    states("idle");
+    await waitFor(() => expect(screen.queryByTitle("Stop (Esc)")).toBeNull());
+    expect(screen.getByTitle("Send")).toBeTruthy();
+  });
+
+  it("another chat's run does not put Stop in this one", async () => {
+    const { hitlId } = await resumed();
+    push({ type: "run_completed", id: hitlId, run_id: "run-1", parent_run_id: null, input_tokens: 1, output_tokens: 1, duration: 1 });
+    push({
+      type: "push_notification",
+      channel: "session_states_changed",
+      payload: { sessions: [{ session_id: "another-chat", state: "running", unread: false }], cause: "activity" },
+    });
+    await waitFor(() => expect(screen.queryByTitle("Stop (Esc)")).toBeNull());
+    act(() => {
+      fireEvent.keyDown(window, { key: "Escape" });
+    });
+    expect(received("cancel")).toHaveLength(0);
+  });
+});
+

@@ -5,7 +5,7 @@ import { useChatSearch } from "./chat/useChatSearch";
 import { useCommands } from "./chat/useCommands";
 import { useHitl } from "./chat/useHitl";
 import { useObserver } from "./chat/useObserver";
-import { useRunPhase } from "./chat/useRunPhase";
+import { useRunPhase, useSessionActive } from "./chat/useRunPhase";
 import { useSessionBinding } from "./chat/useSessionBinding";
 import { useSessionStates } from "./chat/sessionStates";
 import { useBotAvatarLook } from "./chat/botAvatarLook";
@@ -105,6 +105,8 @@ export default function App() {
   useLocalActivity(sessionId, run.processing, hitl.pending?.length ?? 0);
   // Which chats are working, waiting or unread — the sidebar's marks.
   const sessionStates = useSessionStates(client, connected, sessionId);
+  // Stop and Escape follow every run the backend says the chat has going.
+  const sessionActive = useSessionActive(run.controls, sessionStates, sessionId);
   const avatarLook = useBotAvatarLook(run.runPhase, sessionStates, sessionId);
 
   const { groupName, groupMark } = useGroupBranding(status?.theme);
@@ -303,6 +305,7 @@ export default function App() {
           brandName={groupName}
           status={status}
           run={run}
+          sessionActive={sessionActive}
           commands={commands}
           contributions={contributions}
           hitl={hitl}

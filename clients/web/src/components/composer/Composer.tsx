@@ -19,6 +19,9 @@ export interface ComposerProps {
   connected: boolean;
   /** The current turn's phase: Stop replaces Send while it is processing. */
   runPhase: RunPhase;
+  /** The backend says the session has a run going: Stop replaces Send
+   *  whatever the phase (``canStopSession``). */
+  sessionActive?: boolean;
   catalog: ComposerCatalog;
   actions: ComposerActions;
   /** The window's model; the draft and its mode are its `ui.composer`. */
@@ -49,6 +52,7 @@ export function Composer({
   client,
   connected,
   runPhase,
+  sessionActive = false,
   catalog,
   actions,
   windowModel,
@@ -109,6 +113,7 @@ export function Composer({
           onAttach={attachments.pick}
           model={model}
           runPhase={runPhase}
+          sessionActive={sessionActive}
           connected={connected}
           canSend={controller.canSend}
           onSubmit={() => controller.submit()}

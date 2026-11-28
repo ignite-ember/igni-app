@@ -5252,10 +5252,16 @@ button.activity-file-chip:focus-visible {
   cursor: default;
 }
 
-.send-btn.stop {
-  background: var(--bg-raised);
-  color: var(--fg);
-  border: 1px solid var(--border);
+/* Stop is the kit's primary button (``Button``), square to Send's size:
+   a filled inverse tile with the stop glyph, as Claude's composer has. */
+.button.button--primary.send-btn.stop {
+  width: 30px;
+  height: 30px;
+  padding: 0;
+}
+
+.button.send-btn.stop .button-icon {
+  margin: 0;
 }
 
 /* Compound selector (``.popup-menu.send-mode-menu``) beats
@@ -7193,17 +7199,6 @@ button.activity-file-chip:focus-visible {
   box-shadow: 0 0 0 2px color-mix(in srgb, #34c759 25%, transparent);
   flex-shrink: 0;
   animation: pulse-dot 1.8s ease infinite;
-}
-
-/* Nothing runs: a still, grey dot and a quiet zero. */
-.chip-watcher.idle .chip-watcher-dot {
-  background: var(--fg-muted);
-  box-shadow: none;
-  animation: none;
-}
-.chip-watcher.idle .chip-status-count {
-  background: var(--bg-raised);
-  color: var(--fg-muted);
 }
 
 /* The bell's count badge, inline rather than perched on a corner. */

@@ -8,7 +8,16 @@
  */
 
 import type { IgniClient } from "../protocol/client";
-import type { CommandResult, RunCompleted, RunPaused, RunStarted, ServerMessage } from "../protocol/messages";
+import type {
+  CommandResult,
+  ContentDelta,
+  ReasoningStarted,
+  RunCompleted,
+  RunPaused,
+  RunStarted,
+  ServerMessage,
+  ToolStarted,
+} from "../protocol/messages";
 import { ContextTokenCount } from "../protocol/rpcResults";
 import type { HitlRequests } from "./hitlRequests";
 import type { ShellPort } from "./shellPort";
@@ -40,6 +49,9 @@ export class StreamEventRouter {
     command_result: (m) => this.onCommandResult(m),
     run_started: (m) => this.onRunStarted(m),
     run_completed: (m) => this.onRunCompleted(m),
+    content_delta: (m) => this.onWork(m),
+    tool_started: (m) => this.onWork(m),
+    reasoning_started: (m) => this.onWork(m),
   };
 
   constructor(private readonly deps: StreamEventRouterDeps) {}
@@ -62,6 +74,17 @@ export class StreamEventRouter {
       autoAccept.current = false;
       this.deps.revertAutoAccept();
     }
+  }
+
+  /** The run works again after its content ended: the backend sends
+   *  ``streaming_done`` before every pause, and resumes a pause the
+   *  permission policy answers by itself. The run is replying, not
+   *  finalizing — Stop shows and a new message queues behind it. Not
+   *  after a cancel or an error: those are this view's last word. */
+  private onWork(m: ContentDelta | ToolStarted | ReasoningStarted): void {
+    const phase = this.deps.run.runPhaseRef.current;
+    if (phase === "finalizing" || phase === "done") this.deps.run.setRunPhase("streaming");
+    this.deps.view.apply(m);
   }
 
   private onCommandResult(m: CommandResult): void {

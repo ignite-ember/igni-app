@@ -400,7 +400,11 @@ describe("the terminal pane", () => {
 
 describe("the terminal owns the keyboard", () => {
   it("Escape typed in it does not cancel a run", async () => {
-    const run = { runPhaseRef: { current: "streaming" as const }, cancel: vi.fn() };
+    const run = {
+      runPhaseRef: { current: "streaming" as const },
+      cancel: vi.fn(),
+      sessionActiveRef: { current: false },
+    };
     renderHook(() => useHitl({ resolveHitlBatch: vi.fn(async () => {}) }, run));
     const { term } = await mount();
     act(() => {

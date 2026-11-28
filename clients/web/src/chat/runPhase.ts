@@ -98,6 +98,21 @@ export function canStop(phase: RunPhase): boolean {
 }
 
 /**
+ * True while the composer offers Stop and Escape stops: this view can stop
+ * its own run, or the backend says the session has a run going that this
+ * view's phase does not follow — one resumed after an approval, or one a
+ * message from elsewhere started. ``sessionActive`` is the session's
+ * ``running`` / ``waiting`` state from ``session_states_changed``.
+ *
+ * Session 6fa3e09e: a run went on for minutes after its approval while the
+ * view had settled to ``done`` — no Stop, and ten presses of Escape did
+ * nothing.
+ */
+export function canStopSession(phase: RunPhase, sessionActive: boolean): boolean {
+  return canStop(phase) || sessionActive;
+}
+
+/**
  * True while the spinner should be visible for any reason —
  * processing OR finalizing. Cheaper than computing both.
  */

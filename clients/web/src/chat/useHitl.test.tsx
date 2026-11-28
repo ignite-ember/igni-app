@@ -16,9 +16,9 @@ const REQUESTS = [
   { requirement_id: "q2", tool_name: "run_shell" },
 ] as unknown as HITLRequest[];
 
-function mount(phase: RunPhase = "idle") {
+function mount(phase: RunPhase = "idle", sessionActive = false) {
   const client = { resolveHitlBatch: vi.fn(async () => {}) };
-  const run = { runPhaseRef: { current: phase }, cancel: vi.fn() };
+  const run = { runPhaseRef: { current: phase }, cancel: vi.fn(), sessionActiveRef: { current: sessionActive } };
   const hook = renderHook(() => useHitl(client, run));
   return { hook, client, run };
 }
@@ -79,6 +79,38 @@ describe("useHitl", () => {
     pressEscape();
     expect(run.cancel).toHaveBeenCalledTimes(1);
     expect(client.resolveHitlBatch).not.toHaveBeenCalled();
+  });
+
+  // Session 6fa3e09e: ten presses of Escape did nothing while a run resumed
+  // after its approval went on — this view's phase had settled to `done`.
+  it.each(["starting", "streaming", "finalizing", "awaiting_approval"] as const)(
+    "Escape sends the cancel in phase %s",
+    (phase) => {
+      const { run } = mount(phase);
+      const e = pressEscape();
+      expect(run.cancel).toHaveBeenCalledTimes(1);
+      expect(e.defaultPrevented).toBe(true);
+    },
+  );
+
+  it.each(["idle", "done", "cancelled", "errored", "finalizing"] as const)(
+    "Escape sends the cancel in phase %s when the backend says a run goes on",
+    (phase) => {
+      const { client, run } = mount(phase, true);
+      const e = pressEscape();
+      expect(run.cancel).toHaveBeenCalledTimes(1);
+      expect(client.resolveHitlBatch).not.toHaveBeenCalled();
+      expect(e.defaultPrevented).toBe(true);
+    },
+  );
+
+  it("Escape follows the backend's word as it changes, without a remount", () => {
+    const { run } = mount("done");
+    pressEscape();
+    expect(run.cancel).not.toHaveBeenCalled();
+    run.sessionActiveRef.current = true;
+    pressEscape();
+    expect(run.cancel).toHaveBeenCalledTimes(1);
   });
 
   it("leaves Escape to the OS when idle", () => {

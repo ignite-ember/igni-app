@@ -54,6 +54,9 @@ const DECLARED: Record<string, string> = {
     "backend talks to scripts/e2e/scripted_model.py, a deterministic " +
     "OpenAI-compatible model, so this skips only where igni-core's venv " +
     "is missing and IGNI_LIVE_WS is unset",
+  "@needs-decisions":
+    "needs igni-core's decisions service and its model library (igni-core[decisions], " +
+    "which `uv sync --all-extras` installs); skips only where the venv lacks it",
 };
 
 type Skip = {

@@ -26,6 +26,9 @@ export interface AppComposerProps {
   brandName: string;
   status: StatusUpdate | null;
   run: Pick<RunPhaseState, "runPhase" | "controls" | "processing">;
+  /** The backend says this session has a run going (``running`` or
+   *  ``waiting``): Stop shows whatever this view's phase is. */
+  sessionActive: boolean;
   commands: Pick<CommandsState, "skills" | "backendCommands" | "modelMenuSignal">;
   contributions: Pick<Contributions, "tools">;
   hitl: Pick<HitlState, "pending" | "stop">;
@@ -57,6 +60,7 @@ export function AppComposer({
   brandName,
   status,
   run,
+  sessionActive,
   commands,
   contributions,
   hitl,
@@ -120,6 +124,7 @@ export function AppComposer({
       client={client}
       connected={ready}
       runPhase={run.runPhase}
+      sessionActive={sessionActive}
       catalog={catalog}
       actions={composerActions}
       windowModel={windowModel}
