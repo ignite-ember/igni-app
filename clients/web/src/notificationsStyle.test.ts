@@ -45,6 +45,15 @@ describe("the notifications' styles", () => {
     expect(reduced).toMatch(/\.toast\s*\{\s*animation-name:\s*toast-fade-in/);
     expect(reduced).toMatch(/\.toast\.is-closing\s*\{\s*animation-name:\s*toast-fade-out/);
     expect(reduced).toMatch(/\.notify-panel\s*\{\s*animation:\s*none/);
+    expect(reduced).toMatch(/\.toast \.ncard-badge\s*\{\s*animation:\s*none/);
+  });
+
+  it("draw a card in its category's hue, and what waits on you louder", () => {
+    const of = (selector: string) => rules(new RegExp(`^${selector.replace(/[.]/g, "\\.")}$`)).map((r) => r.body).join("\n");
+    expect(of(".ncard-badge")).toMatch(/var\(--ncard-hue\)/);
+    expect(of(".ncard-dot")).toMatch(/background:\s*var\(--ncard-hue\)/);
+    expect(of(".ncard.is-prominent")).toMatch(/border-color:[^;]*--ncard-hue/);
+    expect(of(".ncard.is-prominent .ncard-badge")).toMatch(/background:\s*var\(--ncard-hue\)/);
   });
 
   it("let FadeScroll own the sheet's scrolling", () => {
