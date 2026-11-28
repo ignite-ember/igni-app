@@ -1,29 +1,37 @@
 /**
  * A user bubble: the person's text with its file and snippet pills, or
- * an extension's message as markdown. Edit and delete truncate the
+ * an extension's message as markdown. The files the person uploaded
+ * are drawn as a block under the text; the files they only mention stay
+ * inline, as chips in the sentence. Edit and delete truncate the
  * conversation from here.
  */
 
-import { memo, useState, type ReactNode } from "react";
+import { memo, useMemo, useState, type ReactNode } from "react";
 
+import { useAttachmentContext } from "../../chat/attachmentContext";
 import type { UserItem } from "../../chat/chatItem";
+import { MessageAttachments } from "../../chat/messageAttachments";
 import { UserMessageText, type UserMessageMode } from "../../chat/userMessageText";
-import { UserTextTokenizer, type UserTextToken } from "../../chat/userTextTokens";
+import type { UserTextToken } from "../../chat/userTextTokens";
 import { useExtensionName } from "../../extensions/extensionNames";
-import { FilePill } from "../FilePill";
 import { EditPenIcon, TrashIcon } from "../Icons";
+import { MentionChip } from "../MentionChip";
 import { ChatMarkdown } from "../markdown/ChatMarkdown";
 import { Button } from "../page/Button";
+import { AttachmentBlock } from "./AttachmentBlock";
 import type { UserItemHandlers } from "./handlers";
 import { UserCodePill } from "./UserCodePill";
 import { useMessageEditor, type MessageEditor } from "./useMessageEditor";
 
-function tokenNode(token: UserTextToken): ReactNode {
+/** One token of the message, drawn. An upload's chip is left out: the
+ *  block under the message draws it, and it is not shown twice. */
+function tokenNode(token: UserTextToken, attachments: MessageAttachments): ReactNode {
   switch (token.kind) {
     case "text":
       return token.text;
     case "file":
-      return <FilePill key={token.key} path={token.path} />;
+      if (attachments.isUpload(token.path)) return null;
+      return <MentionChip key={token.key} path={token.path} />;
     case "codePaste":
       return <UserCodePill key={token.key} block={token.block} />;
   }
@@ -92,9 +100,18 @@ export const UserMessage = memo(function UserMessage({
   // is nothing to edit or delete, so the controls stay hidden.
   const canMutate = !!item.runId && (onEdit || onDelete);
   const fromName = useExtensionName(item.fromExtension);
+  const windowPlace = useAttachmentContext();
+  const projectDir = windowPlace?.projectDir ?? "";
+  const attachments = useMemo(
+    () => new MessageAttachments(item.text, { projectDir }),
+    [item.text, projectDir],
+  );
 
   if (editor.editing && onEdit) return <MessageEditForm item={item} editor={editor} mode={mode} />;
 
+  // The message's own text is tokenised only for a chat message: a
+  // command and an extension's message are drawn as they are.
+  const tokenised = mode === "chat" && !item.fromExtension;
   const body =
     mode !== "chat" ? (
       item.text
@@ -103,12 +120,15 @@ export const UserMessage = memo(function UserMessage({
         <ChatMarkdown text={item.text} />
       </div>
     ) : (
-      UserTextTokenizer.tokenize(item.text).map(tokenNode)
+      attachments.tokens.map((token) => tokenNode(token, attachments))
     );
   return (
     <div className={`msg-user mode-${mode}${item.fromExtension ? " msg-user-extension" : ""}`}>
       {item.fromExtension && <div className="msg-user-from">from {fromName}</div>}
       {body}
+      {tokenised && attachments.uploads.length > 0 && (
+        <AttachmentBlock uploads={attachments.uploads} client={windowPlace?.client ?? null} />
+      )}
       {canMutate && (
         <div className="msg-user-actions" onClick={(e) => e.stopPropagation()}>
           {confirmingDelete ? (

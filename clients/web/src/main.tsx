@@ -2,6 +2,7 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import App from "./App";
 import { ActivityDemo } from "./dev/ActivityDemo";
+import { AttachmentsDemo } from "./dev/AttachmentsDemo";
 import { ChatScrollDemo } from "./dev/ChatScrollDemo";
 import { CloudSwitchDemo } from "./dev/CloudSwitchDemo";
 import { HitlDemo } from "./dev/HitlDemo";
@@ -43,6 +44,10 @@ document.documentElement.dataset.host = host.kind;
 //   ?demo=activity       — the activity group in each of its
 //                          states, clocks fixed — see
 //                          ``dev/ActivityDemo.tsx``.
+//   ?demo=attachments    — the files a sent message carries: the
+//                          block under the message and the chip a
+//                          mentioned file is drawn as — see
+//                          ``dev/AttachmentsDemo.tsx``.
 //   ?demo=app            — force-load the real app (otherwise
 //                          the dev Tauri shell, which has no
 //                          address bar to type a query into,
@@ -63,6 +68,7 @@ function pickRoot() {
   if (demo === "panels") return <PanelsDemo />;
   if (demo === "plugins") return <PluginsCatalogDemo />;
   if (demo === "activity") return <ActivityDemo />;
+  if (demo === "attachments") return <AttachmentsDemo />;
   return <App />;
 }
 

@@ -55,7 +55,7 @@ export class BackendCalls {
       );
       if (res.error) return { ok: false, reason: res.error };
       if (!res.path) return { ok: false, reason: `no path came back for ${file.name}` };
-      return { ok: true, path: res.path };
+      return { ok: true, path: res.path, size: res.size };
     } catch (e) {
       return { ok: false, reason: failureReason(e) };
     }

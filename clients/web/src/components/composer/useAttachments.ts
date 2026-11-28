@@ -8,6 +8,7 @@
 
 import { useRef, useState } from "react";
 
+import { uploadRegistry } from "../../chat/uploadRegistry";
 import type { BackendCalls } from "../../protocol/backendCalls";
 
 /** A file still uploading, shown as a chip. */
@@ -52,8 +53,12 @@ export function useAttachments({
     for (const [i, file] of list.entries()) {
       const result = await client.calls.uploadAttachment(file);
       setUploads((prev) => prev.filter((u) => u.key !== pending[i].key));
-      if (result.ok) onLanded(result.path);
-      else console.warn("Attachment not uploaded:", file.name, result.reason);
+      if (result.ok) {
+        // The message carries only the path; the name and the size are
+        // kept here, for the block under the message to draw.
+        uploadRegistry.remember(result.path, { name: file.name, size: result.size });
+        onLanded(result.path);
+      } else console.warn("Attachment not uploaded:", file.name, result.reason);
     }
     if (fileInputRef.current) fileInputRef.current.value = "";
   };

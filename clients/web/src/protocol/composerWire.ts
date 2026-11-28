@@ -19,12 +19,14 @@ export const MAX_ATTACHMENT_BYTES = 5 * 1024 * 1024;
 export class UploadAttachmentResponse {
   constructor(
     readonly path: string,
+    /** The stored file's size in bytes; 0 on error. */
+    readonly size: number,
     readonly error: string,
   ) {}
 
   static parse(raw: unknown): UploadAttachmentResponse {
     const p = new WirePayload(raw);
-    return new UploadAttachmentResponse(p.string("path"), p.string("error"));
+    return new UploadAttachmentResponse(p.string("path"), p.number("size"), p.string("error"));
   }
 }
 
@@ -92,7 +94,7 @@ export interface Failure {
   reason: string;
 }
 
-export type UploadResult = { ok: true; path: string } | Failure;
+export type UploadResult = { ok: true; path: string; size: number } | Failure;
 
 export type CodeSearchResult = { ok: true; matches: CodeMatch[] } | Failure;
 

@@ -218,9 +218,18 @@ export const VIEW_STATE: Record<string, Partial<Record<Category, string[]>>> = {
     measure: ["fps"],
     device: ["visible"],
   },
-  "components/FilePill.tsx": {
-    menu: ["menuOpen"],
+  "components/MentionChip.tsx": {
+    menu: ["open"],
     animation: ["copied"],
+  },
+  "components/chatItems/AttachmentBlock.tsx": {
+    pending: ["unavailable"],
+  },
+  "components/chatItems/AttachmentThumb.tsx": {
+    pending: ["thumbnail"],
+  },
+  "components/chatItems/useNearViewport.ts": {
+    measure: ["near"],
   },
   "components/FilePreview.tsx": {
     data: ["data"],
