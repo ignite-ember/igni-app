@@ -187,6 +187,18 @@ jobs:
       - name: openssl for the certificate scenarios
         run: command -v openssl || (apt-get update && apt-get install -y --no-install-recommends openssl)
 
+      # The decisions service's model (Laya, ~800 MB), which every live
+      # backend shares through one Hugging Face cache (live-be.ts's
+      # HF_CACHE): downloaded once, then restored from here on later runs.
+      # Relative to the workspace, which is where actions/cache resolves it
+      # inside the container.
+      - name: The decisions model's cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: igni-e2e-hf-cache
+          key: igni-e2e-hf-${{ hashFiles('igni-core/pyproject.toml') }}
+          restore-keys: igni-e2e-hf-
+
       # IGNI_E2E_STRICT=1 turns an *undeclared* skip into a failure, so
       # coverage cannot go quiet again without this job going red. F130.
       #
@@ -196,7 +208,7 @@ jobs:
       - name: E2E tests
         env:
           IGNI_E2E_STRICT: "1"
-        run: npx playwright test
+        run: IGNI_E2E_HF_CACHE="$GITHUB_WORKSPACE/igni-e2e-hf-cache" npx playwright test
 
       - name: Upload Playwright report on failure
         if: failure()
