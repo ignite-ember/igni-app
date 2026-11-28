@@ -13,6 +13,7 @@ import { host } from "../lib/host";
 import type { PageServices } from "../components/AppPages";
 import type { IgniClient } from "../protocol/client";
 import type { ComposerSeeder } from "./composerSeeder";
+import { CONTEXT_ROUTE } from "./pageStack";
 import type { ProjectFolderPicker } from "./projectFolderPicker";
 import type { TranscriptView } from "./transcriptView";
 import type { ChatController } from "./useChatController";
@@ -24,7 +25,7 @@ export interface ShellActionsDeps {
   view: Pick<TranscriptView, "info" | "error">;
   controller: Pick<ChatController, "commands" | "sessions" | "submitter" | "streamer">;
   folderPicker: Pick<ProjectFolderPicker, "pick">;
-  navigator: Pick<WindowNavigator, "closePages">;
+  navigator: Pick<WindowNavigator, "closePages" | "openPage">;
   seeder: Pick<ComposerSeeder, "seed">;
   refreshStatus: () => Promise<void>;
 }
@@ -60,6 +61,12 @@ export class ShellActions {
     this.deps.navigator.closePages();
     this.runCommand("/compact");
   };
+
+  /** Continue the open chat in a new session with its history cloned. */
+  fork = (): void => this.runCommand("/fork");
+
+  /** The Context page: what the open chat's context window holds. */
+  openContext = (): void => this.deps.navigator.openPage(CONTEXT_ROUTE);
 
   /** Sign the desktop out. On the cloud side `/logout` would reach the
    *  VM's igni, so the account call goes to this computer's backend; the

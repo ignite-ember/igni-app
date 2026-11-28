@@ -15,7 +15,7 @@ function setup(pick: FolderPick = { kind: "cancelled" }) {
       streamer: { sendLoopIteration: vi.fn(async () => {}) },
     },
     folderPicker: { pick: vi.fn(async () => pick) },
-    navigator: { closePages: vi.fn() },
+    navigator: { closePages: vi.fn(), openPage: vi.fn() },
     seeder: { seed: vi.fn() },
     refreshStatus: vi.fn(async () => {}),
   };
@@ -63,6 +63,19 @@ describe("ShellActions", () => {
     actions.compact();
     expect(deps.navigator.closePages).toHaveBeenCalledTimes(1);
     expect(deps.controller.commands.run.mock.calls).toEqual([["/compact", false]]);
+  });
+
+  it("forks the open chat with /fork", () => {
+    const { deps, actions } = setup();
+    actions.fork();
+    expect(deps.controller.commands.run.mock.calls).toEqual([["/fork", false]]);
+  });
+
+  it("opens the Context page", () => {
+    const { deps, actions } = setup();
+    actions.openContext();
+    expect(deps.navigator.openPage).toHaveBeenCalledWith({ kind: "context", label: "Context" });
+    expect(deps.controller.commands.run).not.toHaveBeenCalled();
   });
 
   it("says who signed in, and refreshes the status after either answer", () => {

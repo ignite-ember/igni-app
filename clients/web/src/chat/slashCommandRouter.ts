@@ -12,7 +12,7 @@
 import type { WindowModel } from "../clientState";
 import type { IgniClient } from "../protocol/client";
 import type { CommandAction, CommandResult, ServerMessage } from "../protocol/messages";
-import type { PageRoute } from "./pageStack";
+import { CONTEXT_ROUTE, type PageRoute } from "./pageStack";
 import type { RunStreamer } from "./runStreamer";
 import type { SessionSwitcher } from "./sessionSwitcher";
 import type { ShellPort } from "./shellPort";
@@ -35,7 +35,7 @@ export const PAGE_FOR_ACTION: Partial<
   hooks: { route: { kind: "hooks", label: "Hooks" } },
   watcher: { route: { kind: "watcher", label: "Watcher" } },
   help: { route: { kind: "help", label: "Help" } },
-  ctx: { route: { kind: "context", label: "Context" } },
+  ctx: { route: CONTEXT_ROUTE },
   programs: { route: { kind: "programs", label: "Programs" } },
 };
 

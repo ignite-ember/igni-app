@@ -55,6 +55,9 @@ export const BASE_PAGE_KINDS = [
   "programs",
 ] as const;
 
+/** The Context page: what the session's context window holds. */
+export const CONTEXT_ROUTE: PageRoute = { kind: "context", label: "Context" };
+
 /** One of the thirteen above — still exact, for the app's own code. */
 export type BasePageKind = (typeof BASE_PAGE_KINDS)[number];
 

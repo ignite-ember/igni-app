@@ -652,6 +652,48 @@ describe("slash commands that change the conversation", () => {
     expect(received("command")).toHaveLength(0);
   });
 
+  async function openContextReadout() {
+    fireEvent.click(await screen.findByRole("button", { name: /^Session .*context \d+% full$/ }));
+    return screen.getByRole("group", { name: "Context operations" });
+  }
+
+  it.each([
+    ["Compact conversation", "/compact"],
+    ["Clear conversation", "/clear"],
+    ["Fork conversation", "/fork"],
+  ])("the context readout's %s runs %s as a command", async (label, command) => {
+    await boot();
+    await openContextReadout();
+    fireEvent.click(screen.getByRole("button", { name: label }));
+    await waitFor(() => expect(received("command").map((m) => m.text)).toEqual([command]));
+    expect(received("user_message")).toHaveLength(0);
+    expect(screen.queryByRole("group", { name: "Context operations" })).toBeNull();
+  });
+
+  it("the context readout's Context details opens the Context page", async () => {
+    await boot();
+    await openContextReadout();
+    fireEvent.click(screen.getByRole("button", { name: "Context details" }));
+    await waitFor(() => expect(document.querySelector(".main--paged")).not.toBeNull());
+    expect(await screen.findByText("Context", { selector: ".page-title, h1, h2" })).toBeTruthy();
+    expect(received("command")).toHaveLength(0);
+  });
+
+  it("the context readout holds compact, clear and fork while a reply runs", async () => {
+    const editor = await boot();
+    typeAndSend(editor, "a long task");
+    const runId = await sentRun("a long task");
+    push({ type: "run_started", id: runId, run_id: runId, parent_run_id: null, agent_name: "igni", model: "test-model" });
+
+    await openContextReadout();
+    for (const label of ["Compact conversation", "Clear conversation", "Fork conversation"]) {
+      const op = screen.getByRole("button", { name: label }) as HTMLButtonElement;
+      await waitFor(() => expect(op.disabled).toBe(true));
+      fireEvent.click(op);
+    }
+    expect(received("command")).toHaveLength(0);
+  });
+
   it("/quit says how to quit instead", async () => {
     const editor = await boot();
     typeAndSend(editor, "/quit");

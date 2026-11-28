@@ -266,3 +266,59 @@ describe("SessionContext", () => {
     expect(title).not.toContain(" of 0");
   });
 });
+
+describe("SessionContext's context operations", () => {
+  const LABELS = ["Compact conversation", "Context details", "Clear conversation", "Fork conversation"];
+
+  function openWith(busy = false) {
+    const actions = { compact: vi.fn(), openContext: vi.fn(), clear: vi.fn(), fork: vi.fn() };
+    const { container } = render(
+      <SessionContext sessionId="s" tokens={10} max={100} pct={10} actions={actions} busy={busy} />,
+    );
+    fireEvent.click(container.querySelector(".session-ctx")!);
+    return actions;
+  }
+
+  const op = (label: string) => screen.getByRole("button", { name: label }) as HTMLButtonElement;
+  const popOpen = () => screen.queryByRole("dialog", { name: "Session and context" }) !== null;
+
+  it("lists the four operations under the context bar", () => {
+    openWith();
+    const group = screen.getByRole("group", { name: "Context operations" });
+    expect(Array.from(group.querySelectorAll("button")).map((b) => b.textContent)).toEqual(LABELS);
+  });
+
+  it.each([
+    ["Compact conversation", "compact"],
+    ["Context details", "openContext"],
+    ["Clear conversation", "clear"],
+    ["Fork conversation", "fork"],
+  ] as const)("%s runs its action once and closes the readout", (label, key) => {
+    const actions = openWith();
+    fireEvent.click(op(label));
+    expect(actions[key]).toHaveBeenCalledTimes(1);
+    for (const other of Object.keys(actions) as (keyof typeof actions)[]) {
+      if (other !== key) expect(actions[other]).not.toHaveBeenCalled();
+    }
+    expect(popOpen()).toBe(false);
+  });
+
+  it("holds compact, clear and fork while a reply runs, but not the details", () => {
+    const actions = openWith(true);
+    for (const label of ["Compact conversation", "Clear conversation", "Fork conversation"]) {
+      expect(op(label).disabled).toBe(true);
+      expect(op(label).title).toBe("Wait for the reply to finish");
+      fireEvent.click(op(label));
+    }
+    expect(actions.compact).not.toHaveBeenCalled();
+    expect(actions.clear).not.toHaveBeenCalled();
+    expect(actions.fork).not.toHaveBeenCalled();
+    expect(op("Context details").disabled).toBe(false);
+  });
+
+  it("lists nothing when it is given no operations", () => {
+    const { container } = render(<SessionContext sessionId="s" tokens={10} max={100} pct={10} />);
+    fireEvent.click(container.querySelector(".session-ctx")!);
+    expect(screen.queryByRole("group", { name: "Context operations" })).toBeNull();
+  });
+});
