@@ -539,6 +539,26 @@ export function NamedIcon({ name, size = 14 }: IconProps & { name: string }) {
   );
 }
 
+/** A notice's severity, as a small ringed mark. Its own artwork rather
+ *  than {@link NamedIcon}'s, whose names the visualizer agent picks from. */
+const SEVERITY_PATHS: Record<"info" | "success" | "warning" | "error", string> = {
+  info: "M8 7.5V11M8 5h.01M2 8a6 6 0 1 0 12 0 6 6 0 0 0-12 0",
+  success: "M5.5 8.2l1.7 1.7 3.3-3.6M2 8a6 6 0 1 0 12 0 6 6 0 0 0-12 0",
+  warning: "M8 2.8l5.6 9.7H2.4L8 2.8zM8 6.8v2.6M8 11h.01",
+  error: "M6.2 6.2l3.6 3.6M9.8 6.2l-3.6 3.6M2 8a6 6 0 1 0 12 0 6 6 0 0 0-12 0",
+};
+
+export function SeverityIcon({
+  severity,
+  size = 16,
+}: IconProps & { severity: keyof typeof SEVERITY_PATHS }) {
+  return (
+    <Svg size={size}>
+      <path d={SEVERITY_PATHS[severity]} />
+    </Svg>
+  );
+}
+
 /** A document — a file in the tree, and the "open file" affordance. */
 export function FileIcon({ size = 13 }: IconProps) {
   return (

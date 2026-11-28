@@ -10,8 +10,9 @@
  * those, and a row that can be opened when there is nowhere to go.
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 
+import { NotificationDays } from "../notifications/dayGroups";
 import { NotificationList, when, type FloorNotification } from "./NotificationList";
 
 afterEach(cleanup);
@@ -157,5 +158,100 @@ describe("when it happened", () => {
     expect(when("not a date")).toBe("");
     expect(when("")).toBe("");
     expect(when(null)).toBe("");
+  });
+});
+
+describe("grouped by day", () => {
+  it("heads each day and lists its rows under it", () => {
+    const now = new Date(2026, 10, 28, 15);
+    const days = new NotificationDays(now, "en-GB");
+    const at = (d: number) => new Date(2026, 10, d, 10).toISOString();
+    render(
+      <NotificationList
+        days={days}
+        rows={[
+          row({ id: "a", title: "Fresh", created_at: at(28) }),
+          row({ id: "b", title: "Older", created_at: at(27) }),
+        ]}
+      />,
+    );
+
+    const today = screen.getByRole("region", { name: "Today" });
+    const yesterday = screen.getByRole("region", { name: "Yesterday" });
+    expect(within(today).getByText("Fresh")).toBeTruthy();
+    expect(within(today).queryByText("Older")).toBeNull();
+    expect(within(yesterday).getByText("Older")).toBeTruthy();
+    expect(screen.getAllByRole("heading", { level: 3 }).map((h) => h.textContent)).toEqual(["Today", "Yesterday"]);
+  });
+});
+
+describe("unread, quietly", () => {
+  it("marks an unread row with a dot and says so to a screen reader", () => {
+    const { container } = render(<NotificationList rows={[row()]} />);
+
+    expect(container.querySelector(".notify-row.is-unread .notify-dot")).toBeTruthy();
+    expect(screen.getByRole("button", { name: /Runbook.*\(unread\)/ })).toBeTruthy();
+  });
+
+  it("draws no dot on a read row", () => {
+    const { container } = render(<NotificationList rows={[row({ read: true })]} />);
+
+    expect(container.querySelector(".notify-dot")).toBeNull();
+    expect(screen.queryByText(/\(unread\)/)).toBeNull();
+  });
+
+  it("offers marking an unread row read, without opening it", () => {
+    const marked = vi.fn();
+    const opened = vi.fn();
+    render(<NotificationList rows={[row()]} onMarkRead={marked} onOpen={opened} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Mark as read" }));
+
+    expect(marked).toHaveBeenCalledWith(expect.objectContaining({ id: "n1" }));
+    expect(opened).not.toHaveBeenCalled();
+  });
+
+  it("offers no mark-as-read on a read row, or without a handler", () => {
+    const { rerender } = render(<NotificationList rows={[row({ read: true })]} onMarkRead={() => {}} />);
+    expect(screen.queryByRole("button", { name: "Mark as read" })).toBeNull();
+    rerender(<NotificationList rows={[row()]} />);
+    expect(screen.queryByRole("button", { name: "Mark as read" })).toBeNull();
+  });
+});
+
+describe("who it is about", () => {
+  it("draws a person's monogram, and an extension's neutral tile for its own notice", () => {
+    const { container, rerender } = render(<NotificationList rows={[row()]} sourceName={nameOf} />);
+    expect(container.querySelector(".notify-face .entity-glyph")).toBeNull();
+
+    rerender(<NotificationList rows={[row({ actor: "" })]} sourceName={nameOf} />);
+    expect(container.querySelector(".notify-face .entity-glyph")?.textContent).toBe("AR");
+  });
+
+  it("does not repeat an actor that is the extension itself", () => {
+    const { container } = render(<NotificationList rows={[row({ actor: "Artifacts" })]} sourceName={nameOf} />);
+
+    expect(container.querySelector(".notify-actor")).toBeNull();
+  });
+
+  it("leaves out when for a row with no date", () => {
+    const { container } = render(<NotificationList rows={[row({ created_at: null })]} />);
+
+    expect(container.querySelector(".notify-when")).toBeNull();
+  });
+});
+
+describe("an empty list", () => {
+  it("shows what it is given instead of the default", () => {
+    render(<NotificationList rows={[]} empty={<p>Custom</p>} />);
+
+    expect(screen.getByText("Custom")).toBeTruthy();
+    expect(screen.queryByText("Nothing is waiting on you.")).toBeNull();
+  });
+
+  it("says you are caught up by default", () => {
+    render(<NotificationList rows={[]} />);
+
+    expect(screen.getByText("You're all caught up")).toBeTruthy();
   });
 });

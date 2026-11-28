@@ -5,6 +5,7 @@ import { ActivityDemo } from "./dev/ActivityDemo";
 import { ChatScrollDemo } from "./dev/ChatScrollDemo";
 import { CloudSwitchDemo } from "./dev/CloudSwitchDemo";
 import { HitlDemo } from "./dev/HitlDemo";
+import { NotificationsDemo } from "./dev/NotificationsDemo";
 import { InterruptedBannerDemo } from "./dev/InterruptedBannerDemo";
 import { OrchestrateDemo } from "./dev/OrchestrateDemo";
 import { PanelsDemo } from "./dev/PanelsDemo";
@@ -47,6 +48,9 @@ document.documentElement.dataset.host = host.kind;
 //   ?demo=fade           — a playground for the top fade: blur
 //                          strength, layers and reach, and where the
 //                          opacity starts and ends — see ``dev/FadeDemo.tsx``.
+//   ?demo=notifications — the notifications sheet over a mock floor
+//                          and the toast stack in each severity — see
+//                          ``dev/NotificationsDemo.tsx``.
 //   ?demo=app            — force-load the real app (otherwise
 //                          the dev Tauri shell, which has no
 //                          address bar to type a query into,
@@ -68,6 +72,7 @@ function pickRoot() {
   if (demo === "plugins") return <PluginsCatalogDemo />;
   if (demo === "activity") return <ActivityDemo />;
   if (demo === "fade") return <FadeDemo />;
+  if (demo === "notifications") return <NotificationsDemo />;
   return <App />;
 }
 

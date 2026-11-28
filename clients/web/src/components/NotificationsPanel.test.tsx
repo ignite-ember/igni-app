@@ -9,7 +9,7 @@
  * sidebar entry) reading a number with nothing behind it.
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 
 import { NotificationsPanel } from "./NotificationsPanel";
 import type { FloorNotification, NotificationCounts } from "../notifications/model";
@@ -222,5 +222,106 @@ describe("marking everything read", () => {
 
     await waitFor(() => expect(screen.getByText(/Could not reach the backend/)).toBeTruthy());
     expect(told).toEqual([]);
+  });
+});
+
+describe("the sheet's frame", () => {
+  it("keeps its header row fixed and scrolls the list under it", async () => {
+    const { client } = backendWith([row()]);
+    const { container } = render(<NotificationsPanel client={client} onClose={() => {}} />);
+    await waitFor(() => expect(screen.getByText("Runbook")).toBeTruthy());
+
+    const panel = container.querySelector(".notify-panel")!;
+    expect(panel.getAttribute("role")).toBe("dialog");
+    const chrome = panel.querySelector(".fade-scroll-chrome")!;
+    expect(chrome.querySelector("h2")?.textContent).toBe("Notifications");
+    expect(within(chrome as HTMLElement).getByRole("button", { name: /mark all read/i })).toBeTruthy();
+    expect(panel.querySelector(".fade-scroll-body.notify-body .notify-row")).toBeTruthy();
+    expect(chrome.querySelector(".notify-row")).toBeNull();
+  });
+
+  it("says it is reading before the first answer, not that nothing is waiting", async () => {
+    let answer: (value: unknown) => void = () => {};
+    const client = {
+      rpc: vi.fn(() => new Promise((resolve) => (answer = resolve))),
+      onEvent: () => () => {},
+    } as never;
+    render(<NotificationsPanel client={client} onClose={() => {}} />);
+
+    expect(screen.getByRole("status").textContent).toMatch(/Reading notifications/);
+    expect(screen.queryByText("Nothing is waiting on you.")).toBeNull();
+
+    await act(async () => answer({ notifications: [], counts: { unread: 0, by_source: {} } }));
+    expect(screen.getByText("Nothing is waiting on you.")).toBeTruthy();
+  });
+
+  it("closes from its close button, the backdrop and Escape", async () => {
+    const { client } = backendWith([]);
+    const closed = vi.fn();
+    const { container } = render(<NotificationsPanel client={client} onClose={closed} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Close notifications" }));
+    fireEvent.click(container.querySelector(".notify-backdrop")!);
+    fireEvent.keyDown(document, { key: "Escape" });
+    fireEvent.keyDown(document, { key: "a" });
+
+    expect(closed).toHaveBeenCalledTimes(3);
+  });
+});
+
+describe("showing only what is unread", () => {
+  it("narrows to the unread rows and back", async () => {
+    const { client } = backendWith([row(), row({ id: "s2", title: "Seen it", read: true })]);
+    render(<NotificationsPanel client={client} onClose={() => {}} />);
+    await waitFor(() => expect(screen.getByText("Seen it")).toBeTruthy());
+
+    fireEvent.click(screen.getByRole("button", { name: "Unread" }));
+    expect(screen.queryByText("Seen it")).toBeNull();
+    expect(screen.getByText("Runbook")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "All" }));
+    expect(screen.getByText("Seen it")).toBeTruthy();
+  });
+
+  it("says nothing is unread, and offers the rest, when everything has been read", async () => {
+    const { client } = backendWith([row({ read: true })]);
+    render(<NotificationsPanel client={client} onClose={() => {}} />);
+    await waitFor(() => expect(screen.getByText("Runbook")).toBeTruthy());
+
+    fireEvent.click(screen.getByRole("button", { name: "Unread" }));
+    expect(screen.getByText("Nothing unread")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Show all" }));
+    expect(screen.getByText("Runbook")).toBeTruthy();
+  });
+
+  it("is simply caught up when there is nothing at all", async () => {
+    const { client } = backendWith([]);
+    render(<NotificationsPanel client={client} onClose={() => {}} />);
+    await waitFor(() => expect(screen.getByText("Nothing is waiting on you.")).toBeTruthy());
+
+    fireEvent.click(screen.getByRole("button", { name: "Unread" }));
+    expect(screen.queryByText("Nothing unread")).toBeNull();
+    expect(screen.getByText("Nothing is waiting on you.")).toBeTruthy();
+  });
+});
+
+describe("marking one read from its row", () => {
+  it("marks just that one, stays open, and shows it read", async () => {
+    const { client, calls } = backendWith([row(), row({ id: "s2", title: "Other" })]);
+    const closed = vi.fn();
+    const told: NotificationCounts[] = [];
+    const { container } = render(
+      <NotificationsPanel client={client} onCountsChanged={(c) => told.push(c)} onClose={closed} />,
+    );
+    await waitFor(() => expect(screen.getByText("2 unread")).toBeTruthy());
+
+    fireEvent.click(screen.getAllByRole("button", { name: "Mark as read" })[0]);
+
+    await waitFor(() => expect(screen.getByText("1 unread")).toBeTruthy());
+    expect(calls).toContainEqual({ method: "notifications_mark_read", args: { ids: ["s1"] } });
+    expect(closed).not.toHaveBeenCalled();
+    expect(told.at(-1)?.unread).toBe(1);
+    await waitFor(() => expect(container.querySelectorAll(".notify-row.is-read")).toHaveLength(1));
   });
 });

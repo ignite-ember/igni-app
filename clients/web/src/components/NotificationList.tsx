@@ -1,24 +1,25 @@
 /**
- * Notifications, whichever extension they are from.
+ * Notifications, whichever extension they are from, grouped by day.
  *
- * This was the Artifacts comment queue with a verb table: it knew what
- * "access_requested" meant and how to say it. It cannot know that any
- * more — notifications are the floor's (igni server's
- * `docs/service-identity.md` §10), every extension has its own kinds,
- * and a host that kept a vocabulary for each would be a host that has
- * to ship whenever an extension does. So each row says what the
- * notification itself says: which extension it is from (and which
- * organisation, for somebody in more than one), its title, its line of
- * body, who did it, and when.
+ * Notifications are the floor's (igni server's
+ * `docs/service-identity.md` §10) and every extension has its own kinds,
+ * so a row says what the notification itself says: its title, its line
+ * of body, which extension (and organisation, for somebody in more than
+ * one), who did it, and when. Unread rows carry a quiet dot.
  *
  * **Reading is not doing.** Opening a row goes to the extension page it
- * names, where the thing can be answered. A queue that also did the
- * work would be a second place to do everything, quietly disagreeing
- * with the first.
+ * names, where the thing can be answered; the only action here is
+ * marking it read.
  */
+import type { ReactNode } from "react";
 import { Monogram } from "@ignite-ember/ui-react";
 
+import { NotificationDays } from "../notifications/dayGroups";
 import type { FloorNotification } from "../notifications/model";
+import { EntityGlyph } from "./EntityGlyph";
+import { CheckIcon } from "./Icons";
+import { Button } from "./page/Button";
+import { PageEmpty } from "./page/PageEmpty";
 
 export type { FloorNotification };
 
@@ -34,11 +35,65 @@ export function when(iso: string | null | undefined): string {
   return `${Math.round(hours / 24)}d ago`;
 }
 
+interface RowProps {
+  row: FloorNotification;
+  from: string;
+  openable: boolean;
+  onOpen?: (row: FloorNotification) => void;
+  onMarkRead?: (row: FloorNotification) => void;
+}
+
+function NotificationRow({ row, from, openable, onOpen, onMarkRead }: RowProps) {
+  return (
+    <li className={row.read ? "notify-row is-read" : "notify-row is-unread"}>
+      <button
+        type="button"
+        className="notify-open"
+        disabled={!openable}
+        title={openable ? `Open in ${from}` : `${from} is not installed here, so this cannot be opened`}
+        onClick={() => openable && onOpen?.(row)}
+      >
+        {!row.read && <span className="notify-dot" aria-hidden="true" />}
+        {/* A person gets their hue, as everywhere; an extension's own
+            notice a neutral tile. */}
+        <span className="notify-face">
+          {row.actor ? <Monogram name={row.actor} size={28} /> : <EntityGlyph name={from} size={28} />}
+        </span>
+        <span className="notify-said">
+          <span className="notify-line">
+            <strong>{row.title || row.kind}</strong>
+            {!row.read && <span className="sr-only"> (unread)</span>}
+          </span>
+          {row.body && <span className="notify-excerpt">{row.body}</span>}
+          <span className="notify-meta">
+            <span className="notify-source">
+              {from}
+              {row.org_name && <span className="notify-org"> · {row.org_name}</span>}
+            </span>
+            {row.actor && row.actor !== from && <span className="notify-actor">{row.actor}</span>}
+            {row.created_at && <span className="notify-when">{when(row.created_at)}</span>}
+          </span>
+        </span>
+      </button>
+      {!row.read && onMarkRead && (
+        <div className="notify-actions">
+          <Button variant="icon" label="Mark as read" onClick={() => onMarkRead(row)}>
+            <CheckIcon size={13} />
+          </Button>
+        </div>
+      )}
+    </li>
+  );
+}
+
 export function NotificationList({
   rows,
   sourceName = (id) => id,
   canOpen = () => true,
   onOpen,
+  onMarkRead,
+  days = new NotificationDays(),
+  empty,
 }: {
   rows: FloorNotification[];
   /** The extension's name, for its id. Its id when it is not installed. */
@@ -47,52 +102,35 @@ export function NotificationList({
   canOpen?: (row: FloorNotification) => boolean;
   /** Go where it points. */
   onOpen?: (row: FloorNotification) => void;
+  /** Mark one read, from its hover action. */
+  onMarkRead?: (row: FloorNotification) => void;
+  /** How rows are grouped into days; today's by default. */
+  days?: NotificationDays;
+  /** What to show instead when there are no rows. */
+  empty?: ReactNode;
 }) {
   if (!rows.length) {
-    return <p className="notify-empty">Nothing is waiting on you.</p>;
+    return <>{empty ?? <PageEmpty title="You're all caught up" hint="Nothing is waiting on you." />}</>;
   }
   return (
-    <ul className="notify-rows">
-      {rows.map((row) => {
-        const from = sourceName(row.source);
-        const openable = row.target !== null && canOpen(row);
-        return (
-          <li key={`${row.origin}:${row.id}`} className={row.read ? "notify-row is-read" : "notify-row"}>
-            <button
-              type="button"
-              className="notify-open"
-              disabled={!openable}
-              title={
-                openable
-                  ? `Open in ${from}`
-                  : `${from} is not installed here, so this cannot be opened`
-              }
-              onClick={() => openable && onOpen?.(row)}
-            >
-              <span className="notify-face">
-                <Monogram name={row.actor || from} size={22} />
-              </span>
-              <span className="notify-said">
-                <span className="notify-source">
-                  {from}
-                  {/* Which organisation, when there is more than one to
-                      come from: the backend names it only then. */}
-                  {row.org_name && <span className="notify-org"> · {row.org_name}</span>}
-                </span>
-                <span className="notify-line">
-                  <strong>{row.title || row.kind}</strong>
-                </span>
-                {row.body && <span className="notify-excerpt">{row.body}</span>}
-                <span className="notify-when">
-                  {row.actor && <span className="notify-actor">{row.actor}</span>}
-                  {row.actor && row.created_at && " · "}
-                  {when(row.created_at)}
-                </span>
-              </span>
-            </button>
-          </li>
-        );
-      })}
-    </ul>
+    <div className="notify-days">
+      {days.group(rows).map((day) => (
+        <section key={day.key} className="notify-day" aria-label={day.label}>
+          <h3 className="notify-day-label">{day.label}</h3>
+          <ul className="notify-rows">
+            {day.rows.map((row) => (
+              <NotificationRow
+                key={`${row.origin}:${row.id}`}
+                row={row}
+                from={sourceName(row.source)}
+                openable={row.target !== null && canOpen(row)}
+                onOpen={onOpen}
+                onMarkRead={onMarkRead}
+              />
+            ))}
+          </ul>
+        </section>
+      ))}
+    </div>
   );
 }

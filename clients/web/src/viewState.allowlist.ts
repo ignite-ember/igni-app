@@ -256,8 +256,11 @@ export const VIEW_STATE: Record<string, Partial<Record<Category, string[]>>> = {
     field: ["checked", "val"],
   },
   "components/NotificationsPanel.tsx": {
+    page: ["show"],
+  },
+  "notifications/useFloorNotifications.ts": {
     data: ["rows", "unread"],
-    pending: ["failed"],
+    pending: ["failed", "loaded"],
   },
   "components/RetryBanner.tsx": {
     data: ["retries"],
@@ -289,7 +292,7 @@ export const VIEW_STATE: Record<string, Partial<Record<Category, string[]>>> = {
   "components/ThemeToggle.tsx": {
     device: ["theme"],
   },
-  "components/Toasts.tsx": {
+  "components/toasts/useToastLifecycle.ts": {
     animation: ["closing"],
   },
   "components/UpdatePrompt.tsx": {
