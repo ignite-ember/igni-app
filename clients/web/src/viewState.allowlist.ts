@@ -82,6 +82,9 @@ export const BECAUSE: Record<string, Record<string, string>> = {
   "chat/useTranscriptScroll.ts": {
     scrollEl: "The scroller element, for the indicator to measure — where it is scrolled is ui.scroll.",
   },
+  "components/page/FadeScroll.tsx": {
+    scrollEl: "The page's scroller element, for the thumb to measure; it is a DOM handle, not where the page is scrolled.",
+  },
   "components/chatItems/useMessageEditor.ts": {
     draft: "The text of a sent message being edited in place, before it is resent.",
   },
@@ -253,8 +256,11 @@ export const VIEW_STATE: Record<string, Partial<Record<Category, string[]>>> = {
     field: ["checked", "val"],
   },
   "components/NotificationsPanel.tsx": {
+    page: ["show"],
+  },
+  "notifications/useFloorNotifications.ts": {
     data: ["rows", "unread"],
-    pending: ["failed"],
+    pending: ["failed", "loaded"],
   },
   "components/RetryBanner.tsx": {
     data: ["retries"],
@@ -265,6 +271,9 @@ export const VIEW_STATE: Record<string, Partial<Record<Category, string[]>>> = {
   },
   "components/terminal/useTerminalToggle.ts": {
     disclosure: ["terminalOpen"],
+  },
+  "components/page/FadeScroll.tsx": {
+    measure: ["scrollEl"],
   },
   "components/ScrollIndicator.tsx": {
     measure: ["thumb"],
@@ -283,7 +292,7 @@ export const VIEW_STATE: Record<string, Partial<Record<Category, string[]>>> = {
   "components/ThemeToggle.tsx": {
     device: ["theme"],
   },
-  "components/Toasts.tsx": {
+  "components/toasts/useToastLifecycle.ts": {
     animation: ["closing"],
   },
   "components/UpdatePrompt.tsx": {

@@ -15,7 +15,7 @@
 import { cleanup, render, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { ExtensionFrame } from "./ExtensionFrame";
+import { ExtensionFrame, INSET_TOKEN } from "./ExtensionFrame";
 import { BRIDGE_VERSION, methodAllowed } from "@ignite-ember/extension-bridge/protocol";
 
 const ORIGIN = "http://127.0.0.1:54321";
@@ -349,6 +349,55 @@ describe("the handshake", () => {
     const { frame } = mount();
     const kinds = repliesTo(frame).map((m) => (m as { kind: string }).kind);
     expect(kinds).not.toContain("hello");
+  });
+});
+
+describe("the inset under the page's chrome", () => {
+  /** Make the page around the frame ask for ``inset`` (``--fade-inset-top``). */
+  function insetOf(inset: string) {
+    const real = window.getComputedStyle;
+    vi.spyOn(window, "getComputedStyle").mockImplementation((el, pseudo) => {
+      const style = real.call(window, el, pseudo);
+      if (!(el instanceof HTMLIFrameElement)) return style;
+      return new Proxy(style, {
+        get(target, key) {
+          if (key === "getPropertyValue")
+            return (name: string) => (name === "--fade-inset-top" ? inset : target.getPropertyValue(name));
+          const value = Reflect.get(target, key);
+          return typeof value === "function" ? value.bind(target) : value;
+        },
+      });
+    });
+  }
+
+  it("tells the frame the inset to leave, in hello and with the theme", () => {
+    insetOf("82px");
+    const { frame, rerender } = mount();
+    frame.dispatchEvent(new Event("load"));
+    expect(repliesTo(frame)).toContainEqual(
+      expect.objectContaining({ kind: "hello", tokens: expect.objectContaining({ [INSET_TOKEN]: "82px" }) }),
+    );
+    rerender(<ExtensionFrame extensionId="acme.scanner" origin={ORIGIN} allow={[]} onCall={vi.fn()} theme="light" />);
+    expect(repliesTo(frame)).toContainEqual(
+      expect.objectContaining({ kind: "theme", tokens: expect.objectContaining({ [INSET_TOKEN]: "82px" }) }),
+    );
+  });
+
+  it("sends none outside a page, or when the value is not a length", () => {
+    const { frame } = mount();
+    frame.dispatchEvent(new Event("load"));
+    const hello = repliesTo(frame).find((m) => (m as { kind?: string }).kind === "hello") as {
+      tokens: Record<string, string>;
+    };
+    expect(hello.tokens).not.toHaveProperty(INSET_TOKEN);
+    cleanup();
+    insetOf("calc(58px + 24px)");
+    const other = mount();
+    other.frame.dispatchEvent(new Event("load"));
+    const greeted = repliesTo(other.frame).find((m) => (m as { kind?: string }).kind === "hello") as {
+      tokens: Record<string, string>;
+    };
+    expect(greeted.tokens).not.toHaveProperty(INSET_TOKEN);
   });
 });
 
