@@ -66,7 +66,7 @@ describe("what a row says", () => {
       <NotificationList rows={[row({ org_id: "org-acme", org_name: "" })]} sourceName={nameOf} />,
     );
 
-    expect(container.querySelector(".notify-org")).toBeNull();
+    expect(container.querySelector(".ncard-org")).toBeNull();
   });
 
   it("names an extension it has no name for by its id", () => {
@@ -189,14 +189,14 @@ describe("unread, quietly", () => {
   it("marks an unread row with a dot and says so to a screen reader", () => {
     const { container } = render(<NotificationList rows={[row()]} />);
 
-    expect(container.querySelector(".notify-row.is-unread .notify-dot")).toBeTruthy();
+    expect(container.querySelector(".notify-row.is-unread .ncard-dot")).toBeTruthy();
     expect(screen.getByRole("button", { name: /Runbook.*\(unread\)/ })).toBeTruthy();
   });
 
   it("draws no dot on a read row", () => {
     const { container } = render(<NotificationList rows={[row({ read: true })]} />);
 
-    expect(container.querySelector(".notify-dot")).toBeNull();
+    expect(container.querySelector(".ncard-dot")).toBeNull();
     expect(screen.queryByText(/\(unread\)/)).toBeNull();
   });
 
@@ -220,24 +220,25 @@ describe("unread, quietly", () => {
 });
 
 describe("who it is about", () => {
-  it("draws a person's monogram, and an extension's neutral tile for its own notice", () => {
+  it("puts a person's monogram on the badge's corner, and none on an extension's own notice", () => {
     const { container, rerender } = render(<NotificationList rows={[row()]} sourceName={nameOf} />);
-    expect(container.querySelector(".notify-face .entity-glyph")).toBeNull();
+    expect(container.querySelector(".ncard-badge .ncard-face")).toBeTruthy();
 
     rerender(<NotificationList rows={[row({ actor: "" })]} sourceName={nameOf} />);
-    expect(container.querySelector(".notify-face .entity-glyph")?.textContent).toBe("AR");
+    expect(container.querySelector(".ncard-face")).toBeNull();
+    expect(container.querySelector(".ncard-badge svg")).toBeTruthy();
   });
 
   it("does not repeat an actor that is the extension itself", () => {
     const { container } = render(<NotificationList rows={[row({ actor: "Artifacts" })]} sourceName={nameOf} />);
 
-    expect(container.querySelector(".notify-actor")).toBeNull();
+    expect(container.querySelector(".ncard-actor")).toBeNull();
   });
 
   it("leaves out when for a row with no date", () => {
     const { container } = render(<NotificationList rows={[row({ created_at: null })]} />);
 
-    expect(container.querySelector(".notify-when")).toBeNull();
+    expect(container.querySelector(".ncard-when")).toBeNull();
   });
 });
 

@@ -53,8 +53,8 @@ describe("Toasts — list rendering", () => {
       <Toasts items={[toast(1, "Just a title")]} onDismiss={() => undefined} />,
     );
     expect(screen.getByText("Just a title")).toBeTruthy();
-    // No ``toast-body`` element when ``body`` isn't passed.
-    expect(container.querySelector(".toast-body")).toBeNull();
+    // No body element when ``body`` isn't passed.
+    expect(container.querySelector(".ncard-body")).toBeNull();
   });
 
   it("wrapper has the right ARIA landmark", () => {
@@ -342,12 +342,12 @@ describe("Toasts — how loudly each is announced", () => {
     ["success", "status"],
     ["warning", "alert"],
     ["error", "alert"],
-  ])("a %s toast is a %s with its severity mark", (kind, role) => {
+  ])("a %s toast is a %s with its category's badge", (kind, role) => {
     const { container } = render(<Toasts items={[toast(1, "x", { kind })]} onDismiss={() => {}} />);
     const card = screen.getByRole(role as "status" | "alert");
     expect(card.className).toContain(`toast--${kind}`);
     expect(card.getAttribute("aria-atomic")).toBe("true");
-    expect(container.querySelector(".toast-mark svg")).toBeTruthy();
+    expect(container.querySelector(".ncard-badge svg")).toBeTruthy();
   });
 });
 

@@ -256,7 +256,7 @@ export const VIEW_STATE: Record<string, Partial<Record<Category, string[]>>> = {
     field: ["checked", "val"],
   },
   "components/NotificationsPanel.tsx": {
-    page: ["show"],
+    page: ["show", "category"],
   },
   "notifications/useFloorNotifications.ts": {
     data: ["rows", "unread"],

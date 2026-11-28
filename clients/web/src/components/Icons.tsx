@@ -1,6 +1,7 @@
 /** Inline SVG icons — UI chrome never uses emoji glyphs. */
 
 import igniIconUrl from "../assets/igni-icon.svg";
+import type { CategoryKey } from "../notifications/category";
 
 interface IconProps {
   size?: number;
@@ -555,6 +556,35 @@ export function SeverityIcon({
   return (
     <Svg size={size}>
       <path d={SEVERITY_PATHS[severity]} />
+    </Svg>
+  );
+}
+
+/** A notification category's mark, all on the 16px grid at the set's
+ *  1.6 stroke so they read as one family in their badges. */
+const CATEGORY_PATHS: Record<CategoryKey, string> = {
+  // A shield with a raised mark: something waits on you.
+  approval: "M8 1.9l4.9 1.9v3.9c0 3-2.1 5.2-4.9 6.4-2.8-1.2-4.9-3.4-4.9-6.4V3.8zM8 5.3v3.1M8 10.7h.01",
+  // A triangle with a mark: something went wrong.
+  failed: "M8 2.6l5.7 9.9H2.3L8 2.6zM8 6.6v2.7M8 11h.01",
+  // A ringed tick: something finished.
+  done: "M5.4 8.2l1.8 1.8 3.4-3.7M2 8a6 6 0 1 0 12 0 6 6 0 0 0-12 0",
+  // A clock: it ran on its own time.
+  background: "M8 4.8V8l2.1 1.4M2 8a6 6 0 1 0 12 0 6 6 0 0 0-12 0",
+  // A speech bubble: somebody said something.
+  people: "M3 3h10c.6 0 1 .4 1 1v6c0 .6-.4 1-1 1H8l-3 2.4V11H3c-.6 0-1-.4-1-1V4c0-.6.4-1 1-1zM5.2 6.2h5.6M5.2 8.2h3.4",
+  // An arrow rising out of a ring: a new version.
+  update: "M8 10.8V5.2M5.6 7.4L8 5l2.4 2.4M2 8a6 6 0 1 0 12 0 6 6 0 0 0-12 0",
+  // Two blocks, one added: an extension.
+  extension: "M2.5 6.5h4v7h-4zM6.5 9.5h4v4h-4zM9.5 2.5h4v4h-4z",
+  // A bell: igni telling you something.
+  notice: "M4.2 10.8V7.3a3.8 3.8 0 0 1 7.6 0v3.5l1.2 1.4H3zM6.7 14h2.6",
+};
+
+export function CategoryIcon({ category, size = 16 }: IconProps & { category: CategoryKey }) {
+  return (
+    <Svg size={size}>
+      <path d={CATEGORY_PATHS[category]} />
     </Svg>
   );
 }

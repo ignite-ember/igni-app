@@ -70,6 +70,54 @@ const ROWS: FloorNotification[] = [
     org_name: "Acme Engineering",
   },
   {
+    id: "n6",
+    origin: "local",
+    source: "igni",
+    kind: "process_failed",
+    title: "Background process failed (exit 1)",
+    body: "pytest tests/ -q — 3 failed, 211 passed in 41.2s",
+    actor: "",
+    target: { page: "session", params: { session_id: "ebbc7eff" } },
+    created_at: ago(40),
+    read: false,
+  },
+  {
+    id: "n7",
+    origin: "local",
+    source: "igni",
+    kind: "scheduler_completed",
+    title: "Scheduled task completed",
+    body: "Nightly dependency audit: no new advisories.",
+    actor: "",
+    target: { page: "schedule", params: {} },
+    created_at: ago(5 * 60),
+    read: false,
+  },
+  {
+    id: "n8",
+    origin: "server",
+    source: "Releases",
+    kind: "release",
+    title: "igni 0.9.2 is out",
+    body: "Faster startup and the new notifications. Restart to update.",
+    actor: "",
+    target: { page: "extension", params: { id: "releases" } },
+    created_at: ago(27 * 60),
+    read: true,
+  },
+  {
+    id: "n9",
+    origin: "local",
+    source: "Code index",
+    kind: "index.note",
+    title: "Index rebuilt",
+    body: "igni-app: 4,812 files, 61k symbols.",
+    actor: "",
+    target: null,
+    created_at: ago(3 * 24 * 60),
+    read: true,
+  },
+  {
     id: "n5",
     origin: "local",
     source: "Scanner",
@@ -83,12 +131,26 @@ const ROWS: FloorNotification[] = [
   },
 ];
 
+/** One toast per category: igni's own name theirs, an extension's
+ *  falls to its severity or to "Extensions". */
 const TOASTS: ModelToast[] = [
-  { id: "t1", text: "Scheduled task finished", kind: "info", body: "Nightly dependency audit: no new advisories.", target: { kind: "schedule", label: "Scheduled tasks" } },
-  { id: "t2", text: "Export ready", kind: "success", body: "Runbook.pdf was saved to Downloads." },
-  { id: "t3", text: "Index is still preparing", kind: "warning", body: "Search results may be incomplete for a few minutes." },
-  { id: "t4", text: "Could not reach igni server", kind: "error", body: "Notifications from your organisation are paused." },
+  { id: "t1", text: "igni is waiting for your approval", kind: "info", category: "approval", body: "Run npm test in igni-app?", target: { kind: "session", label: "Trace the billing flow" } },
+  { id: "t2", text: "Background process failed (exit 1) · 12.4s", kind: "error", category: "failed", body: "pytest tests/ -q", target: { kind: "session", label: "Trace the billing flow" } },
+  { id: "t3", text: "Export ready", kind: "success", source: "Scanner", body: "Runbook.pdf was saved to Downloads." },
+  { id: "t4", text: "Scheduled task completed", kind: "info", category: "background", body: "Nightly dependency audit: no new advisories.", target: { kind: "schedule", label: "Scheduled tasks" } },
+  { id: "t5", text: "Up to date", kind: "info", category: "update", body: "You're on the latest version (0.9.2)." },
+  { id: "t6", text: "Index is still preparing", kind: "warning", source: "Code index", body: "Search results may be incomplete for a few minutes." },
+  { id: "t7", text: "Reviewer left 3 comments", kind: "info", source: "Code review", body: "Open the review to see them.", target: { kind: "extension", label: "Code review" } },
 ];
+
+/** Which toasts to show: `&toasts=t1,t4` picks, `&toasts=0` none. */
+function initialToasts(): ModelToast[] {
+  const pick = params.get("toasts");
+  if (pick === "0") return [];
+  if (!pick) return TOASTS.slice(0, 4);
+  const ids = new Set(pick.split(","));
+  return pick === "all" ? TOASTS : TOASTS.filter((t) => ids.has(t.id));
+}
 
 function floorClient(initial: FloorNotification[]): IgniClient {
   let rows = initial.map((r) => ({ ...r }));
@@ -113,7 +175,7 @@ const CLIENT = floorClient(params.get("empty") === "1" ? [] : ROWS);
 
 export function NotificationsDemo() {
   const [sheet, setSheet] = useState(params.get("sheet") !== "0");
-  const [toasts, setToasts] = useState<ModelToast[]>(params.get("toasts") === "0" ? [] : TOASTS);
+  const [toasts, setToasts] = useState<ModelToast[]>(initialToasts);
 
   return (
     <div className="shell">
@@ -126,7 +188,7 @@ export function NotificationsDemo() {
           <button className="chip" onClick={() => setSheet(true)}>
             Open sheet
           </button>
-          <button className="chip" onClick={() => setToasts(TOASTS)}>
+          <button className="chip" onClick={() => setToasts(initialToasts())}>
             Show toasts
           </button>
         </header>

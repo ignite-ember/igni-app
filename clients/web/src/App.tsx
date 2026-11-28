@@ -68,7 +68,7 @@ export default function App() {
   const shellStatus = useShellStatus(statusSource, windowModel);
   const { status, sessions, auth, refreshStatus } = shellStatus;
   const { panel, route, sidebar, sessionId, projectDir, dialog } = useWindowPlace(windowModel);
-  const updateCheck = useUpdateCheck(client, windowModel);
+  const updateCheck = useUpdateCheck(client, windowModel, notifier);
   // Followed rather than read once, so an extension frame is told when
   // the document's theme changes.
   const frameTheme = useDocumentTheme();

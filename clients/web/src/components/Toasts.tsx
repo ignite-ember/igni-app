@@ -23,11 +23,14 @@ export function Toasts({
   items,
   onDismiss,
   onOpen,
+  sourceName,
 }: {
   items: readonly ModelToast[];
   onDismiss: (id: string) => void;
   /** Opening a toast that points somewhere goes there. */
   onOpen?: (target: PageRoute) => void;
+  /** An extension's name, for its id. */
+  sourceName?: (id: string) => string;
 }) {
   const stack = useRef<HTMLDivElement>(null);
   useComposerClearance(stack, items.length > 0);
@@ -35,7 +38,13 @@ export function Toasts({
   return (
     <div ref={stack} className="toasts" role="region" aria-label="Notifications">
       {items.map((t) => (
-        <ToastCard key={t.id} toast={t} onDismiss={() => onDismiss(t.id)} onOpen={onOpen} />
+        <ToastCard
+          key={t.id}
+          toast={t}
+          onDismiss={() => onDismiss(t.id)}
+          onOpen={onOpen}
+          sourceName={sourceName}
+        />
       ))}
     </div>
   );

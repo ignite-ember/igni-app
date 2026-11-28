@@ -10,12 +10,16 @@
 import type { PageRoute } from "../chat/pageStack";
 import type { WindowModel } from "../clientState";
 import type { Host } from "../lib/host";
+import { NotificationCategories } from "./categories";
+import type { CategoryKey } from "./category";
 
 export interface ToastInput {
   title: string;
   body?: string;
   /** Where clicking the toast goes. */
   target?: PageRoute;
+  /** What it is about; its icon, hue and severity follow. */
+  category?: CategoryKey;
 }
 
 export interface NotifyInput extends ToastInput {
@@ -33,11 +37,13 @@ export class Notifier {
   ) {}
 
   toast(toast: ToastInput): void {
+    const category = NotificationCategories.of(toast.category ?? "notice");
     this.windowModel.toast({
       text: toast.title,
-      kind: "info",
+      kind: category.severity,
       body: toast.body ?? null,
       target: toast.target ?? null,
+      category: category.key,
     });
   }
 
@@ -53,7 +59,7 @@ export class Notifier {
       data: payload.data,
     });
     if (delivered) return;
-    this.toast({ title: payload.title, body: payload.body, target: payload.target });
+    this.toast({ title: payload.title, body: payload.body, target: payload.target, category: payload.category });
   }
 
   /** Ping the OS when a reply finishes while the tab is not in view,

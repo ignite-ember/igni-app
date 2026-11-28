@@ -14,6 +14,8 @@
  */
 import { useEffect, useState } from "react";
 
+import type { CategoryKey } from "../notifications/category";
+import { CategoryFilter } from "../notifications/categoryFilter";
 import type {
   FloorNotification,
   NotificationCounts,
@@ -21,6 +23,7 @@ import type {
 } from "../notifications/model";
 import { useFloorNotifications } from "../notifications/useFloorNotifications";
 import type { IgniClient } from "../protocol/client";
+import { CategoryChips } from "./CategoryChips";
 import { CloseIcon } from "./Icons";
 import { NotificationList } from "./NotificationList";
 import { Button } from "./page/Button";
@@ -59,6 +62,7 @@ export function NotificationsPanel({
 }) {
   const feed = useFloorNotifications(client, onCountsChanged);
   const [show, setShow] = useState<Show>("all");
+  const [category, setCategory] = useState<CategoryKey | null>(null);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -68,7 +72,9 @@ export function NotificationsPanel({
     return () => document.removeEventListener("keydown", onKey);
   }, [onClose]);
 
-  const shown = show === "unread" ? feed.rows.filter((row) => !row.read) : feed.rows;
+  const filter = new CategoryFilter(feed.rows);
+  const only = filter.active(category);
+  const shown = CategoryFilter.apply(show === "unread" ? feed.rows.filter((row) => !row.read) : feed.rows, only);
   const open = (row: FloorNotification) => {
     if (!row.target) return;
     // Opening it is what reading it means.
@@ -96,6 +102,7 @@ export function NotificationsPanel({
         </Button>
       </div>
       <PageTabs tabs={TABS} current={show} onSelect={setShow} />
+      <CategoryChips chips={filter.chips()} current={only} onSelect={setCategory} />
     </div>
   );
 

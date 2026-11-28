@@ -19,7 +19,7 @@ function rules(prefix: RegExp): { selector: string; body: string }[] {
   );
 }
 
-const OURS = /\.(toast|toasts|notify)(-[\w-]+)?\b/;
+const OURS = /\.(toast|toasts|notify|ncard)(-[\w-]+)?\b/;
 /** The two colour literals these rules kept from before: the backdrop's
  *  dim, which every overlay uses, and nothing else. */
 const KEPT = new Set(["rgba(0, 0, 0, 0.28)"]);

@@ -3,37 +3,31 @@
  *
  * Notifications are the floor's (igni server's
  * `docs/service-identity.md` §10) and every extension has its own kinds,
- * so a row says what the notification itself says: its title, its line
+ * so a row says what the notification itself says — its title, its line
  * of body, which extension (and organisation, for somebody in more than
- * one), who did it, and when. Unread rows carry a quiet dot.
+ * one), who did it, and when — in the card its category draws
+ * ({@link NotificationCard}): its badge, its hue, and for what waits on
+ * you, a louder card and a button.
  *
  * **Reading is not doing.** Opening a row goes to the extension page it
- * names, where the thing can be answered; the only action here is
- * marking it read.
+ * names, where the thing can be answered; the only action here besides
+ * that is marking it read.
  */
 import type { ReactNode } from "react";
 import { Monogram } from "@ignite-ember/ui-react";
 
 import { NotificationDays } from "../notifications/dayGroups";
 import type { FloorNotification } from "../notifications/model";
-import { EntityGlyph } from "./EntityGlyph";
+import { NotificationCard as Card, relativeTime } from "../notifications/notificationCard";
 import { CheckIcon } from "./Icons";
+import { NotificationCard } from "./NotificationCard";
 import { Button } from "./page/Button";
 import { PageEmpty } from "./page/PageEmpty";
 
 export type { FloorNotification };
 
-export function when(iso: string | null | undefined): string {
-  const at = Date.parse(iso || "");
-  if (Number.isNaN(at)) return "";
-  const seconds = Math.max(0, (Date.now() - at) / 1000);
-  if (seconds < 90) return "just now";
-  const minutes = seconds / 60;
-  if (minutes < 60) return `${Math.round(minutes)}m ago`;
-  const hours = minutes / 60;
-  if (hours < 24) return `${Math.round(hours)}h ago`;
-  return `${Math.round(hours / 24)}d ago`;
-}
+/** How long ago, in a word or two. */
+export const when = (iso: string | null | undefined): string => relativeTime(iso);
 
 interface RowProps {
   row: FloorNotification;
@@ -44,44 +38,30 @@ interface RowProps {
 }
 
 function NotificationRow({ row, from, openable, onOpen, onMarkRead }: RowProps) {
+  const card = Card.fromFloor(row, from, openable);
+  const open = () => openable && onOpen?.(row);
   return (
     <li className={row.read ? "notify-row is-read" : "notify-row is-unread"}>
-      <button
-        type="button"
-        className="notify-open"
-        disabled={!openable}
-        title={openable ? `Open in ${from}` : `${from} is not installed here, so this cannot be opened`}
-        onClick={() => openable && onOpen?.(row)}
-      >
-        {!row.read && <span className="notify-dot" aria-hidden="true" />}
-        {/* A person gets their hue, as everywhere; an extension's own
-            notice a neutral tile. */}
-        <span className="notify-face">
-          {row.actor ? <Monogram name={row.actor} size={28} /> : <EntityGlyph name={from} size={28} />}
-        </span>
-        <span className="notify-said">
-          <span className="notify-line">
-            <strong>{row.title || row.kind}</strong>
-            {!row.read && <span className="sr-only"> (unread)</span>}
-          </span>
-          {row.body && <span className="notify-excerpt">{row.body}</span>}
-          <span className="notify-meta">
-            <span className="notify-source">
-              {from}
-              {row.org_name && <span className="notify-org"> · {row.org_name}</span>}
-            </span>
-            {row.actor && row.actor !== from && <span className="notify-actor">{row.actor}</span>}
-            {row.created_at && <span className="notify-when">{when(row.created_at)}</span>}
-          </span>
-        </span>
-      </button>
-      {!row.read && onMarkRead && (
-        <div className="notify-actions">
-          <Button variant="icon" label="Mark as read" onClick={() => onMarkRead(row)}>
-            <CheckIcon size={13} />
-          </Button>
-        </div>
-      )}
+      <NotificationCard
+        card={card}
+        variant="row"
+        opener={{
+          as: "button",
+          onOpen: open,
+          disabled: !openable,
+          title: openable ? `Open in ${from}` : `${from} is not installed here, so this cannot be opened`,
+        }}
+        onAction={open}
+        actionTitle={`Open in ${from}`}
+        face={card.actor ? <Monogram name={card.actor} size={16} /> : undefined}
+        corner={
+          !row.read && onMarkRead ? (
+            <Button variant="icon" size="sm" className="notify-mark" label="Mark as read" onClick={() => onMarkRead(row)}>
+              <CheckIcon size={12} />
+            </Button>
+          ) : undefined
+        }
+      />
     </li>
   );
 }

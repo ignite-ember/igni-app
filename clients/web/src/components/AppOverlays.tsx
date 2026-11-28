@@ -72,7 +72,12 @@ export function AppOverlays({
       {preview && (
         <FilePreview client={client} path={preview.path} onClose={() => windowModel.write("preview", null)} />
       )}
-      <Toasts items={toasts} onDismiss={(id) => notifier.dismiss(id)} onOpen={onOpen} />
+      <Toasts
+        items={toasts}
+        onDismiss={(id) => notifier.dismiss(id)}
+        onOpen={onOpen}
+        sourceName={(id) => extensionName(id) ?? id}
+      />
       <RetryBanner />
       {dialog && updateInfo && (
         <UpdatePrompt info={updateInfo.toWire()} onDismiss={() => windowModel.answerDialog(dialog.id, null)} />

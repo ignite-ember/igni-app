@@ -73,7 +73,7 @@ test.describe("an extension's write changes the window", () => {
   }) => {
     const window = await openWindow(page, backend, appUrl);
     const id = backend.windows.extensionToasts(window, { text: "Review ready", body: "Two issues" });
-    await expect(page.locator(".toast-title")).toHaveText("Review ready");
+    await expect(page.locator(".toast .ncard-title")).toHaveText("Review ready");
     await page.getByLabel("Dismiss").click();
     await expect(page.locator(".toast")).toHaveCount(0);
     await expect

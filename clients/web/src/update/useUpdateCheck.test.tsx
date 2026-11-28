@@ -9,6 +9,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, renderHook } from "@testing-library/react";
 
 import { host } from "../lib/host";
+import { Notifier } from "../notifications/notifier";
 import { useUpdateCheck } from "./useUpdateCheck";
 
 afterEach(() => {
@@ -21,8 +22,9 @@ function rig(answer: unknown) {
     answer instanceof Error ? Promise.reject(answer) : Promise.resolve(answer),
   );
   const notify = vi.spyOn(host, "notify").mockResolvedValue(undefined as never);
-  const windowModel = { openDialog: vi.fn() };
-  const hook = renderHook(() => useUpdateCheck({ rpc: vi.fn() } as never, windowModel as never));
+  const windowModel = { openDialog: vi.fn(), toast: vi.fn(), dismissToast: vi.fn() };
+  const notifier = new Notifier(windowModel, host);
+  const hook = renderHook(() => useUpdateCheck({ rpc: vi.fn() } as never, windowModel, notifier));
   return { hook, notify, windowModel };
 }
 
@@ -58,5 +60,19 @@ describe("useUpdateCheck", () => {
     const { hook, notify } = rig({ available: false, current_version: "1.0.5", latest_version: "1.0.5" });
     await act(() => hook.result.current.check(false));
     expect(notify.mock.calls[0][0]).toMatchObject({ title: "Up to date" });
+  });
+
+  it("answers in a toast filed under updates where the OS cannot be reached", async () => {
+    const { hook, windowModel } = rig({ available: false, current_version: "1.0.5", latest_version: "1.0.5" });
+    await act(() => hook.result.current.check(false));
+    expect(windowModel.toast).toHaveBeenCalledWith(expect.objectContaining({ text: "Up to date", category: "update" }));
+  });
+
+  it("files a check that failed under failed", async () => {
+    const { hook, windowModel } = rig(new Error("offline"));
+    await act(() => hook.result.current.check(false));
+    expect(windowModel.toast).toHaveBeenCalledWith(
+      expect.objectContaining({ text: "Couldn't check for updates", category: "failed", kind: "error" }),
+    );
   });
 });

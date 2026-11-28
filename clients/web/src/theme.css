@@ -56,6 +56,19 @@
   --accent-orange-text: #f5a088;
   --danger-text: #f28376;
 
+  /* Notification categories (notifications/categories.ts): one hue
+     each, muted to sit beside the coral accent. "Needs you" takes the
+     accent itself; a failure takes the danger red, so neither is
+     mistaken for news. Paint values; text in a hue mixes in --fg. */
+  --notify-hue-approval: var(--accent);
+  --notify-hue-failed: var(--danger);
+  --notify-hue-done: #7fb48a;
+  --notify-hue-background: #8ba7d8;
+  --notify-hue-people: #b39bd9;
+  --notify-hue-update: #5fb3a8;
+  --notify-hue-extension: #b7a78c;
+  --notify-hue-notice: #a5a49e;
+
   /* ── Type scale ─────────────────────────────────────────────────
      Nine steps, down from twenty-two hardcoded sizes that included
      every half-step from 9px to 15px. Two hundred and seventy-two
@@ -141,6 +154,14 @@
      #faf9f5. ``#b8b5ad`` matches the dark theme's mid-tone, giving
      similar visual weight in both modes. */
   --scroll-thumb: #b8b5ad;
+  --notify-hue-approval: #d4512a;
+  --notify-hue-failed: var(--danger);
+  --notify-hue-done: #3d8050;
+  --notify-hue-background: #4a6aa6;
+  --notify-hue-people: #7b5aa9;
+  --notify-hue-update: #2a7d73;
+  --notify-hue-extension: #85755a;
+  --notify-hue-notice: #6e6d68;
 }
 
 /* Fallback for very first paint: before the JS has set data-theme,
@@ -170,6 +191,14 @@
   --danger-text: #be1f2a;
     --shadow-pop: 0 12px 40px rgba(0, 0, 0, 0.14);
     --scroll-thumb: #b8b5ad;
+    --notify-hue-approval: #d4512a;
+    --notify-hue-failed: var(--danger);
+    --notify-hue-done: #3d8050;
+    --notify-hue-background: #4a6aa6;
+    --notify-hue-people: #7b5aa9;
+    --notify-hue-update: #2a7d73;
+    --notify-hue-extension: #85755a;
+    --notify-hue-notice: #6e6d68;
   }
 }
 
@@ -4772,11 +4801,157 @@ button.activity-file-chip:focus-visible {
   margin-bottom: 0;
 }
 
+/* ── Notification cards: one look for a toast and a sheet row ──────
+   A card wears its category (notifications/categories.ts): a badge with
+   the category's icon on a soft wash of its hue, the hue faintly in the
+   card's corner, and its name in the meta line. Calm by default; what
+   waits on you (``is-prominent``) gets a filled badge, a hued edge and
+   border, and a primary button. ``--ncard-hue`` is set per card from
+   the category's ``--notify-hue-*`` token. */
+
+.ncard {
+  --ncard-hue: var(--notify-hue-notice);
+  position: relative;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: start;
+  column-gap: var(--space-6);
+  padding: var(--space-6) var(--space-5) var(--space-6) var(--space-6);
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+}
+
+.ncard-badge {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-sm);
+  color: color-mix(in srgb, var(--ncard-hue) 88%, var(--fg));
+  background: color-mix(in srgb, var(--ncard-hue) 14%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ncard-hue) 22%, transparent);
+}
+
+/* Who did it, over the badge's corner, ringed off from it. */
+.ncard-face {
+  position: absolute;
+  right: -5px;
+  bottom: -5px;
+  display: flex;
+  border-radius: var(--radius-circle);
+  box-shadow: 0 0 0 2px var(--bg);
+}
+
+.ncard--toast .ncard-face {
+  box-shadow: 0 0 0 2px var(--bg-surface);
+}
+
+.ncard-open {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: 0;
+  text-align: left;
+  background: none;
+  border: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.ncard-open:disabled {
+  cursor: default;
+}
+
+.ncard-open:disabled > * {
+  opacity: 0.6;
+}
+
+.ncard-head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.ncard-title {
+  font-size: var(--text-md);
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--fg);
+  overflow-wrap: anywhere;
+}
+
+/* One line; the rest is where it points. */
+.ncard-body {
+  font-size: var(--text-sm);
+  line-height: 1.45;
+  color: var(--fg-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* What it is, where it is from, who, and when: faint words,
+   dot-separated, the category's name in its own hue. */
+.ncard-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 var(--space-3);
+  margin-top: var(--space-1);
+  font-size: var(--text-xs);
+  line-height: 1.5;
+  color: var(--fg-faint);
+}
+
+.ncard-meta > * + *::before {
+  content: "\00b7";
+  margin-right: var(--space-3);
+}
+
+.ncard-category {
+  font-weight: 600;
+  color: color-mix(in srgb, var(--ncard-hue) 70%, var(--fg));
+}
+
+.ncard-side {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-4);
+  align-self: stretch;
+}
+
+.ncard-corner {
+  margin: -4px -2px 0 0;
+}
+
+.ncard-action {
+  margin-top: auto;
+}
+
+/* Waits on you: louder, but still one card among many. */
+.ncard.is-prominent {
+  border-color: color-mix(in srgb, var(--ncard-hue) 34%, transparent);
+  background-color: color-mix(in srgb, var(--ncard-hue) 7%, var(--bg-surface));
+}
+
+.ncard.is-prominent .ncard-badge {
+  color: var(--bg-surface);
+  background: var(--ncard-hue);
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--ncard-hue) 30%, transparent);
+}
+
 /* ── Toasts (bottom-right, clear of the composer) ──────────────────
-   Small quiet cards: a faint severity mark, a title and one line, an
-   optional way to where it points, and a dismiss. ``--toasts-bottom``
-   lifts the stack above the composer when the two would overlap
-   (``useComposerClearance``). */
+   The card, floating: a hue wash from the badge's corner, a shadow,
+   and an entrance — the card rises, its badge settles a beat later.
+   ``--toasts-bottom`` lifts the stack above the composer when the two
+   would overlap (``useComposerClearance``). */
 
 .toasts {
   position: fixed;
@@ -4791,16 +4966,20 @@ button.activity-file-chip:focus-visible {
 }
 
 .toast {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--space-5);
-  padding: var(--space-5) var(--space-4) var(--space-5) var(--space-6);
-  background: var(--bg-surface);
-  border: 1px solid var(--border-soft);
-  border-radius: var(--radius);
+  background-color: var(--bg-surface);
+  background-image: radial-gradient(
+    140% 120% at 0% 0%,
+    color-mix(in srgb, var(--ncard-hue) 11%, transparent),
+    transparent 55%
+  );
+  border-color: var(--border-soft);
   box-shadow: var(--shadow-pop);
   pointer-events: auto;
-  animation: toast-in 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+  animation: toast-in 0.24s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.toast .ncard-badge {
+  animation: toast-badge-in 0.36s cubic-bezier(0.3, 1.4, 0.5, 1) 0.06s both;
 }
 
 .toast.is-closing {
@@ -4808,8 +4987,13 @@ button.activity-file-chip:focus-visible {
 }
 
 @keyframes toast-in {
-  from { opacity: 0; transform: translateY(8px); }
-  to   { opacity: 1; transform: translateY(0); }
+  from { opacity: 0; transform: translateY(10px) scale(0.98); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes toast-badge-in {
+  from { opacity: 0; transform: scale(0.7) rotate(-8deg); }
+  to   { opacity: 1; transform: scale(1) rotate(0); }
 }
 
 @keyframes toast-out {
@@ -4832,61 +5016,17 @@ button.activity-file-chip:focus-visible {
   .toast.is-closing {
     animation-name: toast-fade-out;
   }
+  .toast .ncard-badge {
+    animation: none;
+  }
 }
 
-/* The severity is a mark, not a colour block: faint for news, the
-   theme's text accents for the rest. */
-.toast-mark {
-  display: flex;
+.toast .ncard-open {
   padding-top: 1px;
-  color: var(--fg-faint);
 }
 
-.toast--success .toast-mark {
-  color: var(--accent-green-text, var(--success));
-}
-
-.toast--warning .toast-mark {
-  color: var(--accent-orange-text);
-}
-
-.toast--error .toast-mark {
-  color: var(--danger-text, var(--danger));
-}
-
-.toast-text {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-  padding-top: 1px;
-  cursor: pointer;
-}
-
-.toast-title {
-  font-size: var(--text-md);
-  font-weight: 600;
-  line-height: 1.4;
-  color: var(--fg);
-  overflow-wrap: anywhere;
-}
-
-.toast-body {
-  font-size: var(--text-sm);
-  line-height: 1.45;
-  color: var(--fg-muted);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-/* 28px buttons centred on the title's first line. */
-.toast-actions {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  margin: -5px 0;
+.toast .ncard-meta {
+  margin-top: var(--space-2);
 }
 
 .loop-iteration-raw {
@@ -6496,133 +6636,142 @@ button.activity-file-chip:focus-visible {
   position: relative;
 }
 
-.notify-open {
-  display: flex;
-  gap: var(--space-5);
-  width: 100%;
-  padding: var(--space-5) var(--space-6) var(--space-5) var(--space-10);
-  text-align: left;
-  background: none;
-  border: none;
-  border-radius: var(--radius);
-  color: inherit;
-  font: inherit;
-  cursor: pointer;
-  transition: background 0.12s ease;
+/* A row is the card at rest: no surface of its own until hovered; an
+   unread one keeps a faint wash of its hue from the badge's side. */
+.ncard--row {
+  transition: background-color 0.12s ease;
 }
 
-.notify-open:hover:not(:disabled),
-.notify-row:focus-within .notify-open {
-  background: color-mix(in srgb, var(--fg) 5%, transparent);
+.ncard--row.is-unread:not(.is-prominent) {
+  background-image: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--ncard-hue) 7%, transparent),
+    transparent 65%
+  );
 }
 
-.notify-open:focus-visible {
+.ncard--row:hover,
+.ncard--row:focus-within {
+  background-color: color-mix(in srgb, var(--fg) 4%, transparent);
+}
+
+.ncard--row.is-prominent:hover,
+.ncard--row.is-prominent:focus-within {
+  background-color: color-mix(in srgb, var(--ncard-hue) 11%, var(--bg-surface));
+}
+
+.ncard--row .ncard-open:focus-visible {
   outline: 2px solid var(--accent-blue);
-  outline-offset: -2px;
+  outline-offset: 4px;
+  border-radius: var(--radius-sm);
 }
 
-.notify-open:disabled {
-  cursor: default;
-}
-
-.notify-open:disabled .notify-said,
-.notify-open:disabled .notify-face {
-  opacity: 0.6;
-}
-
-/* Unread: a small dot in the accent, at the row's edge. */
-.notify-dot {
-  position: absolute;
-  left: var(--space-4);
-  top: 22px;
-  width: 6px;
-  height: 6px;
-  border-radius: var(--radius-circle);
-  background: var(--accent);
-}
-
-/* Who it is about: the actor's monogram, or the extension's when
-   nobody did anything — a notice about your own export. */
-.notify-face {
-  flex: none;
-  width: 28px;
-  height: 28px;
-}
-
-.notify-said {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-  /* Room for the hover action. */
-  padding-right: var(--space-12);
-}
-
-.notify-line {
-  font-size: var(--text-md);
-  line-height: 1.4;
-  color: var(--fg);
-}
-
-.notify-line strong {
+/* Read: still listed, a shade quieter, its badge faded. "What did I
+   see yesterday" is a question, and a list that empties itself cannot
+   answer it. */
+.ncard--row.is-read .ncard-title {
   font-weight: 500;
-}
-
-.notify-row.is-unread .notify-line strong {
-  font-weight: 600;
-}
-
-/* Read: still listed, a shade quieter. "What did I see yesterday" is
-   a question, and a list that empties itself cannot answer it. */
-.notify-row.is-read .notify-line,
-.notify-row.is-read .notify-excerpt {
   color: var(--fg-muted);
 }
 
-/* What they wrote: one line, the rest is where it points. */
-.notify-excerpt {
-  font-size: var(--text-sm);
-  color: var(--fg-muted);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.ncard--row.is-read .ncard-badge {
+  opacity: 0.7;
 }
 
-/* Where it is from, who, and when: faint words, dot-separated. */
-.notify-meta {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0 var(--space-3);
-  margin-top: var(--space-1);
-  font-size: var(--text-xs);
-  color: var(--fg-faint);
-}
-
-.notify-meta > * + *::before {
-  content: "\00b7";
-  margin-right: var(--space-3);
-}
-
-/* The row's own actions, shown on hover or keyboard focus. */
-.notify-actions {
+/* Unread: a dot in the category's hue, top right, giving way to the
+   row's mark-read button when that shows. */
+.ncard-dot {
   position: absolute;
-  top: var(--space-4);
-  right: var(--space-4);
+  top: 19px;
+  right: var(--space-7);
+  width: 7px;
+  height: 7px;
+  border-radius: var(--radius-circle);
+  background: var(--ncard-hue);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ncard-hue) 18%, transparent);
+  transition: opacity 0.12s ease;
+}
+
+.ncard--row .ncard-corner {
   opacity: 0;
   transition: opacity 0.12s ease;
 }
 
-.notify-row:hover .notify-actions,
-.notify-row:focus-within .notify-actions {
+.ncard--row:hover .ncard-corner,
+.ncard--row:focus-within .ncard-corner {
   opacity: 1;
 }
 
+.ncard--row:hover .ncard-dot,
+.ncard--row:focus-within .ncard-dot {
+  opacity: 0;
+}
+
 @media (hover: none) {
-  .notify-actions {
+  .ncard--row .ncard-corner {
     opacity: 1;
   }
+  .ncard-dot {
+    display: none;
+  }
+}
+
+/* The category filter, under the tabs: chips with the categories'
+   icons, the chosen one washed in its hue. */
+.notify-chips {
+  display: flex;
+  gap: var(--space-2);
+  margin-left: calc(-1 * var(--space-2));
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.notify-chip {
+  --ncard-hue: var(--fg-faint);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex: none;
+  height: 26px;
+  padding: 0 var(--space-4);
+  border: 1px solid transparent;
+  border-radius: var(--radius-pill);
+  background: none;
+  color: var(--fg-muted);
+  font: inherit;
+  font-size: var(--text-sm);
+  cursor: pointer;
+  transition: background-color 0.12s ease, border-color 0.12s ease, color 0.12s ease;
+}
+
+.notify-chip svg {
+  color: color-mix(in srgb, var(--ncard-hue) 85%, var(--fg));
+}
+
+.notify-chip:hover {
+  color: var(--fg);
+  background: color-mix(in srgb, var(--fg) 4%, transparent);
+}
+
+.notify-chip[aria-pressed="true"] {
+  color: var(--fg);
+  border-color: color-mix(in srgb, var(--ncard-hue) 40%, transparent);
+  background: color-mix(in srgb, var(--ncard-hue) 14%, transparent);
+}
+
+.notify-chip:focus-visible {
+  outline: 2px solid var(--accent-blue);
+  outline-offset: 2px;
+}
+
+.notify-chip-count {
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+  color: var(--fg-faint);
+}
+
+.notify-chip-label {
+  font-weight: 500;
 }
 
 .drawer-backdrop {
