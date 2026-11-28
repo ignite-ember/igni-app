@@ -8051,6 +8051,219 @@ button.activity-file-chip:focus-visible {
   user-select: all;
 }
 
+/* ── A file mentioned inside a sentence ──────────────────────────
+   The chip reads as part of the sentence, not as a button: a quiet
+   fill, the file's glyph and its name. Hovering or focusing it
+   reveals the path and the two things one can do with it. */
+.mention-chip-wrap {
+  position: relative;
+  display: inline-block;
+  vertical-align: -2px;
+}
+
+.mention-chip {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  max-width: 220px;
+  padding: 0 6px 0 4px;
+  margin: 0 1px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--fg) 6%, transparent);
+  color: var(--fg-muted);
+  font-family: var(--font-ui);
+  font-size: var(--text-sm);
+  line-height: 1.6;
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+
+.mention-chip:hover,
+.mention-chip:focus-visible {
+  background: color-mix(in srgb, var(--fg) 11%, transparent);
+  color: var(--fg);
+  outline: none;
+}
+
+.mention-chip-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: currentColor;
+  flex-shrink: 0;
+}
+
+.mention-chip-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mention-chip-panel {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 40;
+  min-width: 220px;
+  padding: var(--space-2);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-soft);
+  border-radius: 10px;
+  box-shadow: var(--shadow-pop);
+  display: flex;
+  flex-direction: column;
+  font-family: var(--font-ui);
+  white-space: normal;
+}
+
+.mention-chip-path {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--fg-faint);
+  padding: var(--space-3) var(--space-5) var(--space-2);
+  border-bottom: 1px solid var(--border-soft);
+  margin-bottom: var(--space-2);
+  word-break: break-all;
+  text-align: left;
+}
+
+.mention-chip-action {
+  appearance: none;
+  border: none;
+  background: transparent;
+  padding: var(--space-3) var(--space-5);
+  border-radius: 6px;
+  color: var(--fg);
+  font-family: var(--font-ui);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+}
+
+.mention-chip-action:hover {
+  background: var(--bg-raised);
+}
+
+/* ── The files a sent message carries ───────────────────────────
+   A block under the message: images as miniatures, documents as
+   rows. It sits on the bubble's own surface, so its fills are a
+   tint of the text colour rather than a second surface. */
+.msg-attachments {
+  margin-top: var(--space-6);
+  padding-top: var(--space-5);
+  border-top: 1px solid var(--border-soft);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  white-space: normal;
+}
+
+.msg-attachments-thumbs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+}
+
+.msg-att-thumb {
+  appearance: none;
+  width: 84px;
+  height: 84px;
+  padding: 0;
+  border: 1px solid var(--border-soft);
+  border-radius: 10px;
+  background: var(--bg-surface);
+  color: var(--fg-faint);
+  overflow: hidden;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: border-color 0.12s ease;
+}
+
+.msg-att-thumb:hover {
+  border-color: var(--border);
+}
+
+.msg-att-thumb-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.msg-attachments-rows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.msg-att-row {
+  appearance: none;
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--fg);
+  font-family: var(--font-ui);
+  font-size: var(--text-sm);
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.12s ease, border-color 0.12s ease;
+}
+
+.msg-att-row:hover {
+  background: color-mix(in srgb, var(--fg) 6%, transparent);
+  border-color: var(--border-soft);
+}
+
+.msg-att-glyph {
+  display: inline-flex;
+  align-items: center;
+  color: var(--fg-muted);
+  flex-shrink: 0;
+}
+
+.msg-att-label {
+  flex-shrink: 0;
+  padding: 0 4px;
+  border: 1px solid var(--border-soft);
+  border-radius: 4px;
+  color: var(--fg-faint);
+  font-size: var(--text-2xs);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
+.msg-att-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.msg-att-size {
+  margin-left: auto;
+  padding-left: var(--space-4);
+  flex-shrink: 0;
+  color: var(--fg-faint);
+  font-size: var(--text-xs);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mention-chip,
+  .msg-att-thumb,
+  .msg-att-row {
+    transition: none;
+  }
+}
+
 /* ── HITL prompt: rises inside the composer box ────────────────── */
 /* The .composer-hitl wrapper grows from zero height so the input
    panel itself extends upward. No fixed positioning, no separate

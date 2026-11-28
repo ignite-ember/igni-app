@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { AttachmentContext } from "./chat/attachmentContext";
 import { SidebarLayout } from "./chat/sidebarLayout";
 import { useChatController } from "./chat/useChatController";
 import { useChatSearch } from "./chat/useChatSearch";
@@ -134,6 +135,11 @@ export default function App() {
     [windowModel, filesSession.open],
   );
 
+  // What a message's attachments need from the window: the project the
+  // chat is about (to tell an upload from a reference) and the client
+  // (to read an image's bytes).
+  const attachmentPlace = useMemo(() => ({ projectDir, client }), [projectDir, client]);
+
   // The floor's notifications per extension; the backend pushes
   // ``notifications_changed`` and this only listens.
   const [notificationCounts, setNotificationCounts] = useNotificationCounts(client, connected);
@@ -191,6 +197,7 @@ export default function App() {
     <ExtensionNamesContext.Provider value={extensionNames}>
     <BackendStateContext.Provider value={backend}>
     <FileViewerContext.Provider value={fileViewer}>
+    <AttachmentContext.Provider value={attachmentPlace}>
     <div className="shell" style={SidebarLayout.styleFor(sidebar)}>
       {/* Live FPS overlay, hidden by default: Ctrl/Cmd+Alt+Shift+F. */}
       <FPSCounterOverlay />
@@ -350,6 +357,7 @@ export default function App() {
         onLoginFailed={actions.loginFailed}
       />
     </div>
+    </AttachmentContext.Provider>
     </FileViewerContext.Provider>
     </BackendStateContext.Provider>
     </ExtensionNamesContext.Provider>

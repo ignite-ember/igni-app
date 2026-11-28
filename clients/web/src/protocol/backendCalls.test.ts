@@ -19,15 +19,25 @@ function clientAnswering(rpc: Rpc): { client: BackendCalls; rpc: ReturnType<type
 }
 
 describe("uploadAttachment", () => {
-  it("sends the file base64-encoded and answers with its path", async () => {
+  it("sends the file base64-encoded and answers with its path and size", async () => {
     const { client, rpc } = clientAnswering(async () => ({ path: "att/a.txt", size: 3 }));
 
     const result = await client.uploadAttachment(new File(["abc"], "a.txt"));
 
-    expect(result).toEqual({ ok: true, path: "att/a.txt" });
+    expect(result).toEqual({ ok: true, path: "att/a.txt", size: 3 });
     expect(rpc).toHaveBeenCalledExactlyOnceWith("upload_attachment", {
       filename: "a.txt",
       content_base64: btoa("abc"),
+    });
+  });
+
+  it("answers with no size when the backend sends none", async () => {
+    const { client } = clientAnswering(async () => ({ path: "att/a.txt" }));
+
+    expect(await client.uploadAttachment(new File(["abc"], "a.txt"))).toEqual({
+      ok: true,
+      path: "att/a.txt",
+      size: 0,
     });
   });
 
