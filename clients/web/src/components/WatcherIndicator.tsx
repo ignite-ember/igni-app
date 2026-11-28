@@ -1,19 +1,18 @@
 import type { IgniClient } from "../protocol/client";
 import { useProcessTable } from "./panels/watcher/useProcessTable";
 
-/** Header status chip for the watcher, always there; click opens it.
- *  It always counts the running processes, and pulses while there are
- *  any. It keeps its own count-only table (no output buffered, since
- *  the chip is always mounted), seeded and pushed the same way as the
- *  panel's. */
+/** Header status chip for the watcher: shown only while a background
+ *  process runs, with their count; click opens it. It keeps its own
+ *  count-only table (no output buffered, since the chip is always
+ *  mounted), seeded and pushed the same way as the panel's. */
 export function WatcherIndicator({ client, onOpen }: { client: IgniClient; onOpen: () => void }) {
   const count = useProcessTable(client, { logs: false }).table.runningCount;
-  const idle = count === 0;
+  if (count === 0) return null;
   const what = `background process${count === 1 ? "" : "es"} running`;
   return (
     <button
       type="button"
-      className={`chip chip-status chip-watcher${idle ? " idle" : ""}`}
+      className="chip chip-status chip-watcher"
       title={`${count} ${what} — click to open the watcher`}
       onClick={onOpen}
     >
