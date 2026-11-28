@@ -256,3 +256,66 @@ describe("an empty list", () => {
     expect(screen.getByText("You're all caught up")).toBeTruthy();
   });
 });
+
+describe("its category", () => {
+  it("draws the category's badge, name and hue on every row", () => {
+    const { container } = render(
+      <NotificationList
+        rows={[row({ id: "a", kind: "approval" }), row({ id: "b", kind: "process_failed" }), row({ id: "c", kind: "x" })]}
+      />,
+    );
+    const cards = [...container.querySelectorAll<HTMLElement>(".ncard")];
+    expect(cards.map((c) => c.dataset.category)).toEqual(["approval", "failed", "extension"]);
+    expect(cards.map((c) => c.style.getPropertyValue("--ncard-hue"))).toEqual([
+      "var(--notify-hue-approval)",
+      "var(--notify-hue-failed)",
+      "var(--notify-hue-extension)",
+    ]);
+    expect(cards.map((c) => c.querySelector(".ncard-category")?.textContent)).toEqual([
+      "Needs you",
+      "Failed",
+      "Extensions",
+    ]);
+    for (const card of cards) expect(card.querySelector(".ncard-badge svg path")?.getAttribute("d")).toBeTruthy();
+  });
+
+  it("makes an unread approval louder than news, with a primary Review that opens it", () => {
+    const opened = vi.fn();
+    const { container } = render(
+      <NotificationList rows={[row({ id: "a", kind: "approval" }), row({ id: "b", kind: "comment" })]} onOpen={opened} />,
+    );
+    const [approval, comment] = [...container.querySelectorAll(".ncard")];
+    expect(approval.classList.contains("is-prominent")).toBe(true);
+    expect(comment.classList.contains("is-prominent")).toBe(false);
+
+    const review = screen.getByRole("button", { name: "Review" });
+    expect(review.className).toContain("button--primary");
+    expect(review.getAttribute("title")).toBe("Open in igni.artifacts");
+    expect(within(comment as HTMLElement).queryByRole("button", { name: /Review|Open|View/ })).toBeNull();
+    fireEvent.click(review);
+    expect(opened).toHaveBeenCalledWith(expect.objectContaining({ id: "a" }));
+  });
+
+  it("quiets an approval once read: no longer prominent, its button secondary", () => {
+    const { container } = render(<NotificationList rows={[row({ kind: "approval", read: true })]} onOpen={() => {}} />);
+    expect(container.querySelector(".ncard.is-prominent")).toBeNull();
+    expect(screen.getByRole("button", { name: "Review" }).className).toContain("button--secondary");
+  });
+
+  it("opens a failed run's chat from its button", () => {
+    const opened = vi.fn();
+    render(
+      <NotificationList
+        rows={[row({ kind: "process_failed", target: { page: "session", params: { session_id: "s" } } })]}
+        onOpen={opened}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Open chat" }));
+    expect(opened).toHaveBeenCalledOnce();
+  });
+
+  it("offers no button where it cannot open", () => {
+    render(<NotificationList rows={[row({ kind: "approval" })]} canOpen={() => false} onOpen={() => {}} />);
+    expect(screen.queryByRole("button", { name: "Review" })).toBeNull();
+  });
+});

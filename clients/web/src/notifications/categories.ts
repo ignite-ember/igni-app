@@ -26,7 +26,7 @@ export class NotificationCategories {
     new NotificationCategory("people", "Mentions", "View"),
     new NotificationCategory("update", "Updates", "Open", "info", false, true),
     new NotificationCategory("extension", "Extensions", "Open"),
-    new NotificationCategory("notice", "igni", "Open"),
+    new NotificationCategory("notice", "Notices", "Open"),
   ];
 
   private static readonly BY_KEY = new Map(NotificationCategories.ALL.map((c) => [c.key, c]));

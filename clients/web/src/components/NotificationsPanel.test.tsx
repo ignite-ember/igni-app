@@ -325,3 +325,61 @@ describe("marking one read from its row", () => {
     await waitFor(() => expect(container.querySelectorAll(".notify-row.is-read")).toHaveLength(1));
   });
 });
+
+describe("filtering by category", () => {
+  const rows = () => [
+    row({ id: "a", kind: "approval", title: "Approve deploy" }),
+    row({ id: "b", kind: "comment", title: "Ada commented" }),
+    row({ id: "c", kind: "approval", title: "Approve merge", read: true }),
+  ];
+
+  it("offers a chip per category present, with its count", async () => {
+    const { client } = backendWith(rows());
+    render(<NotificationsPanel client={client} onClose={() => {}} />);
+    await waitFor(() => expect(screen.getByText("Approve deploy")).toBeTruthy());
+
+    const group = screen.getByRole("group", { name: "Filter by category" });
+    expect(within(group).getAllByRole("button").map((b) => b.getAttribute("aria-label"))).toEqual([
+      "Needs you, 2",
+      "Mentions, 1",
+    ]);
+  });
+
+  it("shows only the chosen category, and every one again when chosen twice", async () => {
+    const { client } = backendWith(rows());
+    render(<NotificationsPanel client={client} onClose={() => {}} />);
+    await waitFor(() => expect(screen.getByText("Approve deploy")).toBeTruthy());
+
+    const chip = screen.getByRole("button", { name: "Mentions, 1" });
+    fireEvent.click(chip);
+    expect(chip.getAttribute("aria-pressed")).toBe("true");
+    expect(chip.textContent).toContain("Mentions");
+    expect(screen.queryByText("Approve deploy")).toBeNull();
+    expect(screen.getByText("Ada commented")).toBeTruthy();
+
+    fireEvent.click(chip);
+    expect(chip.getAttribute("aria-pressed")).toBe("false");
+    expect(screen.getByText("Approve deploy")).toBeTruthy();
+  });
+
+  it("combines with Unread", async () => {
+    const { client } = backendWith(rows());
+    render(<NotificationsPanel client={client} onClose={() => {}} />);
+    await waitFor(() => expect(screen.getByText("Approve deploy")).toBeTruthy());
+
+    fireEvent.click(screen.getByRole("button", { name: "Needs you, 2" }));
+    expect(screen.getByText("Approve merge")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Unread" }));
+    expect(screen.getByText("Approve deploy")).toBeTruthy();
+    expect(screen.queryByText("Approve merge")).toBeNull();
+    expect(screen.queryByText("Ada commented")).toBeNull();
+  });
+
+  it("draws no chips when every row is in one category", async () => {
+    const { client } = backendWith([row(), row({ id: "s2", title: "Other" })]);
+    render(<NotificationsPanel client={client} onClose={() => {}} />);
+    await waitFor(() => expect(screen.getByText("Other")).toBeTruthy());
+    expect(screen.queryByRole("group", { name: "Filter by category" })).toBeNull();
+  });
+});
+

@@ -372,3 +372,72 @@ describe("Toasts — clear of the composer", () => {
     expect(container.querySelector<HTMLElement>(".toasts")!.style.getPropertyValue("--toasts-bottom")).toBe("16px");
   });
 });
+
+describe("Toasts — each in its category's identity", () => {
+  const SESSION = { kind: "session", label: "Billing" };
+
+  it("draws each category's badge, name and hue", () => {
+    const items = [
+      toast(1, "a", { category: "approval" }),
+      toast(2, "b", { category: "failed", kind: "error" }),
+      toast(3, "c", { category: "background" }),
+      toast(4, "d", { category: "update" }),
+      toast(5, "e", { source: "acme.idx" }),
+      toast(6, "f", { kind: "success", source: "acme.idx" }),
+      toast(7, "g"),
+    ];
+    const { container } = render(<Toasts items={items} onDismiss={() => {}} />);
+    const cards = [...container.querySelectorAll<HTMLElement>(".toast.ncard")];
+    expect(cards.map((c) => c.dataset.category)).toEqual([
+      "approval",
+      "failed",
+      "background",
+      "update",
+      "extension",
+      "done",
+      "notice",
+    ]);
+    const paths = cards.map((c) => c.querySelector(".ncard-badge svg path")?.getAttribute("d"));
+    expect(new Set(paths).size).toBe(7);
+    expect(cards[0].style.getPropertyValue("--ncard-hue")).toBe("var(--notify-hue-approval)");
+  });
+
+  it("names the extension that showed it, by its name, and igni for its own", () => {
+    render(
+      <Toasts
+        items={[toast(1, "a", { source: "acme.idx" }), toast(2, "b")]}
+        onDismiss={() => {}}
+        sourceName={(id) => (id === "acme.idx" ? "Code index" : id)}
+      />,
+    );
+    expect(screen.getByText("Code index")).toBeTruthy();
+    expect(screen.getByText("igni")).toBeTruthy();
+  });
+
+  it("makes an approval prominent, with a primary Review that opens it", () => {
+    const onOpen = vi.fn();
+    const { container } = render(
+      <Toasts items={[toast(1, "Approve?", { category: "approval", target: SESSION })]} onDismiss={() => {}} onOpen={onOpen} />,
+    );
+    expect(container.querySelector(".toast.is-prominent")).toBeTruthy();
+    const review = screen.getByRole("button", { name: "Review" });
+    expect(review.className).toContain("button--primary");
+    fireEvent.click(review);
+    expect(onOpen).toHaveBeenCalledWith(SESSION);
+  });
+
+  it("opens a failed run's chat, and keeps news quiet", () => {
+    const onOpen = vi.fn();
+    const { container } = render(
+      <Toasts
+        items={[toast(1, "Failed", { category: "failed", kind: "error", target: SESSION }), toast(2, "News")]}
+        onDismiss={() => {}}
+        onOpen={onOpen}
+      />,
+    );
+    expect(container.querySelectorAll(".is-prominent")).toHaveLength(0);
+    fireEvent.click(screen.getByRole("button", { name: "Open chat" }));
+    expect(onOpen).toHaveBeenCalledWith(SESSION);
+  });
+});
+
