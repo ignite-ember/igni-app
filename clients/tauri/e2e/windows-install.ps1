@@ -7,6 +7,8 @@
 #   windows-install.ps1 -Action nsis          -Bundle <dir>   # ENT-021: setup.exe /S, then its uninstaller /S
 #   windows-install.ps1 -Action smoke         -Bundle <dir>   # PLAT-008 ENT-033: the installed app starts its backend
 #                                                             # on IGNI_E2E_PYTHON and stops it when closed
+#   windows-install.ps1 -Action desktop-shot  -Bundle <dir>   # the same, started normally, with a screenshot of
+#                                                             # the whole screen, the exe's icon and its signature
 param(
   [Parameter(Mandatory = $true)][string]$Action,
   [Parameter(Mandatory = $true)][string]$Bundle,
@@ -128,6 +130,64 @@ switch ($Action) {
     $left = @(Get-Backends | Where-Object { $_.CommandLine -like "*smoke-project*" })
     if ($left.Count -gt 0) { throw "the backend outlived the app by 30 s: $($left.CommandLine)" }
     Write-Host "the app started its backend and took it down when closed"
+  }
+  "desktop-shot" {
+    # The installed app as a person meets it: started the ordinary way, then
+    # the whole screen (window frame, title, taskbar) as well as the page.
+    # The title turns from "igni" to the project's folder once the backend
+    # is connected (bootstrap.rs), so it is waited for.
+    $project = Join-Path $env:RUNNER_TEMP "released-check"
+    New-Item -ItemType Directory -Force -Path $project | Out-Null
+    $env:IGNI_RUNTIME_PYTHON = $env:IGNI_E2E_PYTHON
+    $app = Start-Process -FilePath $env:IGNI_APP -ArgumentList "`"$project`"" -PassThru
+    try {
+      $deadline = (Get-Date).AddSeconds(180)
+      while ((Get-Date) -lt $deadline) {
+        if ($app.HasExited) { throw "the app exited at start with code $($app.ExitCode)" }
+        $app.Refresh()
+        if ($app.MainWindowTitle -like "released-check*") { break }
+        Start-Sleep -Seconds 1
+      }
+      $title = $app.MainWindowTitle
+      # The chat draws.
+      Start-Sleep -Seconds 10
+      Add-Type -AssemblyName System.Windows.Forms, System.Drawing
+      $screen = [System.Windows.Forms.SystemInformation]::VirtualScreen
+      $bmp = New-Object System.Drawing.Bitmap $screen.Width, $screen.Height
+      $g = [System.Drawing.Graphics]::FromImage($bmp)
+      $g.CopyFromScreen($screen.Left, $screen.Top, 0, 0, $bmp.Size)
+      $bmp.Save((Join-Path $Out "desktop.png"), [System.Drawing.Imaging.ImageFormat]::Png)
+      $g.Dispose(); $bmp.Dispose()
+      [System.Drawing.Icon]::ExtractAssociatedIcon($env:IGNI_APP).ToBitmap().Save((Join-Path $Out "exe-icon.png"), [System.Drawing.Imaging.ImageFormat]::Png)
+      $sig = Get-AuthenticodeSignature $env:IGNI_APP
+      "title: $title`nsignature: $($sig.Status) $($sig.SignerCertificate.Subject)" | Tee-Object -FilePath (Join-Path $Out "window.txt")
+      if ($sig.Status -ne "Valid") { Write-Host "::warning::igni-app.exe has no valid Authenticode signature ($($sig.Status)): SmartScreen warns on first run" }
+      $consoles = @(Get-ConsoleWindows | ForEach-Object { "$($_.ProcessName): $($_.MainWindowTitle)" })
+      "console windows: $(if ($consoles) { $consoles -join '; ' } else { 'none' })" | Tee-Object -FilePath (Join-Path $Out "window.txt") -Append
+      if ($consoles) {
+        # A pull request checks this script against the latest release, which
+        # it cannot change: there the finding is reported, not failed.
+        $msg = "the app's backend opened a console window over the app: $($consoles -join '; ')"
+        if ($env:GITHUB_EVENT_NAME -eq "pull_request") { Write-Host "::warning::$msg" } else { throw $msg }
+      }
+      if ($title -notlike "released-check*") { throw "the window's title is still '$title' after 180 s: the backend did not connect" }
+      $backend = @(Get-Backends | Where-Object { $_.CommandLine -like "*released-check*" })
+      if ($backend.Count -eq 0) { throw "no igni_core.backend for the project" }
+      $null = $app.CloseMainWindow()
+      if (-not $app.WaitForExit(30000)) { throw "the app was still running 30 s after its window was closed" }
+      $deadline = (Get-Date).AddSeconds(30)
+      while ((Get-Date) -lt $deadline -and @(Get-Backends | Where-Object { $_.CommandLine -like "*released-check*" }).Count -gt 0) {
+        Start-Sleep -Seconds 1
+      }
+      if (@(Get-Backends | Where-Object { $_.CommandLine -like "*released-check*" }).Count -gt 0) { throw "the backend outlived the app by 30 s" }
+      Write-Host "the app opened its window, started its backend and took it down when closed"
+    } finally {
+      # The app is single-instance: one left running turns every later launch
+      # into a hand-off that exits at once.
+      if (-not $app.HasExited) { Stop-Process -Id $app.Id -Force -ErrorAction SilentlyContinue }
+      Get-Backends | Where-Object { $_.CommandLine -like "*released-check*" } |
+        ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+    }
   }
   default { throw "unknown action $Action" }
 }

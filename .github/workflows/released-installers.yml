@@ -1,0 +1,299 @@
+name: Released installers
+
+# The installers a customer downloads, run the way a customer meets them.
+# Desktop E2E tests installers it builds from the commit; the release builds
+# its own (signed, with the updater) and nothing ever started those. This
+# takes the published assets of a release, checks them against SHA256SUMS,
+# installs each on a clean runner and runs it:
+#
+# - a full-desktop screenshot of the app started the ordinary way, so the
+#   window frame, its title and the taskbar icon are in the picture;
+# - the Desktop E2E suites against the installed release, the first launch
+#   installing igni-core from PyPI exactly as a customer's does.
+#
+# Screenshots and logs are the run's artifacts. It runs after every
+# successful Release, by hand for any published tag, and on a pull request
+# that changes it or the scripts it runs (against the latest release).
+
+on:
+  workflow_run:
+    workflows: [Release]
+    types: [completed]
+  pull_request:
+    branches: [main]
+    paths:
+      - .github/workflows/released-installers.yml
+      - clients/tauri/e2e/**
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "The release tag to check (e.g. v1.0.7)"
+        required: true
+
+# Read-only: the release is downloaded, never changed.
+permissions:
+  contents: read
+
+concurrency:
+  group: released-installers-${{ inputs.tag || github.event.workflow_run.head_branch || github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Empty on a pull request: the latest release (the "Which release" step).
+  TAG_INPUT: ${{ inputs.tag || github.event.workflow_run.head_branch }}
+  GH_TOKEN: ${{ github.token }}
+
+jobs:
+  linux:
+    name: Released ${{ matrix.package }} (Ubuntu 24.04)
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    # 22.04, where the release builds, is Desktop E2E's; this is the desktop
+    # most people have now.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        package: [deb, AppImage]
+    env:
+      IGNI_E2E_OUT: ${{ github.workspace }}/released-out/${{ matrix.package }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Which release
+        run: |
+          tag=${TAG_INPUT:-$(gh release view --repo "$GITHUB_REPOSITORY" --json tagName --jq .tagName)}
+          [[ "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "not a release tag: $tag"; exit 1; }
+          echo "TAG=$tag" >> "$GITHUB_ENV"
+          echo "### Checking the published $tag" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: The release's assets, checked against SHA256SUMS
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/release" && cd "$RUNNER_TEMP/release"
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --pattern "*.${{ matrix.package }}" --pattern SHA256SUMS
+          sha256sum --check --ignore-missing SHA256SUMS
+          ls -l
+
+      - name: A desktop (window manager, taskbar), WebKitWebDriver and a virtual display
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y webkit2gtk-driver xvfb dbus-x11 xdg-utils desktop-file-utils \
+            openbox tint2 xdotool wmctrl x11-utils imagemagick libfuse2t64
+
+      - name: Install the ${{ matrix.package }}
+        run: |
+          set -euo pipefail
+          if [ "${{ matrix.package }}" = deb ]; then
+            sudo apt-get install -y "$RUNNER_TEMP"/release/*.deb
+            sudo update-desktop-database
+            bin=$(dpkg -L igni | grep -E '^/usr/bin/' | head -1)
+            grep -l 'x-scheme-handler/igni' /usr/share/applications/*.desktop
+          else
+            bin=$(ls "$RUNNER_TEMP"/release/*.AppImage)
+            chmod +x "$bin"
+          fi
+          test -x "$bin"
+          echo "IGNI_APP=$bin" >> "$GITHUB_ENV"
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24"
+
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable branch, 2026-10-16
+        with:
+          toolchain: stable
+
+      - name: tauri-driver
+        run: cargo install tauri-driver --locked
+
+      # The igni-core this release pins, from PyPI: the provisioned runtime,
+      # the igni CLI for the development extension, and the scripted model's
+      # Python.
+      - name: The pinned igni-core from PyPI
+        run: |
+          set -euo pipefail
+          git fetch --depth 1 origin tag "$TAG"
+          core=$(git show "$TAG:igni-core.version" | tr -d '[:space:]')
+          uv venv --python 3.12 "$RUNNER_TEMP/core"
+          UV_TORCH_BACKEND=cpu uv pip install --python "$RUNNER_TEMP/core/bin/python" "igni-core[decisions]==$core"
+          echo "IGNI_E2E_PYTHON=$RUNNER_TEMP/core/bin/python" >> "$GITHUB_ENV"
+
+      - name: The app on a desktop, started normally (full-screen screenshot)
+        run: dbus-run-session -- xvfb-run -a -s "-screen 0 1440x900x24" bash clients/tauri/e2e/desktop-shot.sh "$IGNI_APP" "$IGNI_E2E_OUT/desktop"
+
+      - name: ENT-016 air-gapped with no runtime
+        if: success() || failure()
+        run: dbus-run-session -- xvfb-run -a node clients/tauri/e2e/desktop-e2e.mjs --suite air-gapped
+
+      # An AppImage registers no igni:// handler, which the suite's link step needs.
+      - name: PLAT-012 first launch from PyPI, chat, approval, extension, igni:// link, CSP, quit
+        if: (success() || failure()) && matrix.package == 'deb'
+        env:
+          IGNI_E2E_INDEX: pypi
+        run: dbus-run-session -- xvfb-run -a node clients/tauri/e2e/desktop-e2e.mjs --suite first-launch
+
+      - name: ENT-015 ENT-024 managed settings (runtime_python, an http update_endpoint, air-gapped)
+        if: success() || failure()
+        env:
+          IGNI_E2E_UPDATE_PORT: "8898"
+        run: |
+          sudo mkdir -p /etc/igni
+          printf 'air_gapped: true\nruntime_python: %s\nupdate_endpoint: http://127.0.0.1:8898/latest.json\n' \
+            "$IGNI_E2E_PYTHON" | sudo tee /etc/igni/managed-settings.yaml
+          dbus-run-session -- xvfb-run -a node clients/tauri/e2e/desktop-e2e.mjs --suite provisioned
+          sudo rm -f /etc/igni/managed-settings.yaml
+
+      - name: Upload screenshots and logs
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: released-${{ env.TAG }}-linux-${{ matrix.package }}
+          path: released-out/
+          if-no-files-found: warn
+          retention-days: 90
+
+  windows:
+    name: Released MSI and NSIS (Windows)
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    runs-on: windows-latest
+    timeout-minutes: 90
+    defaults:
+      run:
+        shell: bash
+    env:
+      IGNI_E2E_OUT: ${{ github.workspace }}\released-out
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Which release
+        run: |
+          tag=${TAG_INPUT:-$(gh release view --repo "$GITHUB_REPOSITORY" --json tagName --jq .tagName)}
+          [[ "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "not a release tag: $tag"; exit 1; }
+          echo "TAG=$tag" >> "$GITHUB_ENV"
+          echo "### Checking the published $tag" >> "$GITHUB_STEP_SUMMARY"
+
+      # Laid out as a Tauri bundle directory (msi/, nsis/), which
+      # windows-install.ps1 reads.
+      - name: The release's assets, checked against SHA256SUMS
+        run: |
+          set -euo pipefail
+          b="$RUNNER_TEMP/bundle"
+          mkdir -p "$b/msi" "$b/nsis"
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --pattern "*.msi" --pattern "*-setup.exe" --pattern SHA256SUMS --dir "$b"
+          (cd "$b" && sha256sum --check --ignore-missing SHA256SUMS)
+          mv "$b"/*.msi "$b/msi/" && mv "$b"/*-setup.exe "$b/nsis/"
+          echo "BUNDLE=$(cygpath -w "$b")" >> "$GITHUB_ENV"
+
+      - name: msedgedriver for the WebView2 runtime
+        shell: pwsh
+        run: |
+          $key = "HKLM:\SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}"
+          $wv2 = (Get-ItemProperty -Path $key -ErrorAction SilentlyContinue).pv
+          Write-Host "WebView2 runtime: $wv2"
+          $dest = "$env:RUNNER_TEMP\edgedriver"
+          New-Item -ItemType Directory -Force -Path $dest | Out-Null
+          $ok = $false
+          if ($wv2) {
+            try {
+              Invoke-WebRequest "https://msedgedriver.microsoft.com/$wv2/edgedriver_win64.zip" -OutFile "$dest\d.zip"
+              Expand-Archive "$dest\d.zip" -DestinationPath $dest -Force
+              $ok = $true
+            } catch { Write-Host "no driver download for $wv2 ($_), using the image's" }
+          }
+          if (-not $ok) { Copy-Item "$env:EDGEWEBDRIVER\msedgedriver.exe" $dest }
+          & "$dest\msedgedriver.exe" --version
+          "NATIVE_DRIVER=$dest\msedgedriver.exe" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24"
+
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+
+      - name: The pinned igni-core from PyPI
+        run: |
+          set -euo pipefail
+          git fetch --depth 1 origin tag "$TAG"
+          core=$(git show "$TAG:igni-core.version" | tr -d '[:space:]')
+          uv venv --python 3.12 "$RUNNER_TEMP/core"
+          uv pip install --python "$RUNNER_TEMP/core/Scripts/python.exe" "igni-core[decisions]==$core"
+          echo "IGNI_E2E_PYTHON=$(cygpath -w "$RUNNER_TEMP/core/Scripts/python.exe")" >> "$GITHUB_ENV"
+
+      - name: ENT-021 NSIS installer, silent install and uninstall
+        shell: pwsh
+        run: clients/tauri/e2e/windows-install.ps1 -Action nsis -Bundle $env:BUNDLE -Out $env:IGNI_E2E_OUT
+
+      - name: ENT-021 PLAT-008 MSI, silent install
+        shell: pwsh
+        run: clients/tauri/e2e/windows-install.ps1 -Action install-msi -Bundle $env:BUNDLE -Out $env:IGNI_E2E_OUT
+
+      - name: The app on the desktop, started normally (full-screen screenshot, icon, signature)
+        shell: pwsh
+        run: clients/tauri/e2e/windows-install.ps1 -Action desktop-shot -Bundle $env:BUNDLE -Out "$env:IGNI_E2E_OUT\desktop"
+
+      - name: ENT-016 air-gapped with no runtime
+        if: success() || failure()
+        run: node clients/tauri/e2e/desktop-e2e.mjs --suite air-gapped
+
+      - name: PLAT-008 first launch from PyPI, chat, approval, extension, igni:// link, CSP, quit
+        if: success() || failure()
+        env:
+          IGNI_E2E_INDEX: pypi
+        run: node clients/tauri/e2e/desktop-e2e.mjs --suite first-launch
+
+      - name: ENT-003 ENT-015 ENT-024 managed settings in %PROGRAMDATA%
+        if: success() || failure()
+        env:
+          IGNI_E2E_UPDATE_PORT: "8898"
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path "$env:ProgramData\igni" | Out-Null
+          @("air_gapped: true", "runtime_python: $env:IGNI_E2E_PYTHON", "update_endpoint: http://127.0.0.1:8898/latest.json") |
+            Set-Content -Path "$env:ProgramData\igni\managed-settings.yaml" -Encoding utf8
+          node clients/tauri/e2e/desktop-e2e.mjs --suite provisioned
+          $code = $LASTEXITCODE
+          Remove-Item "$env:ProgramData\igni\managed-settings.yaml"
+          exit $code
+
+      - name: ENT-033 MSI, silent uninstall leaves no backend
+        if: success() || failure()
+        shell: pwsh
+        run: clients/tauri/e2e/windows-install.ps1 -Action uninstall-msi -Bundle $env:BUNDLE -Out $env:IGNI_E2E_OUT
+
+      - name: Upload screenshots and logs
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: released-${{ env.TAG }}-windows
+          path: released-out/
+          if-no-files-found: warn
+          retention-days: 90
+
+  # What the installed app asks for when it looks for an update.
+  updater:
+    name: The updater's endpoint serves this release
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: latest.json at the endpoint tauri.conf.json names
+        run: |
+          set -euo pipefail
+          url=$(jq -r '.plugins.updater.endpoints[0]' clients/tauri/src-tauri/tauri.conf.json)
+          curl -fsSL "$url" -o latest.json
+          jq '{version, platforms: (.platforms | keys)}' latest.json
+          served=$(jq -r .version latest.json)
+          latest=$(gh release view --repo "$GITHUB_REPOSITORY" --json tagName --jq .tagName)
+          [ "v${served#v}" = "$latest" ] || { echo "the updater serves $served, the latest release is $latest"; exit 1; }
+          for p in linux-x86_64 windows-x86_64 darwin-aarch64; do
+            jq -e --arg p "$p" '.platforms | keys | any(startswith($p))' latest.json >/dev/null || { echo "no $p in latest.json"; exit 1; }
+          done

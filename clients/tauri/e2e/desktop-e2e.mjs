@@ -18,7 +18,7 @@
 //   IGNI_E2E_PYTHON   a Python with igni-core installed (the provisioned runtime, the igni CLI
 //                     for the dev extension, and the scripted model)
 //   IGNI_E2E_INDEX    first-launch only: the local package index (UV_INDEX_URL) the runtime
-//                     installs igni-core from
+//                     installs igni-core from, or "pypi" for the app's own default index
 //   IGNI_E2E_OUT      where screenshots and results.json go (default ./desktop-e2e-out)
 //   TAURI_DRIVER      the tauri-driver binary (default: on PATH)
 //   NATIVE_DRIVER     the native WebDriver (msedgedriver on Windows), passed to tauri-driver
@@ -597,9 +597,9 @@ async function firstLaunch() {
 
   const env = appEnv(home, {
     IGNI_DEV_EXTENSIONS: "1",
-    // The runtime install goes to the organisation's own index, never PyPI.
-    UV_INDEX_URL: index,
-    UV_DEFAULT_INDEX: index,
+    // The runtime install goes to the organisation's own index, never PyPI;
+    // "pypi" leaves the app's default, the install a customer's first launch makes.
+    ...(index === "pypi" ? {} : { UV_INDEX_URL: index, UV_DEFAULT_INDEX: index }),
     // No 1.7 GB model download in CI: the prefetch fails fast and is not
     // fatal (igni_core.prefetch_models), which is the documented contract.
     HF_HUB_OFFLINE: "1",
@@ -607,7 +607,7 @@ async function firstLaunch() {
   linkEnv = env;
   await startDriver(env);
 
-  await step("PLAT-012 PLAT-001", "first launch installs the runtime from the local index and opens the chat", async () => {
+  await step("PLAT-012 PLAT-001", `first launch installs the runtime from ${index === "pypi" ? "PyPI" : "the local index"} and opens the chat`, async () => {
     await launch(project);
     await sleep(3_000);
     await shot("01-loading");
