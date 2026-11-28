@@ -13,6 +13,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 
 import { NotificationDays } from "../notifications/dayGroups";
+import { actionWorld } from "../notifications/testing";
 import { NotificationList, when, type FloorNotification } from "./NotificationList";
 
 afterEach(cleanup);
@@ -99,31 +100,41 @@ describe("what a row says", () => {
 });
 
 describe("opening one", () => {
-  it("hands back the whole notification", () => {
-    const opened = vi.fn();
-    render(<NotificationList rows={[row()]} onOpen={opened} />);
+  it("follows what it reaches and hands back the row and the action", () => {
+    const { actions } = actionWorld({ pages: { "igni.artifacts": "Artifacts" } });
+    const followed = vi.fn();
+    render(<NotificationList rows={[row()]} actions={actions} onFollow={followed} />);
 
-    fireEvent.click(screen.getByRole("button"));
+    const open = screen.getByRole("button", { name: "Open Artifacts" });
+    fireEvent.click(open);
 
-    expect(opened).toHaveBeenCalledWith(expect.objectContaining({ id: "n1", target: row().target }));
+    expect(followed).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "n1", target: row().target }),
+      expect.objectContaining({ label: "Open Artifacts" }),
+    );
   });
 
   it("cannot be opened when its page is not here", () => {
     // The extension it is from is not installed on this machine.
-    const opened = vi.fn();
-    render(<NotificationList rows={[row()]} canOpen={() => false} onOpen={opened} />);
+    const { actions } = actionWorld({ pages: {} });
+    const followed = vi.fn();
+    render(<NotificationList rows={[row()]} actions={actions} onFollow={followed} />);
 
-    const button = screen.getByRole("button") as HTMLButtonElement;
-    expect(button.disabled).toBe(true);
-    fireEvent.click(button);
-    expect(opened).not.toHaveBeenCalled();
+    expect(screen.queryByRole("button", { name: /Open/ })).toBeNull();
+    expect(followed).not.toHaveBeenCalled();
   });
 
   it("cannot be opened when it names no page", () => {
-    const opened = vi.fn();
-    render(<NotificationList rows={[row({ target: null })]} onOpen={opened} />);
+    const { actions } = actionWorld();
+    render(<NotificationList rows={[row({ target: null })]} actions={actions} onFollow={vi.fn()} />);
 
-    expect((screen.getByRole("button") as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.queryByRole("button", { name: /Open/ })).toBeNull();
+  });
+
+  it("opens nothing without a resolver", () => {
+    render(<NotificationList rows={[row()]} onFollow={vi.fn()} />);
+
+    expect(screen.queryByRole("button", { name: /Open/ })).toBeNull();
   });
 });
 
@@ -190,7 +201,7 @@ describe("unread, quietly", () => {
     const { container } = render(<NotificationList rows={[row()]} />);
 
     expect(container.querySelector(".notify-row.is-unread .ncard-dot")).toBeTruthy();
-    expect(screen.getByRole("button", { name: /Runbook.*\(unread\)/ })).toBeTruthy();
+    expect(screen.getByText(/Runbook/).textContent).toContain("(unread)");
   });
 
   it("draws no dot on a read row", () => {
@@ -203,7 +214,8 @@ describe("unread, quietly", () => {
   it("offers marking an unread row read, without opening it", () => {
     const marked = vi.fn();
     const opened = vi.fn();
-    render(<NotificationList rows={[row()]} onMarkRead={marked} onOpen={opened} />);
+    const { actions } = actionWorld();
+    render(<NotificationList rows={[row()]} actions={actions} onMarkRead={marked} onFollow={opened} />);
 
     fireEvent.click(screen.getByRole("button", { name: "Mark as read" }));
 
@@ -257,11 +269,17 @@ describe("an empty list", () => {
   });
 });
 
-describe("its category", () => {
+describe("its category and its button", () => {
+  /** A row that names a chat, as an approval notice does. */
+  const inChat = (over: Partial<FloorNotification> = {}) =>
+    row({ kind: "approval", actor: "", target: { page: "session", params: { session_id: "cv" } }, ...over });
+
   it("draws the category's badge, name and hue on every row", () => {
+    const { actions } = actionWorld({ approvals: [{ requirement_id: "r1", tool_name: "bash", friendly_name: "npm install" }] });
     const { container } = render(
       <NotificationList
-        rows={[row({ id: "a", kind: "approval" }), row({ id: "b", kind: "process_failed" }), row({ id: "c", kind: "x" })]}
+        actions={actions}
+        rows={[inChat({ id: "a" }), row({ id: "b", kind: "process_failed" }), row({ id: "c", kind: "x" })]}
       />,
     );
     const cards = [...container.querySelectorAll<HTMLElement>(".ncard")];
@@ -279,43 +297,85 @@ describe("its category", () => {
     for (const card of cards) expect(card.querySelector(".ncard-badge svg path")?.getAttribute("d")).toBeTruthy();
   });
 
-  it("makes an unread approval louder than news, with a primary Review that opens it", () => {
-    const opened = vi.fn();
+  it("makes a waiting approval louder than news, with a button naming it that opens its chat", () => {
+    const { actions, followed } = actionWorld({
+      approvals: [{ requirement_id: "r1", tool_name: "bash", friendly_name: "npm install" }],
+    });
+    const onFollow = vi.fn((_row, action) => action.run());
     const { container } = render(
-      <NotificationList rows={[row({ id: "a", kind: "approval" }), row({ id: "b", kind: "comment" })]} onOpen={opened} />,
+      <NotificationList rows={[inChat({ id: "a" }), row({ id: "b", kind: "comment" })]} actions={actions} onFollow={onFollow} />,
     );
     const [approval, comment] = [...container.querySelectorAll(".ncard")];
     expect(approval.classList.contains("is-prominent")).toBe(true);
     expect(comment.classList.contains("is-prominent")).toBe(false);
 
-    const review = screen.getByRole("button", { name: "Review" });
-    expect(review.className).toContain("button--primary");
-    expect(review.getAttribute("title")).toBe("Open in igni.artifacts");
-    expect(within(comment as HTMLElement).queryByRole("button", { name: /Review|Open|View/ })).toBeNull();
-    fireEvent.click(review);
-    expect(opened).toHaveBeenCalledWith(expect.objectContaining({ id: "a" }));
+    const approve = screen.getByRole("button", { name: "Approve npm install in ‘CV review’" });
+    expect(approve.className).toContain("button--primary");
+    expect(approve.textContent).toBe("Approve npm install in ‘CV review’");
+    expect(within(comment as HTMLElement).queryByRole("button", { name: /Approve|Answer|Review \d/ })).toBeNull();
+    fireEvent.click(approve);
+    expect(followed).toEqual([{ to: "chat", sessionId: "cv" }]);
   });
 
-  it("quiets an approval once read: no longer prominent, its button secondary", () => {
-    const { container } = render(<NotificationList rows={[row({ kind: "approval", read: true })]} onOpen={() => {}} />);
+  it("counts several approvals waiting in the chat", () => {
+    const { actions } = actionWorld({
+      approvals: [
+        { requirement_id: "r1", tool_name: "bash", friendly_name: "" },
+        { requirement_id: "r2", tool_name: "write", friendly_name: "" },
+        { requirement_id: "r3", tool_name: "edit", friendly_name: "" },
+      ],
+    });
+    render(<NotificationList rows={[inChat()]} actions={actions} />);
+    expect(screen.getByRole("button", { name: "Review 3 approvals in ‘CV review’" })).toBeTruthy();
+  });
+
+  it("demotes the card the moment its approval is answered: no longer Needs you, its button the chat", () => {
+    const pending = actionWorld({ approvals: [{ requirement_id: "r1", tool_name: "bash", friendly_name: "npm install" }] });
+    const answered = actionWorld({ approvals: null });
+    const { container, rerender } = render(<NotificationList rows={[inChat()]} actions={pending.actions} />);
+    expect(container.querySelector(".ncard")?.getAttribute("data-category")).toBe("approval");
+
+    rerender(<NotificationList rows={[inChat()]} actions={answered.actions} />);
     expect(container.querySelector(".ncard.is-prominent")).toBeNull();
-    expect(screen.getByRole("button", { name: "Review" }).className).toContain("button--secondary");
+    expect(container.querySelector(".ncard")?.getAttribute("data-category")).not.toBe("approval");
+    expect(screen.queryByRole("button", { name: /Approve|Review \d|Answer/ })).toBeNull();
+    // The card still opens the chat, which is still there; it just says so.
+    expect(screen.getByRole("button", { name: "Open chat ‘CV review’" })).toBeTruthy();
   });
 
-  it("opens a failed run's chat from its button", () => {
-    const opened = vi.fn();
+  it("gives a row whose kind only says review no decision and no decision button", () => {
+    const { actions } = actionWorld({ pages: { "igni.artifacts": "Artifacts" } });
+    const { container } = render(
+      <NotificationList rows={[row({ kind: "review_requested" }), row({ id: "b", kind: "approval" })]} actions={actions} />,
+    );
+    expect(container.querySelector('[data-category="approval"]')).toBeNull();
+    expect(screen.queryByRole("button", { name: /Approve|Review \d|Answer/ })).toBeNull();
+  });
+
+  it("names the chat a failure opens, cut short on the button and whole in its label", () => {
+    const { actions, followed } = actionWorld();
     render(
       <NotificationList
-        rows={[row({ kind: "process_failed", target: { page: "session", params: { session_id: "s" } } })]}
-        onOpen={opened}
+        rows={[row({ kind: "process_failed", target: { page: "session", params: { session_id: "billing" } } })]}
+        actions={actions}
+        onFollow={(_row, action) => action.run()}
       />,
     );
-    fireEvent.click(screen.getByRole("button", { name: "Open chat" }));
-    expect(opened).toHaveBeenCalledOnce();
+    const full = "Open chat ‘Trace the billing flow through the gateway and the ledger’";
+    const open = screen.getByRole("button", { name: full });
+    expect(open.textContent).toBe("Open chat ‘Trace the billing flow…’");
+    fireEvent.click(open);
+    expect(followed).toEqual([{ to: "chat", sessionId: "billing" }]);
   });
 
-  it("offers no button where it cannot open", () => {
-    render(<NotificationList rows={[row({ kind: "approval" })]} canOpen={() => false} onOpen={() => {}} />);
-    expect(screen.queryByRole("button", { name: "Review" })).toBeNull();
+  it("offers no button for a chat that is gone", () => {
+    const { actions } = actionWorld();
+    render(
+      <NotificationList
+        rows={[row({ kind: "process_failed", target: { page: "session", params: { session_id: "deleted" } } })]}
+        actions={actions}
+      />,
+    );
+    expect(document.querySelector(".ncard-action")).toBeNull();
   });
 });

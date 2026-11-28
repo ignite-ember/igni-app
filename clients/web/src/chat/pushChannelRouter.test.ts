@@ -55,7 +55,7 @@ describe("PushChannelRouter", () => {
     expect(deps.notifier.notify).toHaveBeenCalledWith({
       title: "Scheduled task completed",
       body: "d\n\nr",
-      target: { kind: "schedule", label: "Scheduled tasks" },
+      target: { kind: "schedule", label: "Scheduled tasks", params: { name: "d" } },
       data: { channel: "scheduler_completed", task_id: "t" },
       category: "background",
     });

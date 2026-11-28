@@ -1,7 +1,8 @@
 /** One notification, drawn the same as a toast and as a row of the
  *  sheet: its category's badge, its title and line, where it is from and
- *  when, and its button. What it says is {@link NotificationCard}'s; the
- *  wrapper decides what opening it and the corner button do. */
+ *  when, and — when it reaches something — a button naming it. What it
+ *  says and reaches is {@link NotificationCard}'s; the wrapper decides
+ *  what else following it does (dismiss, mark read, close the sheet). */
 
 import type { CSSProperties, HTMLAttributes, ReactNode } from "react";
 
@@ -9,39 +10,25 @@ import type { NotificationCard as Card } from "../notifications/notificationCard
 import { CategoryIcon } from "./Icons";
 import { Button } from "./page/Button";
 
-export interface CardOpener {
-  onOpen: () => void;
-  /** Its tooltip: where it goes, or why it cannot. */
-  title?: string;
-  disabled?: boolean;
-  /** `button`: the text is a button (the sheet). `pointer`: a click
-   *  target, with the keyboard on the buttons beside it (a toast). */
-  as: "button" | "pointer";
-}
-
 export function NotificationCard({
   card,
   variant,
-  opener,
-  onAction,
-  actionTitle,
+  onFollow,
   face,
   corner,
   rootProps,
 }: {
   card: Card;
   variant: "toast" | "row";
-  opener: CardOpener;
-  /** What the button does; drawn only when the card has a label for it. */
-  onAction?: () => void;
-  /** The button's tooltip: where it goes. */
-  actionTitle?: string;
+  /** Follow the card's action: the wrapper runs it, and its own part. */
+  onFollow: () => void;
   /** Who did it, over the badge's corner. */
   face?: ReactNode;
   /** Dismiss or mark read, top right. */
   corner?: ReactNode;
   rootProps?: HTMLAttributes<HTMLDivElement>;
 }) {
+  const action = card.action;
   const classes = [
     "ncard",
     `ncard--${variant}`,
@@ -85,38 +72,35 @@ export function NotificationCard({
         <CategoryIcon category={card.category.key} size={16} />
         {face && <span className="ncard-face">{face}</span>}
       </span>
-      {opener.as === "button" ? (
-        <button
-          type="button"
-          className="ncard-open"
-          disabled={opener.disabled}
-          title={opener.title}
-          onClick={() => !opener.disabled && opener.onOpen()}
-        >
-          {said}
-        </button>
-      ) : (
-        <div className="ncard-open" title={opener.title} onClick={opener.onOpen}>
-          {said}
-        </div>
-      )}
-      {card.unread && variant === "row" && <span className="ncard-dot" aria-hidden="true" />}
-      {(corner || (card.action && onAction)) && (
-        <div className="ncard-side">
-          {corner && <div className="ncard-corner">{corner}</div>}
-          {card.action && onAction && (
+      <div className="ncard-col">
+        {variant === "row" ? (
+          // The sheet: the words are words. Only the button opens
+          // anything, and it says what it opens.
+          <div className="ncard-open">{said}</div>
+        ) : (
+          // A toast: the text is a click target for the pointer; the
+          // keyboard has the buttons beside it.
+          <div className="ncard-open" title={action?.label} onClick={onFollow}>
+            {said}
+          </div>
+        )}
+        {action && card.button && (
+          <div className="ncard-actions">
             <Button
               size="sm"
               variant={card.prominent ? "primary" : "secondary"}
               className="ncard-action"
-              title={actionTitle}
-              onClick={onAction}
+              label={action.label}
+              title={action.label}
+              onClick={onFollow}
             >
-              {card.action}
+              {action.text}
             </Button>
-          )}
-        </div>
-      )}
+          </div>
+        )}
+      </div>
+      {card.unread && variant === "row" && <span className="ncard-dot" aria-hidden="true" />}
+      {corner && <div className="ncard-corner">{corner}</div>}
     </div>
   );
 }

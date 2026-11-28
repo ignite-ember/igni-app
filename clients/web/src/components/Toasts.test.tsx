@@ -15,7 +15,26 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { Toasts } from "./Toasts";
+import type { PageRoute } from "../chat/pageStack";
 import type { ModelToast } from "../clientState";
+import { NotificationActions } from "../notifications/notificationActions";
+import { actionWorld } from "../notifications/testing";
+import { UpdateInfo } from "../update/updateInfo";
+
+/** Every page installed; following a toast to one calls `onOpen`. */
+function opens(onOpen: (route: PageRoute) => void): NotificationActions {
+  return new NotificationActions(
+    { ...NOWHERE, pages: { has: () => true, label: (kind) => kind } },
+    { openChat: () => {}, openPage: onOpen, showUpdate: () => {} },
+  );
+}
+const NOWHERE = {
+  chats: [],
+  states: { of: () => ({ activity: "idle" as const, unread: false }) },
+  currentChat: "",
+  approvals: null,
+  update: null,
+};
 
 /** A toast as the window model holds it. */
 function toast(id: number, text: string, extra: Partial<ModelToast> = {}): ModelToast {
@@ -80,7 +99,7 @@ describe("Toasts — body button (primary action)", () => {
       <Toasts
         items={[toast(7, "click me", { target: SCHEDULE })]}
         onDismiss={onDismiss}
-        onOpen={onOpen}
+        actions={opens(onOpen)}
       />,
     );
     fireEvent.click(screen.getByText("click me"));
@@ -97,7 +116,7 @@ describe("Toasts — body button (primary action)", () => {
       <Toasts
         items={[toast(7, "click me", { target: SCHEDULE })]}
         onDismiss={onDismiss}
-        onOpen={onOpen}
+        actions={opens(onOpen)}
       />,
     );
     fireEvent.click(screen.getByText("click me"));
@@ -159,7 +178,7 @@ describe("Toasts — dismiss (X) button", () => {
       <Toasts
         items={[toast(7, "x", { target: SCHEDULE })]}
         onDismiss={onDismiss}
-        onOpen={onOpen}
+        actions={opens(onOpen)}
       />,
     );
     fireEvent.click(screen.getByLabelText("Dismiss"));
@@ -247,8 +266,8 @@ describe("Toasts — holding the countdown", () => {
 
   it("keeps holding when focus moves between its own buttons", () => {
     const onDismiss = vi.fn();
-    render(<Toasts items={[toast(7, "x", { target: SCHEDULE })]} onDismiss={onDismiss} />);
-    const open = screen.getByRole("button", { name: "Open" });
+    render(<Toasts items={[toast(7, "x", { target: SCHEDULE })]} onDismiss={onDismiss} actions={opens(() => {})} />);
+    const open = screen.getByRole("button", { name: "Open Scheduled tasks" });
     const close = screen.getByRole("button", { name: "Dismiss" });
     act(() => open.focus());
     act(() => close.focus());
@@ -311,12 +330,12 @@ describe("Toasts — Escape and the action", () => {
     const onOpen = vi.fn();
     const onDismiss = vi.fn();
     render(
-      <Toasts items={[toast(1, "a", { target: SCHEDULE }), toast(2, "b")]} onDismiss={onDismiss} onOpen={onOpen} />,
+      <Toasts items={[toast(1, "a", { target: SCHEDULE }), toast(2, "b")]} onDismiss={onDismiss} actions={opens(onOpen)} />,
     );
-    const opens = screen.getAllByRole("button", { name: "Open" });
-    expect(opens).toHaveLength(1);
-    expect(opens[0].getAttribute("title")).toBe("Open Scheduled tasks");
-    fireEvent.click(opens[0]);
+    const buttons = screen.getAllByRole("button", { name: "Open Scheduled tasks" });
+    expect(buttons).toHaveLength(1);
+    expect(buttons[0].textContent).toBe("Open Scheduled tasks");
+    fireEvent.click(buttons[0]);
     expect(onOpen).toHaveBeenCalledWith(SCHEDULE);
     act(() => {
       vi.advanceTimersByTime(150);
@@ -374,11 +393,13 @@ describe("Toasts — clear of the composer", () => {
 });
 
 describe("Toasts — each in its category's identity", () => {
-  const SESSION = { kind: "session", label: "Billing" };
+  const CV = { kind: "session", label: "CV review", params: { session_id: "cv" } };
+  const NPM = { requirement_id: "r1", tool_name: "bash", friendly_name: "npm install" };
 
   it("draws each category's badge, name and hue", () => {
+    const { actions } = actionWorld({ approvals: [NPM] });
     const items = [
-      toast(1, "a", { category: "approval" }),
+      toast(1, "a", { category: "approval", target: CV }),
       toast(2, "b", { category: "failed", kind: "error" }),
       toast(3, "c", { category: "background" }),
       toast(4, "d", { category: "update" }),
@@ -386,7 +407,7 @@ describe("Toasts — each in its category's identity", () => {
       toast(6, "f", { kind: "success", source: "acme.idx" }),
       toast(7, "g"),
     ];
-    const { container } = render(<Toasts items={items} onDismiss={() => {}} />);
+    const { container } = render(<Toasts items={items} onDismiss={() => {}} actions={actions} />);
     const cards = [...container.querySelectorAll<HTMLElement>(".toast.ncard")];
     expect(cards.map((c) => c.dataset.category)).toEqual([
       "approval",
@@ -414,30 +435,79 @@ describe("Toasts — each in its category's identity", () => {
     expect(screen.getByText("igni")).toBeTruthy();
   });
 
-  it("makes an approval prominent, with a primary Review that opens it", () => {
-    const onOpen = vi.fn();
+  it("makes a waiting approval prominent, its primary button naming it and opening its chat", () => {
+    const { actions, followed } = actionWorld({ approvals: [NPM] });
     const { container } = render(
-      <Toasts items={[toast(1, "Approve?", { category: "approval", target: SESSION })]} onDismiss={() => {}} onOpen={onOpen} />,
+      <Toasts items={[toast(1, "Approve?", { category: "approval", target: CV })]} onDismiss={() => {}} actions={actions} />,
     );
     expect(container.querySelector(".toast.is-prominent")).toBeTruthy();
-    const review = screen.getByRole("button", { name: "Review" });
-    expect(review.className).toContain("button--primary");
-    fireEvent.click(review);
-    expect(onOpen).toHaveBeenCalledWith(SESSION);
+    const approve = screen.getByRole("button", { name: "Approve npm install in ‘CV review’" });
+    expect(approve.className).toContain("button--primary");
+    fireEvent.click(approve);
+    expect(followed).toEqual([{ to: "chat", sessionId: "cv" }]);
   });
 
-  it("opens a failed run's chat, and keeps news quiet", () => {
-    const onOpen = vi.fn();
+  it("leaves the moment its approval is answered", () => {
+    const onDismiss = vi.fn();
+    const items = [toast(1, "Approve?", { category: "approval", target: CV }), toast(2, "News")];
+    const { container, rerender } = render(
+      <Toasts items={items} onDismiss={onDismiss} actions={actionWorld({ approvals: [NPM] }).actions} />,
+    );
+    expect(container.querySelectorAll(".toast")).toHaveLength(2);
+
+    rerender(<Toasts items={items} onDismiss={onDismiss} actions={actionWorld({ approvals: null }).actions} />);
+    expect(screen.queryByText("Approve?")).toBeNull();
+    expect(screen.getByText("News")).toBeTruthy();
+    expect(onDismiss).toHaveBeenCalledWith("t1");
+    expect(onDismiss).not.toHaveBeenCalledWith("t2");
+  });
+
+  it("never shows an approval igni claimed without a decision behind it", () => {
+    const onDismiss = vi.fn();
+    render(<Toasts items={[toast(1, "Approve?", { category: "approval" })]} onDismiss={onDismiss} />);
+    expect(screen.queryByText("Approve?")).toBeNull();
+    expect(onDismiss).toHaveBeenCalledWith("t1");
+  });
+
+  it("opens a failed run's chat by name, and keeps news quiet", () => {
+    const { actions, followed } = actionWorld();
     const { container } = render(
       <Toasts
-        items={[toast(1, "Failed", { category: "failed", kind: "error", target: SESSION }), toast(2, "News")]}
+        items={[toast(1, "Failed", { category: "failed", kind: "error", target: CV }), toast(2, "News")]}
         onDismiss={() => {}}
-        onOpen={onOpen}
+        actions={actions}
       />,
     );
     expect(container.querySelectorAll(".is-prominent")).toHaveLength(0);
-    fireEvent.click(screen.getByRole("button", { name: "Open chat" }));
-    expect(onOpen).toHaveBeenCalledWith(SESSION);
+    fireEvent.click(screen.getByRole("button", { name: "Open chat ‘CV review’" }));
+    expect(followed).toEqual([{ to: "chat", sessionId: "cv" }]);
+  });
+
+  it("offers the waiting update by its version, and nothing when none waits", () => {
+    const info = UpdateInfo.parse({ available: true, current_version: "1.0.7", latest_version: "1.0.8" })!;
+    const waiting = actionWorld({ update: info });
+    const { rerender } = render(
+      <Toasts items={[toast(1, "Update ready", { category: "update" })]} onDismiss={() => {}} actions={waiting.actions} />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Restart to update to 1.0.8" }));
+    expect(waiting.followed).toEqual([{ to: "update", version: "1.0.8" }]);
+
+    rerender(<Toasts items={[toast(2, "Up to date", { category: "update" })]} onDismiss={() => {}} actions={actionWorld().actions} />);
+    expect(screen.queryByRole("button", { name: /Restart/ })).toBeNull();
+  });
+
+  it("names the scheduled task it shows", () => {
+    const { actions, followed } = actionWorld({ pages: { schedule: "Scheduled tasks" } });
+    const target = { kind: "schedule", label: "Scheduled tasks", params: { name: "nightly sync" } };
+    render(<Toasts items={[toast(1, "Done", { category: "background", target })]} onDismiss={() => {}} actions={actions} />);
+    fireEvent.click(screen.getByRole("button", { name: "Show ‘nightly sync’ in Scheduled tasks" }));
+    expect(followed).toEqual([{ to: "page", route: target }]);
+  });
+
+  it("offers nothing for a page that is not installed", () => {
+    const { actions } = actionWorld({ pages: {} });
+    render(<Toasts items={[toast(1, "x", { target: SCHEDULE })]} onDismiss={() => {}} actions={actions} />);
+    expect(document.querySelector(".ncard-action")).toBeNull();
   });
 });
 

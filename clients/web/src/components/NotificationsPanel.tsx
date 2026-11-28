@@ -9,18 +9,17 @@
  * (`FadeScroll`). The list is the floor's, not an extension's: igni's
  * backend merges what igni server delivered with what extensions on
  * this machine told it (igni server's `docs/service-identity.md` §10).
- * Opening a row goes to the extension page it names and marks it read
- * where it lives; the backend knows which.
+ * Opening a row follows what it reaches ({@link NotificationActions})
+ * and marks it read where it lives; the backend knows which.
  */
 import { useEffect, useState } from "react";
 
 import type { CategoryKey } from "../notifications/category";
 import { CategoryFilter } from "../notifications/categoryFilter";
-import type {
-  FloorNotification,
-  NotificationCounts,
-  NotificationTarget,
-} from "../notifications/model";
+import type { FloorNotification, NotificationCounts } from "../notifications/model";
+import type { NotificationAction } from "../notifications/notificationAction";
+import { NotificationActions } from "../notifications/notificationActions";
+import { NotificationCategories } from "../notifications/categories";
 import { useFloorNotifications } from "../notifications/useFloorNotifications";
 import type { IgniClient } from "../protocol/client";
 import { CategoryChips } from "./CategoryChips";
@@ -42,19 +41,16 @@ const TABS = [
 export function NotificationsPanel({
   client,
   sourceName,
-  canOpen,
-  onOpenTarget,
+  actions = NotificationActions.NONE,
   onCountsChanged,
   onClose,
 }: {
   client: IgniClient;
   /** The extension's name, for its id. */
   sourceName?: (source: string) => string;
-  /** Whether this app has a page called `page` right now. */
-  canOpen?: (page: string) => boolean;
-  /** Go to the page a notification names. The panel closes on the way,
+  /** What each row reaches. Following one closes the panel on the way,
    *  so it does not cover the answer. */
-  onOpenTarget?: (target: NotificationTarget, row: FloorNotification) => void;
+  actions?: NotificationActions;
   /** The counts, every time this learns them — marking something read
    *  moves every badge, not only this list. */
   onCountsChanged?: (counts: NotificationCounts) => void;
@@ -72,14 +68,13 @@ export function NotificationsPanel({
     return () => document.removeEventListener("keydown", onKey);
   }, [onClose]);
 
-  const filter = new CategoryFilter(feed.rows);
+  const filter = new CategoryFilter(feed.rows, (row) => NotificationCategories.forFloor(row, actions.forFloor(row)));
   const only = filter.active(category);
-  const shown = CategoryFilter.apply(show === "unread" ? feed.rows.filter((row) => !row.read) : feed.rows, only);
-  const open = (row: FloorNotification) => {
-    if (!row.target) return;
+  const shown = filter.apply(show === "unread" ? feed.rows.filter((row) => !row.read) : feed.rows, only);
+  const follow = (row: FloorNotification, action: NotificationAction) => {
     // Opening it is what reading it means.
     if (!row.read) void feed.markRead([row.id]);
-    onOpenTarget?.(row.target, row);
+    action.run();
     onClose();
   };
 
@@ -124,8 +119,8 @@ export function NotificationsPanel({
             <NotificationList
               rows={shown}
               sourceName={sourceName}
-              canOpen={(row) => !!row.target && (canOpen?.(row.target.page) ?? true)}
-              onOpen={open}
+              actions={actions}
+              onFollow={follow}
               onMarkRead={(row) => void feed.markRead([row.id])}
               empty={
                 show === "unread" && feed.rows.length ? (

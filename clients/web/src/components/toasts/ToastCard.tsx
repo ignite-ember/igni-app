@@ -1,11 +1,11 @@
 /** One toast: the shared notification card in its category's identity,
- *  a way to where it points, and a dismiss. Escape, with focus inside
- *  it, dismisses it. */
+ *  a button naming what it reaches (when it reaches something), and a
+ *  dismiss. Escape, with focus inside it, dismisses it. */
 
 import type { KeyboardEvent } from "react";
 
-import type { PageRoute } from "../../chat/pageStack";
 import type { ModelToast } from "../../clientState";
+import type { NotificationAction } from "../../notifications/notificationAction";
 import { NotificationCard as Card } from "../../notifications/notificationCard";
 import { ToastTone } from "../../notifications/toastTone";
 import { CloseIcon } from "../Icons";
@@ -15,22 +15,22 @@ import { useToastLifecycle } from "./useToastLifecycle";
 
 export function ToastCard({
   toast,
+  action,
   onDismiss,
-  onOpen,
   sourceName,
 }: {
   toast: ModelToast;
+  /** What following it does, resolved against what is there now. */
+  action: NotificationAction | null;
   onDismiss: () => void;
-  onOpen?: (target: PageRoute) => void;
   sourceName?: (id: string) => string;
 }) {
   const { closing, close, hold } = useToastLifecycle(toast.id, onDismiss);
   const tone = ToastTone.of(toast.kind);
-  const card = Card.fromToast(toast, sourceName);
-  const target = toast.target ?? null;
+  const card = Card.fromToast(toast, action, sourceName);
 
-  const open = () => {
-    if (target) onOpen?.(target);
+  const follow = () => {
+    action?.run();
     close();
   };
   const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
@@ -43,9 +43,7 @@ export function ToastCard({
     <NotificationCard
       card={card}
       variant="toast"
-      opener={{ as: "pointer", onOpen: open, title: target ? `Open ${target.label}` : undefined }}
-      onAction={target ? open : undefined}
-      actionTitle={target ? `Open ${target.label}` : undefined}
+      onFollow={follow}
       corner={
         <Button variant="icon" size="sm" className="toast-close" label="Dismiss" onClick={close}>
           <CloseIcon size={12} />

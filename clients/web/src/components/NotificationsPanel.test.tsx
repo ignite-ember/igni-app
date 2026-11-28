@@ -11,6 +11,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 
+import { actionWorld } from "../notifications/testing";
 import { NotificationsPanel } from "./NotificationsPanel";
 import type { FloorNotification, NotificationCounts } from "../notifications/model";
 
@@ -133,29 +134,22 @@ describe("what it lists", () => {
 });
 
 describe("opening one", () => {
-  it("goes to its page with its params, marks it read, and closes", async () => {
+  it("follows what it reaches, marks it read, and closes", async () => {
     const { client, calls } = backendWith([row()]);
-    const opened = vi.fn();
+    const { actions, followed } = actionWorld({ pages: { "igni.artifacts": "Artifacts" } });
     const closed = vi.fn();
     const told: NotificationCounts[] = [];
 
     render(
-      <NotificationsPanel
-        client={client}
-        canOpen={(page) => page === "igni.artifacts"}
-        onOpenTarget={opened}
-        onCountsChanged={(c) => told.push(c)}
-        onClose={closed}
-      />,
+      <NotificationsPanel client={client} actions={actions} onCountsChanged={(c) => told.push(c)} onClose={closed} />,
     );
     await waitFor(() => expect(screen.getByText("Runbook")).toBeTruthy());
 
-    fireEvent.click(screen.getByTitle(/Open in/));
+    fireEvent.click(screen.getByRole("button", { name: "Open Artifacts" }));
 
-    expect(opened).toHaveBeenCalledWith(
-      { page: "igni.artifacts", params: { slug: "runbook", comment: "c1" } },
-      expect.objectContaining({ id: "s1" }),
-    );
+    expect(followed).toEqual([
+      { to: "page", route: { kind: "igni.artifacts", label: "Artifacts", params: { slug: "runbook", comment: "c1" } } },
+    ]);
     expect(closed).toHaveBeenCalled();
     await waitFor(() =>
       expect(calls).toContainEqual({ method: "notifications_mark_read", args: { ids: ["s1"] } }),
@@ -165,25 +159,38 @@ describe("opening one", () => {
 
   it("does not mark again what was already read", async () => {
     const { client, calls } = backendWith([row({ read: true })]);
-    render(<NotificationsPanel client={client} onOpenTarget={() => {}} onClose={() => {}} />);
+    const { actions } = actionWorld();
+    render(<NotificationsPanel client={client} actions={actions} onClose={() => {}} />);
     await waitFor(() => expect(screen.getByText("Runbook")).toBeTruthy());
 
-    fireEvent.click(screen.getByTitle(/Open in/));
+    fireEvent.click(screen.getByRole("button", { name: /Open/ }));
 
     expect(calls.some((c) => c.method === "notifications_mark_read")).toBe(false);
   });
 
   it("cannot open one whose page this app does not have", async () => {
     const { client } = backendWith([row()]);
-    const opened = vi.fn();
-    render(
-      <NotificationsPanel client={client} canOpen={() => false} onOpenTarget={opened} onClose={() => {}} />,
-    );
+    const { actions, followed } = actionWorld({ pages: {} });
+    const closed = vi.fn();
+    render(<NotificationsPanel client={client} actions={actions} onClose={closed} />);
     await waitFor(() => expect(screen.getByText("Runbook")).toBeTruthy());
 
-    fireEvent.click(screen.getByRole("button", { name: /Runbook/ }));
+    // No button, so nothing to press and nothing followed.
+    expect(screen.queryByRole("button", { name: /Open/ })).toBeNull();
+    expect(followed).toEqual([]);
+    expect(closed).not.toHaveBeenCalled();
+  });
 
-    expect(opened).not.toHaveBeenCalled();
+  it("opens the chat of a waiting approval from its button", async () => {
+    const { client } = backendWith([
+      row({ kind: "approval", actor: "", target: { page: "session", params: { session_id: "infra" } } }),
+    ]);
+    const { actions, followed } = actionWorld({ waiting: ["infra"] });
+    render(<NotificationsPanel client={client} actions={actions} onClose={() => {}} />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Answer the approval in ‘Infra cleanup’" }));
+
+    expect(followed).toEqual([{ to: "chat", sessionId: "infra" }]);
   });
 });
 
@@ -328,14 +335,33 @@ describe("marking one read from its row", () => {
 
 describe("filtering by category", () => {
   const rows = () => [
-    row({ id: "a", kind: "approval", title: "Approve deploy" }),
+    row({ id: "a", kind: "approval", title: "Approve deploy", target: { page: "session", params: { session_id: "cv" } } }),
     row({ id: "b", kind: "comment", title: "Ada commented" }),
-    row({ id: "c", kind: "approval", title: "Approve merge", read: true }),
+    row({ id: "c", kind: "approval", title: "Approve merge", read: true, target: { page: "session", params: { session_id: "infra" } } }),
   ];
+
+  /** Both approval rows' chats still waiting. */
+  const waiting = () =>
+    actionWorld({
+      waiting: ["infra"],
+      approvals: [{ requirement_id: "r1", tool_name: "bash", friendly_name: "npm test" }],
+    }).actions;
+
+  it("files a row whose kind only says approval under its extension, not Needs you", async () => {
+    const { client } = backendWith(rows());
+    render(<NotificationsPanel client={client} onClose={() => {}} />);
+    await waitFor(() => expect(screen.getByText("Approve deploy")).toBeTruthy());
+
+    const group = screen.getByRole("group", { name: "Filter by category" });
+    expect(within(group).getAllByRole("button").map((b) => b.getAttribute("aria-label"))).toEqual([
+      "Mentions, 1",
+      "Extensions, 2",
+    ]);
+  });
 
   it("offers a chip per category present, with its count", async () => {
     const { client } = backendWith(rows());
-    render(<NotificationsPanel client={client} onClose={() => {}} />);
+    render(<NotificationsPanel client={client} actions={waiting()} onClose={() => {}} />);
     await waitFor(() => expect(screen.getByText("Approve deploy")).toBeTruthy());
 
     const group = screen.getByRole("group", { name: "Filter by category" });
@@ -347,7 +373,7 @@ describe("filtering by category", () => {
 
   it("shows only the chosen category, and every one again when chosen twice", async () => {
     const { client } = backendWith(rows());
-    render(<NotificationsPanel client={client} onClose={() => {}} />);
+    render(<NotificationsPanel client={client} actions={waiting()} onClose={() => {}} />);
     await waitFor(() => expect(screen.getByText("Approve deploy")).toBeTruthy());
 
     const chip = screen.getByRole("button", { name: "Mentions, 1" });
@@ -364,7 +390,7 @@ describe("filtering by category", () => {
 
   it("combines with Unread", async () => {
     const { client } = backendWith(rows());
-    render(<NotificationsPanel client={client} onClose={() => {}} />);
+    render(<NotificationsPanel client={client} actions={waiting()} onClose={() => {}} />);
     await waitFor(() => expect(screen.getByText("Approve deploy")).toBeTruthy());
 
     fireEvent.click(screen.getByRole("button", { name: "Needs you, 2" }));
@@ -377,7 +403,7 @@ describe("filtering by category", () => {
 
   it("draws no chips when every row is in one category", async () => {
     const { client } = backendWith([row(), row({ id: "s2", title: "Other" })]);
-    render(<NotificationsPanel client={client} onClose={() => {}} />);
+    render(<NotificationsPanel client={client} actions={waiting()} onClose={() => {}} />);
     await waitFor(() => expect(screen.getByText("Other")).toBeTruthy());
     expect(screen.queryByRole("group", { name: "Filter by category" })).toBeNull();
   });

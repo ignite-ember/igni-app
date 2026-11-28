@@ -4812,13 +4812,27 @@ button.activity-file-chip:focus-visible {
 .ncard {
   --ncard-hue: var(--notify-hue-notice);
   position: relative;
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  align-items: start;
-  column-gap: var(--space-6);
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-6);
   padding: var(--space-6) var(--space-5) var(--space-6) var(--space-6);
   border: 1px solid transparent;
   border-radius: var(--radius);
+}
+
+/* The text, and the button under it: a long name never squeezes the
+   words beside it. */
+.ncard-col {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.ncard-actions {
+  display: flex;
+  justify-content: flex-end;
 }
 
 .ncard-badge {
@@ -4918,21 +4932,24 @@ button.activity-file-chip:focus-visible {
   color: color-mix(in srgb, var(--ncard-hue) 70%, var(--fg));
 }
 
-.ncard-side {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: var(--space-4);
-  align-self: stretch;
-}
-
+/* The corner button, top right, over the card's own edge. */
 .ncard-corner {
-  margin: -4px -2px 0 0;
+  position: absolute;
+  top: var(--space-4);
+  right: var(--space-4);
+  margin: 0;
 }
 
+/* A long name wraps inside the button rather than running out of the
+   card; the whole name is in its tooltip and its accessible name. */
 .ncard-action {
-  margin-top: auto;
+  display: block;
+  max-width: 100%;
+  min-width: 0;
+  white-space: normal;
+  line-height: 1.35;
+  text-align: left;
+  overflow-wrap: anywhere;
 }
 
 /* Waits on you: louder, but still one card among many. */
@@ -6679,18 +6696,23 @@ button.activity-file-chip:focus-visible {
   opacity: 0.7;
 }
 
-/* Unread: a dot in the category's hue, top right, giving way to the
-   row's mark-read button when that shows. */
+/* Unread: a dot in the category's hue, top right, beside the row's
+   mark-read button, which shows in its place on hover. */
 .ncard-dot {
   position: absolute;
-  top: 19px;
-  right: var(--space-7);
+  top: 20px;
+  right: var(--space-12);
   width: 7px;
   height: 7px;
   border-radius: var(--radius-circle);
   background: var(--ncard-hue);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--ncard-hue) 18%, transparent);
   transition: opacity 0.12s ease;
+}
+
+/* Room for the corner button the dot shares the corner with. */
+.ncard--row .ncard-col {
+  padding-right: var(--space-12);
 }
 
 .ncard--row .ncard-corner {

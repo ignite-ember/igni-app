@@ -341,7 +341,14 @@ export default function App() {
         contributions={contributions}
         extensions={extensions}
         projectDir={projectDir}
+        chats={sessions}
+        chatStates={sessionStates}
+        currentChat={sessionId}
+        approvals={hitl.pending}
+        pendingUpdate={updateCheck.pendingUpdate}
         onOpen={navigator.openPage}
+        onOpenChat={actions.pickSession}
+        onShowUpdate={updateCheck.showUpdate}
         onPickFolder={actions.attachFolder}
         onCountsChanged={setNotificationCounts}
         onSignedIn={actions.signedIn}

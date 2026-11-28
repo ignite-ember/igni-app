@@ -54,7 +54,8 @@ export class PushNotice {
       body,
       { channel: ev.channel, task_id: ev.taskId },
       "background",
-      { kind: "schedule", label: "Scheduled tasks" },
+      // The task by name, so its button says which one it shows.
+      { kind: "schedule", label: "Scheduled tasks", ...(ev.description ? { params: { name: ev.description } } : {}) },
     );
   }
 

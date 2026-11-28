@@ -1,11 +1,13 @@
 /** What one notification card shows, whether it is a toast or a row of
  *  the sheet: its category, its words, where it is from and when, and
- *  the label on its button. Built here so the card itself only draws. */
+ *  what opening it does ({@link NotificationActions}). Built here so the
+ *  card itself only draws. */
 
 import type { ModelToast } from "../clientState";
 import { NotificationCategories } from "./categories";
 import type { NotificationCategory } from "./category";
 import type { FloorNotification } from "./model";
+import type { NotificationAction } from "./notificationAction";
 import { ToastTone, type Severity } from "./toastTone";
 
 /** igni's own name, as the source of a toast igni raised. */
@@ -26,13 +28,18 @@ export class NotificationCard {
     /** When, in words; empty when it cannot be said. */
     readonly when: string,
     readonly unread: boolean,
-    /** The button's label when it points somewhere; empty when it does not. */
-    readonly action: string,
+    /** What opening it does; `null` when there is nothing to open. */
+    readonly action: NotificationAction | null,
+    /** The action is drawn as a button, not only on a click of the card. */
+    readonly button: boolean,
   ) {}
 
-  static fromToast(toast: ModelToast, sourceName: (id: string) => string = (id) => id): NotificationCard {
-    const category = NotificationCategories.forToast(toast);
-    const target = toast.target ?? null;
+  static fromToast(
+    toast: ModelToast,
+    action: NotificationAction | null,
+    sourceName: (id: string) => string = (id) => id,
+  ): NotificationCard {
+    const category = NotificationCategories.forToast(toast, action);
     return new NotificationCard(
       category,
       ToastTone.of(toast.kind).severity,
@@ -43,17 +50,18 @@ export class NotificationCard {
       "",
       "now",
       true,
-      target ? category.actionLabel(target.kind) : "",
+      action,
+      action !== null,
     );
   }
 
   static fromFloor(
     row: FloorNotification,
     source: string,
-    openable: boolean,
+    action: NotificationAction | null,
     now: number = Date.now(),
   ): NotificationCard {
-    const category = NotificationCategories.forFloor(row);
+    const category = NotificationCategories.forFloor(row, action);
     return new NotificationCard(
       category,
       category.severity,
@@ -64,13 +72,14 @@ export class NotificationCard {
       row.actor && row.actor !== source ? row.actor : "",
       relativeTime(row.created_at, now),
       !row.read,
-      openable && row.target && category.actionable ? category.actionLabel(row.target.page) : "",
+      action,
+      action !== null,
     );
   }
 
-  /** Waits on the person and has not been dealt with: drawn louder. */
+  /** A decision still waiting on the person: drawn louder. */
   get prominent(): boolean {
-    return this.category.needsYou && this.unread;
+    return this.category.needsYou;
   }
 
   /** The hue it is drawn in: its category's, or the warning's for a

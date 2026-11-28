@@ -11,6 +11,7 @@ import * as path from "node:path";
 import { NotificationCategories } from "./categories";
 import type { CategoryKey } from "./category";
 import { PushNotice } from "./pushNotice";
+import { actionWorld } from "./testing";
 
 const key = (kind: string) => NotificationCategories.forFloor({ kind }).key;
 
@@ -39,14 +40,6 @@ describe("the registry", () => {
     expect(NotificationCategories.ALL.filter((c) => c.needsYou).map((c) => c.key)).toEqual(["approval"]);
   });
 
-  it("gives a button to what can be acted on: approval, a failure, an update", () => {
-    expect(NotificationCategories.ALL.filter((c) => c.actionable).map((c) => c.key)).toEqual([
-      "approval",
-      "failed",
-      "update",
-    ]);
-  });
-
   it("styles failures as errors and finished work as successes", () => {
     const severities = Object.fromEntries(NotificationCategories.ALL.map((c) => [c.key, c.severity]));
     expect(severities).toEqual({
@@ -59,17 +52,6 @@ describe("the registry", () => {
       extension: "info",
       notice: "info",
     });
-  });
-
-  it("labels its button by the category, and a failure in a chat as Open chat", () => {
-    const of = NotificationCategories.of;
-    expect(of("approval").actionLabel("session")).toBe("Review");
-    expect(of("failed").actionLabel("session")).toBe("Open chat");
-    expect(of("failed").actionLabel("chat")).toBe("Open chat");
-    expect(of("failed").actionLabel("extension")).toBe("Open");
-    expect(of("failed").actionLabel(null)).toBe("Open");
-    expect(of("background").actionLabel("session")).toBe("View");
-    expect(of("people").actionLabel("chat")).toBe("View");
   });
 });
 
@@ -91,10 +73,6 @@ describe("igni's own notices", () => {
 
 describe("a floor row, by its kind", () => {
   it.each<[string, CategoryKey]>([
-    ["approval", "approval"],
-    ["permission_request", "approval"],
-    ["hitl", "approval"],
-    ["review", "approval"],
     ["comment", "people"],
     ["mention", "people"],
     ["chat.message", "people"],
@@ -114,10 +92,28 @@ describe("a floor row, by its kind", () => {
     expect(key(kind)).toBe(expected);
   });
 
-  it("lets a failure outrank what failed, and a request outrank who asked", () => {
+  it.each(["approval", "permission_request", "hitl", "review", "review_requested", "decision", "waiting", "confirm"])(
+    "never makes %s a decision on its words alone",
+    (kind) => {
+      expect(key(kind)).not.toBe("approval");
+      expect(key(kind)).toBe("extension");
+    },
+  );
+
+  it("is a decision only when one is waiting behind it", () => {
+    const { actions } = actionWorld({ waiting: ["infra"] });
+    const waiting = actions.forFloor({ target: { page: "session", params: { session_id: "infra" } } });
+    const idle = actions.forFloor({ target: { page: "session", params: { session_id: "cv" } } });
+    expect(NotificationCategories.forFloor({ kind: "comment" }, waiting).key).toBe("approval");
+    expect(NotificationCategories.forFloor({ kind: "approval" }, idle).key).toBe("extension");
+    expect(NotificationCategories.forToast({ kind: "info", category: "approval" }, idle).key).toBe("notice");
+    expect(NotificationCategories.forToast({ kind: "info", category: "approval" }, waiting).key).toBe("approval");
+  });
+
+  it("lets a failure outrank what failed", () => {
     expect(key("workflow_failed")).toBe("failed");
     expect(key("review_failed")).toBe("failed");
-    expect(key("comment_approval")).toBe("approval");
+    expect(key("comment_approval")).toBe("people");
     expect(key("mention_update")).toBe("people");
     expect(key("release_workflow")).toBe("update");
     expect(key("task_completed")).toBe("background");
@@ -140,9 +136,10 @@ describe("a toast", () => {
   const toast = (over: { kind?: string; category?: string | null; source?: string | null }) =>
     NotificationCategories.forToast({ kind: "info", ...over }).key;
 
-  it("takes the category igni named", () => {
+  it("takes the category igni named, but never a decision on its say-so", () => {
     expect(toast({ category: "update" })).toBe("update");
-    expect(toast({ category: "approval", kind: "error" })).toBe("approval");
+    expect(toast({ category: "approval", kind: "error" })).toBe("failed");
+    expect(toast({ category: "approval" })).toBe("notice");
   });
 
   it("ignores a category that is not one", () => {
