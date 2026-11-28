@@ -167,14 +167,18 @@ describe("the watcher pill", () => {
     );
   });
 
-  it("stays in the header, quiet and counting zero, when nothing runs", async () => {
-    const client = fakeClient(() => [{ pid: 10, cmd: "make", elapsed_seconds: 1, is_running: false, exit_code: 0 }]);
-    const onOpen = vi.fn();
-    render(<WatcherIndicator client={client} onOpen={onOpen} />);
-    const chip = await screen.findByRole("button", { name: "Watcher 0 background processes running" });
-    expect(chip.className).toBe("chip chip-status chip-watcher idle");
-    expect(chip.querySelector(".chip-status-count")!.textContent).toBe("0");
-    fireEvent.click(chip);
-    expect(onOpen).toHaveBeenCalled();
+  it("is not in the header while nothing runs, and appears once something does", async () => {
+    let table: unknown[] = [{ pid: 10, cmd: "make", elapsed_seconds: 1, is_running: false, exit_code: 0 }];
+    const rpc = vi.fn(async () => table);
+    const client = { rpc, onEvent: () => () => {} } as never;
+    const { container } = render(<WatcherIndicator client={client} onOpen={() => {}} />);
+    await waitFor(() => expect(rpc).toHaveBeenCalled());
+    await Promise.resolve();
+    expect(container.querySelector(".chip-watcher")).toBeNull();
+    expect(screen.queryByRole("button", { name: /^Watcher/ })).toBeNull();
+    table = [{ pid: 11, cmd: "sleep 9", elapsed_seconds: 1, is_running: true, exit_code: null }];
+    cleanup();
+    render(<WatcherIndicator client={client} onOpen={() => {}} />);
+    expect(await screen.findByRole("button", { name: "Watcher 1 background process running" })).toBeTruthy();
   });
 });
