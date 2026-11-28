@@ -245,6 +245,24 @@ describe("a streamed run", () => {
     await expect(run).resolves.toBeUndefined();
   });
 
+  it("ends when its signal aborts, and leaves later frames of its id to the listeners", async () => {
+    const { client, ws } = connected();
+    const seen: unknown[] = [];
+    const heard: unknown[] = [];
+    client.onEvent((m) => heard.push(m.type));
+    const queued = new AbortController();
+    const run = client.runMessage("hi", (m) => seen.push(m.type), undefined, { signal: queued.signal });
+    // The signal is not sent: it is the window's, not the wire's.
+    expect(ws.last).not.toHaveProperty("signal");
+    expect(ws.last).toMatchObject({ type: "user_message", force: false });
+    const id = ws.last.id;
+    queued.abort();
+    await expect(run).resolves.toBeUndefined();
+    ws.receive({ type: "content_delta", id, text: "late" });
+    expect(seen).toEqual([]);
+    expect(heard).toEqual(["content_delta"]);
+  });
+
   it("fails at once without a socket", async () => {
     const client = new mod.IgniClient("ws://test", "");
     await expect(client.runMessage("hi", () => undefined)).rejects.toThrow("not connected");

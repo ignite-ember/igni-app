@@ -123,6 +123,7 @@ describe("MirrorEventRouter", () => {
     const hitl = approvals();
     const shell = { setStatus: vi.fn() };
     const pushRouter = { route: vi.fn() };
+    const sent = { echoed: vi.fn() };
     const router = new MirrorEventRouter({
       client: { clientId: "me" },
       view: t.view,
@@ -130,9 +131,41 @@ describe("MirrorEventRouter", () => {
       run,
       shell,
       pushRouter,
+      sent,
     });
-    return { t, run, hitl, shell, pushRouter, router };
+    return { t, run, hitl, shell, pushRouter, router, sent };
   }
+
+  it("hands this view's own echo to what it sent, painting nothing", () => {
+    const s = setup();
+    const mine = { type: "user_message_received", text: "mine", client_id: "me", queued: true } as ServerMessage;
+    s.router.route(mine);
+    expect(s.sent.echoed).toHaveBeenCalledWith(mine);
+    expect(s.t.items).toEqual([]);
+  });
+
+  it("does not hand another view's or an extension's message to what it sent", () => {
+    const s = setup();
+    s.router.route({ type: "user_message_received", text: "x", client_id: "you", queued: true } as ServerMessage);
+    s.router.route({
+      type: "user_message_received",
+      text: "e",
+      client_id: "me",
+      queued: false,
+      extension_id: "x",
+    } as ServerMessage);
+    expect(s.sent.echoed).not.toHaveBeenCalled();
+  });
+
+  it("a sub-agent finishing leaves another view's turn working, so a message is still queued", () => {
+    const s = setup();
+    s.router.route({ type: "run_started", run_id: "r", parent_run_id: null, agent_name: "a", model: "m" } as ServerMessage);
+    s.router.route({ type: "streaming_done", run_id: "r" } as ServerMessage);
+    s.router.route({ type: "run_completed", run_id: "s", parent_run_id: "r" } as ServerMessage);
+    expect(s.run.runPhaseRef.current).toBe("finalizing");
+    s.router.route({ type: "run_completed", run_id: "r", parent_run_id: null } as ServerMessage);
+    expect(s.run.runPhaseRef.current).toBe("done");
+  });
 
   it("paints other views' messages, not this view's echo", () => {
     const s = setup();

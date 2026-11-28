@@ -16,6 +16,7 @@ import type {
 } from "../protocol/messages";
 import type { ChatItem, ToolItem, UserItem } from "./chatItem";
 import type { ChatTranscript } from "./chatTranscript";
+import { InjectedUserNote } from "./injectedUserNote";
 import { RunCompletion } from "./runCompletion";
 import { toolOutputForDisplay } from "./toolOutput";
 
@@ -62,13 +63,22 @@ export class ServerMessageReducer {
   private onToolCompleted(msg: ToolCompleted): ChatTranscript {
     const hit = this.transcript.lastWhere(isRunningTool);
     if (!hit) return this.transcript;
-    return this.transcript.replaceAt(hit.index, {
+    const raw = msg.full_result || msg.summary;
+    const done = this.transcript.replaceAt(hit.index, {
       ...hit.item,
       status: msg.is_rejected ? "rejected" : msg.is_error ? "error" : "done",
-      result: toolOutputForDisplay(msg.full_result || msg.summary),
+      result: toolOutputForDisplay(raw),
       isError: msg.is_error,
       diffRows: msg.diff_rows ?? null,
     });
+    return this.takeInjected(done, raw, hit.index, hit.item.runId);
+  }
+
+  /** The tool call carried queued messages to the model: they are sent
+   *  now, right after it. */
+  private takeInjected(t: ChatTranscript, result: string, index: number, runId: string): ChatTranscript {
+    const note = InjectedUserNote.in(result);
+    return note ? t.takeQueued(note.takenFrom(t.queuedTexts), index, runId) : t;
   }
 
   private onToolError(msg: ToolError): ChatTranscript {
@@ -116,9 +126,7 @@ export class ServerMessageReducer {
 
   private onStreamingDone(msg: StreamingDone): ChatTranscript {
     if (!msg.run_id) return this.transcript;
-    const hit = this.transcript.lastWhere(
-      (it): it is UserItem => it.kind === "user" && it.runId === msg.run_id,
-    );
+    const hit = this.transcript.runOwner(msg.run_id);
     if (!hit) return this.transcript;
     return this.transcript.replaceAt(hit.index, { ...hit.item, streamingEndedAt: Date.now() });
   }

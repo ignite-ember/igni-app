@@ -175,18 +175,20 @@ export class IgniClient implements RpcCaller {
   // ── Core flows ────────────────────────────────────────────────────
 
   /** Send a user message, streaming its run to `onMessage` until `stream_end`.
-   *  `force` supersedes interrupted rows (the Retry action). */
+   *  `force` supersedes interrupted rows (the Retry action); `signal` ends
+   *  the stream early, for a message the backend queued instead of running. */
   runMessage(
     text: string,
     onMessage: StreamHandler,
     fileContents?: Record<string, string>,
-    options: { force?: boolean } = {},
+    options: { force?: boolean; signal?: AbortSignal } = {},
   ): Promise<void> {
     const id = this.nextId("run");
     return this.stream(
       fe.userMessage(text, id, this.clientId, fileContents, options),
       id,
       onMessage,
+      options.signal,
     );
   }
 
@@ -284,8 +286,9 @@ export class IgniClient implements RpcCaller {
     payload: ClientMessage,
     id: string,
     onMessage: StreamHandler,
+    signal?: AbortSignal,
   ): Promise<void> {
-    return this.replies.stream(id, () => this.send(payload), onMessage);
+    return this.replies.stream(id, () => this.send(payload), onMessage, signal);
   }
 
   private send(payload: ClientMessage): void {

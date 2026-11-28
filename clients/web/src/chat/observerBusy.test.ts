@@ -146,3 +146,13 @@ describe("nextObserverBusyState", () => {
     });
   });
 });
+
+describe("a sub-agent's run ending", () => {
+  it("leaves its parent turn working", () => {
+    const sub = { type: "run_completed", run_id: "s", parent_run_id: "r" } as ServerMessage;
+    expect(nextObserverBusyState({ proc: false, finalizing: true }, sub)).toEqual({
+      proc: false,
+      finalizing: true,
+    });
+  });
+});

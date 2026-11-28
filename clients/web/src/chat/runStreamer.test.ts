@@ -7,7 +7,13 @@ import { ArrayTranscript } from "./transcriptView.test.util";
 
 type Handler = (m: ServerMessage) => void;
 
-function setup(opts: { runMessage?: (text: string, on: Handler) => Promise<void>; loop?: unknown[] } = {}) {
+function setup(
+  opts: {
+    runMessage?: (text: string, on: Handler, files?: unknown, o?: { signal?: AbortSignal }) => Promise<void>;
+    resolveHitlBatch?: (d: unknown, on: Handler) => Promise<void>;
+    loop?: unknown[];
+  } = {},
+) {
   const t = new ArrayTranscript();
   const phase = { current: "idle" as RunPhase };
   const run = {
@@ -20,7 +26,7 @@ function setup(opts: { runMessage?: (text: string, on: Handler) => Promise<void>
   const loop = [...(opts.loop ?? [])];
   const client = {
     runMessage: vi.fn(opts.runMessage ?? (async () => {})),
-    resolveHitlBatch: vi.fn(async () => {}),
+    resolveHitlBatch: vi.fn(opts.resolveHitlBatch ?? (async () => {})),
     rpc: vi.fn(async () => loop.shift() ?? null),
   };
   const onEvent = vi.fn();
@@ -88,5 +94,55 @@ describe("RunStreamer", () => {
     await s.streamer.retry("again");
     expect(s.client.runMessage).toHaveBeenCalledWith("again", expect.any(Function), undefined, { force: true });
     expect(s.t.items.at(-1)).toMatchObject({ kind: "error", text: "Couldn't retry: nope" });
+  });
+  it("passes the queued signal to the run's stream", async () => {
+    const s = setup();
+    const queued = new AbortController().signal;
+    await s.streamer.send("hello", queued);
+    expect(s.client.runMessage).toHaveBeenCalledWith("hello", expect.any(Function), undefined, { signal: queued });
+  });
+
+  it("a message the backend queued leaves the phase busy, with no reply-ready notice or loop", async () => {
+    const queued = new AbortController();
+    const s = setup({
+      runMessage: async () => {
+        queued.abort();
+      },
+    });
+    await s.streamer.send("follow-up", queued.signal);
+    expect(s.run.runPhaseRef.current).toBe("streaming");
+    expect(s.notifier.replyReady).not.toHaveBeenCalled();
+    expect(s.shell.refreshStatus).not.toHaveBeenCalled();
+    expect(s.client.rpc).not.toHaveBeenCalled();
+  });
+
+  it("settles a run whose stream ended while finalizing: the backend ends it only once the run is over", async () => {
+    const s = setup({
+      runMessage: async () => {
+        s.run.setRunPhase("finalizing");
+      },
+    });
+    await s.streamer.send("hello");
+    expect(s.run.runPhaseRef.current).toBe("done");
+  });
+
+  it("settles a resumed run whose stream ended while finalizing", async () => {
+    const s = setup({
+      resolveHitlBatch: async () => {
+        s.run.setRunPhase("finalizing");
+      },
+    });
+    await s.streamer.resume([] as never);
+    expect(s.run.runPhaseRef.current).toBe("done");
+  });
+
+  it("leaves a run paused on an approval paused when its stream ends", async () => {
+    const s = setup({
+      runMessage: async () => {
+        s.run.setRunPhase("awaiting_approval");
+      },
+    });
+    await s.streamer.send("hello");
+    expect(s.run.runPhaseRef.current).toBe("awaiting_approval");
   });
 });

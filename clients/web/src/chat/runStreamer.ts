@@ -32,8 +32,11 @@ export interface RunStreamerDeps {
 interface StreamPlan {
   start: (onEvent: StreamHandler) => Promise<void>;
   /** The phases a stream that ended without a terminal event is still
-   *  in; it moves on to ``done`` from them. */
+   *  in; it moves on to ``done`` from them. ``finalizing`` is one: the
+   *  backend ends the stream only once the run is over. */
   settlesFrom: readonly RunPhase[];
+  /** Aborted when the backend queued the message instead of running it. */
+  queued?: AbortSignal;
   onError: (e: unknown) => void;
 }
 
@@ -46,13 +49,15 @@ export class RunStreamer {
     return this.deps.run.viewGenRef.current;
   }
 
-  /** Send a message as a new run. */
-  async send(text: string): Promise<void> {
+  /** Send a message as a new run. ``queued`` aborts when the backend
+   *  queues it behind a turn still working instead. */
+  async send(text: string, queued?: AbortSignal): Promise<void> {
     const { client, run, view } = this.deps;
     run.setRunPhase("starting");
     await this.stream({
-      start: (on) => client.runMessage(text, on),
-      settlesFrom: ["starting", "streaming"],
+      start: (on) => client.runMessage(text, on, undefined, { signal: queued }),
+      settlesFrom: ["starting", "streaming", "finalizing"],
+      queued,
       onError: (e) => {
         view.error(String(e));
         run.setRunPhase("errored");
@@ -77,7 +82,7 @@ export class RunStreamer {
     run.setRunPhase("streaming");
     await this.stream({
       start: (on) => client.resolveHitlBatch(decisions, on),
-      settlesFrom: ["streaming"],
+      settlesFrom: ["streaming", "finalizing"],
       onError: (e) => {
         view.error(String(e));
         run.setRunPhase("errored");
@@ -109,18 +114,29 @@ export class RunStreamer {
   }
 
   private async stream(plan: StreamPlan): Promise<void> {
-    const { run, shell, notifier } = this.deps;
+    const { run } = this.deps;
     try {
       await plan.start(this.guard(this.generation()));
+      if (plan.queued?.aborted) {
+        // A turn works on the backend: its events move the phase on, and
+        // the message runs in it or after it. Nothing has replied yet.
+        run.setRunPhase("streaming");
+        return;
+      }
       if (plan.settlesFrom.includes(run.runPhaseRef.current))
         run.setRunPhase("done");
     } catch (e) {
       plan.onError(e);
-    } finally {
-      void shell.refreshStatus(); // keep the ctx counter live after each run
-      notifier.replyReady();
-      void this.continueLoop();
     }
+    this.afterRun();
+  }
+
+  /** What follows every run this view drove: status, the reply-ready
+   *  notice, the next ``/loop`` iteration. */
+  private afterRun(): void {
+    void this.deps.shell.refreshStatus(); // keep the ctx counter live after each run
+    this.deps.notifier.replyReady();
+    void this.continueLoop();
   }
 
   /** TUI parity: a pending ``/loop`` refires after each run. */

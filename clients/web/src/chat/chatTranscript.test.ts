@@ -480,3 +480,97 @@ describe("ChatTranscript#startWorkflow", () => {
     expect(opened.startWorkflow("build", "wf1")).toBe(opened);
   });
 });
+
+// ── The queued tail: taken in mid-turn, re-queued, owned ──
+
+describe("ChatTranscript: messages queued for a working turn", () => {
+  const queued = (text: string): ChatItem[] => [factory.queuedUser(text), factory.queuedNote("Queued")];
+
+  it("lists the queued messages' texts, oldest first", () => {
+    const items = [factory.user("ask"), ...queued("one"), ...queued("two")];
+    expect(t(items).queuedTexts).toEqual(["one", "two"]);
+    expect(t([factory.user("ask")]).queuedTexts).toEqual([]);
+  });
+
+  it("moves the messages a tool call took in right after it, as sent, owned by its run", () => {
+    const ask = { ...factory.user("ask"), runId: "r1" };
+    const tool = factory.assistant("tool stand-in");
+    const reply = factory.assistant("more");
+    const items = [ask, tool, reply, ...queued("one"), ...queued("two")];
+    const out = t(items).takeQueued(1, 1, "r1").items;
+    expect(out.map((it) => [it.kind, "text" in it ? it.text : ""])).toEqual([
+      ["user", "ask"],
+      ["assistant", "tool stand-in"],
+      ["user", "one"],
+      ["assistant", "more"],
+      ["user", "two"],
+      ["info", "Queued"],
+    ]);
+    expect(out[2]).toMatchObject({ runId: "r1" });
+    expect(out[2]).not.toHaveProperty("queued", true);
+    expect(out[4]).toMatchObject({ queued: true });
+  });
+
+  it("takes two in their order", () => {
+    const items = [factory.user("ask"), factory.assistant("tool"), ...queued("one"), ...queued("two")];
+    const out = t(items).takeQueued(2, 1, "r1").items;
+    expect(out.map((it) => ("text" in it ? it.text : ""))).toEqual(["ask", "tool", "one", "two"]);
+    expect(out.some((it) => "queued" in it && it.queued)).toBe(false);
+  });
+
+  it("takes nothing for a count of none", () => {
+    const tr = t([factory.user("ask"), ...queued("one")]);
+    expect(tr.takeQueued(0, 0, "r1")).toBe(tr);
+  });
+
+  it("leaves the run off a taken message when the tool had none", () => {
+    const out = t([factory.user("ask"), ...queued("one")]).takeQueued(1, 0, "").items;
+    expect(out[1]).toMatchObject({ kind: "user", text: "one" });
+    expect((out[1] as UserItemT).runId).toBeUndefined();
+  });
+
+  it("re-queues a bubble the backend queued, at the tail's end, with a note", () => {
+    const sent = { ...factory.user("late"), runId: "r9", startedAt: 5 };
+    const items = [factory.user("ask"), ...queued("one"), sent];
+    // The sent bubble is not queued, so it was painted above the tail;
+    // place it there as the transcript would.
+    const placed = [items[0], sent, items[1], items[2]];
+    const out = t(placed).requeue(sent.id, "Queued").items;
+    expect(out.map((it) => ("text" in it ? it.text : ""))).toEqual(["ask", "one", "Queued", "late", "Queued"]);
+    expect(out[3]).toMatchObject({ id: sent.id, queued: true });
+    expect((out[3] as UserItemT).runId).toBeUndefined();
+    expect((out[3] as UserItemT).startedAt).toBeUndefined();
+    expect(out[4]).toMatchObject({ kind: "info", queued: true });
+  });
+
+  it("re-queues nothing it cannot find, nor a bubble already queued", () => {
+    const items = [factory.user("ask"), ...queued("one")];
+    const tr = t(items);
+    expect(tr.requeue(999, "Queued")).toBe(tr);
+    expect(tr.requeue(items[1].id, "Queued")).toBe(tr);
+    expect(tr.requeue(items[2].id, "Queued")).toBe(tr);
+  });
+
+  it("the run's owner is its first message, past one it took in", () => {
+    const ask = { ...factory.user("ask"), runId: "r1" };
+    const taken = { ...factory.user("one"), runId: "r1" };
+    const items = [{ ...factory.user("old"), runId: "r0" }, ask, factory.assistant("a"), taken, factory.assistant("b")];
+    expect(t(items).runOwner("r1")).toMatchObject({ index: 1, item: { text: "ask" } });
+    expect(t(items).runOwner("r0")).toMatchObject({ index: 0 });
+    expect(t(items).runOwner("nope")).toBeNull();
+  });
+
+  it("persists every message of the run, the taken one included", () => {
+    const items = [
+      { ...factory.user("old"), runId: "r0" },
+      { ...factory.user("ask"), runId: "r1" },
+      { ...factory.user("one"), runId: "r1", persisted: true },
+      { ...factory.user("two"), runId: "r1" },
+    ];
+    const out = t(items).markRunPersisted("r1").items as UserItemT[];
+    expect(out.map((it) => it.persisted)).toEqual([undefined, true, true, true]);
+    expect(out[2]).toBe(items[2]);
+  });
+});
+
+type UserItemT = Extract<ChatItem, { kind: "user" }>;

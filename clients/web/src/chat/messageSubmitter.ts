@@ -9,7 +9,8 @@ import type { IgniClient } from "../protocol/client";
 import { buildContinuedPrompt } from "./continueInterrupted";
 import { QUEUED_NOTE } from "./mirrorEventRouter";
 import type { RunStreamer } from "./runStreamer";
-import { isProcessing } from "./runPhase";
+import { isTurnWorking } from "./runPhase";
+import type { SentMessages } from "./sentMessages";
 import type { SlashCommandRouter } from "./slashCommandRouter";
 import type { TranscriptView } from "./transcriptView";
 import type { RunControls } from "./useRunPhase";
@@ -20,6 +21,7 @@ export interface MessageSubmitterDeps {
   run: Pick<RunControls, "runPhaseRef">;
   commands: Pick<SlashCommandRouter, "run">;
   streamer: Pick<RunStreamer, "send">;
+  sent: Pick<SentMessages, "track" | "forget">;
 }
 
 export class MessageSubmitter {
@@ -49,21 +51,31 @@ export class MessageSubmitter {
     }
   }
 
+  /** A message while a turn works is queued for it — between the turn's
+   *  steps too, and in a turn resumed after an approval. One while the
+   *  turn waits on an approval goes as a run: it ends that turn. */
+  private async sendMessage(text: string): Promise<void> {
+    if (isTurnWorking(this.deps.run.runPhaseRef.current)) this.queue(text);
+    else await this.startRun(text);
+  }
+
+  /** Below the running reply until the turn takes it in (R645). */
+  private queue(text: string): void {
+    const { client, view } = this.deps;
+    view.append(view.chatItems.queuedUser(text));
+    view.append(view.chatItems.queuedNote(QUEUED_NOTE));
+    client.queueMessage(text);
+  }
+
   /** After an interrupted reply, any new message (even a bare
    *  ``continue``) resumes from the partial: the backend gets a fenced
    *  context block, the bubble shows what was typed. */
-  private async sendMessage(text: string): Promise<void> {
-    const { client, view, run, streamer } = this.deps;
-    if (isProcessing(run.runPhaseRef.current)) {
-      // Below the running reply until its own run starts (R645).
-      view.append(view.chatItems.queuedUser(text));
-      view.append(view.chatItems.queuedNote(QUEUED_NOTE));
-      client.queueMessage(text);
-      return;
-    }
+  private async startRun(text: string): Promise<void> {
+    const { view, streamer, sent } = this.deps;
     // Nothing runs now, so nothing is still waiting its turn.
     view.update((t) => t.settleQueued());
-    view.append(view.chatItems.user(text));
+    const bubble = view.chatItems.user(text);
+    view.append(bubble);
     // A new message is the person going on past a crash: the
     // restored prompts' banner has done its job.
     if (view.current().items.some((it) => it.kind === "assistant" && it.restored)) {
@@ -80,6 +92,12 @@ export class MessageSubmitter {
         ),
       );
     }
-    await streamer.send(continued.text);
+    // The backend may still queue it, when a turn it knows of works.
+    const queued = sent.track(continued.text, bubble.id);
+    try {
+      await streamer.send(continued.text, queued);
+    } finally {
+      sent.forget(bubble.id);
+    }
   }
 }
