@@ -13,8 +13,9 @@ import { ChatItemView } from "./chatItems/ChatItemView";
 import type { ChatItemHandlers } from "./chatItems/handlers";
 
 /** Room above the first message, so its edit/delete chip clears the
- *  frosted header's drag region. */
-const HEADER_SPACER_PX = 78;
+ *  frosted header's drag region, plus 20px of air. Same as
+ *  ``.conversation > .col``'s top padding. */
+const HEADER_SPACER_PX = 98;
 
 /** How far past the viewport Virtuoso renders, each way. */
 const OVERSCAN = { top: 400, bottom: 800 } as const;

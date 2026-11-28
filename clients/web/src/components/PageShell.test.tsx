@@ -20,7 +20,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 
-import { PAGE_REST_SHIFT, PageShell } from "./PageShell";
+import { PageShell } from "./PageShell";
+import { FADE_REST_SHIFT } from "./page/FadeScroll";
 import type { PageRoute } from "../chat/pageStack";
 
 // This project does not set ``globals: true``, so testing-library's
@@ -196,12 +197,8 @@ describe("the body", () => {
   });
 });
 
-describe("scrolling under the header", () => {
-  /** Renders the shell inside a ``.main``, as the app does. */
-  function setupInMain(overrides: Partial<Parameters<typeof PageShell>[0]> = {}) {
-    const main = document.createElement("main");
-    main.className = "main main--paged";
-    document.body.appendChild(main);
+describe("scrolling", () => {
+  function setup(overrides: Partial<Parameters<typeof PageShell>[0]> = {}) {
     const props = {
       trail,
       onCrumb: vi.fn(),
@@ -210,51 +207,78 @@ describe("scrolling under the header", () => {
       children: <div>body</div>,
       ...overrides,
     };
-    const view = render(<PageShell {...props} />, { container: main });
+    const view = render(<PageShell {...props} />);
+    const root = document.querySelector(".fade-scroll") as HTMLElement;
     const body = document.querySelector(".page-body") as HTMLElement;
     const scrollTo = (top: number) => {
       body.scrollTop = top;
       fireEvent.scroll(body);
     };
-    return { main, body, scrollTo, view };
+    return { root, body, scrollTo, view };
   }
 
-  afterEach(() => {
-    document.querySelectorAll("main").forEach((m) => m.remove());
+  it("goes through FadeScroll, whose scroller is the page body", () => {
+    const { body } = setup();
+    expect(body.classList.contains("fade-scroll-body")).toBe(true);
   });
 
-  it("scrolls the title row and the toolbar with the list", () => {
-    // They go up under the app header with the content, the way the
-    // chat's first message does, so both live inside the scroller.
-    const { body } = setupInMain({ headerExtras: <button>Sync</button>, toolbar: <div>filters</div> });
-    const kids = Array.from(body.children).map((e) => e.className);
-    expect(kids).toEqual(["page-head", "page-toolbar", "page-measure"]);
-    expect(document.querySelector(".page > .page-head, .page > .page-toolbar")).toBeNull();
+  it("keeps the title row and the toolbar fixed, outside the scroller", () => {
+    const { root, body } = setup({ headerExtras: <button>Sync</button>, toolbar: <div>filters</div> });
+    expect(root.dataset.fade).toBe("chrome");
+    const chrome = root.querySelector(":scope > .fade-scroll-chrome") as HTMLElement;
+    expect(Array.from(chrome.children).map((e) => e.className)).toEqual(["page-head", "page-toolbar"]);
+    expect(body.querySelector(".page-head, .page-toolbar")).toBeNull();
+    expect(Array.from(body.children).map((e) => e.className)).toEqual(["page-measure"]);
   });
 
-  it("lifts the fade and the blur clear of the title at rest", () => {
-    const { main, body } = setupInMain();
-    expect(main.style.getPropertyValue("--page-rest-shift")).toBe(`${PAGE_REST_SHIFT}px`);
-    // No mask at all at rest: the page is the page it always was.
-    expect(body.hasAttribute("data-scrolled")).toBe(false);
+  it("is chrome mode with only a toolbar", () => {
+    const { root } = setup({ titleInBody: true, toolbar: <div>filters</div> });
+    expect(root.dataset.fade).toBe("chrome");
   });
 
-  it("slides them into the chat's place over the first pixels of scroll", () => {
-    const { main, body, scrollTo } = setupInMain();
+  it("scrolls under the app header when the title is in the body", () => {
+    const { root } = setup({ titleInBody: true });
+    expect(root.dataset.fade).toBe("app");
+    expect(root.querySelector(".fade-scroll-chrome")).toBeNull();
+  });
+
+  it("is at rest with no fade, the fade lifted clear", () => {
+    const { root } = setup();
+    expect(root.style.getPropertyValue("--fade-rest-shift")).toBe(`${FADE_REST_SHIFT}px`);
+    expect(root.hasAttribute("data-scrolled")).toBe(false);
+  });
+
+  it("slides the fade into place over the first pixels of scroll", () => {
+    const { root, scrollTo } = setup();
     scrollTo(10);
-    expect(main.style.getPropertyValue("--page-rest-shift")).toBe(`${PAGE_REST_SHIFT - 10}px`);
-    expect(body.hasAttribute("data-scrolled")).toBe(true);
+    expect(root.style.getPropertyValue("--fade-rest-shift")).toBe(`${FADE_REST_SHIFT - 10}px`);
+    expect(root.hasAttribute("data-scrolled")).toBe(true);
     scrollTo(500);
-    expect(main.style.getPropertyValue("--page-rest-shift")).toBe("0px");
+    expect(root.style.getPropertyValue("--fade-rest-shift")).toBe("0px");
     scrollTo(0);
-    expect(main.style.getPropertyValue("--page-rest-shift")).toBe(`${PAGE_REST_SHIFT}px`);
-    expect(body.hasAttribute("data-scrolled")).toBe(false);
+    expect(root.style.getPropertyValue("--fade-rest-shift")).toBe(`${FADE_REST_SHIFT}px`);
+    expect(root.hasAttribute("data-scrolled")).toBe(false);
   });
 
-  it("leaves nothing on .main when the page closes", () => {
-    const { main, scrollTo, view } = setupInMain();
-    scrollTo(500);
+  it("keeps the fade on for a body that scrolls itself", () => {
+    const { root } = setup({ titleInBody: true, selfScrolling: true });
+    expect(root.hasAttribute("data-self-scrolling")).toBe(true);
+    expect(root.hasAttribute("data-scrolled")).toBe(true);
+    expect(root.style.getPropertyValue("--fade-rest-shift")).toBe("0px");
+  });
+
+  it("writes nothing outside the page", () => {
+    const main = document.createElement("main");
+    main.className = "main main--paged";
+    document.body.appendChild(main);
+    const view = render(
+      <PageShell trail={trail} onCrumb={vi.fn()} onBack={vi.fn()} onClose={vi.fn()}>
+        <div>body</div>
+      </PageShell>,
+      { container: main },
+    );
+    expect(main.getAttribute("style")).toBeNull();
     view.unmount();
-    expect(main.style.getPropertyValue("--page-rest-shift")).toBe("");
+    main.remove();
   });
 });

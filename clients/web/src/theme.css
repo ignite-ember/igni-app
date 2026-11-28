@@ -56,6 +56,19 @@
   --accent-orange-text: #f5a088;
   --danger-text: #f28376;
 
+  /* Notification categories (notifications/categories.ts): one hue
+     each, muted to sit beside the coral accent. "Needs you" takes the
+     accent itself; a failure takes the danger red, so neither is
+     mistaken for news. Paint values; text in a hue mixes in --fg. */
+  --notify-hue-approval: var(--accent);
+  --notify-hue-failed: var(--danger);
+  --notify-hue-done: #7fb48a;
+  --notify-hue-background: #8ba7d8;
+  --notify-hue-people: #b39bd9;
+  --notify-hue-update: #5fb3a8;
+  --notify-hue-extension: #b7a78c;
+  --notify-hue-notice: #a5a49e;
+
   /* ── Type scale ─────────────────────────────────────────────────
      Nine steps, down from twenty-two hardcoded sizes that included
      every half-step from 9px to 15px. Two hundred and seventy-two
@@ -141,6 +154,14 @@
      #faf9f5. ``#b8b5ad`` matches the dark theme's mid-tone, giving
      similar visual weight in both modes. */
   --scroll-thumb: #b8b5ad;
+  --notify-hue-approval: #d4512a;
+  --notify-hue-failed: var(--danger);
+  --notify-hue-done: #3d8050;
+  --notify-hue-background: #4a6aa6;
+  --notify-hue-people: #7b5aa9;
+  --notify-hue-update: #2a7d73;
+  --notify-hue-extension: #85755a;
+  --notify-hue-notice: #6e6d68;
 }
 
 /* Fallback for very first paint: before the JS has set data-theme,
@@ -170,6 +191,14 @@
   --danger-text: #be1f2a;
     --shadow-pop: 0 12px 40px rgba(0, 0, 0, 0.14);
     --scroll-thumb: #b8b5ad;
+    --notify-hue-approval: #d4512a;
+    --notify-hue-failed: var(--danger);
+    --notify-hue-done: #3d8050;
+    --notify-hue-background: #4a6aa6;
+    --notify-hue-people: #7b5aa9;
+    --notify-hue-update: #2a7d73;
+    --notify-hue-extension: #85755a;
+    --notify-hue-notice: #6e6d68;
   }
 }
 
@@ -331,7 +360,6 @@ button {
 .doc-rail-empty,
 .kb-pick-empty,
 .mention-empty,
-.notify-empty,
 .orchestrate-empty,
 .prov-legend-empty,
 .slash-empty,
@@ -1290,12 +1318,13 @@ button {
    lands inside the header rectangle where the OS-level drag region
    intercepts events before any DOM listener — buttons silently
    stop working on the topmost message. 78 px = ~58px header height
-   + 10 px chip offset + ~10 px safety margin. Sits inside the
+   + 10 px chip offset + ~10 px safety margin, plus 20 px of air the
+   owner asked for. Sits inside the
    scroll content so it scrolls away along with the messages —
    that's what lets content slide *behind* the header for the blur
    to pick up. */
 .conversation > .col {
-  padding-top: 78px;
+  padding-top: 98px;
 }
 
 /* Solid opaque background painted behind the header content
@@ -1320,36 +1349,34 @@ button {
   top: 0;
   left: 0;
   right: 0;
-  height: calc(100% + 24px);
-  pointer-events: none;
+  height: calc(100% + var(--top-blur-tail));
   z-index: -1;
+}
+
+/* The blur's boxes, one for the chat's header and one over every page's
+   fixed chrome (``FadeScroll``). Each holds the same layered blur
+   (``TopBlur``, tuned in ``components/page/topBlurLayers.ts``); the boxes only
+   place it. ``--top-blur-tail`` is how far below the chrome it reaches. */
+:root {
+  --top-blur-tail: 24px;
+}
+
+.app-header-blur,
+.fade-scroll-blur {
+  pointer-events: none;
   background: transparent;
-  -webkit-backdrop-filter: blur(6px);
-  backdrop-filter: blur(6px);
-  -webkit-mask-image: linear-gradient(
-    to bottom,
-    #000 0%,
-    rgba(0, 0, 0, 0.9) 22%,
-    rgba(0, 0, 0, 0.7) 42%,
-    rgba(0, 0, 0, 0.45) 60%,
-    rgba(0, 0, 0, 0.22) 77%,
-    rgba(0, 0, 0, 0.07) 90%,
-    transparent 100%
-  );
-  mask-image: linear-gradient(
-    to bottom,
-    #000 0%,
-    rgba(0, 0, 0, 0.9) 22%,
-    rgba(0, 0, 0, 0.7) 42%,
-    rgba(0, 0, 0, 0.45) 60%,
-    rgba(0, 0, 0, 0.22) 77%,
-    rgba(0, 0, 0, 0.07) 90%,
-    transparent 100%
-  );
+}
+
+.top-blur-layer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  pointer-events: none;
 }
 
 /* The messages fade to nothing as they reach the top of the window, on a
-   smooth (smoothstep-shaped) curve over the top 76px — gone at the very
+   smooth (smoothstep-shaped) curve over the top 58px — gone at the very
    edge, fully there just below the header, and no point in between where
    the opacity jumps. Cheaper than any blur: it is only a mask.
 
@@ -1358,42 +1385,44 @@ button {
   --top-fade-mask: linear-gradient(
     to bottom,
     transparent 0px,
-    rgba(0, 0, 0, 0.03) 8px,
-    rgba(0, 0, 0, 0.12) 17px,
-    rgba(0, 0, 0, 0.27) 27px,
-    rgba(0, 0, 0, 0.46) 37px,
-    rgba(0, 0, 0, 0.65) 47px,
-    rgba(0, 0, 0, 0.82) 57px,
-    rgba(0, 0, 0, 0.94) 67px,
-    #000 76px
+    rgba(0, 0, 0, 0.043) 7.25px,
+    rgba(0, 0, 0, 0.156) 14.5px,
+    rgba(0, 0, 0, 0.316) 21.75px,
+    rgba(0, 0, 0, 0.500) 29px,
+    rgba(0, 0, 0, 0.684) 36.25px,
+    rgba(0, 0, 0, 0.844) 43.5px,
+    rgba(0, 0, 0, 0.957) 50.75px,
+    #000 58px
   );
 }
 
-/* ``--top-fade-shift`` lifts the curve and the header blur up together.
-   The chat leaves it at 0. A page sets it while its scroller is within
-   the first few pixels of the top (``PageShell``), so the title clears
-   both, and 24px of scroll later both are exactly where the chat has
-   them. At rest a page carries no mask at all (``data-scrolled`` is set
-   from the first pixel): a mask makes the list its own layer, which
-   redraws its text a shade differently, and at rest the page has to be
-   the page it always was. */
+/* One rule for the chat and every page's scroller, so the two cannot
+   drift. ``--fade-top`` is where the curve starts, from the scroller's
+   top: 0 for the chat, which runs up to the top of the window under the
+   app header; a page's fixed header row (``FadeScroll``) moves it down
+   by the row's height, so the content dissolves under that row the way
+   the chat's dissolves under the app header. The area above the curve
+   is outside the mask image, so it is hidden. A page carries no mask at
+   rest (``data-scrolled`` comes with the first scrolled pixel): a mask
+   makes the list its own layer, which redraws its text a shade
+   differently, and at rest a page has to be the page it always was. */
 .conversation,
-.page-body[data-scrolled] {
+.fade-scroll[data-scrolled] > .fade-scroll-body {
   -webkit-mask-image: var(--top-fade-mask);
   mask-image: var(--top-fade-mask);
-  -webkit-mask-size: 100% calc(100% + var(--top-fade-shift, 0px));
-  mask-size: 100% calc(100% + var(--top-fade-shift, 0px));
-  -webkit-mask-position: 0 calc(-1 * var(--top-fade-shift, 0px));
-  mask-position: 0 calc(-1 * var(--top-fade-shift, 0px));
+  -webkit-mask-size: 100% calc(100% - var(--fade-top, 0px));
+  mask-size: 100% calc(100% - var(--fade-top, 0px));
+  -webkit-mask-position: 0 var(--fade-top, 0px);
+  mask-position: 0 var(--fade-top, 0px);
   -webkit-mask-repeat: no-repeat;
   mask-repeat: no-repeat;
 }
 
-/* The blur goes the whole of its height (header plus tail, 82px) in the
-   same 24px, so at rest it is above the window and blurs nothing: a blur
-   over flat colour still moves it by a shade. */
+/* Over a page the blur is the page's own (``.fade-scroll-blur``): it has
+   to sit under a header row's text, which this one, in the app header,
+   is above. Two would blur twice. */
 .main--paged .app-header-blur {
-  transform: translateY(calc(-3.5 * var(--top-fade-shift, 0px)));
+  visibility: hidden;
 }
 
 /* The header's near-invisible fill (it only has to be there for the
@@ -4772,99 +4801,249 @@ button.activity-file-chip:focus-visible {
   margin-bottom: 0;
 }
 
-/* ── Toasts (top-right) ─────────────────────────────────────────── */
+/* ── Notification cards: one look for a toast and a sheet row ──────
+   A card wears its category (notifications/categories.ts): a badge with
+   the category's icon on a soft wash of its hue, the hue faintly in the
+   card's corner, and its name in the meta line. Calm by default; what
+   waits on you (``is-prominent``) gets a filled badge, a hued edge and
+   border, and a primary button. ``--ncard-hue`` is set per card from
+   the category's ``--notify-hue-*`` token. */
+
+.ncard {
+  --ncard-hue: var(--notify-hue-notice);
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-6);
+  padding: var(--space-6) var(--space-5) var(--space-6) var(--space-6);
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+}
+
+/* The text, and the button under it: a long name never squeezes the
+   words beside it. */
+.ncard-col {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.ncard-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.ncard-badge {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-sm);
+  color: color-mix(in srgb, var(--ncard-hue) 88%, var(--fg));
+  background: color-mix(in srgb, var(--ncard-hue) 14%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ncard-hue) 22%, transparent);
+}
+
+/* Who did it, over the badge's corner, ringed off from it. */
+.ncard-face {
+  position: absolute;
+  right: -5px;
+  bottom: -5px;
+  display: flex;
+  border-radius: var(--radius-circle);
+  box-shadow: 0 0 0 2px var(--bg);
+}
+
+.ncard--toast .ncard-face {
+  box-shadow: 0 0 0 2px var(--bg-surface);
+}
+
+.ncard-open {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: 0;
+  text-align: left;
+  background: none;
+  border: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.ncard-open:disabled {
+  cursor: default;
+}
+
+.ncard-open:disabled > * {
+  opacity: 0.6;
+}
+
+.ncard-head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.ncard-title {
+  font-size: var(--text-md);
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--fg);
+  overflow-wrap: anywhere;
+}
+
+/* One line; the rest is where it points. */
+.ncard-body {
+  font-size: var(--text-sm);
+  line-height: 1.45;
+  color: var(--fg-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* What it is, where it is from, who, and when: faint words,
+   dot-separated, the category's name in its own hue. */
+.ncard-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 var(--space-3);
+  margin-top: var(--space-1);
+  font-size: var(--text-xs);
+  line-height: 1.5;
+  color: var(--fg-faint);
+}
+
+.ncard-meta > * + *::before {
+  content: "\00b7";
+  margin-right: var(--space-3);
+}
+
+.ncard-category {
+  font-weight: 600;
+  color: color-mix(in srgb, var(--ncard-hue) 70%, var(--fg));
+}
+
+/* The corner button, top right, over the card's own edge. */
+.ncard-corner {
+  position: absolute;
+  top: var(--space-4);
+  right: var(--space-4);
+  margin: 0;
+}
+
+/* A long name wraps inside the button rather than running out of the
+   card; the whole name is in its tooltip and its accessible name. */
+.ncard-action {
+  display: block;
+  max-width: 100%;
+  min-width: 0;
+  white-space: normal;
+  line-height: 1.35;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+
+/* Waits on you: louder, but still one card among many. */
+.ncard.is-prominent {
+  border-color: color-mix(in srgb, var(--ncard-hue) 34%, transparent);
+  background-color: color-mix(in srgb, var(--ncard-hue) 7%, var(--bg-surface));
+}
+
+.ncard.is-prominent .ncard-badge {
+  color: var(--bg-surface);
+  background: var(--ncard-hue);
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--ncard-hue) 30%, transparent);
+}
+
+/* ── Toasts (bottom-right, clear of the composer) ──────────────────
+   The card, floating: a hue wash from the badge's corner, a shadow,
+   and an entrance — the card rises, its badge settles a beat later.
+   ``--toasts-bottom`` lifts the stack above the composer when the two
+   would overlap (``useComposerClearance``). */
 
 .toasts {
   position: fixed;
-  top: 16px;
   right: 16px;
+  bottom: var(--toasts-bottom, 16px);
   z-index: 60;
   display: flex;
   flex-direction: column;
-  gap: var(--space-5);
+  gap: var(--space-4);
+  width: min(360px, calc(100vw - 32px));
   pointer-events: none;
-  max-width: min(360px, calc(100vw - 32px));
 }
 
 .toast {
-  display: flex;
-  align-items: stretch;
-  gap: 0;
-  background: var(--bg-surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.22);
-  overflow: hidden;
+  background-color: var(--bg-surface);
+  background-image: radial-gradient(
+    140% 120% at 0% 0%,
+    color-mix(in srgb, var(--ncard-hue) 11%, transparent),
+    transparent 55%
+  );
+  border-color: var(--border-soft);
+  box-shadow: var(--shadow-pop);
   pointer-events: auto;
-  animation: toast-in 0.22s cubic-bezier(0.2, 0.9, 0.3, 1.05);
+  animation: toast-in 0.24s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.toast .ncard-badge {
+  animation: toast-badge-in 0.36s cubic-bezier(0.3, 1.4, 0.5, 1) 0.06s both;
 }
 
 .toast.is-closing {
-  animation: toast-out 0.18s ease-in forwards;
+  animation: toast-out 0.16s ease-in forwards;
 }
 
 @keyframes toast-in {
-  from { opacity: 0; transform: translateY(-6px) scale(0.98); }
-  to   { opacity: 1; transform: translateY(0)     scale(1); }
+  from { opacity: 0; transform: translateY(10px) scale(0.98); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes toast-badge-in {
+  from { opacity: 0; transform: scale(0.7) rotate(-8deg); }
+  to   { opacity: 1; transform: scale(1) rotate(0); }
 }
 
 @keyframes toast-out {
-  from { opacity: 1; transform: translateY(0)     scale(1); }
-  to   { opacity: 0; transform: translateY(-6px) scale(0.98); }
+  from { opacity: 1; transform: translateY(0); }
+  to   { opacity: 0; transform: translateY(4px); }
 }
 
-.toast-body-btn {
-  flex: 1;
-  text-align: left;
-  background: transparent;
-  border: none;
-  color: var(--fg);
-  cursor: pointer;
-  padding: var(--space-5) var(--space-6);
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-  font: inherit;
+@keyframes toast-fade-in {
+  from { opacity: 0; }
 }
 
-.toast-body-btn:hover {
-  background: var(--bg-raised);
+@keyframes toast-fade-out {
+  to { opacity: 0; }
 }
 
-.toast-title {
-  font-size: var(--text-sm);
-  font-weight: 700;
-  color: var(--fg);
+@media (prefers-reduced-motion: reduce) {
+  .toast {
+    animation-name: toast-fade-in;
+  }
+  .toast.is-closing {
+    animation-name: toast-fade-out;
+  }
+  .toast .ncard-badge {
+    animation: none;
+  }
 }
 
-.toast-body {
-  font-size: var(--text-sm);
-  color: var(--fg-muted);
-  line-height: 1.45;
-  white-space: pre-wrap;
-  word-break: break-word;
-  display: -webkit-box;
-  -webkit-line-clamp: 5;
-  line-clamp: 5;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
+.toast .ncard-open {
+  padding-top: 1px;
 }
 
-.toast-close {
-  background: transparent;
-  border: none;
-  color: var(--fg-faint);
-  cursor: pointer;
-  padding: var(--space-4) var(--space-5);
-  border-left: 1px solid var(--border-soft);
-  display: flex;
-  align-items: flex-start;
-  transition: color 0.12s, background 0.12s;
-}
-
-.toast-close:hover {
-  color: var(--fg);
-  background: var(--bg-raised);
+.toast .ncard-meta {
+  margin-top: var(--space-2);
 }
 
 .loop-iteration-raw {
@@ -6020,28 +6199,19 @@ button.activity-file-chip:focus-visible {
 /* A page that still has a header row is still cleared by it. Nothing
    in this panel does any more; a page that grows one will not have
    to remember why its hierarchy overlaps its buttons. */
-.page:has(> .page-body > .page-head) {
+.page:has(> .fade-scroll > .fade-scroll-chrome > .page-head) {
   --tree-dock-top: calc(82px + var(--doc-air));
 }
 
-.page:has(> .page-body > .page-head) {
+.page:has(> .fade-scroll > .fade-scroll-chrome > .page-head) {
   --page-chrome-h: 82px;
 }
 
-/* Under the app header, the page's scroller reaches up to the top of the
-   window the way ``.conversation`` does, and pads its content back down
-   by the same amount. ``.page`` itself does not move — everything placed
-   against it (the docked hierarchy, the trail) keeps its numbers — and
-   at rest nothing inside moves either. Scrolled, the title, the toolbar
-   and the list go up under the header and dissolve on the chat's curve
-   (``--top-fade-mask``) behind the chat's blur. 0 without a header (a
-   test, a modal), where there is nothing to scroll under. */
+/* Under the app header a page's scroller reaches up to the top of the
+   window, as ``.conversation`` does (``FadeScroll``). 0 without a header
+   (a test, a modal), where there is nothing to scroll under. */
 .main--paged .page {
   --page-under-header: 58px;
-}
-
-.main--paged {
-  --top-fade-shift: var(--page-rest-shift, 24px);
 }
 
 /* The breadcrumb is portaled up into the app header (next to the sidebar
@@ -6102,7 +6272,7 @@ button.activity-file-chip:focus-visible {
    them out of the flow drops that header underneath them. Which is
    the same distinction ``--page-chrome-h`` is already drawn on, and
    the reason it is two numbers rather than one. */
-.page:not(:has(> .page-body > .page-head)) > .page-crumbs {
+.page:not(:has(> .fade-scroll > .fade-scroll-chrome > .page-head)) > .page-crumbs {
   position: absolute;
   top: 0;
   left: 0;
@@ -6193,23 +6363,105 @@ button.activity-file-chip:focus-visible {
   padding: 10px 18px 0;
 }
 
+/* ── FadeScroll: the one way a page scrolls ──────────────────────────
+   ``.fade-scroll`` only carries the state (``--fade-chrome-h``,
+   ``--fade-rest-shift``, ``data-scrolled``); it lays out nothing, so its
+   three children are the page's own flex items and the docked hierarchy
+   stays positioned against ``.page``.
+
+   The scroller reaches up under the chrome to the top of the window and
+   pads its content back down by the same amount, so at rest the content
+   is exactly where it would be below the chrome. Scrolled, it goes up
+   under the chrome and dissolves on the chat's curve (``--fade-top``)
+   behind the chat's blur. */
+/* Registered so a frame's host reads it resolved, in px
+   (``ExtensionFrame`` passes it on as ``--inset-top``). */
+@property --fade-inset-top {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 0px;
+}
+
+.fade-scroll {
+  display: contents;
+  --fade-top: calc(var(--fade-chrome-h, 0px) - var(--fade-rest-shift, 0px));
+  /* Where content that cannot be told the scroll offset (a frame) has
+     to start to sit clear of the fade and the blur at rest. */
+  --fade-inset-top: calc(
+    var(--page-under-header, 0px) + var(--fade-chrome-h, 0px) + var(--top-blur-tail)
+  );
+}
+
+/* The header row and the toolbar: fixed, over the content that scrolls
+   under them, and over the blur, so they stay crisp. No background —
+   the dissolving content is meant to show through. */
+.fade-scroll-chrome {
+  flex: none;
+  z-index: 2;
+}
+
+/* Behind the chrome's text, over the content: the app header's blur,
+   at the chat's place relative to the chrome — from where the curve
+   starts, header plus tail tall. Hidden at rest, so the page's flat
+   colour is never blurred a shade. */
+.fade-scroll-blur {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(var(--fade-top) - var(--page-under-header, 0px));
+  height: calc(var(--page-under-header, 0px) + var(--top-blur-tail));
+  z-index: 1;
+}
+
+.fade-scroll:not([data-scrolled]) > .fade-scroll-blur {
+  visibility: hidden;
+}
+
 /* The scrolling element, full width, so the scrollbar is where a
-   scrollbar belongs: at the right edge of the window. It used to be
-   the measure as well, which put the bar against the text — a rail
-   floating in the middle of the page that reads as belonging to
-   whatever it happens to be beside. */
-.page-body {
+   scrollbar belongs: at the right edge of the window. */
+.fade-scroll-body {
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
-  margin-top: calc(-1 * var(--page-under-header, 0px));
-  padding-top: var(--page-under-header, 0px);
+  margin-top: calc(-1 * (var(--page-under-header, 0px) + var(--fade-chrome-h, 0px)));
+  padding-top: calc(var(--page-under-header, 0px) + var(--fade-chrome-h, 0px));
+  /* Its own stacking context under the chrome, so nothing positioned in
+     the list paints over the fixed rows. Not ``position: relative`` —
+     see ``.page-body``. */
+  isolation: isolate;
+  z-index: 0;
+  overscroll-behavior: contain;
+  /* Hidden: it would fade with the content. ``ScrollIndicator`` draws the
+     thumb over the fade instead, as on the chat. */
+  scrollbar-width: none;
+}
+
+.fade-scroll-body::-webkit-scrollbar {
+  display: none;
+}
+
+/* A frame scrolls itself, so this one does not: the frame reaches up
+   under the chrome to the top of the window, keeps the fade and blur on,
+   and is told ``--fade-inset-top`` to leave (``ExtensionFrame``). */
+.fade-scroll[data-self-scrolling] > .fade-scroll-body {
+  overflow: hidden;
+  padding-top: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* The page's type size, for the fixed rows and the list alike (it
+   inherits through ``.fade-scroll``, which draws no box). */
+.page > .fade-scroll {
+  font-size: var(--text-md);
+}
+
+.page-body {
   /* A classic scrollbar takes its width from one side only, which
      would centre the measure a few pixels left of the header above
      it. Reserving the same gutter on both sides keeps the two
      columns on one axis; overlay scrollbars reserve nothing. */
   scrollbar-gutter: stable both-edges;
-  overscroll-behavior: contain;
-  font-size: var(--text-md);
   /* Deliberately *not* ``position: relative``. This box scrolls, and
      the hierarchy is positioned against ``.page`` above it, which
      does not — that is the whole of what keeps the tree still while
@@ -6279,33 +6531,37 @@ button.activity-file-chip:focus-visible {
   }
 }
 
-/* ── Notifications, down the right ──────────────────────────────
-   Over the app rather than instead of it: the question "is anybody
-   waiting on me" gets asked between other pieces of work, and the
-   work should still be there afterwards. */
+/* ── Notifications, in a sheet down the right ──────────────────────
+   Over the app rather than instead of it: "is anybody waiting on me"
+   gets asked between other pieces of work, and the work should still
+   be there afterwards. Its header row is FadeScroll's fixed chrome,
+   so the list fades under it as every page's does. */
 .notify-backdrop {
   position: fixed;
   inset: 0;
   z-index: 44;
-  /* Lighter than a modal's. What is underneath is still the thing
-     being worked on — often the very document a comment is about. */
+  /* Lighter than a modal's: what is underneath is still the thing
+     being worked on. */
   background: rgba(0, 0, 0, 0.28);
   animation: fade-in 0.16s ease;
 }
 
 .notify-panel {
   position: fixed;
-  top: 0;
-  right: 0;
-  bottom: 0;
+  top: var(--space-4);
+  right: var(--space-4);
+  bottom: var(--space-4);
   z-index: 45;
-  width: min(460px, 94vw);
+  width: min(440px, calc(100vw - 2 * var(--space-4)));
   display: flex;
   flex-direction: column;
-  background: var(--bg-surface);
-  border-left: 1px solid var(--border);
+  overflow: hidden;
+  background: var(--bg);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-lg);
   box-shadow: var(--shadow-pop);
-  animation: notify-in 0.18s ease;
+  font-size: var(--text-md);
+  animation: notify-in 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
 @keyframes notify-in {
@@ -6323,143 +6579,228 @@ button.activity-file-chip:focus-visible {
 
 .notify-head {
   display: flex;
-  align-items: baseline;
+  flex-direction: column;
   gap: var(--space-5);
-  padding: var(--space-7) var(--space-6) var(--space-6) var(--space-8);
-  border-bottom: 1px solid var(--border);
+  padding: var(--space-7) var(--space-6) var(--space-4) var(--space-10);
+}
+
+.notify-titlebar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.notify-heading {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-4);
 }
 
 .notify-title {
   margin: 0;
-  font-size: var(--text-lg);
+  font-size: var(--text-xl);
   font-weight: 600;
 }
 
-/* The count in words beside the title, not a number in a pill: the
-   pill is on the bell, and this is the sentence the bell was short
-   for. */
+/* The count in words beside the title: the bell's number, as the
+   sentence it was short for. */
 .notify-count {
-  flex: 1;
-  font-size: var(--text-xs);
+  font-size: var(--text-sm);
   color: var(--fg-faint);
 }
 
-.notify-empty {
-  margin: 20px 4px;
+.notify-head .page-tabs {
+  margin-left: calc(-1 * var(--space-5));
 }
 
-/* The drawer's raised surface is lighter than the chat's, and --danger
-   on it falls under 4.5:1 in the dark theme (axe: color-contrast). R683. */
-.notify-panel .msg-error {
+/* FadeScroll's scroller; its top padding is FadeScroll's. */
+.notify-body {
+  padding-left: var(--space-5);
+  padding-right: var(--space-5);
+  padding-bottom: var(--space-8);
+}
+
+.notify-error {
+  margin: var(--space-2) var(--space-4) var(--space-6);
+  padding: var(--space-4) var(--space-6);
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--danger) 8%, transparent);
   color: var(--danger-text, var(--danger));
+  font-size: var(--text-sm);
+}
+
+.notify-days {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+  padding-top: var(--space-2);
+}
+
+/* In line with the cards' badges. */
+.notify-day-label {
+  margin: 0;
+  padding: 0 var(--space-5) var(--space-3) calc(var(--space-6) + 1px);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--fg-faint);
 }
 
 .notify-rows {
   margin: 0;
   padding: 0;
   list-style: none;
-}
-
-.notify-row {
-  border-bottom: 1px solid var(--border-faint, var(--border));
-}
-
-.notify-row:last-child {
-  border-bottom: none;
-}
-
-/* A row somebody has already looked at. Dimmed rather than removed:
-   "what did I see yesterday" is a question, and a queue that empties
-   itself cannot answer it. */
-.notify-row.is-read .notify-line,
-.notify-row.is-read .notify-excerpt {
-  color: var(--fg-muted);
-}
-
-.notify-open {
-  display: flex;
-  gap: var(--space-5);
-  width: 100%;
-  padding: 11px 8px;
-  text-align: left;
-  background: none;
-  border: none;
-  border-radius: var(--radius-sm);
-  color: inherit;
-  font: inherit;
-  cursor: pointer;
-}
-
-.notify-open:hover:not(:disabled) {
-  background: var(--bg-raised);
-}
-
-.notify-open:disabled {
-  cursor: default;
-  opacity: 0.6;
-}
-
-/* Who it is about: the actor's monogram, or the extension's when
-   nobody did anything — a notice about your own export. */
-.notify-face {
-  position: relative;
-  flex: none;
-  width: 22px;
-  height: 22px;
-}
-
-/* Which extension it is from. Above the title, small, because the
-   list mixes every extension and this is how a row is placed before
-   it is read. */
-.notify-source {
-  font-size: var(--text-xs);
-  color: var(--fg-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
-/* The organisation, for somebody in more than one: a name, so not
-   shouted like the extension beside it. */
-.notify-org {
-  text-transform: none;
-  letter-spacing: normal;
-}
-
-.notify-said {
   display: flex;
   flex-direction: column;
   gap: var(--space-1);
-  min-width: 0;
 }
 
-.notify-line {
-  font-size: var(--text-sm);
-  line-height: 1.45;
+.notify-row {
+  position: relative;
 }
 
-/* What they wrote, when there is any. One line: the rest is in the
-   document, which is where it is worth reading.
+/* A row is the card at rest: no surface of its own until hovered; an
+   unread one keeps a faint wash of its hue from the badge's side. */
+.ncard--row {
+  transition: background-color 0.12s ease;
+}
 
-   Not ``.notify-body`` — that is the panel's scrolling container,
-   and two rules of that name would have given the excerpt ``flex:
-   1`` and the container ``white-space: nowrap``. */
-.notify-excerpt {
-  font-size: var(--text-sm);
+.ncard--row.is-unread:not(.is-prominent) {
+  background-image: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--ncard-hue) 7%, transparent),
+    transparent 65%
+  );
+}
+
+.ncard--row:hover,
+.ncard--row:focus-within {
+  background-color: color-mix(in srgb, var(--fg) 4%, transparent);
+}
+
+.ncard--row.is-prominent:hover,
+.ncard--row.is-prominent:focus-within {
+  background-color: color-mix(in srgb, var(--ncard-hue) 11%, var(--bg-surface));
+}
+
+.ncard--row .ncard-open:focus-visible {
+  outline: 2px solid var(--accent-blue);
+  outline-offset: 4px;
+  border-radius: var(--radius-sm);
+}
+
+/* Read: still listed, a shade quieter, its badge faded. "What did I
+   see yesterday" is a question, and a list that empties itself cannot
+   answer it. */
+.ncard--row.is-read .ncard-title {
+  font-weight: 500;
   color: var(--fg-muted);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
-.notify-when {
+.ncard--row.is-read .ncard-badge {
+  opacity: 0.7;
+}
+
+/* Unread: a dot in the category's hue, top right, beside the row's
+   mark-read button, which shows in its place on hover. */
+.ncard-dot {
+  position: absolute;
+  top: 20px;
+  right: var(--space-12);
+  width: 7px;
+  height: 7px;
+  border-radius: var(--radius-circle);
+  background: var(--ncard-hue);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ncard-hue) 18%, transparent);
+  transition: opacity 0.12s ease;
+}
+
+/* Room for the corner button the dot shares the corner with. */
+.ncard--row .ncard-col {
+  padding-right: var(--space-12);
+}
+
+.ncard--row .ncard-corner {
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+
+.ncard--row:hover .ncard-corner,
+.ncard--row:focus-within .ncard-corner {
+  opacity: 1;
+}
+
+.ncard--row:hover .ncard-dot,
+.ncard--row:focus-within .ncard-dot {
+  opacity: 0;
+}
+
+@media (hover: none) {
+  .ncard--row .ncard-corner {
+    opacity: 1;
+  }
+  .ncard-dot {
+    display: none;
+  }
+}
+
+/* The category filter, under the tabs: chips with the categories'
+   icons, the chosen one washed in its hue. */
+.notify-chips {
+  display: flex;
+  gap: var(--space-2);
+  margin-left: calc(-1 * var(--space-2));
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.notify-chip {
+  --ncard-hue: var(--fg-faint);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex: none;
+  height: 26px;
+  padding: 0 var(--space-4);
+  border: 1px solid transparent;
+  border-radius: var(--radius-pill);
+  background: none;
+  color: var(--fg-muted);
+  font: inherit;
+  font-size: var(--text-sm);
+  cursor: pointer;
+  transition: background-color 0.12s ease, border-color 0.12s ease, color 0.12s ease;
+}
+
+.notify-chip svg {
+  color: color-mix(in srgb, var(--ncard-hue) 85%, var(--fg));
+}
+
+.notify-chip:hover {
+  color: var(--fg);
+  background: color-mix(in srgb, var(--fg) 4%, transparent);
+}
+
+.notify-chip[aria-pressed="true"] {
+  color: var(--fg);
+  border-color: color-mix(in srgb, var(--ncard-hue) 40%, transparent);
+  background: color-mix(in srgb, var(--ncard-hue) 14%, transparent);
+}
+
+.notify-chip:focus-visible {
+  outline: 2px solid var(--accent-blue);
+  outline-offset: 2px;
+}
+
+.notify-chip-count {
   font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
   color: var(--fg-faint);
 }
 
-.notify-body {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  padding: 0 var(--space-6) var(--space-8);
+.notify-chip-label {
+  font-weight: 500;
 }
 
 .drawer-backdrop {
@@ -7518,11 +7859,11 @@ button.activity-file-chip:focus-visible {
 }
 
 /* Long text on a detail page — a task's output, a hook's script — whole,
-   in mono, in a block that scrolls rather than a page that never ends. */
+   in mono. No cap and no scroll of its own: it wraps, and the page
+   scrolls it (``FadeScroll``), so it fades under the header like every
+   other page's content instead of being cut off at the box's edge. */
 .mono-block {
   margin: 0;
-  max-height: min(70vh, 640px);
-  overflow: auto;
   padding: var(--space-5) var(--space-6);
   border-radius: var(--radius-md, 8px);
   background: var(--bg);
@@ -8320,8 +8661,9 @@ button.activity-file-chip:focus-visible {
   line-height: 1.6;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
-  max-height: 240px;
-  overflow: auto;
+  /* No cap and no scroll of its own: it wraps, and the page scrolls
+     (``FadeScroll``). A box that scrolls inside the page cuts the
+     error off at a line. */
 }
 
 /* ── MCP: a server's tools, resources and prompts ─────────────── */
@@ -11336,10 +11678,10 @@ button.activity-file-chip:focus-visible {
   stroke-width: 1.6;
 }
 
-/* Lit only when something is actually waiting. A bell that is always
-   coloured is a bell nobody looks at. */
+/* Something waiting: the glyph at full strength; the count says how
+   much. A bell that is always coloured is a bell nobody looks at. */
 .chip-bell.has-waiting {
-  color: var(--accent-orange-text);
+  color: var(--fg);
 }
 
 /* An extension's unread count, on its sidebar entry and its chip.
@@ -11352,10 +11694,10 @@ button.activity-file-chip:focus-visible {
   margin-left: 6px;
   padding: 0 4px;
   border-radius: var(--radius-pill);
-  background: var(--igni-gradient);
+  background: var(--accent);
   color: #fff;
   font-size: var(--text-2xs);
-  font-weight: 700;
+  font-weight: 600;
   line-height: 16px;
   text-align: center;
   vertical-align: middle;
@@ -11364,16 +11706,19 @@ button.activity-file-chip:focus-visible {
 
 .chip-bell-count {
   position: absolute;
-  top: -4px;
-  right: -4px;
+  top: -2px;
+  right: -3px;
   min-width: 15px;
   height: 15px;
   padding: 0 3px;
   border-radius: var(--radius-pill);
-  background: var(--igni-gradient);
+  /* A ring in the header's colour, so the pill sits on the glyph
+     rather than colliding with it. */
+  box-shadow: 0 0 0 2px var(--bg);
+  background: var(--accent);
   color: #fff;
   font-size: var(--text-2xs);
-  font-weight: 700;
+  font-weight: 600;
   line-height: 15px;
   text-align: center;
   font-variant-numeric: tabular-nums;
@@ -12106,18 +12451,12 @@ button.activity-file-chip:focus-visible {
   min-height: 0;
 }
 
-/* An extension's page is its frame, edge to edge: the page body does
-   not scroll (the frame scrolls itself) and the measure gives up its
-   900px column and padding. Without this the frame kept an iframe's
-   default 300x150. The trail floats over the top of a page with no
-   header row; a frame cannot know to leave room for it, so the body
-   does. */
+/* An extension's page is its frame, edge to edge: the frame scrolls
+   itself, so the page body does not (``FadeScroll``'s ``selfScrolling``),
+   and the measure gives up its 900px column and padding. Without this
+   the frame kept an iframe's default 300x150. */
 .page:has(.extension-frame) .page-body {
   scrollbar-gutter: auto;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  padding-top: calc(var(--page-under-header, 0px) + var(--crumb-row-h));
 }
 
 .page:has(.extension-frame) .page-measure {
@@ -12516,32 +12855,8 @@ button.activity-file-chip:focus-visible {
 }
 
 /* ── Files: a read-only view of the project tree ──────────────────────
-   A full-bleed two-pane page (code + navigator), so it opts out of the
-   centred reading measure the other pages sit in and manages its own
-   scroll inside each pane. */
-.page:has(.files-layout) .page-body {
-  scrollbar-gutter: auto;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  padding: var(--page-under-header, 0px) 0 0;
-}
-/* Full-bleed, so its header row is too. */
-.page:has(.files-layout) .page-body > .page-head,
-.page:has(.files-layout) .page-body > .page-toolbar {
-  width: 100%;
-}
-
-.page:has(.files-layout) .page-measure {
-  flex: 1;
-  min-width: 0;
-  min-height: 0;
-  width: 100%;
-  max-width: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-}
+   A full-bleed two-pane view (code + navigator) in the side dock, not
+   a page; it manages its own scroll inside each pane. */
 .files-layout {
   flex: 1;
   min-width: 0;
@@ -12910,6 +13225,7 @@ button.activity-file-chip:focus-visible {
   border-color: transparent;
   background: var(--bg-surface);
 }
+.chip-bell.active,
 .chip-files.active,
 .chip-terminal.active {
   color: var(--fg);

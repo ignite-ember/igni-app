@@ -68,7 +68,7 @@ export default function App() {
   const shellStatus = useShellStatus(statusSource, windowModel);
   const { status, sessions, auth, refreshStatus } = shellStatus;
   const { panel, route, sidebar, sessionId, projectDir, dialog } = useWindowPlace(windowModel);
-  const updateCheck = useUpdateCheck(client, windowModel);
+  const updateCheck = useUpdateCheck(client, windowModel, notifier);
   // Followed rather than read once, so an extension frame is told when
   // the document's theme changes.
   const frameTheme = useDocumentTheme();
@@ -248,6 +248,7 @@ export default function App() {
           onToggleTerminal={toggleTerminal}
           status={status}
           waiting={notificationCounts.unread}
+          notificationsOpen={panel?.kind === "notifications"}
           onToggleNotifications={() => windowModel.togglePanel("notifications")}
           extensions={extensions}
           notificationCounts={notificationCounts}
@@ -343,7 +344,14 @@ export default function App() {
         contributions={contributions}
         extensions={extensions}
         projectDir={projectDir}
+        chats={sessions}
+        chatStates={sessionStates}
+        currentChat={sessionId}
+        approvals={hitl.pending}
+        pendingUpdate={updateCheck.pendingUpdate}
         onOpen={navigator.openPage}
+        onOpenChat={actions.pickSession}
+        onShowUpdate={updateCheck.showUpdate}
         onPickFolder={actions.attachFolder}
         onCountsChanged={setNotificationCounts}
         onSignedIn={actions.signedIn}

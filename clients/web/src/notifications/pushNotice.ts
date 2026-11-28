@@ -8,6 +8,7 @@
  */
 
 import type { BackgroundProcessDone, SchedulerEvent } from "../protocol/pushChannels";
+import type { CategoryKey } from "./category";
 import type { NotifyInput } from "./notifier";
 
 /** How much of a background command the notification shows. */
@@ -22,6 +23,7 @@ export class PushNotice {
     readonly title: string,
     readonly body: string,
     readonly data: Record<string, unknown>,
+    readonly category: CategoryKey,
     readonly target?: NotifyInput["target"],
   ) {}
 
@@ -34,7 +36,7 @@ export class PushNotice {
       ev.exitCode === 0
         ? `Background process finished${duration}`
         : `Background process failed (exit ${ev.exitCode})${duration}`;
-    return new PushNotice(title, cmd, { channel: ev.channel });
+    return new PushNotice(title, cmd, { channel: ev.channel }, ev.exitCode === 0 ? "background" : "failed");
   }
 
   static scheduler(ev: SchedulerEvent): PushNotice {
@@ -51,11 +53,13 @@ export class PushNotice {
       title,
       body,
       { channel: ev.channel, task_id: ev.taskId },
-      { kind: "schedule", label: "Scheduled tasks" },
+      "background",
+      // The task by name, so its button says which one it shows.
+      { kind: "schedule", label: "Scheduled tasks", ...(ev.description ? { params: { name: ev.description } } : {}) },
     );
   }
 
   toNotify(): NotifyInput {
-    return { title: this.title, body: this.body, target: this.target, data: this.data };
+    return { title: this.title, body: this.body, target: this.target, data: this.data, category: this.category };
   }
 }

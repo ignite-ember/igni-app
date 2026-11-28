@@ -203,6 +203,8 @@ export interface ModelToast {
   target?: PageRoute | null;
   /** The extension that showed it; `null` for igni. */
   source?: string | null;
+  /** What it is about, when igni says: a `NotificationCategories` key. */
+  category?: string | null;
 }
 
 export interface Dialog {

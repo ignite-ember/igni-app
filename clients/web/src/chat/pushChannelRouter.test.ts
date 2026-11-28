@@ -45,7 +45,7 @@ describe("PushChannelRouter", () => {
     const { deps, route } = harness();
     route("background_process_done", { cmd: "make", exit_code: 0 });
     expect(deps.notifier.notify).toHaveBeenCalledWith(
-      expect.objectContaining({ title: "Background process finished", body: "make" }),
+      expect.objectContaining({ title: "Background process finished", body: "make", category: "background" }),
     );
   });
 
@@ -55,8 +55,9 @@ describe("PushChannelRouter", () => {
     expect(deps.notifier.notify).toHaveBeenCalledWith({
       title: "Scheduled task completed",
       body: "d\n\nr",
-      target: { kind: "schedule", label: "Scheduled tasks" },
+      target: { kind: "schedule", label: "Scheduled tasks", params: { name: "d" } },
       data: { channel: "scheduler_completed", task_id: "t" },
+      category: "background",
     });
   });
 

@@ -70,3 +70,20 @@ describe("AppHeader's right-hand icons", () => {
     expect(container.querySelector(".chip-divider")).toBeNull();
   });
 });
+
+describe("AppHeader's bell", () => {
+  it("is lit and expanded while the notifications sheet is open", () => {
+    const onToggleNotifications = vi.fn();
+    const { rerender } = render(header({ waiting: 3, onToggleNotifications }));
+    const bell = screen.getByRole("button", { name: "Notifications" });
+    expect(bell.getAttribute("aria-expanded")).toBe("false");
+    expect(bell.className).toBe("chip chip-bell has-waiting");
+    expect(bell.querySelector(".chip-bell-count")?.textContent).toBe("3");
+    fireEvent.click(bell);
+    expect(onToggleNotifications).toHaveBeenCalledTimes(1);
+
+    rerender(header({ waiting: 3, notificationsOpen: true }));
+    expect(bell.getAttribute("aria-expanded")).toBe("true");
+    expect(bell.className).toBe("chip chip-bell has-waiting active");
+  });
+});

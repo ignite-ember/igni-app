@@ -1,101 +1,68 @@
 /**
- * Toasts — top-right notification stack.
+ * Toasts: a quiet stack in the bottom-right corner, clear of the composer.
  *
- * Scheduled tasks (and other project-level async events) shouldn't
- * inject into whichever chat the user happens to be in — that buries
- * the result in an unrelated conversation. They land here instead,
- * outside the chat scroll, persist across conversation switches, and
- * auto-dismiss after a few seconds.
+ * Project-level async events (a scheduled task finishing) land here
+ * rather than in whichever chat is open, persist across conversation
+ * switches, and hide themselves after a few seconds unless looked at.
  *
  * The list is the window model's ``ui.toasts`` — igni's own toasts and
- * an extension's (``host.ui.toast``) alike. This component renders it
- * and reports the person dismissing one or clicking through to where it
- * points; the closing animation is its own.
+ * an extension's (``host.ui.toast``) alike. This renders it, each with
+ * what following it reaches ({@link NotificationActions}), and reports
+ * the person dismissing one. A toast about a decision leaves as soon as
+ * the decision is no longer waiting.
  */
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef } from "react";
 
 import type { ModelToast } from "../clientState";
-import type { PageRoute } from "../chat/pageStack";
+import { NotificationActions } from "../notifications/notificationActions";
+import { ToastCard } from "./toasts/ToastCard";
+import { useComposerClearance } from "./toasts/useComposerClearance";
 
-/** Auto-dismiss after this many ms. */
-export const TOAST_TTL_MS = 8000;
+export { TOAST_TTL_MS } from "./toasts/useToastLifecycle";
 
 export function Toasts({
   items,
   onDismiss,
-  onOpen,
+  actions = NotificationActions.NONE,
+  sourceName,
 }: {
   items: readonly ModelToast[];
   onDismiss: (id: string) => void;
-  /** Clicking a toast that points somewhere goes there. */
-  onOpen?: (target: PageRoute) => void;
+  /** What each toast reaches, against what is there now. */
+  actions?: NotificationActions;
+  /** An extension's name, for its id. */
+  sourceName?: (id: string) => string;
 }) {
-  if (items.length === 0) return null;
+  const stack = useRef<HTMLDivElement>(null);
+  useComposerClearance(stack, items.length > 0);
+  const resolved = items.map((toast) => ({ toast, action: actions.forToast(toast) }));
+  const isSettled = ({ toast, action }: (typeof resolved)[number]) =>
+    toast.category === "approval" && !action?.decides;
+  const shown = resolved.filter((entry) => !isSettled(entry));
+  const settled = resolved
+    .filter(isSettled)
+    .map(({ toast }) => toast.id)
+    .join(" ");
+
+  useEffect(() => {
+    for (const id of settled.split(" ").filter(Boolean)) onDismiss(id);
+    // The ids are the dependency: a new handler does not dismiss again.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [settled]);
+
+  if (shown.length === 0) return null;
   return (
-    <div className="toasts" role="region" aria-label="Notifications">
-      {items.map((t) => (
+    <div ref={stack} className="toasts" role="region" aria-label="Notifications">
+      {shown.map(({ toast, action }) => (
         <ToastCard
-          key={t.id}
-          toast={t}
-          onDismiss={() => onDismiss(t.id)}
-          onOpen={onOpen}
+          key={toast.id}
+          toast={toast}
+          action={action}
+          onDismiss={() => onDismiss(toast.id)}
+          sourceName={sourceName}
         />
       ))}
-    </div>
-  );
-}
-
-function ToastCard({
-  toast,
-  onDismiss,
-  onOpen,
-}: {
-  toast: ModelToast;
-  onDismiss: () => void;
-  onOpen?: (target: PageRoute) => void;
-}) {
-  // The exit animation, between the person's click (or the timer) and
-  // the toast leaving the model.
-  const [closing, setClosing] = useState(false);
-  useEffect(() => {
-    const t = window.setTimeout(() => {
-      setClosing(true);
-      // Wait for the exit animation, then drop from the list.
-      window.setTimeout(onDismiss, 200);
-    }, TOAST_TTL_MS);
-    return () => window.clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [toast.id]);
-  return (
-    <div className={`toast${closing ? " is-closing" : ""}`}>
-      <button
-        type="button"
-        className="toast-body-btn"
-        onClick={() => {
-          if (toast.target) onOpen?.(toast.target);
-          setClosing(true);
-          window.setTimeout(onDismiss, 150);
-        }}
-      >
-        <div className="toast-title">{toast.text}</div>
-        {toast.body && <div className="toast-body">{toast.body}</div>}
-      </button>
-      <button
-        type="button"
-        className="toast-close"
-        aria-label="Dismiss"
-        onClick={(e) => {
-          e.stopPropagation();
-          setClosing(true);
-          window.setTimeout(onDismiss, 150);
-        }}
-      >
-        <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor"
-          strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-          <path d="M4 4l8 8M12 4l-8 8" />
-        </svg>
-      </button>
     </div>
   );
 }

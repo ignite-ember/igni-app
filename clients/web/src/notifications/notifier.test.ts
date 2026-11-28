@@ -10,10 +10,22 @@ function fakes(delivered: boolean) {
 }
 
 describe("Notifier", () => {
-  it("shows a toast as an info toast in the window model", () => {
+  it("shows a toast as an igni notice in the window model", () => {
     const { windowModel, notifier } = fakes(false);
     notifier.toast({ title: "Hi" });
-    expect(windowModel.toast).toHaveBeenCalledWith({ text: "Hi", kind: "info", body: null, target: null });
+    expect(windowModel.toast).toHaveBeenCalledWith({ text: "Hi", kind: "info", body: null, target: null, category: "notice" });
+  });
+
+  it("styles a toast by its category's severity", () => {
+    const { windowModel, notifier } = fakes(false);
+    notifier.toast({ title: "Broke", category: "failed" });
+    notifier.toast({ title: "Done", category: "done" });
+    notifier.toast({ title: "Ran", category: "background" });
+    expect(windowModel.toast.mock.calls.map(([t]) => [t.category, t.kind])).toEqual([
+      ["failed", "error"],
+      ["done", "success"],
+      ["background", "info"],
+    ]);
   });
 
   it("dismisses through the window model", () => {
@@ -32,8 +44,8 @@ describe("Notifier", () => {
   it("falls back to a toast, with its target, when the host cannot", async () => {
     const { windowModel, notifier } = fakes(false);
     const target = { kind: "schedule", label: "Scheduled tasks" };
-    await notifier.notify({ title: "T", body: "B", target });
-    expect(windowModel.toast).toHaveBeenCalledWith({ text: "T", kind: "info", body: "B", target });
+    await notifier.notify({ title: "T", body: "B", target, category: "background" });
+    expect(windowModel.toast).toHaveBeenCalledWith({ text: "T", kind: "info", body: "B", target, category: "background" });
   });
 
   it("does not ping about a reply while there is no Notification API", () => {
@@ -53,6 +65,7 @@ describe("PushNotice", () => {
     expect(n.title).toBe("Background process finished · 2.0s");
     expect(n.body).toBe("make");
     expect(n.toNotify().data).toEqual({ channel: "background_process_done" });
+    expect(n.toNotify().category).toBe("background");
   });
 
   it("says a background process failed, and cuts a long command", () => {
@@ -62,6 +75,7 @@ describe("PushNotice", () => {
       exitCode: 3,
     });
     expect(n.title).toBe("Background process failed (exit 3)");
+    expect(n.category).toBe("failed");
     expect(n.body).toHaveLength(CMD_PREVIEW_CHARS);
     expect(n.body.endsWith("…")).toBe(true);
   });
@@ -77,6 +91,7 @@ describe("PushNotice", () => {
     expect(started.body).toBe("(no description)");
     expect(started.target).toEqual({ kind: "schedule", label: "Scheduled tasks" });
     expect(started.data).toEqual({ channel: "scheduler_started", task_id: "t1" });
+    expect(started.toNotify().category).toBe("background");
   });
 
   it("adds a completed task's result, cut to length", () => {

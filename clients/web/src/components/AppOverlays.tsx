@@ -2,8 +2,11 @@ import type { PageRoute } from "../chat/pageStack";
 import { useWindowField, type WindowModel } from "../clientState";
 import type { Contributions } from "../extensions/contributions";
 import type { ExtensionSummary } from "../extensions/ExtensionPage";
-import type { NotificationCounts, NotificationTarget } from "../notifications/model";
+import type { ChatState } from "../chat/sessionStates";
+import type { NotificationCounts } from "../notifications/model";
+import { NotificationActions, type ChatEntry, type OpenApproval } from "../notifications/notificationActions";
 import type { Notifier } from "../notifications/notifier";
+import { PageDirectory } from "../notifications/pageDirectory";
 import type { IgniClient } from "../protocol/client";
 import { UpdateInfo } from "../update/updateInfo";
 import { TRUST_DIALOG_KIND, isTrustStatus } from "../workspaceTrust/model";
@@ -30,7 +33,14 @@ export function AppOverlays({
   contributions,
   extensions,
   projectDir,
+  chats,
+  chatStates,
+  currentChat,
+  approvals,
+  pendingUpdate,
   onOpen,
+  onOpenChat,
+  onShowUpdate,
   onPickFolder,
   onCountsChanged,
   onSignedIn,
@@ -42,7 +52,16 @@ export function AppOverlays({
   contributions: Contributions;
   extensions: ExtensionSummary[];
   projectDir: string;
+  /** The chats, what each is doing, the one on screen and its open
+   *  approvals: what a notification's decision is checked against. */
+  chats: readonly ChatEntry[];
+  chatStates: { of(sessionId: string): ChatState };
+  currentChat: string;
+  approvals: readonly OpenApproval[] | null;
+  pendingUpdate: UpdateInfo | null;
   onOpen: (route: PageRoute) => void;
+  onOpenChat: (sessionId: string) => void;
+  onShowUpdate: (info: UpdateInfo) => void;
   onPickFolder: (dir: string) => void;
   onCountsChanged: (counts: NotificationCounts) => void;
   onSignedIn: (who: string) => void;
@@ -55,24 +74,32 @@ export function AppOverlays({
   const updateInfo = dialog ? UpdateInfo.fromDialogSpec(dialog.spec) : null;
   const extensionName = (id: string) => extensions.find((e) => e.id === id)?.name;
 
-  // The extension's own page, with the notification's params: the door
-  // its sidebar entry opens, so it reads where to go from its launch params.
-  const openTarget = (target: NotificationTarget) => {
-    const owner = contributions.pages.ownerOf(target.page);
-    const extension = extensions.find((e) => e.id === owner);
-    const label =
-      extension?.pages.find((p) => p.kind === target.page)?.label ??
-      contributions.sidebar().find((l) => l.kind === target.page)?.label ??
-      target.page;
-    onOpen({ kind: target.page, label, params: target.params });
-  };
+  // What a notification reaches, checked against what is there now:
+  // rebuilt every render, so a decision answered elsewhere demotes its
+  // card and loses its button at once.
+  const actions = new NotificationActions(
+    {
+      chats,
+      states: chatStates,
+      currentChat,
+      approvals,
+      pages: new PageDirectory(contributions, extensions),
+      update: pendingUpdate,
+    },
+    { openChat: onOpenChat, openPage: onOpen, showUpdate: onShowUpdate },
+  );
 
   return (
     <>
       {preview && (
         <FilePreview client={client} path={preview.path} onClose={() => windowModel.write("preview", null)} />
       )}
-      <Toasts items={toasts} onDismiss={(id) => notifier.dismiss(id)} onOpen={onOpen} />
+      <Toasts
+        items={toasts}
+        onDismiss={(id) => notifier.dismiss(id)}
+        actions={actions}
+        sourceName={(id) => extensionName(id) ?? id}
+      />
       <RetryBanner />
       {dialog && updateInfo && (
         <UpdatePrompt info={updateInfo.toWire()} onDismiss={() => windowModel.answerDialog(dialog.id, null)} />
@@ -106,12 +133,11 @@ export function AppOverlays({
         <NotificationsPanel
           client={client}
           sourceName={(source) => extensionName(source) ?? source}
-          canOpen={(kind) => contributions.pages.has(kind)}
+          actions={actions}
           // Marking something read moves every badge, and the push that
           // says so may land after the panel read the new counts — so
           // it reports what it read too.
           onCountsChanged={onCountsChanged}
-          onOpenTarget={openTarget}
           onClose={() => windowModel.closePanel()}
         />
       )}

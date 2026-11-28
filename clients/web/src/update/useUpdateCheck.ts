@@ -7,6 +7,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import type { WindowModel } from "../clientState";
 import { host } from "../lib/host";
+import type { Notifier } from "../notifications/notifier";
 import type { IgniClient } from "../protocol/client";
 import { UpdateInfo } from "./updateInfo";
 
@@ -23,7 +24,11 @@ export interface UpdateCheck {
   checkNow: (silent?: boolean) => Promise<void>;
 }
 
-export function useUpdateCheck(client: IgniClient, windowModel: WindowModel): UpdateCheck {
+export function useUpdateCheck(
+  client: IgniClient,
+  windowModel: Pick<WindowModel, "openDialog">,
+  notifier: Pick<Notifier, "notify">,
+): UpdateCheck {
   const [pendingUpdate, setPendingUpdate] = useState<UpdateInfo | null>(null);
   const showUpdate = useCallback(
     (info: UpdateInfo) => windowModel.openDialog(info.toDialogSpec()),
@@ -54,12 +59,14 @@ export function useUpdateCheck(client: IgniClient, windowModel: WindowModel): Up
           return;
         } else if (info.checksDisabled) {
           // Nothing was asked: "up to date" would be a guess (R628).
-          void host.notify({
+          void notifier.notify({
+            category: "update",
             title: "Update checks are off",
             body: "This install's update policy turns checking off, so igni did not look for a new version.",
           });
         } else {
-          void host.notify({
+          void notifier.notify({
+            category: "update",
             title: "Up to date",
             body: `You're on the latest version (${info.currentVersion}).`,
           });
@@ -68,14 +75,15 @@ export function useUpdateCheck(client: IgniClient, windowModel: WindowModel): Up
         // The background check stays quiet; a click always answers, a
         // refused mirror included (R628).
         if (!silent) {
-          void host.notify({
+          void notifier.notify({
+            category: "failed",
             title: "Couldn't check for updates",
             body: e instanceof Error ? e.message : String(e),
           });
         }
       }
     },
-    [announce, client],
+    [announce, client, notifier],
   );
   const checkRef = useRef(check);
   useEffect(() => {
