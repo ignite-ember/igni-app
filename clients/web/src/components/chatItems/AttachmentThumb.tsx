@@ -53,6 +53,7 @@ export function AttachmentThumb({
       ref={ref}
       className="msg-att-thumb"
       title={attachment.name}
+      aria-label={attachment.name}
       onClick={() => viewer?.open(attachment.path)}
     >
       {thumbnail ? (
